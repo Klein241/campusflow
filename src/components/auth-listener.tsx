@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAppStore } from '@/lib/store';
 import { ensureUserProfile } from '@/lib/api-client';
@@ -25,75 +25,51 @@ async function ensureProfile(user: {
             first_name: user.user_metadata.first_name || fullName.split(' ')[0] || undefined,
         });
     } catch (e) {
-        console.warn('[Auth] ensureProfile error:', e);
+        console.warn('[Auth] ensureProfile error (non-blocking):', e);
     }
 }
 
-// Check if user profile is active — if deactivated by admin, sign out
+// Check if user profile is active — NEVER sign out on error (prevents infinite loop)
 async function checkProfileActive(userId: string): Promise<boolean> {
     try {
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('profiles')
             .select('is_active')
             .eq('id', userId)
             .single();
 
+        // Network error or RLS error — ASSUME active (don't block login)
+        if (error) {
+            console.warn('[Auth] checkProfileActive query error (assuming active):', error.message);
+            return true; // ← KEY FIX: never block login on network/RLS errors
+        }
+
+        // Only block if explicitly deactivated by admin
         if (data && data.is_active === false) {
-            console.warn('[Auth] User account is deactivated, signing out');
+            console.warn('[Auth] User account is deactivated by admin');
             await supabase.auth.signOut();
-            alert('Votre compte a été désactivé par un administrateur. Contactez le support pour plus d\'informations.');
+            alert('Votre compte a été désactivé par un administrateur.');
             return false;
         }
+
         return true;
-    } catch {
-        // If profile doesn't exist (deleted by admin), sign out
-        console.warn('[Auth] Profile not found, signing out');
-        await supabase.auth.signOut();
-        return false;
+    } catch (e) {
+        // Catch-all: NEVER sign out on unexpected errors — prevents infinite login loop
+        console.warn('[Auth] checkProfileActive exception (assuming active):', e);
+        return true; // ← KEY FIX: assume active on any exception
     }
 }
 
 export function AuthListener() {
     const { setUser } = useAppStore();
+    const isProcessingRef = useRef(false); // Prevent re-entrant calls
 
     useEffect(() => {
         // Initial session check
         const checkSession = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-                // Check if account is still active before allowing access
-                const isActive = await checkProfileActive(session.user.id);
-                if (!isActive) {
-                    setUser(null);
-                    return;
-                }
-
-                // Set user immediately (don't wait for profile)
-                setUser({
-                    id: session.user.id,
-                    email: session.user.email || '',
-                    name: session.user.user_metadata.full_name || 'Utilisateur',
-                    avatar: session.user.user_metadata.avatar_url,
-                    joinedAt: session.user.created_at,
-                });
-                useAppStore.getState().loadInitialData();
-
-                // Ensure profile exists (async, non-blocking)
-                ensureProfile(session.user as any);
-            } else {
-                setUser(null);
-                // Still load public data (prayers, testimonials) for guests
-                useAppStore.getState().loadInitialData();
-            }
-        };
-
-        checkSession();
-
-        // Listen for changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            async (_event, session) => {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
                 if (session?.user) {
-                    // Check if account is still active
                     const isActive = await checkProfileActive(session.user.id);
                     if (!isActive) {
                         setUser(null);
@@ -108,11 +84,51 @@ export function AuthListener() {
                         joinedAt: session.user.created_at,
                     });
                     useAppStore.getState().loadInitialData();
-
-                    // Ensure profile exists (async, non-blocking)
                     ensureProfile(session.user as any);
                 } else {
                     setUser(null);
+                    // Still load public data for guests
+                    useAppStore.getState().loadInitialData();
+                }
+            } catch (e) {
+                console.warn('[Auth] checkSession error:', e);
+                setUser(null);
+                useAppStore.getState().loadInitialData();
+            }
+        };
+
+        checkSession();
+
+        // Listen for auth changes — with re-entrancy guard
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+            async (_event, session) => {
+                // Prevent re-entrant processing (signOut inside callback → new event → infinite loop)
+                if (isProcessingRef.current) return;
+                isProcessingRef.current = true;
+
+                try {
+                    if (session?.user) {
+                        const isActive = await checkProfileActive(session.user.id);
+                        if (!isActive) {
+                            setUser(null);
+                            isProcessingRef.current = false;
+                            return;
+                        }
+
+                        setUser({
+                            id: session.user.id,
+                            email: session.user.email || '',
+                            name: session.user.user_metadata.full_name || 'Utilisateur',
+                            avatar: session.user.user_metadata.avatar_url,
+                            joinedAt: session.user.created_at,
+                        });
+                        useAppStore.getState().loadInitialData();
+                        ensureProfile(session.user as any);
+                    } else {
+                        setUser(null);
+                    }
+                } finally {
+                    isProcessingRef.current = false;
                 }
             }
         );
@@ -124,4 +140,3 @@ export function AuthListener() {
 
     return null;
 }
-
