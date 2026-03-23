@@ -311,16 +311,21 @@ export const useAppStore = create<AppState>()(
             },
 
             loadInitialData: async () => {
+                console.log('[Store] loadInitialData called');
                 get().loadAppSettings();
                 const { user } = get();
+                console.log('[Store] user:', user ? user.id : 'guest');
 
                 try {
                     // Load Prayers (public - accessible even without login)
-                    const { data: prayers } = await supabase
+                    const { data: prayers, error: prayersError } = await supabase
                         .from('prayer_requests')
                         .select('*, profiles(full_name, avatar_url)')
                         .order('created_at', { ascending: false })
                         .limit(20);
+
+                    if (prayersError) console.warn('[Store] prayers error:', prayersError.message);
+                    else console.log('[Store] prayers loaded:', prayers?.length || 0);
 
                     if (prayers) {
                         const formattedPrayers = prayers.map((p: any) => ({

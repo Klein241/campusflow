@@ -838,6 +838,26 @@ function BookForm({ initialData, onSave, onCancel }: { initialData: Book | null;
         if (!title.trim()) return toast.error("Le titre est obligatoire");
         if (!initialData && !bookFile) return toast.error("Veuillez sélectionner un fichier PDF ou EPUB");
 
+        // ── Duplicate detection ──────────────────────────────────
+        if (!initialData) { // Only check on NEW book, not when editing
+            try {
+                const { data: existing } = await supabase
+                    .from('books')
+                    .select('id, title, author')
+                    .ilike('title', title.trim())
+                    .limit(1);
+
+                if (existing && existing.length > 0) {
+                    const confirmed = window.confirm(
+                        `⚠️ Un livre similaire existe déjà :\n\n"${existing[0].title}" par ${existing[0].author}\n\nVoulez-vous quand même publier ce livre ?`
+                    );
+                    if (!confirmed) return;
+                }
+            } catch (e) {
+                console.warn('[Library] Duplicate check failed (non-blocking):', e);
+            }
+        }
+
         setIsUploading(true);
         try {
             let fileUrl = initialData?.file_url || '';
@@ -1205,6 +1225,33 @@ function BulkUploadForm({
         if (validFiles.length === 0) {
             toast.error('Aucun fichier PDF ou EPUB trouvé');
             return;
+        }
+
+        // ── Duplicate detection for bulk upload ──────────────────
+        try {
+            const titles = validFiles.map(f => f.title.toLowerCase());
+            const { data: existingBooks } = await supabase
+                .from('books')
+                .select('title')
+                .in('title', validFiles.map(f => f.title));
+
+            if (existingBooks && existingBooks.length > 0) {
+                const existingTitles = new Set(existingBooks.map(b => b.title.toLowerCase()));
+                let duplicateCount = 0;
+                validFiles.forEach(f => {
+                    if (existingTitles.has(f.title.toLowerCase())) {
+                        f.status = 'error';
+                        f.error = '⚠️ Livre déjà publié';
+                        f.progress = 'Doublon détecté';
+                        duplicateCount++;
+                    }
+                });
+                if (duplicateCount > 0) {
+                    toast.warning(`${duplicateCount} livre(s) déjà publié(s) — marqués en rouge`);
+                }
+            }
+        } catch (e) {
+            console.warn('[Library] Bulk duplicate check failed (non-blocking):', e);
         }
 
         const startIdx = files.length;
