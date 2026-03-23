@@ -70,7 +70,7 @@ function SplashScreen() {
 }
 
 export default function Home() {
-  const { user, isHydrated, activeTab, setActiveTab, selectedDay, setSelectedDay } = useAppStore();
+  const { user, activeTab, setActiveTab, selectedDay, setSelectedDay } = useAppStore();
   const [showSplash, setShowSplash] = useState(true);
   const [hideNav, setHideNav] = useState(false);
 
@@ -117,29 +117,18 @@ export default function Home() {
     }
   }, [activeTab]);
 
-  // Handle splash screen duration AND hydration safety timeout
+  // Splash screen — simple 2s timer, NO blocking on Zustand hydration
+  // The previous isHydrated gate caused infinite loading on fresh/static deploys
   useEffect(() => {
-    const splashTimer = setTimeout(() => {
-      setShowSplash(false);
-    }, 2500);
-
-    // Safety: if Zustand hydration never fires (empty/corrupt localStorage,
-    // first visit, or SSG), force isHydrated after 3s to prevent infinite splash
+    const timer = setTimeout(() => setShowSplash(false), 2000);
+    // Also force hydration flag in case other components check it
     const hydrationTimer = setTimeout(() => {
-      if (!useAppStore.getState().isHydrated) {
-        console.warn('[App] Hydration timeout — forcing isHydrated=true');
-        useAppStore.getState().setHydrated(true);
-      }
-    }, 3000);
-
-    return () => {
-      clearTimeout(splashTimer);
-      clearTimeout(hydrationTimer);
-    };
+      try { useAppStore.getState().setHydrated(true); } catch { }
+    }, 500);
+    return () => { clearTimeout(timer); clearTimeout(hydrationTimer); };
   }, []);
 
-  // Wait for hydration or splash screen
-  if (!isHydrated || showSplash) {
+  if (showSplash) {
     return <SplashScreen />;
   }
 
