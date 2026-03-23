@@ -117,16 +117,25 @@ export default function Home() {
     }
   }, [activeTab]);
 
-  // Handle splash screen duration
+  // Handle splash screen duration — with hydration safety
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const splashTimer = setTimeout(() => {
       setShowSplash(false);
     }, 2500);
-    return () => clearTimeout(timer);
+
+    // Safety: force hydration flag after 2s in case Zustand persist fails
+    const hydrationTimer = setTimeout(() => {
+      try { useAppStore.getState().setHydrated(true); } catch { }
+    }, 2000);
+
+    return () => {
+      clearTimeout(splashTimer);
+      clearTimeout(hydrationTimer);
+    };
   }, []);
 
-  // Wait for hydration or splash screen
-  if (!isHydrated || showSplash) {
+  // Show splash only during initial load — never block permanently
+  if (showSplash) {
     return <SplashScreen />;
   }
 

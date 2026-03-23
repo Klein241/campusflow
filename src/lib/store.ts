@@ -225,22 +225,32 @@ export const useAppStore = create<AppState>()(
 
             signIn: async (email, password) => {
                 set({ isLoading: true, authError: null });
+
+                // Safety timeout — never let spinner run more than 10 seconds
+                const safetyTimeout = setTimeout(() => {
+                    console.error('[Auth] signIn safety timeout hit — forcing isLoading=false');
+                    set({ isLoading: false, authError: 'Délai de connexion dépassé. Veuillez réessayer.' });
+                }, 10000);
+
                 try {
+                    console.log('[Auth] signIn called with email:', email);
                     const { data, error } = await supabase.auth.signInWithPassword({
                         email,
                         password,
                     });
+                    console.log('[Auth] signInWithPassword result:', {
+                        hasUser: !!data?.user,
+                        hasSession: !!data?.session,
+                        error: error?.message
+                    });
                     if (error) throw error;
-
-                    // User will be set by the auth listener in layout but we can set strictly here too
-                    if (data.user) {
-                        // We'll fetch profile data later, for now just basic info
-                        // The AuthListener will handle the real sync
-                    }
                 } catch (error: any) {
+                    console.error('[Auth] signIn error:', error.message);
                     set({ authError: error.message || 'Erreur de connexion' });
                 } finally {
+                    clearTimeout(safetyTimeout);
                     set({ isLoading: false });
+                    console.log('[Auth] signIn complete, isLoading=false');
                 }
             },
 
