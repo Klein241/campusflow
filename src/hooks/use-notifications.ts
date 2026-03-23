@@ -279,7 +279,7 @@ export function useNotifications(): UseNotificationsReturn {
                         'Content-Type': 'application/json',
                         'X-User-Id': user.id,
                     },
-                    body: JSON.stringify({ notification_id: id }),
+                    body: JSON.stringify({ notificationId: id }),
                 });
                 return;
             } catch (e) { /* fallback */ }
@@ -297,9 +297,13 @@ export function useNotifications(): UseNotificationsReturn {
 
         if (workerUrl && user?.id) {
             try {
-                await fetch(`${workerUrl}/notify/read-all`, {
+                await fetch(`${workerUrl}/notify/read`, {
                     method: 'PATCH',
-                    headers: { 'X-User-Id': user.id },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-User-Id': user.id,
+                    },
+                    body: JSON.stringify({ all: true }),
                 });
                 return;
             } catch (e) { /* fallback */ }

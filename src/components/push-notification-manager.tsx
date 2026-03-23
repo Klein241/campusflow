@@ -44,9 +44,16 @@ export function PushNotificationManager() {
                         return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
                     };
 
+                    // Validate VAPID key before subscribing
+                    const keyBytes = urlBase64ToUint8Array(publicKey);
+                    if (keyBytes.length !== 65) {
+                        console.warn(`[Push] Invalid VAPID key length: ${keyBytes.length} (expected 65). Skipping.`);
+                        return;
+                    }
+
                     subscription = await registration.pushManager.subscribe({
                         userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(publicKey),
+                        applicationServerKey: keyBytes,
                     });
                 }
 

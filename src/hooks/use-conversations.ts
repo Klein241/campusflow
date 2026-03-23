@@ -176,10 +176,15 @@ export function useConversations(user: UserInfo | null) {
                 );
             }
 
-            await supabase
-                .from('conversations')
-                .update({ last_message_at: new Date().toISOString(), last_message: messageContent })
-                .eq('id', selectedConversation.id);
+            try {
+                await supabase
+                    .from('conversations')
+                    .update({ last_message_at: new Date().toISOString(), last_message: messageContent })
+                    .eq('id', selectedConversation.id);
+            } catch (e) {
+                // Non-critical — message was already sent successfully
+                console.warn('[DM] Failed to update conversation metadata:', e);
+            }
 
             if (selectedConversation.otherUser?.id) {
                 notifyDirectMessage({

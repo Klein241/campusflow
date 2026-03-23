@@ -1021,11 +1021,12 @@ export function WhatsAppChat({ user, onHideNav, activeGroupId, activeConversatio
 
                 if (error) throw error;
 
-                // Update conversation's last message
-                await supabase
-                    .from('conversations')
-                    .update({ last_message: msgContent, last_message_at: new Date().toISOString() })
-                    .eq('id', selectedConversation.id);
+                try {
+                    await supabase
+                        .from('conversations')
+                        .update({ last_message: msgContent, last_message_at: new Date().toISOString() })
+                        .eq('id', selectedConversation.id);
+                } catch (e) { console.warn('[Chat] conversation metadata update failed:', e); }
 
                 // Optimistic local add
                 if (data) {
@@ -1223,7 +1224,7 @@ export function WhatsAppChat({ user, onHideNav, activeGroupId, activeConversatio
                     sender: { id: user.id, full_name: user.name, avatar_url: user.avatar || null },
                 }]);
             }
-            await supabase.from('conversations').update({ last_message: content, last_message_at: new Date().toISOString() }).eq('id', selectedConversation.id);
+            try { await supabase.from('conversations').update({ last_message: content, last_message_at: new Date().toISOString() }).eq('id', selectedConversation.id); } catch (e) { console.warn('[Chat] conversation metadata update failed:', e); }
         } else if (view === 'group' && selectedGroup) {
             const { data, error } = await supabase
                 .from('prayer_group_messages')
@@ -1301,11 +1302,12 @@ export function WhatsAppChat({ user, onHideNav, activeGroupId, activeConversatio
 
                 if (error) throw error;
 
-                // Update conversation's last message
-                await supabase
-                    .from('conversations')
-                    .update({ last_message: '🎤 Message vocal', last_message_at: new Date().toISOString() })
-                    .eq('id', selectedConversation.id);
+                try {
+                    await supabase
+                        .from('conversations')
+                        .update({ last_message: '🎤 Message vocal', last_message_at: new Date().toISOString() })
+                        .eq('id', selectedConversation.id);
+                } catch (e) { console.warn('[Chat] conversation metadata update failed:', e); }
 
                 // Send notification to conversation partner
                 notifyDirectMessage({
@@ -1989,9 +1991,11 @@ export function WhatsAppChat({ user, onHideNav, activeGroupId, activeConversatio
                         }];
                     });
                 }
-                await supabase.from('conversations')
-                    .update({ last_message: text.substring(0, 100), last_message_at: new Date().toISOString() })
-                    .eq('id', selectedConversation.id);
+                try {
+                    await supabase.from('conversations')
+                        .update({ last_message: text.substring(0, 100), last_message_at: new Date().toISOString() })
+                        .eq('id', selectedConversation.id);
+                } catch (e) { console.warn('[Chat] conversation metadata update failed:', e); }
                 notifyDirectMessage({
                     recipientId: selectedConversation.participantId,
                     senderId: user.id,
