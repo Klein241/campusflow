@@ -39,7 +39,7 @@ import { ChatMessageBubble } from './chat-message-bubble';
 import { ChatInputBar } from './chat-input-bar';
 import { GroupGameDialog } from './group-game-dialog';
 // FloatingBubbles removed — replaced by system notification messages in chat
-import { getInitials, formatTime, getMemberColor, normalizecoursesBookName } from './chat-utils';
+import { getInitials, formatTime, getMemberColor, normalizeBibleBookName } from './chat-utils';
 
 export function WhatsAppChat({ user, onHideNav, activeGroupId, activeConversationId, onlineUsers: externalOnlineUsers }: WhatsAppChatProps & { activeGroupId?: string | null; activeConversationId?: string | null; onlineUsers?: Record<string, boolean> }) {
     // View State

@@ -1,6 +1,6 @@
 import { DailyProgram } from './types';
 
-// 40-Day Prayer CentreFormation Program Data
+// 40-Day CampusFlow SaaSgram Data
 export const curriculumData: DailyProgram[] = [
     {
         day: 1,

@@ -273,9 +273,9 @@ export const useAppStore = create<AppState>()(
                 set({ isLoading: true, authError: null });
                 try {
                     // Strategy: Use whatsapp number to generate a fake email for Supabase Auth
-                    // email: [clean_whatsapp]@centreformation.local
+                    // email: [clean_whatsapp]@campusflow.local
                     const cleanPhone = formData.whatsapp.replace(/\D/g, '');
-                    const email = `${cleanPhone}@centreformation.local`;
+                    const email = `${cleanPhone}@campusflow.local`;
                     const password = formData.password;
                     const fullName = `${formData.firstName} ${formData.lastName}`;
 
@@ -824,7 +824,7 @@ export const useAppStore = create<AppState>()(
             appSettings: {},
         }),
         {
-            name: 'centreformation-storage',
+            name: 'campusflow-storage',
             partialize: (state) => ({
                 // Sync only local prefs
                 theme: state.theme,

@@ -1188,8 +1188,8 @@ export function ProfileView() {
                                 className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50 transition-colors"
                                 onClick={() => {
                                     const shareData = {
-                                        title: 'CentreFormation Pro',
-                                        text: 'Rejoins-moi sur CentreFormation Pro ! Une Forum étudiant de prière, Bible et partage spirituel.',
+                                        title: 'CampusFlow',
+                                        text: 'Rejoins-moi sur CampusFlow ! Une plateforme de gestion scolaire et académique.',
                                         url: window.location.origin
                                     };
                                     if (navigator.share && navigator.canShare(shareData)) {
@@ -1227,7 +1227,7 @@ export function ProfileView() {
                 </div>
 
                 <div className="text-center mt-8 text-xs text-slate-600">
-                    Version 1.4.0 • CentreFormation Pro
+                    Version 1.4.0 • CampusFlow
                 </div>
 
                 {/* Migrate Members Dialog */}

@@ -41,19 +41,19 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "CentreFormation Pro",
-  description: "CentreFormation Pro — Plateforme de gestion pour centre de formation. Cursus, notes, paiements et marketplace.",
+  title: "CampusFlow",
+  description: "CampusFlow — Plateforme de gestion pour centre de formation. Cursus, notes, paiements et marketplace.",
   manifest: "/manifest.json",
   openGraph: {
-    title: "CentreFormation Pro",
-    description: "Plateforme de gestion pour centre de formation.",
+    title: "CampusFlow",
+    description: "Plateforme SaaS de gestion scolaire & universitaire.",
     images: ["/icon-512.png"],
     type: "website",
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "CentreFormation Pro",
+    title: "CampusFlow",
   },
   other: {
     "apple-mobile-web-app-capable": "yes",
@@ -81,7 +81,7 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icon-192.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="CentreFormation Pro" />
+        <meta name="apple-mobile-web-app-title" content="CampusFlow" />
         {/* Microsoft Tiles */}
         <meta name="msapplication-TileColor" content="#0F172A" />
         <meta name="msapplication-TileImage" content="/icon-192.png" />

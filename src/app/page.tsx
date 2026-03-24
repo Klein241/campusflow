@@ -131,7 +131,7 @@ function AdminPanelView() {
   );
 }
 
-// Splash screen — CentreFormation Pro
+// Splash screen — CampusFlow
 function SplashScreen() {
   return (
     <motion.div
@@ -155,7 +155,7 @@ function SplashScreen() {
         >
           🎓
         </motion.div>
-        <h1 className="text-3xl font-bold mb-2" suppressHydrationWarning>CentreFormation Pro</h1>
+        <h1 className="text-3xl font-bold mb-2" suppressHydrationWarning>CampusFlow</h1>
         <p className="text-white/80">Votre avenir commence ici</p>
         <motion.div
           initial={{ width: 0 }}

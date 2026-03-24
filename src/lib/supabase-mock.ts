@@ -11,7 +11,7 @@ import {
 
 const MOCK_USER = {
   id:    "student-mock-001",
-  email: "etudiant@centreformation.test",
+  email: "etudiant@campusflow.test",
   role:  "authenticated",
 }
 

@@ -86,7 +86,7 @@ export function SignupView() {
 
         try {
             const cleanPhone = phone.replace(/\D/g, '')
-            const authEmail = email.trim() || `${cleanPhone}@centreformation.local`
+            const authEmail = email.trim() || `${cleanPhone}@campusflow.local`
 
             // 1. Create Supabase Auth user
             const { data: signUpData, error: signUpError } = await supabase.auth.signUp({

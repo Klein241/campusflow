@@ -28,7 +28,7 @@ export const FEATURE_TUTORIALS: Record<string, FeatureTutorialConfig> = {
             '📤 Partagez vos sujets de prière',
             '❤️ Priez pour les demandes des autres',
             '🚪 Créez une Chambre Haute autour d\'une prière',
-            '🏠 Migrez vers une CentreFormation Pro permanente',
+            '�� Accédez à votre espace académique',
         ],
         color: 'from-amber-500 to-orange-600',
     },

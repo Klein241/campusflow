@@ -315,7 +315,7 @@ export async function copyMultipleVerses(verses: { reference: string; text: stri
 }
 
 export async function shareVerse(reference: string, text: string): Promise<boolean> {
-    const shareText = `📖 ${reference}\n\n"${text}"\n\n— CentreFormation Pro`;
+    const shareText = `📖 ${reference}\n\n"${text}"\n\n— CampusFlow`;
 
     try {
         if (navigator.share) {
@@ -339,7 +339,7 @@ export async function shareVerse(reference: string, text: string): Promise<boole
 }
 
 export async function shareMultipleVerses(verses: { reference: string; text: string }[]): Promise<boolean> {
-    const shareText = verses.map(v => `📖 ${v.reference}\n"${v.text}"`).join('\n\n') + '\n\n— CentreFormation Pro';
+    const shareText = verses.map(v => `📖 ${v.reference}\n"${v.text}"`).join('\n\n') + '\n\n— CampusFlow';
 
     try {
         if (navigator.share) {

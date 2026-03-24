@@ -383,7 +383,7 @@ export const socialService = {
         if (navigator.share) {
             try {
                 await navigator.share({
-                    title: title || 'Partagé depuis CentreFormation Pro',
+                    title: title || 'Partagé depuis CampusFlow',
                     text: content,
                     url: window.location.href
                 });

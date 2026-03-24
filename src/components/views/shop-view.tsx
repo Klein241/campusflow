@@ -221,7 +221,7 @@ export function ShopView() {
 
     const shareProduct = useCallback(async (product: Product) => {
         const url = `${window.location.origin}/marketplace/?p=${product.id}`;
-        const text = `🛒 ${product.title}\n💰 ${formatPrice(product.price, product.currency)}\n\nDécouvrez sur CentreFormation Pro !`;
+        const text = `🛒 ${product.title}\n💰 ${formatPrice(product.price, product.currency)}\n\nDécouvrez sur CampusFlow !`;
 
         if (navigator.share) {
             try { await navigator.share({ title: product.title, text, url }); } catch { }

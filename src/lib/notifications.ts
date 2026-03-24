@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 
 /**
  * ══════════════════════════════════════════════════════════
- * NOTIFICATION CLIENT — CentreFormation Pro v2
+ * NOTIFICATION CLIENT — CampusFlow v2
  * ══════════════════════════════════════════════════════════
  *
  * All notification functions now route through the Cloudflare

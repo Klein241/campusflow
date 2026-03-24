@@ -1,6 +1,6 @@
 /**
  * ══════════════════════════════════════════════════════════
- * MAISON DE PRIÈRE — NOTIFICATION WORKER
+ * CAMPUSFLOW — NOTIFICATION WORKER
  * ══════════════════════════════════════════════════════════
  *
  * Advanced notification gateway (Facebook-tier ~70%):
@@ -11,7 +11,7 @@
  *  - GET  /notify/list   → cursor-based pagination (Supabase wrapper)
  *
  *  Queue consumer: batch push via Web Push API (up to 100/req)
- *  Cron trigger:   prayer_no_response reminders (48h without prayer)
+ *  Cron trigger:   tutoring_no_response reminders (48h without help)
  */
 
 // ══════════════════════════════════════════════════════════
@@ -267,24 +267,24 @@ function buildNotificationMessage(
         case 'prayer_prayed':
             if (actorCount === 1) {
                 return {
-                    title: '🙏 Quelqu\'un a prié pour vous',
-                    message: `${first} a prié pour votre demande : "${short(targetName)}"`,
+                    title: '📚 Quelqu\'un vous a aidé',
+                    message: `${first} a répondu à votre demande : "${short(targetName)}"`,
                 };
             }
             return {
-                title: '🙏 Plusieurs personnes ont prié',
-                message: `${formatActors()} ont prié pour votre demande`,
+                title: '📚 Plusieurs personnes vous ont aidé',
+                message: `${formatActors()} ont répondu à votre demande`,
             };
 
         case 'friend_prayed':
             return {
-                title: '🙏 Votre ami a prié',
-                message: `Votre ami ${first} a aussi prié pour ce sujet`,
+                title: '📚 Votre ami vous a aidé',
+                message: `Votre ami ${first} a aussi aidé sur ce sujet`,
             };
 
         case 'new_prayer_published':
             return {
-                title: '📢 Nouvelle demande de prière',
+                title: '📢 Nouvelle demande de tutorat',
                 message: `${first} a publié : "${short(targetName)}"`,
             };
 
@@ -292,18 +292,18 @@ function buildNotificationMessage(
             if (actorCount === 1) {
                 return {
                     title: '💬 Nouveau commentaire',
-                    message: `${first} a commenté votre demande de prière`,
+                    message: `${first} a commenté votre demande de tutorat`,
                 };
             }
             return {
                 title: '💬 Nouveaux commentaires',
-                message: `${formatActors()} ont commenté votre demande de prière`,
+                message: `${formatActors()} ont commenté votre demande de tutorat`,
             };
 
         case 'prayer_no_response':
             return {
-                title: '🕊️ Votre demande attend',
-                message: 'Votre demande n\'a pas encore reçu de prière. La forum est là.',
+                title: '🔔 Votre demande attend',
+                message: 'Votre demande n\'a pas encore reçu de réponse. Le forum est là.',
             };
 
         case 'group_access_request':
@@ -758,7 +758,7 @@ async function sendWebPush(
 
     const jwt = await createVapidJwt(
         audience,
-        env.VAPID_EMAIL || 'mailto:admin@centreformation.app',
+        env.VAPID_EMAIL || 'mailto:admin@campusflow.app',
         env.VAPID_PUBLIC_KEY,
         env.VAPID_PRIVATE_KEY
     );

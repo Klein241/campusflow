@@ -250,7 +250,7 @@ export function usecoursesHighlights(userId?: string) {
 
 // Share verse function
 export async function shareVerse(reference: string, text: string, translation: string) {
-    const shareText = `📖 ${reference} (${translation})\n\n"${text}"\n\n— CentreFormation Pro`;
+    const shareText = `📖 ${reference} (${translation})\n\n"${text}"\n\n— CampusFlow`;
 
     try {
         if (navigator.share) {

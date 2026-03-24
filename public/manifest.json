@@ -1,7 +1,7 @@
 {
-  "name": "CentreFormation Pro",
-  "short_name": "Formation",
-  "description": "CentreFormation Pro — Plateforme de gestion pour centre de formation. Cursus, notes, paiements et marketplace.",
+  "name": "CampusFlow",
+  "short_name": "CampusFlow",
+  "description": "CampusFlow — Plateforme SaaS de gestion scolaire & universitaire multi-tenant. Chaque établissement dispose de son propre espace personnalisé.",
   "start_url": "/",
   "id": "/",
   "display": "standalone",
@@ -17,7 +17,8 @@
   "dir": "ltr",
   "categories": [
     "education",
-    "productivity"
+    "productivity",
+    "business"
   ],
   "icons": [
     {
@@ -60,10 +61,10 @@
       ]
     },
     {
-      "name": "Cursus",
-      "short_name": "Cursus",
-      "description": "Voir mon cursus",
-      "url": "/?view=curriculum",
+      "name": "Mes Filières",
+      "short_name": "Filières",
+      "description": "Voir les filières et cursus",
+      "url": "/?view=filieres",
       "icons": [
         {
           "src": "/icon-192.png",
@@ -72,9 +73,9 @@
       ]
     },
     {
-      "name": "Boutique",
+      "name": "Marketplace",
       "short_name": "Shop",
-      "description": "Accéder à la marketplace",
+      "description": "Accéder à la marketplace éducative",
       "url": "/?view=shop",
       "icons": [
         {

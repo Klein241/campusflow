@@ -464,7 +464,7 @@ export function ResourcesView() {
         const slug = book.slug || slugify(book.title);
         const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
         const shareUrl = `${baseUrl}/livre/?s=${slug}`;
-        const shareText = `📚 ${book.title}\npar ${book.author}\n\nDécouvrez ce livre sur CentreFormation Pro !`;
+        const shareText = `📚 ${book.title}\npar ${book.author}\n\nDécouvrez ce livre sur CampusFlow !`;
 
         if (navigator.share) {
             try {

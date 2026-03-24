@@ -26,7 +26,7 @@ function BookRedirect() {
                     .single();
 
                 if (book) {
-                    document.title = `📚 ${book.title} — CentreFormation Pro`;
+                    document.title = `📚 ${book.title} — CampusFlow`;
                 }
             } catch (e) {
                 console.error('Error loading book:', e);

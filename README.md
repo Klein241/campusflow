@@ -1,65 +1,121 @@
-# 🕊️ CentreFormation Pro - Prayer CentreFormation App
+# 🎓 CampusFlow — Plateforme SaaS de gestion scolaire & universitaire
 
-**CentreFormation Pro** est une application web progressive (PWA) complète conçue pour connecter les croyants dans une expérience de prière, d'étude biblique et de communion en ligne.
+**CampusFlow** est une plateforme SaaS multi-tenant conçue pour les établissements d'enseignement supérieur et centres de formation en Afrique. Chaque établissement dispose de son propre espace personnalisé, accessible via une URL unique.
 
-![Aperçu de l'application](public/window.svg)
+## 🏗️ Architecture Multi-Tenant
 
-## 🚀 Fonctionnalités Principales
+```
+campusflow.com/                          → Landing page publique
+campusflow.com/institut-sciences-app/    → Page publique de l'institut (feed, actus, marketplace)
+campusflow.com/institut-sciences-app/director/admin  → Backoffice directeur
+```
 
-### 🙏 Groupes de Prière & CentreFormation
-- **Création de Groupes** : Créez des espaces dédiés pour des sujets de prière spécifiques.
-- **CentreFormations de Prière** : Organisez des sessions de prière continues (24/7) avec des créneaux horaires.
-- **Retours d'expérience** : Partagez et célébrez les prières exaucées.
+Chaque établissement inscrit obtient :
+- **Son propre URL** : `campusflow.com/[slug-etablissement]/`
+- **Son espace public** : page d'accueil, actualités, marketplace, bibliothèque
+- **Son backoffice** : gestion des filières, étudiants, professeurs, paiements
+- **Ses données isolées** : isolation totale via RLS Supabase (Row Level Security)
 
-### 💬 Communication & Forum étudiant
-- **Chat Temps Réel** : Messagerie instantanée style WhatsApp avec support des émojis et réactions.
-- **Messages Vocaux** : Enregistrez et partagez des prières ou encouragements vocaux.
-- **Appels Vidéo** : Réunions de groupe et appels individuels intégrés.
-- **Système d'Amis** : Connectez-vous avec d'autres membres, envoyez des demandes d'amis.
+## 👥 Les 7 acteurs du système
 
-### 📖 Bible & Étude
-- **Lecteur Biblique** : Accès complet à la Bible (LSG, KJV) avec recherche rapide.
-- **Jeux Bibliques** : Testez vos connaissances avec des Quiz et Mots Mêlés générés dynamiquement.
-- **Notes & Surlignage** : Personnalisez votre étude biblique.
+| Rôle | Accès | Description |
+|------|-------|-------------|
+| 🛡️ **Super Admin** | `/superadmin` | Opérateur de la plateforme. Vue globale cross-établissements |
+| 🏛️ **Directeur** | `/[org]/director` | Gouvernance établissement, KPIs, configuration, création des comptes |
+| 📋 **Secrétaire** | `/[org]/secretary` | Inscriptions, dossiers, emplois du temps, documents officiels |
+| 💰 **Trésorier** | `/[org]/treasurer` | Paiements scolarité, relances, réconciliation marketplace |
+| 👨‍🏫 **Professeur** | `/[org]/professor` | Ses classes, upload cours, saisie notes/présences, vente marketplace |
+| 🎒 **Étudiant** | `/[org]/student` | Notes, EDT, forum, paiement scolarité, achat marketplace |
+| 🏢 **Établissement** | Entité tenant | S'inscrit et configure son espace SaaS |
 
-### 🛠️ Administration
-- **Dashboard Complet** : Gestion des utilisateurs, modération de contenu et analyses.
-- **Notifications** : Système d'annonces et de notifications push.
+## 🔐 Système d'accès par codes
 
-## 💻 Stack Technique
+- **Directeur** : crée l'établissement, nomme les secrétaires et professeurs
+- **Secrétaire** : gère les inscriptions, génère les codes matricules étudiants
+- **Professeur** : reçoit un code d'accès attribué par le directeur
+- **Étudiant** : reçoit un code matricule auto-généré (ex: `INFO-2024-001`) après validation de son dossier
 
-- **Frontend** : [Next.js 14](https://nextjs.org) (App Router), React, TailwindCSS, Framer Motion.
-- **Backend** : [Supabase](https://supabase.com) (PostgreSQL, Auth, Realtime, Storage).
-- **Déploiement** : Optimisé pour [Netlify](https://netlify.com).
+## 🚀 Fonctionnalités principales
 
-## 📦 Installation & Démarrage
+### 📚 Gestion académique
+- **13+ filières** préconfigurées (Informatique, Comptabilité, Marketing, Droit, Santé…)
+- **Promotions** par année et filière avec effectifs max
+- **Emploi du temps** par filière, salle et professeur
+- **Notes & évaluations** avec calcul automatique des moyennes pondérées
+- **Suivi des présences** avec taux calculé en temps réel
 
-1. **Cloner le projet**
-   ```bash
-   git clone https://github.com/votre-username/centreformation.git
-   cd centreformation
-   ```
+### 💰 Gestion financière
+- **Paiements scolarité** via Mobile Money (MTN MoMo, Orange Money — Notch Pay)
+- **Suivi des impayés** et relances automatiques
+- **Historique des transactions** avec reçus PDF
 
-2. **Installer les dépendances**
-   ```bash
-   npm install
-   ```
+### 🛒 Marketplace à 3 niveaux
+| Niveau | Type | Revenue Split |
+|--------|------|--------------|
+| B2C School | Profs → Étudiants du même centre | Prof 70% / Centre 30% |
+| B2B Inter-centres | Centre → Autres centres | Vendeur 80% / Plateforme 20% |
+| B2C Grand Public | Auteurs → Public illimité | Auteur 65% / École 15% / Plateforme 20% |
 
-3. **Configurer les variables d'environnement**
-   Créez un fichier `.env.local` et ajoutez vos clés Supabase :
-   ```env
-   NEXT_PUBLIC_SUPABASE_URL=votre_url_supabase
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=votre_cle_anon
-   SUPABASE_SERVICE_ROLE_KEY=votre_cle_service_role
-   ```
+### 💬 Communication
+- **Forum étudiant** par filière
+- **Chat temps réel** (messages directs, groupes d'étude)
+- **Notifications push** pour cours, notes, paiements
+- **Live streaming** pour cours en ligne
 
-4. **Lancer en développement**
-   ```bash
-   npm run dev
-   ```
+## 💻 Stack technique
+
+- **Frontend** : [Next.js 16](https://nextjs.org) (App Router, Turbopack), React 19, TailwindCSS, Framer Motion
+- **Backend** : [Supabase](https://supabase.com) (PostgreSQL, Auth, Realtime, Storage, RLS)
+- **Paiements** : Notch Pay / FedaPay (Mobile Money Afrique)
+- **Déploiement** : [Netlify](https://netlify.com)
+- **PWA** : Installation native sur mobile
+
+## 📦 Installation
+
+```bash
+# Cloner le projet
+git clone https://github.com/Klein241/campusflow.git
+cd campusflow
+
+# Installer les dépendances
+npm install
+
+# Configurer l'environnement
+cp .env.example .env.local
+# Renseigner NEXT_PUBLIC_SUPABASE_URL et NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+# Lancer en développement
+npm run dev
+```
+
+## 🗄️ Base de données
+
+Exécuter le schéma SQL dans l'éditeur Supabase :
+```
+supabase-migrations/complete_schema.sql
+```
+
+Ce script crée : 20+ tables, RLS, triggers, fonctions PostgreSQL, index et données de départ (13 filières).
 
 ## 🌍 Déploiement
 
-Ce projet est configuré pour un déploiement facile sur **Netlify**.
-Voir le guide [NETLIFY_DEPLOYMENT.md](./NETLIFY_DEPLOYMENT.md) pour les détails.
+1. Connecter le repo GitHub à **Netlify**
+2. Branche de production : `principal`
+3. Build command : `npm run build`
+4. Variables d'environnement : configurer `NEXT_PUBLIC_SUPABASE_URL` et `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
+## 📍 Roadmap
+
+- [x] Schéma SQL multi-tenant complet
+- [x] Système de rôles 5+ niveaux avec RLS
+- [x] Navigation adaptative par rôle
+- [x] 13 filières préconfigurées
+- [ ] Routing multi-tenant `/[orgSlug]/`
+- [ ] Intégration Notch Pay (Mobile Money)
+- [ ] Page d'inscription établissement (onboarding wizard)
+- [ ] Dashboard directeur avec KPIs
+- [ ] Génération automatique des codes matricules
+
+## 📄 Licence
+
+Projet privé — © 2026 SYGMA-TECH. Tous droits réservés.

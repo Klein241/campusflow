@@ -80,7 +80,7 @@ export function coursesShareDialog({ open, onOpenChange, onShareVerse }: courses
 
         const text = selected.map(v =>
             `📖 ${selectedBook.name} ${selectedChapter}:${v.verse}\n"${v.text}"`
-        ).join('\n\n') + '\n\n— CentreFormation Pro';
+        ).join('\n\n') + '\n\n— CampusFlow';
 
         onShareVerse(text);
         resetAndClose();
@@ -90,7 +90,7 @@ export function coursesShareDialog({ open, onOpenChange, onShareVerse }: courses
         if (!selectedBook || verses.length === 0) return;
         const header = `📖 **${selectedBook.name} ${selectedChapter}** (chapitre complet)\n\n`;
         const body = verses.map(v => `${v.verse}. ${v.text}`).join('\n');
-        const text = header + body + '\n\n— CentreFormation Pro';
+        const text = header + body + '\n\n— CampusFlow';
         onShareVerse(text);
         resetAndClose();
     };

@@ -125,7 +125,7 @@ function LiveRegistrationFlow({
         setIsSubmitting(true);
         try {
             // Create user account with phone-based email (phone@maison.app)
-            const fakeEmail = `${phone.replace(/[^0-9]/g, '')}@centreformation.app`;
+            const fakeEmail = `${phone.replace(/[^0-9]/g, '')}@campusflow.app`;
 
             const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
                 email: fakeEmail,

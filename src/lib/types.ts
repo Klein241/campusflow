@@ -1,4 +1,4 @@
-// Types for the Prayer CentreFormation App - V3 Extended
+// Types for the CampusFlow SaaS App - V3 Extended
 // ================================================
 
 export interface DailyProgram {

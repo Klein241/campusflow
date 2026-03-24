@@ -43,7 +43,7 @@ export default function AdminDashboardPage() {
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-3xl font-bold tracking-tight bg-linear-to-r from-primary to-purple-400 bg-clip-text text-transparent">Tableau de Bord</h2>
-                    <p className="text-muted-foreground mt-1">Vue d'ensemble de l'activité de CentreFormation Pro.</p>
+                    <p className="text-muted-foreground mt-1">Vue d'ensemble de l'activité de CampusFlow.</p>
                 </div>
                 <div className="flex items-center gap-2 text-sm bg-muted/50 px-3 py-1 rounded-full border">
                     <span className="relative flex h-2 w-2">

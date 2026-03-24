@@ -54,7 +54,7 @@ export function AuthView() {
             toast.error('Numéro de téléphone trop court');
             return;
         }
-        const email = `${cleanPhone}@CentreFormation.local`;
+        const email = `${cleanPhone}@campusflow.local`;
         await signIn(email, loginPassword);
     };
 
@@ -86,7 +86,7 @@ export function AuthView() {
         setIsResetting(true);
         try {
             const cleanPhone = resetPhone.replace(/\D/g, '');
-            const email = `${cleanPhone}@CentreFormation.local`;
+            const email = `${cleanPhone}@campusflow.local`;
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
                 redirectTo: `${window.location.origin}/`,
             });
@@ -134,7 +134,7 @@ export function AuthView() {
         if (recoveryEmail.trim() && recoveryEmail.includes('@')) {
             try {
                 const cleanPhone = whatsapp.replace(/\D/g, '');
-                const email = `${cleanPhone}@CentreFormation.local`;
+                const email = `${cleanPhone}@campusflow.local`;
                 const { data: authData } = await supabase.auth.getUser();
                 if (authData?.user?.id) {
                     await supabase.from('profiles').update({ recovery_email: recoveryEmail.trim() }).eq('id', authData.user.id);
@@ -164,7 +164,7 @@ export function AuthView() {
                             🎓
                         </motion.div>
                         <CardTitle className="text-2xl font-bold bg-linear-to-r from-indigo-400 to-blue-400 bg-clip-text text-transparent">
-                            CentreFormation Pro
+                            CampusFlow
                         </CardTitle>
                         <CardDescription>
                             Connectez-vous simplement avec votre numéro WhatsApp

@@ -86,7 +86,7 @@ export function CurriculumView({ onSelectDay }: CurriculumViewProps) {
                                     Programme
                                 </h1>
                                 <p className="text-slate-400 text-sm mt-1 font-medium">
-                                    CentreFormation Pro
+                                    CampusFlow
                                 </p>
                             </div>
                             <div className="flex items-center gap-2">

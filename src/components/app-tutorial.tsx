@@ -18,7 +18,7 @@ interface TutorialStep {
 
 const STEPS: TutorialStep[] = [
     {
-        title: 'Bienvenue dans CentreFormation Pro ! 🙏',
+        title: 'Bienvenue sur CampusFlow ! 🎓',
         description: 'Votre espace de communion, de prière et de partage spirituel. Découvrons ensemble les fonctionnalités principales.',
         icon: Heart,
         color: 'text-pink-400',
@@ -35,7 +35,7 @@ const STEPS: TutorialStep[] = [
     },
     {
         title: 'Chambres Hautes & Maisons de Prière',
-        description: 'Créez une chambre haute 🚪 autour d\'une demande de prière, puis migrez vos membres vers une CentreFormation Pro 🏠 permanente. Chat, annonces, jeûnes collectifs et plus !',
+        description: 'Créez une chambre haute 🚪 autour d\'une demande de prière, puis migrez vos membres vers une CampusFlow 🏠 permanente. Chat, annonces, jeûnes collectifs et plus !',
         icon: Users,
         color: 'text-indigo-400',
         bgGradient: 'from-indigo-600/20 to-blue-600/10',
