@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { notifyGroupAccessRequest, notifyGroupAccessApproved, notifyGroupInvitation } from '@/lib/notifications';
 
-interface PrayerGroup {
+interface StudyGroup {
     id: string;
     name: string;
     description: string | null;
@@ -61,7 +61,7 @@ interface FriendProfile {
     is_already_invited?: boolean;
 }
 
-interface PrayerGroupManagerProps {
+interface StudyGroupManagerProps {
     prayerId: string;
     prayerContent: string;
     prayerOwnerId: string;
@@ -71,7 +71,7 @@ interface PrayerGroupManagerProps {
     isDialogOpen?: boolean; // NEW: trigger reload whenever dialog opens
 }
 
-export function PrayerGroupManager({
+export function StudyGroupManager({
     prayerId,
     prayerContent,
     prayerOwnerId,
@@ -79,9 +79,9 @@ export function PrayerGroupManager({
     onClose,
     onOpenChat,
     isDialogOpen = true,
-}: PrayerGroupManagerProps) {
+}: StudyGroupManagerProps) {
     const [view, setView] = useState<'main' | 'create' | 'join_requests' | 'invite_friends'>('main');
-    const [existingGroup, setExistingGroup] = useState<PrayerGroup | null>(null);
+    const [existingGroup, setExistingGroup] = useState<StudyGroup | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
@@ -120,12 +120,12 @@ export function PrayerGroupManager({
     const loadGroup = useCallback(async () => {
         setIsLoading(true);
         try {
-            console.log('[PrayerGroupManager] Loading group for prayerId:', prayerId);
+            console.log('[StudyGroupManager] Loading group for prayerId:', prayerId);
 
             // Primary: Check if group exists for this prayer by prayer_request_id
             // Use order+limit to handle cases where multiple groups might have been created
             let { data: groupDataArray, error: groupError } = await supabase
-                .from('prayer_groups')
+                .from('study_groups')
                 .select('*')
                 .eq('prayer_request_id', prayerId)
                 .order('created_at', { ascending: false })
@@ -134,40 +134,40 @@ export function PrayerGroupManager({
             let groupData = groupDataArray?.[0];
 
             if (groupError) {
-                console.error('[PrayerGroupManager] Error querying group by prayer_request_id:', groupError);
+                console.error('[StudyGroupManager] Error querying group by prayer_request_id:', groupError);
             }
 
             // Fallback: if no group found by prayer_request_id, try searching by prayer content in group name
             if (!groupData && prayerContent) {
-                console.log('[PrayerGroupManager] No group found by prayer_request_id, trying fallback by content...');
+                console.log('[StudyGroupManager] No group found by prayer_request_id, trying fallback by content...');
                 const searchKey = prayerContent.substring(0, 30);
                 const { data: fallbackGroups } = await supabase
-                    .from('prayer_groups')
+                    .from('study_groups')
                     .select('*')
                     .ilike('name', `%${searchKey}%`)
                     .limit(1);
 
                 if (fallbackGroups && fallbackGroups.length > 0) {
                     groupData = fallbackGroups[0];
-                    console.log('[PrayerGroupManager] Found group via fallback:', groupData.name);
+                    console.log('[StudyGroupManager] Found group via fallback:', groupData.name);
 
                     // Auto-fix: update the prayer_request_id on the group if it's missing
                     if (!groupData.prayer_request_id) {
                         await supabase
-                            .from('prayer_groups')
+                            .from('study_groups')
                             .update({ prayer_request_id: prayerId })
                             .eq('id', groupData.id);
-                        console.log('[PrayerGroupManager] Auto-fixed prayer_request_id link');
+                        console.log('[StudyGroupManager] Auto-fixed prayer_request_id link');
                     }
                 }
             }
 
-            console.log('[PrayerGroupManager] Group data found:', !!groupData, groupData?.name);
+            console.log('[StudyGroupManager] Group data found:', !!groupData, groupData?.name);
 
             if (groupData) {
                 // Get member count and member IDs
                 const { data: members, count } = await supabase
-                    .from('prayer_group_members')
+                    .from('group_members')
                     .select('user_id', { count: 'exact' })
                     .eq('group_id', groupData.id);
 
@@ -221,11 +221,11 @@ export function PrayerGroupManager({
                     pending_request: pendingRequest
                 });
             } else {
-                console.log('[PrayerGroupManager] No group found for prayer:', prayerId);
+                console.log('[StudyGroupManager] No group found for prayer:', prayerId);
                 setExistingGroup(null);
             }
         } catch (e) {
-            console.error('[PrayerGroupManager] Error loading group:', e);
+            console.error('[StudyGroupManager] Error loading group:', e);
         }
         setIsLoading(false);
     }, [prayerId, prayerContent, currentUserId]);
@@ -365,7 +365,7 @@ export function PrayerGroupManager({
             const avatarUrl = urlData.publicUrl;
 
             const { data: newGroup, error: createError } = await supabase
-                .from('prayer_groups')
+                .from('study_groups')
                 .insert({
                     name: trimmedName,
                     description: groupDescription.trim() || null,
@@ -383,7 +383,7 @@ export function PrayerGroupManager({
             if (createError) throw createError;
 
             // Add creator as admin member
-            await supabase.from('prayer_group_members').insert({
+            await supabase.from('group_members').insert({
                 group_id: newGroup.id,
                 user_id: currentUserId,
                 role: 'admin'
@@ -396,7 +396,7 @@ export function PrayerGroupManager({
                     user_id: uid,
                     role: 'member' as const
                 }));
-                await supabase.from('prayer_group_members').insert(inviteRows);
+                await supabase.from('group_members').insert(inviteRows);
 
                 // Get creator name for notification
                 const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', currentUserId!).maybeSingle();
@@ -432,7 +432,7 @@ export function PrayerGroupManager({
         try {
             if (existingGroup.is_open) {
                 const { error } = await supabase
-                    .from('prayer_group_members')
+                    .from('group_members')
                     .insert({
                         group_id: existingGroup.id,
                         user_id: currentUserId,
@@ -483,7 +483,7 @@ export function PrayerGroupManager({
         setIsSaving(true);
         try {
             const { error } = await supabase
-                .from('prayer_group_members')
+                .from('group_members')
                 .delete()
                 .eq('group_id', existingGroup.id)
                 .eq('user_id', currentUserId);
@@ -509,7 +509,7 @@ export function PrayerGroupManager({
 
             if (approved) {
                 await supabase
-                    .from('prayer_group_members')
+                    .from('group_members')
                     .insert({
                         group_id: existingGroup.id,
                         user_id: userId,
@@ -539,7 +539,7 @@ export function PrayerGroupManager({
         try {
             // Add friend directly as member (since the owner is inviting)
             const { error } = await supabase
-                .from('prayer_group_members')
+                .from('group_members')
                 .insert({
                     group_id: existingGroup.id,
                     user_id: friendId,
@@ -940,7 +940,7 @@ export function PrayerGroupManager({
                                 }
                             </p>
                             <p className="text-xs text-slate-500 mt-1">
-                                Ajoutez des amis depuis la section "Amis" de la communauté
+                                Ajoutez des amis depuis la section "Amis" de la forum
                             </p>
                         </div>
                     ) : (
@@ -1181,7 +1181,7 @@ export function PrayerGroupManager({
 }
 
 // Lightweight button to trigger the modal
-export function JoinPrayerGroupButton({
+export function JoinStudyGroupButton({
     prayerId,
     prayerContent,
     prayerOwnerId,
@@ -1230,7 +1230,7 @@ export function JoinPrayerGroupButton({
                     <DialogHeader>
                         <DialogTitle className="sr-only">Chambre haute</DialogTitle>
                     </DialogHeader>
-                    <PrayerGroupManager
+                    <StudyGroupManager
                         prayerId={prayerId}
                         prayerContent={prayerContent}
                         prayerOwnerId={prayerOwnerId}

@@ -1,41 +1,41 @@
 /**
- * UNIFIED BIBLE API SERVICE - FIXED
+ * UNIFIED courses API SERVICE - FIXED
  * ==================================
  * 
- * Single source of truth for all Bible data in the app.
+ * Single source of truth for all courses data in the app.
  * Uses LOCAL FRENCH DATA from .txt files (Louis Segond 1910).
  * All data is offline — no external API calls.
  */
 
 import {
-    BIBLE_BOOKS as LOCAL_BOOKS,
-    BibleVerse as LocalVerse,
-    BibleChapter,
-    BibleBook as LocalBook,
+    courses_BOOKS as LOCAL_BOOKS,
+    coursesVerse as LocalVerse,
+    coursesChapter,
+    coursesBook as LocalBook,
     getBookById as getLocalBookById,
     formatReference,
     getChapterCount,
     parseVerseLine
-} from './local-bible-data';
+} from './local-courses-data';
 
 import {
     loadChapter,
     loadVerse,
     loadVerseRange,
-    searchBible as localSearchBible,
-    advancedSearchBible as localAdvancedSearchBible,
+    searchcourses as localSearchcourses,
+    advancedSearchcourses as localAdvancedSearchcourses,
     getRandomVerse as getLocalRandomVerse,
     getRandomVerses as getLocalRandomVerses,
     getVerseOfTheDay as getLocalVerseOfTheDay,
     preloadPopularBooks
-} from './local-bible-service';
-export type { AdvancedSearchResult } from './local-bible-service';
+} from './local-courses-service';
+export type { AdvancedSearchResult } from './local-courses-service';
 
 // ============================================
 // TYPES (Backward compatible)
 // ============================================
 
-export interface BibleVerse {
+export interface coursesVerse {
     reference: string;
     text: string;
     book_id?: string;
@@ -44,15 +44,15 @@ export interface BibleVerse {
     verse?: number;
 }
 
-export interface BiblePassage {
+export interface coursesPassage {
     reference: string;
     text: string;
     translation_id: string;
     translation_name: string;
-    verses: BibleVerse[];
+    verses: coursesVerse[];
 }
 
-export interface BibleBook {
+export interface coursesBook {
     id: string;
     name: string;
     nameLong: string;
@@ -63,7 +63,7 @@ export interface BibleBook {
     localId?: string;
 }
 
-export interface BibleTranslation {
+export interface coursesTranslation {
     id: string;
     name: string;
     abbreviation: string;
@@ -76,13 +76,13 @@ export interface BibleTranslation {
 
 const CACHE_DURATION_MS = 1000 * 60 * 60;
 
-export const TRANSLATIONS: BibleTranslation[] = [
+export const TRANSLATIONS: coursesTranslation[] = [
     { id: 'lsg', name: 'Louis Segond 1910', abbreviation: 'LSG', language: 'fr' },
 ];
 
 export const DEFAULT_TRANSLATION = 'lsg';
 
-// Mapping from standard Bible IDs to local file names
+// Mapping from standard courses IDs to local file names
 const STANDARD_TO_LOCAL: Record<string, string> = {
     'GEN': 'genese', 'EXO': 'exode', 'LEV': 'levitique', 'NUM': 'nombres', 'DEU': 'deuteronome',
     'JOS': 'josue', 'JDG': 'juges', 'RUT': 'ruth', '1SA': '1samuel', '2SA': '2samuel',
@@ -107,8 +107,8 @@ const LOCAL_TO_STANDARD: Record<string, string> = Object.fromEntries(
     Object.entries(STANDARD_TO_LOCAL).map(([k, v]) => [v, k])
 );
 
-// Complete list of Bible books with standard IDs
-export const BIBLE_BOOKS: BibleBook[] = [
+// Complete list of courses books with standard IDs
+export const courses_BOOKS: coursesBook[] = [
     // Old Testament (39 books)
     { id: 'GEN', name: 'Genèse', nameLong: 'Genèse', abbreviation: 'Gen', testament: 'OT', chapters: 50, nameEn: 'Genesis', localId: 'genese' },
     { id: 'EXO', name: 'Exode', nameLong: 'Exode', abbreviation: 'Exo', testament: 'OT', chapters: 40, nameEn: 'Exodus', localId: 'exode' },
@@ -180,7 +180,7 @@ export const BIBLE_BOOKS: BibleBook[] = [
 ];
 
 // Static fallback verses - MAXIMIZED to ~100
-const FALLBACK_VERSES: BibleVerse[] = [
+const FALLBACK_VERSES: coursesVerse[] = [
     { text: "Au commencement, Dieu créa les cieux et la terre.", reference: "Genèse 1:1" },
     { text: "L'Éternel est mon berger: je ne manquerai de rien.", reference: "Psaumes 23:1" },
     { text: "Car Dieu a tant aimé le monde qu'il a donné son Fils unique.", reference: "Jean 3:16" },
@@ -313,11 +313,11 @@ function getStandardId(localId: string): string {
     return LOCAL_TO_STANDARD[localId.toLowerCase()] || localId.toUpperCase();
 }
 
-function getBookByStandardId(standardId: string): BibleBook | undefined {
-    return BIBLE_BOOKS.find(b => b.id === standardId.toUpperCase());
+function getBookByStandardId(standardId: string): coursesBook | undefined {
+    return courses_BOOKS.find(b => b.id === standardId.toUpperCase());
 }
 
-function convertLocalVerseToApiFormat(verse: LocalVerse, translation: string = 'lsg'): BibleVerse {
+function convertLocalVerseToApiFormat(verse: LocalVerse, translation: string = 'lsg'): coursesVerse {
     const localBook = getLocalBookById(verse.book);
     const standardId = getStandardId(verse.book);
     const book = getBookByStandardId(standardId);
@@ -335,19 +335,19 @@ function convertLocalVerseToApiFormat(verse: LocalVerse, translation: string = '
 // MAIN API SERVICE
 // ============================================
 
-export const bibleApi = {
+export const coursesApi = {
     /**
-     * Get all Bible books
+     * Get all courses books
      */
-    getBooks(): BibleBook[] {
-        return BIBLE_BOOKS;
+    getBooks(): coursesBook[] {
+        return courses_BOOKS;
     },
 
     /**
      * Get chapters count for a book
      */
     getChapters(bookId: string): number[] {
-        const book = BIBLE_BOOKS.find(b => b.id === bookId.toUpperCase());
+        const book = courses_BOOKS.find(b => b.id === bookId.toUpperCase());
         if (!book) return [];
         return Array.from({ length: book.chapters }, (_, i) => i + 1);
     },
@@ -355,7 +355,7 @@ export const bibleApi = {
     /**
      * Get a full chapter - uses LOCAL data
      */
-    async getChapter(bookId: string, chapterNum: number, translation: string = DEFAULT_TRANSLATION): Promise<BiblePassage | null> {
+    async getChapter(bookId: string, chapterNum: number, translation: string = DEFAULT_TRANSLATION): Promise<coursesPassage | null> {
         const localId = getLocalId(bookId);
         const book = getBookByStandardId(bookId);
 
@@ -396,14 +396,14 @@ export const bibleApi = {
     /**
      * Alias for backward compatibility
      */
-    async getChapterContent(bookId: string, chapterNum: number, translation: string = DEFAULT_TRANSLATION): Promise<BiblePassage | null> {
+    async getChapterContent(bookId: string, chapterNum: number, translation: string = DEFAULT_TRANSLATION): Promise<coursesPassage | null> {
         return this.getChapter(bookId, chapterNum, translation);
     },
 
     /**
      * Get verse of the day
      */
-    async getVerseOfTheDay(translation: string = DEFAULT_TRANSLATION): Promise<BibleVerse> {
+    async getVerseOfTheDay(translation: string = DEFAULT_TRANSLATION): Promise<coursesVerse> {
         try {
             const verse = await getLocalVerseOfTheDay();
             if (verse) {
@@ -418,7 +418,7 @@ export const bibleApi = {
     /**
      * Get a random verse
      */
-    async getRandomVerse(translation: string = DEFAULT_TRANSLATION): Promise<BibleVerse> {
+    async getRandomVerse(translation: string = DEFAULT_TRANSLATION): Promise<coursesVerse> {
         try {
             const verse = await getLocalRandomVerse();
             if (verse) {
@@ -433,7 +433,7 @@ export const bibleApi = {
     /**
      * Get multiple random verses
      */
-    async getMultipleRandomVerses(count: number, translation: string = DEFAULT_TRANSLATION): Promise<BibleVerse[]> {
+    async getMultipleRandomVerses(count: number, translation: string = DEFAULT_TRANSLATION): Promise<coursesVerse[]> {
         try {
             const verses = await getLocalRandomVerses(count);
             return verses.map(v => convertLocalVerseToApiFormat(v));
@@ -444,23 +444,23 @@ export const bibleApi = {
     },
 
     /**
-     * Search Bible
+     * Search courses
      */
-    async searchBible(query: string, translation: string = DEFAULT_TRANSLATION, maxResults: number = 50): Promise<BibleVerse[]> {
+    async searchcourses(query: string, translation: string = DEFAULT_TRANSLATION, maxResults: number = 50): Promise<coursesVerse[]> {
         try {
-            const results = await localSearchBible(query, maxResults);
+            const results = await localSearchcourses(query, maxResults);
             return results.map(v => convertLocalVerseToApiFormat(v));
         } catch (e) {
-            console.error('Error searching bible:', e);
+            console.error('Error searching courses:', e);
             return [];
         }
     },
 
     /**
-     * Advanced search: search entire Bible, group by book with occurrence count
+     * Advanced search: search entire courses, group by book with occurrence count
      */
-    async advancedSearchBible(query: string) {
-        return localAdvancedSearchBible(query);
+    async advancedSearchcourses(query: string) {
+        return localAdvancedSearchcourses(query);
     },
 
     /**
@@ -471,7 +471,7 @@ export const bibleApi = {
     },
 
     /**
-     * Parse a Bible reference string like "Genèse 1:1-5", "Psaumes 23", "1 Corinthiens 13:4"
+     * Parse a courses reference string like "Genèse 1:1-5", "Psaumes 23", "1 Corinthiens 13:4"
      * Returns { bookId, chapter, verseStart?, verseEnd? } or null if unparseable
      */
     parseReference(reference: string): { bookId: string; chapter: number; verseStart?: number; verseEnd?: number } | null {
@@ -497,7 +497,7 @@ export const bibleApi = {
             const normalizedName = bookName.toLowerCase()
                 .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // Remove accents
 
-            let book = BIBLE_BOOKS.find(b => {
+            let book = courses_BOOKS.find(b => {
                 const bName = b.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                 const bLong = b.nameLong.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                 return bName === normalizedName || bLong === normalizedName;
@@ -505,7 +505,7 @@ export const bibleApi = {
 
             // Partial match fallback
             if (!book) {
-                book = BIBLE_BOOKS.find(b => {
+                book = courses_BOOKS.find(b => {
                     const bName = b.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                     return bName.startsWith(normalizedName) || normalizedName.startsWith(bName);
                 });
@@ -513,7 +513,7 @@ export const bibleApi = {
 
             // Abbreviation fallback
             if (!book) {
-                book = BIBLE_BOOKS.find(b =>
+                book = courses_BOOKS.find(b =>
                     b.abbreviation.toLowerCase() === bookName.toLowerCase()
                 );
             }
@@ -531,4 +531,4 @@ export const bibleApi = {
     }
 };
 
-export default bibleApi;
+export default coursesApi;

@@ -9,12 +9,12 @@ import { toast } from 'sonner';
 import { Plus, Upload, X, Loader2, Image as ImageIcon, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-interface AddTestimonialDialogProps {
+interface AddExperienceFeedbackDialogProps {
     onSuccess?: () => void;
     trigger?: React.ReactNode;
 }
 
-export function AddTestimonialDialog({ onSuccess, trigger }: AddTestimonialDialogProps) {
+export function AddExperienceFeedbackDialog({ onSuccess, trigger }: AddExperienceFeedbackDialogProps) {
     const [open, setOpen] = useState(false);
     const [content, setContent] = useState('');
     const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -61,7 +61,7 @@ export function AddTestimonialDialog({ onSuccess, trigger }: AddTestimonialDialo
             const filename = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
 
             const { data, error } = await supabase.storage
-                .from('testimonial-photos')
+                .from('ExperienceFeedback-photos')
                 .upload(filename, photoFile, {
                     cacheControl: '3600',
                     upsert: false
@@ -70,7 +70,7 @@ export function AddTestimonialDialog({ onSuccess, trigger }: AddTestimonialDialo
             if (error) throw error;
 
             const { data: { publicUrl } } = supabase.storage
-                .from('testimonial-photos')
+                .from('ExperienceFeedback-photos')
                 .getPublicUrl(filename);
 
             return publicUrl;
@@ -107,9 +107,9 @@ export function AddTestimonialDialog({ onSuccess, trigger }: AddTestimonialDialo
                 }
             }
 
-            // Insert testimonial
+            // Insert ExperienceFeedback
             const { error } = await supabase
-                .from('testimonials')
+                .from('experience_feedbacks')
                 .insert({
                     user_id: user.id,
                     content: content.trim(),
@@ -125,7 +125,7 @@ export function AddTestimonialDialog({ onSuccess, trigger }: AddTestimonialDialo
             resetForm();
             onSuccess?.();
         } catch (error: any) {
-            console.error('Error submitting testimonial:', error);
+            console.error('Error submitting ExperienceFeedback:', error);
             toast.error(error.message || 'Erreur lors de l\'envoi du témoignage');
         } finally {
             setSaving(false);
@@ -156,7 +156,7 @@ export function AddTestimonialDialog({ onSuccess, trigger }: AddTestimonialDialo
                 </DialogHeader>
 
                 <div className="space-y-6 pt-4">
-                    {/* Testimonial Content */}
+                    {/* ExperienceFeedback Content */}
                     <div className="space-y-2">
                         <label className="text-xs font-bold text-slate-400 uppercase">
                             Votre témoignage

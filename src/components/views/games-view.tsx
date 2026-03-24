@@ -9,8 +9,8 @@ import dynamic from 'next/dynamic';
 import { getGameHistory, getGameStats, formatGameTypeName, getGameTypeEmoji, type GameHistoryEntry } from '@/lib/game-history';
 
 // Lazy load game components
-const BibleQuiz = dynamic(() => import('@/components/games/bible-quiz').then(m => ({ default: m.BibleQuiz })), { ssr: false });
-const BibleMemoryGame = dynamic(() => import('@/components/games/bible-memory-game').then(m => ({ default: m.BibleMemoryGame })), { ssr: false });
+const coursesQuiz = dynamic(() => import('@/components/games/courses-quiz').then(m => ({ default: m.coursesQuiz })), { ssr: false });
+const coursesMemoryGame = dynamic(() => import('@/components/games/courses-memory-game').then(m => ({ default: m.coursesMemoryGame })), { ssr: false });
 const MultiplayerManager = dynamic(() => import('@/components/games/multiplayer-manager').then(m => ({ default: m.MultiplayerManager })), { ssr: false });
 const WordSearchGame = dynamic(() => import('@/components/games/word-search-game').then(m => ({ default: m.WordSearchGame })), { ssr: false });
 const ChronoGame = dynamic(() => import('@/components/games/chrono-game').then(m => ({ default: m.ChronoGame })), { ssr: false });
@@ -76,7 +76,7 @@ const GAME_CARDS = [
     {
         id: 'multiplayer_groups' as GameId,
         title: '👥 Groupes de Joueurs',
-        subtitle: 'Multijoueur • Communauté',
+        subtitle: 'Multijoueur • Forum étudiant',
         description: 'Rejoignez un groupe et jouez ensemble',
         gradient: 'from-sky-600 to-blue-600',
         glow: 'shadow-sky-500/30',
@@ -91,9 +91,9 @@ export function GamesView({ onBack }: GamesViewProps) {
         switch (activeGame) {
 
             case 'quiz':
-                return <BibleQuiz onBack={() => setActiveGame(null)} />;
+                return <coursesQuiz onBack={() => setActiveGame(null)} />;
             case 'memory':
-                return <BibleMemoryGame onBack={() => setActiveGame(null)} />;
+                return <coursesMemoryGame onBack={() => setActiveGame(null)} />;
             case 'multiplayer':
                 return <MultiplayerManager onBack={() => setActiveGame(null)} />;
             case 'word_search':

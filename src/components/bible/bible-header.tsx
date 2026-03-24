@@ -5,17 +5,17 @@ import { Search, Star, BookOpen, Brain, CalendarDays, ArrowLeft } from "lucide-r
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 
-export type BibleTab = 'home' | 'read' | 'search' | 'highlights' | 'plans' | 'memorize';
+export type coursesTab = 'home' | 'read' | 'search' | 'highlights' | 'plans' | 'memorize';
 
-interface BibleHeaderProps {
-    currentTab: BibleTab;
-    onTabChange: (tab: BibleTab) => void;
+interface coursesHeaderProps {
+    currentTab: coursesTab;
+    onTabChange: (tab: coursesTab) => void;
     title?: string;
     subtitle?: string;
     showBack?: boolean;
 }
 
-const NAV_ITEMS: { id: BibleTab; label: string; icon: React.ReactNode; gradient: string }[] = [
+const NAV_ITEMS: { id: coursesTab; label: string; icon: React.ReactNode; gradient: string }[] = [
     { id: 'home', label: 'Lecture', icon: <BookOpen className="h-4 w-4" />, gradient: 'from-indigo-500 to-violet-500' },
     { id: 'search', label: 'Recherche', icon: <Search className="h-4 w-4" />, gradient: 'from-amber-500 to-orange-500' },
     { id: 'highlights', label: 'Notes', icon: <Star className="h-4 w-4" />, gradient: 'from-emerald-500 to-teal-500' },
@@ -23,7 +23,7 @@ const NAV_ITEMS: { id: BibleTab; label: string; icon: React.ReactNode; gradient:
     { id: 'memorize', label: 'Mémoriser', icon: <Brain className="h-4 w-4" />, gradient: 'from-purple-500 to-fuchsia-500' },
 ];
 
-export function BibleHeader({ currentTab, onTabChange, title, subtitle, showBack }: BibleHeaderProps) {
+export function coursesHeader({ currentTab, onTabChange, title, subtitle, showBack }: coursesHeaderProps) {
     return (
         <header className="relative z-40">
             {/* Title bar */}
@@ -38,7 +38,7 @@ export function BibleHeader({ currentTab, onTabChange, title, subtitle, showBack
                             <BookOpen className="h-5 w-5 text-white" />
                         </div>
                         <div>
-                            <h1 className="text-2xl font-black tracking-tight text-white">{title || 'Bible'}</h1>
+                            <h1 className="text-2xl font-black tracking-tight text-white">{title || 'courses'}</h1>
                             {subtitle && <p className="text-[11px] text-slate-500 font-medium">{subtitle}</p>}
                         </div>
                     </div>
@@ -66,7 +66,7 @@ export function BibleHeader({ currentTab, onTabChange, title, subtitle, showBack
                             >
                                 {currentTab === item.id && (
                                     <motion.div
-                                        layoutId="bible-nav-pill"
+                                        layoutId="courses-nav-pill"
                                         className={cn("absolute inset-0 rounded-xl bg-gradient-to-r opacity-90", item.gradient)}
                                         transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                                     />

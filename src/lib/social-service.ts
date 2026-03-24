@@ -1,6 +1,6 @@
 // Social Features Service
 // =======================
-// Handles likes, favorites, sharing, and testimonials
+// Handles likes, favorites, sharing, and experience_feedbacks
 
 import { supabase } from './supabase';
 
@@ -14,53 +14,53 @@ export interface SocialAction {
 
 export const socialService = {
     // ========================
-    // TESTIMONIAL LIKES
+    // ExperienceFeedback LIKES
     // ========================
 
-    async toggleTestimonialLike(testimonialId: string, userId: string): Promise<SocialAction> {
+    async toggleExperienceFeedbackLike(ExperienceFeedbackId: string, userId: string): Promise<SocialAction> {
         try {
             // Try to use the database function first
             const { data, error } = await supabase
-                .rpc('toggle_testimonial_like', {
-                    testimonial_id: testimonialId,
+                .rpc('toggle_ExperienceFeedback_like', {
+                    ExperienceFeedback_id: ExperienceFeedbackId,
                     liking_user_id: userId
                 });
 
             if (error) {
                 // Fallback: manual update
-                const { data: testimonial } = await supabase
-                    .from('testimonials')
+                const { data: ExperienceFeedback } = await supabase
+                    .from('experience_feedbacks')
                     .select('likes, liked_by')
-                    .eq('id', testimonialId)
+                    .eq('id', ExperienceFeedbackId)
                     .single();
 
-                if (!testimonial) throw new Error('Testimonial not found');
+                if (!ExperienceFeedback) throw new Error('ExperienceFeedback not found');
 
-                const likedBy = testimonial.liked_by || [];
+                const likedBy = ExperienceFeedback.liked_by || [];
                 const alreadyLiked = likedBy.includes(userId);
 
                 if (alreadyLiked) {
                     // Remove like
                     await supabase
-                        .from('testimonials')
+                        .from('experience_feedbacks')
                         .update({
-                            likes: Math.max(0, (testimonial.likes || 0) - 1),
+                            likes: Math.max(0, (ExperienceFeedback.likes || 0) - 1),
                             liked_by: likedBy.filter((id: string) => id !== userId)
                         })
-                        .eq('id', testimonialId);
+                        .eq('id', ExperienceFeedbackId);
 
-                    return { success: true, liked: false, count: Math.max(0, (testimonial.likes || 0) - 1) };
+                    return { success: true, liked: false, count: Math.max(0, (ExperienceFeedback.likes || 0) - 1) };
                 } else {
                     // Add like
                     await supabase
-                        .from('testimonials')
+                        .from('experience_feedbacks')
                         .update({
-                            likes: (testimonial.likes || 0) + 1,
+                            likes: (ExperienceFeedback.likes || 0) + 1,
                             liked_by: [...likedBy, userId]
                         })
-                        .eq('id', testimonialId);
+                        .eq('id', ExperienceFeedbackId);
 
-                    return { success: true, liked: true, count: (testimonial.likes || 0) + 1 };
+                    return { success: true, liked: true, count: (ExperienceFeedback.likes || 0) + 1 };
                 }
             }
 
@@ -71,12 +71,12 @@ export const socialService = {
         }
     },
 
-    async isTestimonialLiked(testimonialId: string, userId: string): Promise<boolean> {
+    async isExperienceFeedbackLiked(ExperienceFeedbackId: string, userId: string): Promise<boolean> {
         try {
             const { data } = await supabase
-                .from('testimonials')
+                .from('experience_feedbacks')
                 .select('liked_by')
-                .eq('id', testimonialId)
+                .eq('id', ExperienceFeedbackId)
                 .single();
 
             return data?.liked_by?.includes(userId) || false;
@@ -92,7 +92,7 @@ export const socialService = {
     async togglePrayerLike(prayerId: string, userId: string): Promise<SocialAction> {
         try {
             const { data: prayer } = await supabase
-                .from('prayer_requests')
+                .from('tutoring_requests')
                 .select('prayer_count, prayed_by')
                 .eq('id', prayerId)
                 .single();
@@ -105,7 +105,7 @@ export const socialService = {
             if (alreadyPrayed) {
                 // Remove prayer
                 await supabase
-                    .from('prayer_requests')
+                    .from('tutoring_requests')
                     .update({
                         prayer_count: Math.max(0, (prayer.prayer_count || 0) - 1),
                         prayed_by: prayedBy.filter((id: string) => id !== userId)
@@ -116,7 +116,7 @@ export const socialService = {
             } else {
                 // Add prayer
                 await supabase
-                    .from('prayer_requests')
+                    .from('tutoring_requests')
                     .update({
                         prayer_count: (prayer.prayer_count || 0) + 1,
                         prayed_by: [...prayedBy, userId]
@@ -225,13 +225,13 @@ export const socialService = {
     },
 
     // ========================
-    // TESTIMONIALS
+    // experience_feedbacks
     // ========================
 
-    async createTestimonial(userId: string, content: string, photoUrl?: string, photos?: string[]): Promise<SocialAction> {
+    async createExperienceFeedback(userId: string, content: string, photoUrl?: string, photos?: string[]): Promise<SocialAction> {
         try {
             const { error } = await supabase
-                .from('testimonials')
+                .from('experience_feedbacks')
                 .insert({
                     user_id: userId,
                     content: content,
@@ -245,15 +245,15 @@ export const socialService = {
             if (error) throw error;
             return { success: true };
         } catch (e: any) {
-            console.error('Error creating testimonial:', e);
+            console.error('Error creating ExperienceFeedback:', e);
             return { success: false, error: e.message };
         }
     },
 
-    async getTestimonials(approvedOnly: boolean = true) {
+    async getexperience_feedbacks(approvedOnly: boolean = true) {
         try {
             let query = supabase
-                .from('testimonials')
+                .from('experience_feedbacks')
                 .select(`
                     *,
                     profiles:user_id (full_name, avatar_url)
@@ -281,7 +281,7 @@ export const socialService = {
                 createdAt: t.created_at
             })) || [];
         } catch (e) {
-            console.error('Error fetching testimonials:', e);
+            console.error('Error fetching experience_feedbacks:', e);
             return [];
         }
     },
@@ -290,7 +290,7 @@ export const socialService = {
     // PRAYER REQUESTS
     // ========================
 
-    async createPrayerRequest(
+    async createTutoringRequest(
         userId: string,
         content: string,
         category: string = 'other',
@@ -299,7 +299,7 @@ export const socialService = {
     ): Promise<SocialAction> {
         try {
             const { error } = await supabase
-                .from('prayer_requests')
+                .from('tutoring_requests')
                 .insert({
                     user_id: userId,
                     content: content,
@@ -318,10 +318,10 @@ export const socialService = {
         }
     },
 
-    async getPrayerRequests(category?: string) {
+    async getTutoringRequests(category?: string) {
         try {
             let query = supabase
-                .from('prayer_requests')
+                .from('tutoring_requests')
                 .select(`
                     *,
                     profiles:user_id (full_name, avatar_url)
@@ -359,7 +359,7 @@ export const socialService = {
     async markPrayerAnswered(prayerId: string): Promise<SocialAction> {
         try {
             const { error } = await supabase
-                .from('prayer_requests')
+                .from('tutoring_requests')
                 .update({
                     is_answered: true,
                     answered_at: new Date().toISOString()
@@ -383,7 +383,7 @@ export const socialService = {
         if (navigator.share) {
             try {
                 await navigator.share({
-                    title: title || 'Partagé depuis Maison de Prière',
+                    title: title || 'Partagé depuis CentreFormation Pro',
                     text: content,
                     url: window.location.href
                 });
@@ -412,7 +412,7 @@ export const socialService = {
             if (groupId) {
                 // Group message
                 const { error } = await supabase
-                    .from('prayer_group_messages')
+                    .from('group_messages')
                     .insert({
                         group_id: groupId,
                         user_id: userId,
@@ -424,7 +424,7 @@ export const socialService = {
                 // Community message (if table exists)
                 // First try the community_messages table
                 const { error } = await supabase
-                    .from('prayer_group_messages')
+                    .from('group_messages')
                     .insert({
                         group_id: null, // Community chat
                         user_id: userId,
@@ -444,7 +444,7 @@ export const socialService = {
         try {
             // Fetch messages without embedded join (avoids PostgREST FK issues)
             const { data: rawMsgs, error } = await supabase
-                .from('prayer_group_messages')
+                .from('group_messages')
                 .select('id, group_id, user_id, content, type, voice_url, voice_duration, created_at, is_pinned')
                 .eq('group_id', groupId)
                 .order('created_at', { ascending: true })

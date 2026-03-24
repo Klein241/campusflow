@@ -54,21 +54,21 @@ export function SystemStatusCard() {
             });
         }
 
-        // Check 3: testimonials table with is_approved column
+        // Check 3: experience_feedbacks table with is_approved column
         try {
             const { data, error } = await supabase
-                .from('testimonials')
+                .from('experience_feedbacks')
                 .select('is_approved')
                 .limit(1);
 
             newChecks.push({
-                name: 'Table testimonials',
+                name: 'Table experience_feedbacks',
                 status: error ? 'error' : 'success',
                 message: error ? 'Table ou colonne manquante' : 'Table configurée correctement'
             });
         } catch (e: any) {
             newChecks.push({
-                name: 'Table testimonials',
+                name: 'Table experience_feedbacks',
                 status: 'error',
                 message: 'Table ou colonne manquante'
             });
@@ -93,20 +93,20 @@ export function SystemStatusCard() {
             });
         }
 
-        // Check 5: Storage bucket - testimonial-photos
+        // Check 5: Storage bucket - feedback-photos
         try {
             const { data, error } = await supabase.storage
-                .from('testimonial-photos')
+                .from('feedback-photos')
                 .list('', { limit: 1 });
 
             newChecks.push({
-                name: 'Bucket testimonial-photos',
+                name: 'Bucket feedback-photos',
                 status: error ? 'error' : 'success',
                 message: error ? 'Bucket manquant - Voir QUICK_START.md' : 'Bucket configuré'
             });
         } catch (e: any) {
             newChecks.push({
-                name: 'Bucket testimonial-photos',
+                name: 'Bucket feedback-photos',
                 status: 'error',
                 message: 'Bucket manquant - Voir QUICK_START.md'
             });

@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from "react";
-import { bibleApi, DEFAULT_TRANSLATION as DEFAULT_BIBLE_ID } from "@/lib/unified-bible-api";
-import type { AdvancedSearchResult } from "@/lib/local-bible-service";
+import { coursesApi, DEFAULT_TRANSLATION as DEFAULT_courses_ID } from "@/lib/unified-courses-api";
+import type { AdvancedSearchResult } from "@/lib/local-courses-service";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,13 +13,13 @@ import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useAppStore } from "@/lib/store";
 
-interface BibleFullSearchProps {
+interface coursesFullSearchProps {
     onNavigate: (bookId: string, chapter: string) => void;
 }
 
 const SUGGESTIONS = ['amour', 'foi', 'espérance', 'grâce', 'paix', 'lumière', 'miséricorde', 'justice'];
 
-export function BibleFullSearch({ onNavigate }: BibleFullSearchProps) {
+export function coursesFullSearch({ onNavigate }: coursesFullSearchProps) {
     const [query, setQuery] = useState("");
     const [advancedResults, setAdvancedResults] = useState<AdvancedSearchResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -37,7 +37,7 @@ export function BibleFullSearch({ onNavigate }: BibleFullSearchProps) {
         setHasSearched(true);
 
         try {
-            const results = await bibleApi.advancedSearchBible(term);
+            const results = await coursesApi.advancedSearchcourses(term);
             setAdvancedResults(results);
             setTotalOccurrences(results.reduce((sum, r) => sum + r.occurrences, 0));
         } catch {
@@ -95,7 +95,7 @@ export function BibleFullSearch({ onNavigate }: BibleFullSearchProps) {
                                 <Search className="h-7 w-7 text-amber-400 animate-pulse" />
                             </div>
                         </div>
-                        <p className="text-slate-500 text-sm font-medium animate-pulse">Recherche dans toute la Bible...</p>
+                        <p className="text-slate-500 text-sm font-medium animate-pulse">Recherche dans toute la courses...</p>
                     </div>
                 ) : advancedResults.length > 0 ? (
                     <div className="space-y-3 pb-32">
@@ -168,7 +168,7 @@ export function BibleFullSearch({ onNavigate }: BibleFullSearchProps) {
                         <div className="w-20 h-20 rounded-3xl bg-linear-to-br from-amber-500/10 to-orange-500/10 flex items-center justify-center mx-auto mb-5">
                             <Search className="h-9 w-9 text-amber-400/50" />
                         </div>
-                        <p className="font-bold text-slate-300 mb-2">Recherche dans toute la Bible</p>
+                        <p className="font-bold text-slate-300 mb-2">Recherche dans toute la courses</p>
                         <p className="text-sm text-slate-500 max-w-xs mx-auto">Tapez un mot pour voir tous les livres et versets qui le contiennent.</p>
                     </div>
                 )}

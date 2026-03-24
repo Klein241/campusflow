@@ -1,7 +1,7 @@
 // Game History & Offline Persistence via localStorage
 // ====================================================
 // Provides game history tracking, save/resume functionality,
-// and offline storage for all Bible games.
+// and offline storage for all courses games.
 
 export interface GameHistoryEntry {
     id: string;
@@ -32,9 +32,9 @@ export interface GameSave {
     metadata?: Record<string, any>;
 }
 
-const HISTORY_KEY = 'bible_game_history';
-const SAVE_KEY = 'bible_game_saves';
-const STATS_KEY = 'bible_game_stats';
+const HISTORY_KEY = 'courses_game_history';
+const SAVE_KEY = 'courses_game_saves';
+const STATS_KEY = 'courses_game_stats';
 const MAX_HISTORY = 100;
 
 // ===== GAME HISTORY =====

@@ -1,17 +1,17 @@
-# 🕊️ Maison de Prière - Prayer Marathon App
+# 🕊️ CentreFormation Pro - Prayer CentreFormation App
 
-**Maison de Prière** est une application web progressive (PWA) complète conçue pour connecter les croyants dans une expérience de prière, d'étude biblique et de communion en ligne.
+**CentreFormation Pro** est une application web progressive (PWA) complète conçue pour connecter les croyants dans une expérience de prière, d'étude biblique et de communion en ligne.
 
 ![Aperçu de l'application](public/window.svg)
 
 ## 🚀 Fonctionnalités Principales
 
-### 🙏 Groupes de Prière & Marathon
+### 🙏 Groupes de Prière & CentreFormation
 - **Création de Groupes** : Créez des espaces dédiés pour des sujets de prière spécifiques.
-- **Marathons de Prière** : Organisez des sessions de prière continues (24/7) avec des créneaux horaires.
-- **Témoignages** : Partagez et célébrez les prières exaucées.
+- **CentreFormations de Prière** : Organisez des sessions de prière continues (24/7) avec des créneaux horaires.
+- **Retours d'expérience** : Partagez et célébrez les prières exaucées.
 
-### 💬 Communication & Communauté
+### 💬 Communication & Forum étudiant
 - **Chat Temps Réel** : Messagerie instantanée style WhatsApp avec support des émojis et réactions.
 - **Messages Vocaux** : Enregistrez et partagez des prières ou encouragements vocaux.
 - **Appels Vidéo** : Réunions de groupe et appels individuels intégrés.
@@ -36,8 +36,8 @@
 
 1. **Cloner le projet**
    ```bash
-   git clone https://github.com/votre-username/maisondepriere.git
-   cd maisondepriere
+   git clone https://github.com/votre-username/centreformation.git
+   cd centreformation
    ```
 
 2. **Installer les dépendances**

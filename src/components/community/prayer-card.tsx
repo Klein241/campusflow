@@ -13,9 +13,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/lib/supabase";
-import { PrayerCategory, PrayerRequest } from "@/lib/types";
+import { PrayerCategory, TutoringRequest } from "@/lib/types";
 import { PhotoGallery } from "@/components/ui/photo-upload";
-import { PrayerGroupManager } from "@/components/community/prayer-group-manager";
+import { StudyGroupManager } from "@/components/community/prayer-group-manager";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow, format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -30,7 +30,7 @@ export function PrayerCard({
     userId,
     onOpenChat
 }: {
-    prayer: PrayerRequest;
+    prayer: TutoringRequest;
     onPray: () => void;
     onDelete?: (id: string) => void;
     getCategoryInfo: (cat: PrayerCategory) => any;
@@ -99,7 +99,7 @@ export function PrayerCard({
             try {
                 // Primary check by prayer_request_id
                 const { data, error } = await supabase
-                    .from('prayer_groups')
+                    .from('study_groups')
                     .select('id')
                     .eq('prayer_request_id', prayerId)
                     .limit(1);
@@ -113,7 +113,7 @@ export function PrayerCard({
                 if (contentText) {
                     const searchKey = contentText.substring(0, 30);
                     const { data: fallback } = await supabase
-                        .from('prayer_groups')
+                        .from('study_groups')
                         .select('id')
                         .ilike('name', `%${searchKey}%`)
                         .limit(1);
@@ -168,7 +168,7 @@ export function PrayerCard({
         try {
             // Update prayer request - when marked as answered, also lock it
             const { error } = await supabase
-                .from('prayer_requests')
+                .from('tutoring_requests')
                 .update({
                     is_answered: newStatus,
                     answered_at: newStatus ? new Date().toISOString() : null,
@@ -182,14 +182,14 @@ export function PrayerCard({
             if (newStatus) {
                 // Find and close any associated prayer group
                 const { data: groupData } = await supabase
-                    .from('prayer_groups')
+                    .from('study_groups')
                     .select('id')
                     .eq('prayer_request_id', prayerId)
                     .single();
 
                 if (groupData) {
                     await supabase
-                        .from('prayer_groups')
+                        .from('study_groups')
                         .update({
                             is_open: false,
                             is_closed: true,
@@ -221,7 +221,7 @@ export function PrayerCard({
         setIsSubmitting(true);
         try {
             const { error } = await supabase
-                .from('testimonials')
+                .from('experience_feedbacks')
                 .insert({
                     user_id: userId,
                     content: testimonyContent.trim(),
@@ -272,7 +272,7 @@ export function PrayerCard({
         try {
             // Direct Supabase delete (no serverless function needed)
             const { error } = await supabase
-                .from('prayer_requests')
+                .from('tutoring_requests')
                 .delete()
                 .eq('id', prayerId);
             if (error) throw error;
@@ -518,7 +518,7 @@ export function PrayerCard({
                                 )}
                                 onClick={() => {
                                     if (isGuest) {
-                                        toast.error("Connectez-vous ou créez un compte pour accéder aux groupes de prière 🙏");
+                                        toast.error("Connectez-vous ou créez un compte pour accéder aux groupes d'etude 🙏");
                                         return;
                                     }
                                     setShowGroupDialog(true);
@@ -626,7 +626,7 @@ export function PrayerCard({
             {/* Group Dialog */}
             <Dialog open={showGroupDialog} onOpenChange={setShowGroupDialog}>
                 <DialogContent className="bg-[#0F1219] border-white/10 text-white max-w-[95vw] sm:max-w-md rounded-2xl sm:rounded-4xl max-h-[85vh] overflow-y-auto">
-                    <PrayerGroupManager
+                    <StudyGroupManager
                         prayerId={prayerId}
                         prayerContent={prayer.content}
                         prayerOwnerId={prayerUserId}

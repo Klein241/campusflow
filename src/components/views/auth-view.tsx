@@ -54,7 +54,7 @@ export function AuthView() {
             toast.error('Numéro de téléphone trop court');
             return;
         }
-        const email = `${cleanPhone}@marathon.local`;
+        const email = `${cleanPhone}@CentreFormation.local`;
         await signIn(email, loginPassword);
     };
 
@@ -86,7 +86,7 @@ export function AuthView() {
         setIsResetting(true);
         try {
             const cleanPhone = resetPhone.replace(/\D/g, '');
-            const email = `${cleanPhone}@marathon.local`;
+            const email = `${cleanPhone}@CentreFormation.local`;
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
                 redirectTo: `${window.location.origin}/`,
             });
@@ -134,7 +134,7 @@ export function AuthView() {
         if (recoveryEmail.trim() && recoveryEmail.includes('@')) {
             try {
                 const cleanPhone = whatsapp.replace(/\D/g, '');
-                const email = `${cleanPhone}@marathon.local`;
+                const email = `${cleanPhone}@CentreFormation.local`;
                 const { data: authData } = await supabase.auth.getUser();
                 if (authData?.user?.id) {
                     await supabase.from('profiles').update({ recovery_email: recoveryEmail.trim() }).eq('id', authData.user.id);
@@ -146,7 +146,7 @@ export function AuthView() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-4 bg-linear-to-br from-spiritual via-primary to-spiritual/80">
+        <div className="min-h-screen flex items-center justify-center p-4 bg-linear-to-br from-indigo-900 via-blue-800 to-indigo-900/80">
             <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -161,10 +161,10 @@ export function AuthView() {
                             transition={{ delay: 0.2 }}
                             className="mx-auto bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mb-4 text-4xl"
                         >
-                            🙏
+                            🎓
                         </motion.div>
-                        <CardTitle className="text-2xl font-bold bg-linear-to-r from-primary to-spiritual bg-clip-text text-transparent">
-                            Maison de Prière
+                        <CardTitle className="text-2xl font-bold bg-linear-to-r from-indigo-400 to-blue-400 bg-clip-text text-transparent">
+                            CentreFormation Pro
                         </CardTitle>
                         <CardDescription>
                             Connectez-vous simplement avec votre numéro WhatsApp
@@ -413,7 +413,7 @@ export function AuthView() {
                                                 </>
                                             ) : (
                                                 <>
-                                                    Rejoindre le Marathon
+                                                    S'inscrire
                                                     <ArrowRight className="ml-2 h-4 w-4" />
                                                 </>
                                             )}
@@ -424,7 +424,7 @@ export function AuthView() {
                         </Tabs>
                     </CardContent>
                     <CardFooter className="justify-center text-xs text-muted-foreground">
-                        Rejoignez une communauté de prière mondiale
+                        Plateforme de gestion pour centre de formation
                     </CardFooter>
                 </Card>
 

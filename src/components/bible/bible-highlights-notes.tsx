@@ -10,22 +10,22 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppStore } from "@/lib/store";
-import { useBibleFavorites, useBibleHighlights, shareVerse, HIGHLIGHT_COLORS, HighlightColor } from "@/lib/bible-features";
+import { usecoursesFavorites, usecoursesHighlights, shareVerse, HIGHLIGHT_COLORS, HighlightColor } from "@/lib/courses-features";
 
-interface BibleHighlightsNotesProps {
+interface coursesHighlightsNotesProps {
     onNavigate: (bookId: string, chapter: string) => void;
 }
 
 type SubTab = 'favorites' | 'highlights' | 'notes';
 
-export function BibleHighlightsNotes({ onNavigate }: BibleHighlightsNotesProps) {
+export function coursesHighlightsNotes({ onNavigate }: coursesHighlightsNotesProps) {
     const { user } = useAppStore();
-    const { favorites, removeFavorite } = useBibleFavorites(user?.id);
-    const { highlights, removeHighlight } = useBibleHighlights(user?.id);
+    const { favorites, removeFavorite } = usecoursesFavorites(user?.id);
+    const { highlights, removeHighlight } = usecoursesHighlights(user?.id);
     const [subTab, setSubTab] = useState<SubTab>('favorites');
     const [noteInput, setNoteInput] = useState<{ id: string; text: string } | null>(null);
-    const { bibleNavigation, setBibleNavigation } = useAppStore();
-    const books = require('@/lib/unified-bible-api').bibleApi.getBooks();
+    const { coursesNavigation, setcoursesNavigation } = useAppStore();
+    const books = require('@/lib/unified-courses-api').coursesApi.getBooks();
 
     const copyVerse = (text: string, ref: string) => {
         navigator.clipboard.writeText(`"${text}" - ${ref}`);

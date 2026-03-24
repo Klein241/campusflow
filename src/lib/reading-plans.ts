@@ -3,7 +3,7 @@
 /**
  * READING PLANS & VERSE MEMORIZATION
  * ===================================
- * State management for Bible reading plans and spaced-repetition flashcards
+ * State management for courses reading plans and spaced-repetition flashcards
  */
 
 import { create } from 'zustand';
@@ -68,9 +68,9 @@ export type SRSRating = 'again' | 'hard' | 'good' | 'easy';
 
 export const READING_PLANS: ReadingPlan[] = [
     {
-        id: 'bible-1-year',
-        name: 'Bible en 1 an',
-        description: 'Lisez toute la Bible en 365 jours à raison de ~3 chapitres par jour.',
+        id: 'courses-1-year',
+        name: 'courses en 1 an',
+        description: 'Lisez toute la courses en 365 jours à raison de ~3 chapitres par jour.',
         icon: '📖',
         totalDays: 365,
         category: 'full',
@@ -337,7 +337,7 @@ export const useReadingPlanStore = create<ReadingPlanState>()(
             },
         }),
         {
-            name: 'bible-reading-plans-storage',
+            name: 'courses-reading-plans-storage',
         }
     )
 );

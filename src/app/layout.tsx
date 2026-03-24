@@ -41,19 +41,19 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Maison de Prière",
-  description: "Maison de Prière — Communauté de prière, Bible et partage spirituel.",
+  title: "CentreFormation Pro",
+  description: "CentreFormation Pro — Plateforme de gestion pour centre de formation. Cursus, notes, paiements et marketplace.",
   manifest: "/manifest.json",
   openGraph: {
-    title: "Maison de Prière",
-    description: "Communauté de prière, Bible et partage spirituel.",
+    title: "CentreFormation Pro",
+    description: "Plateforme de gestion pour centre de formation.",
     images: ["/icon-512.png"],
     type: "website",
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Maison de Prière",
+    title: "CentreFormation Pro",
   },
   other: {
     "apple-mobile-web-app-capable": "yes",
@@ -81,7 +81,7 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icon-192.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="Maison de Prière" />
+        <meta name="apple-mobile-web-app-title" content="CentreFormation Pro" />
         {/* Microsoft Tiles */}
         <meta name="msapplication-TileColor" content="#0F172A" />
         <meta name="msapplication-TileImage" content="/icon-192.png" />

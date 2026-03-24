@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { WhatsAppChat } from '@/components/community/whatsapp-chat';
+import { WhatsAppChat } from '@/components/community/forum-chat';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';

@@ -213,7 +213,7 @@ function VideoContent() {
 
     const handleShare = async () => {
         const url = window.location.href;
-        const title = video?.title || 'Vidéo Maison de Prière';
+        const title = video?.title || 'Vidéo CentreFormation Pro';
         if (navigator.share) {
             try {
                 await navigator.share({ title, text: `Regardez cette vidéo: ${title}`, url });

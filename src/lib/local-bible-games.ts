@@ -1,22 +1,22 @@
 /**
- * LOCAL BIBLE GAMES SERVICE
+ * LOCAL courses GAMES SERVICE
  * =========================
- * Generate unlimited Bible game content from local Bible data
+ * Generate unlimited courses game content from local courses data
  * Supports both French and English languages
  */
 
 import {
-    BIBLE_BOOKS,
-    BibleVerse,
+    courses_BOOKS,
+    coursesVerse,
     formatReference,
     getBookById
-} from './local-bible-data';
+} from './local-courses-data';
 import {
     loadChapter,
     getRandomVerse,
     getRandomVerses,
     getRandomPopularVerse
-} from './local-bible-service';
+} from './local-courses-service';
 
 // Types
 export type GameType = 'quiz' | 'fill-blank' | 'verse-order' | 'book-order' | 'word-search' | 'memory';
@@ -118,7 +118,7 @@ export async function generateQuizQuestion(
 
 // Question: Which book contains this verse?
 function generateBookQuestion(
-    verse: BibleVerse,
+    verse: coursesVerse,
     bookName: string,
     language: GameLanguage,
     difficulty: GameDifficulty
@@ -132,7 +132,7 @@ function generateBookQuestion(
     const book = getBookById(verse.book);
     const testament = book?.testament;
 
-    const wrongBooks = BIBLE_BOOKS
+    const wrongBooks = courses_BOOKS
         .filter(b => b.id !== verse.book && (difficulty === 'hard' ? b.testament === testament : true))
         .sort(() => Math.random() - 0.5)
         .slice(0, 3)
@@ -162,7 +162,7 @@ function generateBookQuestion(
 
 // Question: What does this verse say? (Complete the verse)
 function generateVerseContentQuestion(
-    verse: BibleVerse,
+    verse: coursesVerse,
     bookName: string,
     language: GameLanguage,
     difficulty: GameDifficulty
@@ -202,7 +202,7 @@ function generateVerseContentQuestion(
 
 // Question: Find the correct reference
 function generateReferenceQuestion(
-    verse: BibleVerse,
+    verse: coursesVerse,
     bookName: string,
     language: GameLanguage,
     difficulty: GameDifficulty
@@ -240,7 +240,7 @@ function generateReferenceQuestion(
 
 // Question: Which testament?
 function generateTestamentQuestion(
-    verse: BibleVerse,
+    verse: coursesVerse,
     book: { testament: string; name: string; nameEn?: string },
     language: GameLanguage,
     difficulty: GameDifficulty
@@ -269,7 +269,7 @@ function generateTestamentQuestion(
 
 // Question: Which chapter?
 function generateChapterQuestion(
-    verse: BibleVerse,
+    verse: coursesVerse,
     bookName: string,
     language: GameLanguage,
     difficulty: GameDifficulty
@@ -484,8 +484,8 @@ export function generateBookOrderQuestion(
 
     // Filter books by testament if specified
     const availableBooks = testament
-        ? BIBLE_BOOKS.filter(b => b.testament === testament)
-        : BIBLE_BOOKS;
+        ? courses_BOOKS.filter(b => b.testament === testament)
+        : courses_BOOKS;
 
     // Pick random consecutive books
     const maxStart = availableBooks.length - count;

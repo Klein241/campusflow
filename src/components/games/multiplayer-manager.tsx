@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { MultiplayerLobby, Room, Player } from './multiplayer-lobby';
-import { BibleMemoryGame } from './bible-memory-game';
+import { coursesMemoryGame } from './courses-memory-game';
 import { QuizDuelGame } from './quiz-duel-game';
 import { WhoAmIGame } from './who-am-i-game';
 import { ChronoGame } from './chrono-game';
@@ -222,10 +222,10 @@ export function MultiplayerManager({ onBack, initialView }: MultiplayerManagerPr
                 // @ts-ignore
                 gameComponent = <WordSearchGame key={roundKey} {...commonProps} grid={currentRoom.config.grid || []} words={currentRoom.config.words || []} />;
                 break;
-            case 'bible_memory':
+            case 'courses_memory':
             default:
                 // @ts-ignore
-                gameComponent = <BibleMemoryGame key={roundKey} {...commonProps} initialVerse={currentRoom.config.verse} />;
+                gameComponent = <coursesMemoryGame key={roundKey} {...commonProps} initialVerse={currentRoom.config.verse} />;
                 break;
         }
 

@@ -6,7 +6,7 @@ import { X, Heart, MessageCircle, Users, BookOpen } from 'lucide-react';
 
 interface FloatingBubbleItem {
     id: string;
-    type: 'prayer' | 'tool' | 'group' | 'bible';
+    type: 'prayer' | 'tool' | 'group' | 'courses';
     title: string;
     icon?: string;
     content?: string; // The full content to show on click
@@ -22,14 +22,14 @@ const ICONS = {
     prayer: Heart,
     tool: MessageCircle,
     group: Users,
-    bible: BookOpen,
+    courses: BookOpen,
 };
 
 const COLORS = {
     prayer: 'from-rose-500 to-pink-600',
     tool: 'from-indigo-500 to-purple-600',
     group: 'from-emerald-500 to-teal-600',
-    bible: 'from-amber-500 to-orange-600',
+    courses: 'from-amber-500 to-orange-600',
 };
 
 function DraggableBubble({

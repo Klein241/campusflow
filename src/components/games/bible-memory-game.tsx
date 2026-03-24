@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RefreshCw, CheckCircle2, Trophy, Clock, ArrowLeft, ArrowRight, Pause, Play } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { bibleApi, BibleVerse } from '@/lib/unified-bible-api';
+import { coursesApi, coursesVerse } from '@/lib/unified-courses-api';
 import { cn } from '@/lib/utils';
 import { Player } from './multiplayer-lobby';
 import { addGameHistory } from '@/lib/game-history';
@@ -18,10 +18,10 @@ interface Word {
     status: 'hidden' | 'visible' | 'selected' | 'correct';
 }
 
-interface BibleMemoryGameProps {
+interface coursesMemoryGameProps {
     onBack: () => void;
     mode?: 'solo' | 'multiplayer';
-    initialVerse?: BibleVerse;
+    initialVerse?: coursesVerse;
     players?: Player[];
     currentUserId?: string;
     onProgress?: (pct: number) => void;
@@ -31,7 +31,7 @@ interface BibleMemoryGameProps {
     onNextRound?: () => void;
 }
 
-export function BibleMemoryGame({
+export function coursesMemoryGame({
     onBack,
     mode = 'solo',
     initialVerse,
@@ -42,12 +42,12 @@ export function BibleMemoryGame({
     isHost,
     roundInfo,
     onNextRound
-}: BibleMemoryGameProps) {
-    const [verse, setVerse] = useState<BibleVerse | null>(initialVerse || null);
+}: coursesMemoryGameProps) {
+    const [verse, setVerse] = useState<coursesVerse | null>(initialVerse || null);
     const [shuffledWords, setShuffledWords] = useState<Word[]>([]);
     const [selectedWords, setSelectedWords] = useState<Word[]>([]);
     const [gameState, setGameState] = useState<'loading' | 'playing' | 'success'>('loading');
-    const [originalVerse, setOriginalVerse] = useState<BibleVerse | null>(null);
+    const [originalVerse, setOriginalVerse] = useState<coursesVerse | null>(null);
     const [streak, setStreak] = useState(0);
 
     // Timer state
@@ -97,7 +97,7 @@ export function BibleMemoryGame({
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const setupGame = (verseData: BibleVerse) => {
+    const setupGame = (verseData: coursesVerse) => {
         setOriginalVerse(verseData);
         setVerse(verseData);
 
@@ -119,7 +119,7 @@ export function BibleMemoryGame({
     const loadNewVerse = async () => {
         setGameState('loading');
         try {
-            const verseData = await bibleApi.getRandomVerse();
+            const verseData = await coursesApi.getRandomVerse();
             setupGame(verseData);
         } catch (error) {
             console.error('Error loading verse:', error);

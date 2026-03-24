@@ -18,7 +18,7 @@ interface TutorialStep {
 
 const STEPS: TutorialStep[] = [
     {
-        title: 'Bienvenue dans Maison de Prière ! 🙏',
+        title: 'Bienvenue dans CentreFormation Pro ! 🙏',
         description: 'Votre espace de communion, de prière et de partage spirituel. Découvrons ensemble les fonctionnalités principales.',
         icon: Heart,
         color: 'text-pink-400',
@@ -35,7 +35,7 @@ const STEPS: TutorialStep[] = [
     },
     {
         title: 'Chambres Hautes & Maisons de Prière',
-        description: 'Créez une chambre haute 🚪 autour d\'une demande de prière, puis migrez vos membres vers une maison de prière 🏠 permanente. Chat, annonces, jeûnes collectifs et plus !',
+        description: 'Créez une chambre haute 🚪 autour d\'une demande de prière, puis migrez vos membres vers une CentreFormation Pro 🏠 permanente. Chat, annonces, jeûnes collectifs et plus !',
         icon: Users,
         color: 'text-indigo-400',
         bgGradient: 'from-indigo-600/20 to-blue-600/10',
@@ -51,15 +51,15 @@ const STEPS: TutorialStep[] = [
     },
     {
         title: 'Lisez la Bible',
-        description: 'Accédez à la Bible complète dans l\'app. Lisez, surlignez et partagez vos versets préférés avec la communauté ou dans vos groupes.',
+        description: 'Accédez à la Bible complète dans l\'app. Lisez, surlignez et partagez vos versets préférés avec la forum ou dans vos groupes.',
         icon: BookOpen,
         color: 'text-emerald-400',
         bgGradient: 'from-emerald-600/20 to-teal-600/10',
         emoji: '📖',
     },
     {
-        title: 'Bibliothèque',
-        description: 'Explorez notre bibliothèque de plus de 5000 livres chrétiens. Lisez, téléchargez, notez vos livres préférés et gardez un historique de lecture.',
+        title: 'ressources',
+        description: 'Explorez notre ressources de plus de 5000 livres chrétiens. Lisez, téléchargez, notez vos livres préférés et gardez un historique de lecture.',
         icon: Gamepad2,
         color: 'text-teal-400',
         bgGradient: 'from-teal-600/20 to-emerald-600/10',

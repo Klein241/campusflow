@@ -93,7 +93,7 @@ export function usePresence(userId: string | undefined) {
         }, 20000);
 
         // ── 4. Real-time: Supabase Presence channel (INSTANT) ────
-        const presenceChannel = supabase.channel('unified-presence');
+        const presenceChannel = supabase.channel('campus-presence');
         channelRef.current = presenceChannel;
 
         presenceChannel

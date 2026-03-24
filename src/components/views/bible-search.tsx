@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Search, Loader2, BookOpen } from "lucide-react"
-import { bibleApi, DEFAULT_TRANSLATION as DEFAULT_BIBLE_ID, BibleVerse } from "@/lib/unified-bible-api"
+import { coursesApi, DEFAULT_TRANSLATION as DEFAULT_courses_ID, coursesVerse } from "@/lib/unified-courses-api"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useAppStore } from "@/lib/store"
 
@@ -14,41 +14,41 @@ interface SearchResult {
     id?: string;
 }
 
-export function BibleSearch({ onClose }: { onClose: () => void }) {
+export function coursesSearch({ onClose }: { onClose: () => void }) {
     const [query, setQuery] = useState("")
     const [results, setResults] = useState<SearchResult[]>([])
     const [loading, setLoading] = useState(false)
-    const { setBibleNavigation } = useAppStore()
+    const { setcoursesNavigation } = useAppStore()
 
     const handleSearch = async () => {
         if (!query.trim()) return;
         setLoading(true);
 
         try {
-            // Use the unified Bible API's search method
-            const searchResults = await bibleApi.searchBible(query, DEFAULT_BIBLE_ID);
+            // Use the unified courses API's search method
+            const searchResults = await coursesApi.searchcourses(query, DEFAULT_courses_ID);
 
             if (searchResults && searchResults.length > 0) {
-                setResults(searchResults.map((v: BibleVerse) => ({
+                setResults(searchResults.map((v: coursesVerse) => ({
                     reference: v.reference,
                     text: v.text,
                     id: v.reference
                 })));
             } else {
                 // Fallback: try to parse the query as a reference (e.g. "Jean 3:16")
-                const ref = bibleApi.parseReference(query);
+                const ref = coursesApi.parseReference(query);
                 if (ref) {
-                    const chapter = await bibleApi.getChapter(ref.bookId, ref.chapter, DEFAULT_BIBLE_ID);
+                    const chapter = await coursesApi.getChapter(ref.bookId, ref.chapter, DEFAULT_courses_ID);
                     if (chapter && chapter.verses.length > 0) {
                         // If specific verses requested, filter them
                         const verses = ref.verseStart
-                            ? chapter.verses.filter((v: BibleVerse) => {
+                            ? chapter.verses.filter((v: coursesVerse) => {
                                 const num = v.verse || 0;
                                 return num >= (ref.verseStart || 0) && num <= (ref.verseEnd || ref.verseStart || 0);
                             })
                             : chapter.verses;
 
-                        setResults(verses.map((v: BibleVerse) => ({
+                        setResults(verses.map((v: coursesVerse) => ({
                             reference: v.reference,
                             text: v.text,
                             id: v.reference
@@ -69,9 +69,9 @@ export function BibleSearch({ onClose }: { onClose: () => void }) {
     };
 
     const handleSelectResult = (reference: string) => {
-        const ref = bibleApi.parseReference(reference);
+        const ref = coursesApi.parseReference(reference);
         if (ref) {
-            setBibleNavigation({ bookId: ref.bookId, chapterId: `${ref.bookId}.${ref.chapter}` });
+            setcoursesNavigation({ bookId: ref.bookId, chapterId: `${ref.bookId}.${ref.chapter}` });
             onClose();
         }
     };

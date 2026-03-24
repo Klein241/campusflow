@@ -9,7 +9,7 @@
  * 
  * 6 zones supportées :
  *   - book_detail    → Détail du livre (entre les suggestions)
- *   - home_feed      → Accueil bibliothèque (bannière en haut)
+ *   - home_feed      → Accueil ressources (bannière en haut)
  *   - marketplace    → Marketplace (annonce sponsorisée)
  *   - reader_end     → Page d'accueil (bannière principale)
  *   - search_results → Résultats de recherche
@@ -60,7 +60,7 @@ async function fetchAdsForPlacement(placement: string): Promise<AdData[]> {
 
     try {
         const { data } = await supabase
-            .from('library_ads')
+            .from('resource_banners')
             .select('*')
             .eq('is_active', true)
             .eq('placement', placement)
@@ -84,14 +84,14 @@ async function fetchAdsForPlacement(placement: string): Promise<AdData[]> {
 }
 
 function trackImpression(ad: AdData) {
-    supabase.from('library_ads')
+    supabase.from('resource_banners')
         .update({ view_count: (ad.view_count || 0) + 1 })
         .eq('id', ad.id)
         .then(() => { });
 }
 
 function trackClick(ad: AdData) {
-    supabase.from('library_ads')
+    supabase.from('resource_banners')
         .update({ click_count: (ad.click_count || 0) + 1 })
         .eq('id', ad.id)
         .then(() => { });

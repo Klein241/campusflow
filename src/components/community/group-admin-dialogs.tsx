@@ -20,17 +20,17 @@ interface GroupAdminDialogsProps {
     currentGroup: ChatGroup | null;
     groupMembers: GroupMember[];
 
-    // Bible tool
-    showBibleTool: boolean;
-    setShowBibleTool: (v: boolean) => void;
-    bibleVersion: string;
-    setBibleVersion: (v: string) => void;
-    bibleReference: string;
-    setBibleReference: (v: string) => void;
-    bibleContent: string;
-    isFetchingBible: boolean;
-    fetchBiblePassage: () => void;
-    shareBiblePassage: () => void;
+    // courses tool
+    showcoursesTool: boolean;
+    setShowcoursesTool: (v: boolean) => void;
+    coursesVersion: string;
+    setcoursesVersion: (v: string) => void;
+    coursesReference: string;
+    setcoursesReference: (v: string) => void;
+    coursesContent: string;
+    isFetchingcourses: boolean;
+    fetchcoursesPassage: () => void;
+    sharecoursesPassage: () => void;
 
     // Fasting tool
     showFastingTool: boolean;
@@ -99,9 +99,9 @@ interface GroupAdminDialogsProps {
 export function GroupAdminDialogs(props: GroupAdminDialogsProps) {
     const {
         user, currentGroup, groupMembers,
-        showBibleTool, setShowBibleTool, bibleVersion, setBibleVersion,
-        bibleReference, setBibleReference, bibleContent, isFetchingBible,
-        fetchBiblePassage, shareBiblePassage,
+        showcoursesTool, setShowcoursesTool, coursesVersion, setcoursesVersion,
+        coursesReference, setcoursesReference, coursesContent, isFetchingcourses,
+        fetchcoursesPassage, sharecoursesPassage,
         showFastingTool, setShowFastingTool, fastingTheme, setFastingTheme,
         fastingDuration, setFastingDuration, fastingDays, setFastingDays,
         initFastingDays, shareFastingProgram,
@@ -172,7 +172,7 @@ export function GroupAdminDialogs(props: GroupAdminDialogsProps) {
 
             // Update comment_count on the message
             const newCount = threadComments.length + 1;
-            const table = currentGroup ? 'prayer_group_messages' : 'direct_messages';
+            const table = currentGroup ? 'group_messages' : 'direct_messages';
             await sb.from(table).update({ comment_count: newCount }).eq('id', threadMessage.id);
         } catch (e) {
             console.error('Error saving comment:', e);
@@ -257,8 +257,8 @@ export function GroupAdminDialogs(props: GroupAdminDialogsProps) {
 
     return (
         <>
-            {/* Bible Sharing Tool Dialog */}
-            <Dialog open={showBibleTool} onOpenChange={setShowBibleTool}>
+            {/* courses Sharing Tool Dialog */}
+            <Dialog open={showcoursesTool} onOpenChange={setShowcoursesTool}>
                 <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto bg-slate-900 border-white/10">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-white">
@@ -274,11 +274,11 @@ export function GroupAdminDialogs(props: GroupAdminDialogsProps) {
                                     <Button
                                         key={v}
                                         size="sm"
-                                        variant={bibleVersion === v ? 'default' : 'outline'}
-                                        className={bibleVersion === v
+                                        variant={coursesVersion === v ? 'default' : 'outline'}
+                                        className={coursesVersion === v
                                             ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                                             : 'border-white/10 text-slate-400 hover:bg-white/5'}
-                                        onClick={() => setBibleVersion(v)}
+                                        onClick={() => setcoursesVersion(v)}
                                     >
                                         {v}
                                     </Button>
@@ -290,32 +290,32 @@ export function GroupAdminDialogs(props: GroupAdminDialogsProps) {
                             <div className="flex gap-2">
                                 <Input
                                     placeholder="Ex: Jean 3:16 ou Psaume 23"
-                                    value={bibleReference}
-                                    onChange={e => setBibleReference(e.target.value)}
+                                    value={coursesReference}
+                                    onChange={e => setcoursesReference(e.target.value)}
                                     className="bg-white/5 border-white/10 text-white"
-                                    onKeyPress={e => e.key === 'Enter' && fetchBiblePassage()}
+                                    onKeyPress={e => e.key === 'Enter' && fetchcoursesPassage()}
                                 />
                                 <Button
-                                    onClick={fetchBiblePassage}
-                                    disabled={isFetchingBible}
+                                    onClick={fetchcoursesPassage}
+                                    disabled={isFetchingcourses}
                                     className="bg-emerald-600 hover:bg-emerald-700 shrink-0"
                                 >
-                                    {isFetchingBible ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                                    {isFetchingcourses ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                                 </Button>
                             </div>
                         </div>
-                        {bibleContent && (
+                        {coursesContent && (
                             <div className="p-4 rounded-xl bg-linear-to-br from-emerald-500/10 to-teal-500/5 border border-emerald-500/20">
                                 <div className="flex items-center gap-2 mb-2">
                                     <BookOpen className="h-4 w-4 text-emerald-400" />
-                                    <span className="text-emerald-400 font-semibold text-sm">{bibleReference} ({bibleVersion})</span>
+                                    <span className="text-emerald-400 font-semibold text-sm">{coursesReference} ({coursesVersion})</span>
                                 </div>
-                                <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{bibleContent}</p>
+                                <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{coursesContent}</p>
                             </div>
                         )}
-                        {bibleContent && (
+                        {coursesContent && (
                             <Button
-                                onClick={shareBiblePassage}
+                                onClick={sharecoursesPassage}
                                 className="w-full bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white"
                             >
                                 <Send className="h-4 w-4 mr-2" />

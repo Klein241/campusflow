@@ -44,7 +44,7 @@ export function EventCalendarButton({ groupId, groupName, className }: EventCale
     const [creating, setCreating] = useState(false);
     const [event, setEvent] = useState<PrayerEvent>({
         title: groupName ? `Prière de groupe - ${groupName}` : 'Moment de prière',
-        description: 'Événement de prière communautaire organisé via la Maison de Prière.',
+        description: 'Événement de prière communautaire organisé via la CentreFormation Pro.',
         startDate: new Date().toISOString().split('T')[0],
         startTime: '18:00',
         endDate: new Date().toISOString().split('T')[0],

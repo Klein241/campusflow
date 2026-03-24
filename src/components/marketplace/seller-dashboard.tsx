@@ -121,7 +121,7 @@ export function SellerDashboard({ userId, userName, userAvatar }: SellerDashboar
     const loadProducts = async (sellerId: string) => {
         try {
             const { data } = await supabase
-                .from('marketplace_products')
+                .from('shop_products')
                 .select('*')
                 .eq('seller_id', sellerId)
                 .order('created_at', { ascending: false });
@@ -137,8 +137,8 @@ export function SellerDashboard({ userId, userName, userAvatar }: SellerDashboar
     const loadOrders = async () => {
         try {
             const { data } = await supabase
-                .from('marketplace_orders')
-                .select('*, product:marketplace_products(title, images, price, currency)')
+                .from('shop_orders')
+                .select('*, product:shop_products(title, images, price, currency)')
                 .eq('seller_id', userId)
                 .order('created_at', { ascending: false })
                 .limit(20);
@@ -150,7 +150,7 @@ export function SellerDashboard({ userId, userName, userAvatar }: SellerDashboar
         try {
             const { data } = await supabase
                 .from('marketplace_conversations')
-                .select('*, buyer:profiles!marketplace_conversations_buyer_id_fkey(full_name, avatar_url), product:marketplace_products(title, images, price)')
+                .select('*, buyer:profiles!marketplace_conversations_buyer_id_fkey(full_name, avatar_url), product:shop_products(title, images, price)')
                 .eq('seller_id', userId)
                 .order('last_message_at', { ascending: false })
                 .limit(20);
@@ -222,14 +222,14 @@ export function SellerDashboard({ userId, userName, userAvatar }: SellerDashboar
 
             if (editingProduct) {
                 const { error } = await supabase
-                    .from('marketplace_products')
+                    .from('shop_products')
                     .update(productData)
                     .eq('id', editingProduct.id);
                 if (error) throw error;
                 toast.success('Produit mis à jour ✅');
             } else {
                 const { error } = await supabase
-                    .from('marketplace_products')
+                    .from('shop_products')
                     .insert(productData);
                 if (error) throw error;
                 toast.success('Produit publié 🎉');
@@ -247,7 +247,7 @@ export function SellerDashboard({ userId, userName, userAvatar }: SellerDashboar
     const deleteProduct = async (productId: string) => {
         if (!seller) return;
         try {
-            await supabase.from('marketplace_products').delete().eq('id', productId);
+            await supabase.from('shop_products').delete().eq('id', productId);
             setProducts(prev => prev.filter(p => p.id !== productId));
             toast.success('Produit supprimé');
         } catch (e: any) {
@@ -258,7 +258,7 @@ export function SellerDashboard({ userId, userName, userAvatar }: SellerDashboar
     const toggleProductStatus = async (product: Product) => {
         const newStatus = product.status === 'active' ? 'paused' : 'active';
         try {
-            await supabase.from('marketplace_products')
+            await supabase.from('shop_products')
                 .update({ status: newStatus })
                 .eq('id', product.id);
             setProducts(prev => prev.map(p => p.id === product.id ? { ...p, status: newStatus } : p));

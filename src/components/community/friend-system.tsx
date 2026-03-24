@@ -498,7 +498,7 @@ export function FriendSystem({ userId, userName, onClose, onStartChat }: FriendS
                                     <span className="text-green-400">● En ligne maintenant</span>
                                 ) : profile.last_seen ? (
                                     `Vu ${formatDistanceToNow(new Date(profile.last_seen), { addSuffix: true, locale: fr })}`
-                                ) : 'Membre de la communauté'}
+                                ) : 'Membre de la forum'}
                             </p>
 
                             {/* Location & Church */}

@@ -26,7 +26,7 @@ function BookRedirect() {
                     .single();
 
                 if (book) {
-                    document.title = `📚 ${book.title} — Maison de Prière`;
+                    document.title = `📚 ${book.title} — CentreFormation Pro`;
                 }
             } catch (e) {
                 console.error('Error loading book:', e);

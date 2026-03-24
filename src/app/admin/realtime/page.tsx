@@ -41,7 +41,7 @@ interface OnlineUser {
 
 interface ActivityEvent {
     id: string;
-    type: 'prayer' | 'message' | 'group_join' | 'testimonial' | 'login' | 'view';
+    type: 'prayer' | 'message' | 'group_join' | 'feedback' | 'login' | 'view';
     user_name: string;
     user_avatar?: string;
     description: string;
@@ -125,7 +125,7 @@ export default function RealtimeViewsPage() {
         const prayersSub = supabase
             .channel('admin_prayers_realtime')
             .on('postgres_changes',
-                { event: 'INSERT', schema: 'public', table: 'prayer_requests' },
+                { event: 'INSERT', schema: 'public', table: 'tutoring_requests' },
                 async (payload) => {
                     const { data: profile } = await supabase
                         .from('profiles')
@@ -173,7 +173,7 @@ export default function RealtimeViewsPage() {
         const groupMsgSub = supabase
             .channel('admin_group_msg_realtime')
             .on('postgres_changes',
-                { event: 'INSERT', schema: 'public', table: 'prayer_group_messages' },
+                { event: 'INSERT', schema: 'public', table: 'group_messages' },
                 async (payload) => {
                     const { data: profile } = await supabase
                         .from('profiles')
@@ -193,11 +193,11 @@ export default function RealtimeViewsPage() {
             .subscribe();
         channels.push(groupMsgSub);
 
-        // Testimonials subscription
-        const testimonialSub = supabase
-            .channel('admin_testimonial_realtime')
+        // experience_feedbacks subscription
+        const experience_feedbacksub = supabase
+            .channel('admin_feedback_realtime')
             .on('postgres_changes',
-                { event: 'INSERT', schema: 'public', table: 'testimonials' },
+                { event: 'INSERT', schema: 'public', table: 'experience_feedbacks' },
                 async (payload) => {
                     const { data: profile } = await supabase
                         .from('profiles')
@@ -206,7 +206,7 @@ export default function RealtimeViewsPage() {
                         .single();
 
                     addActivity({
-                        type: 'testimonial',
+                        type: 'feedback',
                         user_name: profile?.full_name || 'Utilisateur',
                         user_avatar: profile?.avatar_url,
                         description: `Nouveau témoignage soumis`,
@@ -214,7 +214,7 @@ export default function RealtimeViewsPage() {
                 }
             )
             .subscribe();
-        channels.push(testimonialSub);
+        channels.push(experience_feedbacksub);
 
         // Profile updates (login/online status)
         const profileSub = supabase
@@ -346,7 +346,7 @@ export default function RealtimeViewsPage() {
 
             // Total prayers
             const { count: totalPrayers } = await supabase
-                .from('prayer_requests')
+                .from('tutoring_requests')
                 .select('*', { count: 'exact', head: true });
 
             // Total messages (DM + group)
@@ -355,12 +355,12 @@ export default function RealtimeViewsPage() {
                 .select('*', { count: 'exact', head: true });
 
             const { count: totalGroupMsgs } = await supabase
-                .from('prayer_group_messages')
+                .from('group_messages')
                 .select('*', { count: 'exact', head: true });
 
             // Total groups
             const { count: totalGroups } = await supabase
-                .from('prayer_groups')
+                .from('study_groups')
                 .select('*', { count: 'exact', head: true });
 
             setStats({
@@ -390,7 +390,7 @@ export default function RealtimeViewsPage() {
             case 'prayer': return <Heart className="h-4 w-4 text-pink-400" />;
             case 'message': return <Send className="h-4 w-4 text-blue-400" />;
             case 'group_join': return <Users className="h-4 w-4 text-emerald-400" />;
-            case 'testimonial': return <BookOpen className="h-4 w-4 text-amber-400" />;
+            case 'feedback': return <BookOpen className="h-4 w-4 text-amber-400" />;
             case 'login': return <Wifi className="h-4 w-4 text-green-400" />;
             case 'view': return <Eye className="h-4 w-4 text-indigo-400" />;
             default: return <Activity className="h-4 w-4 text-slate-400" />;
@@ -402,7 +402,7 @@ export default function RealtimeViewsPage() {
             case 'prayer': return 'from-pink-500/20 to-pink-500/5';
             case 'message': return 'from-blue-500/20 to-blue-500/5';
             case 'group_join': return 'from-emerald-500/20 to-emerald-500/5';
-            case 'testimonial': return 'from-amber-500/20 to-amber-500/5';
+            case 'feedback': return 'from-amber-500/20 to-amber-500/5';
             case 'login': return 'from-green-500/20 to-green-500/5';
             case 'view': return 'from-indigo-500/20 to-indigo-500/5';
             default: return 'from-slate-500/20 to-slate-500/5';

@@ -25,7 +25,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 
 // Types
-interface BibleBook {
+interface coursesBook {
     id: string;
     book_id: string;
     name: string;
@@ -34,23 +34,23 @@ interface BibleBook {
     book_order: number;
 }
 
-interface BibleChapter {
+interface coursesChapter {
     book_id: string;
     chapter_number: number;
     content: string; // JSON string
     created_at: string;
 }
 
-export function BibleManager() {
-    const [books, setBooks] = useState<BibleBook[]>([]);
+export function coursesManager() {
+    const [books, setBooks] = useState<coursesBook[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
-    const [selectedBook, setSelectedBook] = useState<BibleBook | null>(null);
+    const [selectedBook, setSelectedBook] = useState<coursesBook | null>(null);
 
     const loadBooks = useCallback(async () => {
         setLoading(true);
         const { data, error } = await supabase
-            .from('bible_books')
+            .from('courses_books')
             .select('*')
             .order('book_order');
 
@@ -124,7 +124,7 @@ export function BibleManager() {
     );
 }
 
-function BooksList({ books, onSelect }: { books: BibleBook[], onSelect: (book: BibleBook) => void }) {
+function BooksList({ books, onSelect }: { books: coursesBook[], onSelect: (book: coursesBook) => void }) {
     return (
         <ScrollArea className="h-[600px]">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-1">
@@ -157,7 +157,7 @@ function BooksList({ books, onSelect }: { books: BibleBook[], onSelect: (book: B
 
 // --- CHAPTER MANAGER ---
 
-function BookChapterManager({ book, onBack }: { book: BibleBook, onBack: () => void }) {
+function BookChapterManager({ book, onBack }: { book: coursesBook, onBack: () => void }) {
     const [chapters, setChapters] = useState<number[]>([]);
     const [customChapters, setCustomChapters] = useState<Set<number>>(new Set());
     const [loading, setLoading] = useState(true);
@@ -167,7 +167,7 @@ function BookChapterManager({ book, onBack }: { book: BibleBook, onBack: () => v
     const loadCustomChapters = useCallback(async () => {
         setLoading(true);
         const { data, error } = await supabase
-            .from('bible_chapters')
+            .from('courses_chapters')
             .select('chapter_number')
             .eq('book_id', book.book_id);
 
@@ -226,9 +226,9 @@ function BookChapterManager({ book, onBack }: { book: BibleBook, onBack: () => v
 
             const jsonContent = JSON.stringify(verses);
 
-            // Upsert into bible_chapters
+            // Upsert into courses_chapters
             const { error } = await supabase
-                .from('bible_chapters')
+                .from('courses_chapters')
                 .upsert({
                     book_id: book.book_id,
                     chapter_number: chapterNum,
@@ -239,13 +239,13 @@ function BookChapterManager({ book, onBack }: { book: BibleBook, onBack: () => v
                 // Fallback: delete then insert if upsert fails (missing unique index)
                 if (error.message.includes('unique') || error.message.includes('constraint') || error.code === '42P10') {
                     await supabase
-                        .from('bible_chapters')
+                        .from('courses_chapters')
                         .delete()
                         .eq('book_id', book.book_id)
                         .eq('chapter_number', chapterNum);
 
                     const { error: insertError } = await supabase
-                        .from('bible_chapters')
+                        .from('courses_chapters')
                         .insert({
                             book_id: book.book_id,
                             chapter_number: chapterNum,
@@ -274,7 +274,7 @@ function BookChapterManager({ book, onBack }: { book: BibleBook, onBack: () => v
 
         try {
             const { error } = await supabase
-                .from('bible_chapters')
+                .from('courses_chapters')
                 .delete()
                 .match({ book_id: book.book_id, chapter_number: chapterNum });
 
@@ -390,4 +390,4 @@ function BookChapterManager({ book, onBack }: { book: BibleBook, onBack: () => v
     );
 }
 
-export default BibleManager;
+export default coursesManager;

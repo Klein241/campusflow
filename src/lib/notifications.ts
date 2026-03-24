@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 
 /**
  * ══════════════════════════════════════════════════════════
- * NOTIFICATION CLIENT — Maison de Prière v2
+ * NOTIFICATION CLIENT — CentreFormation Pro v2
  * ══════════════════════════════════════════════════════════
  *
  * All notification functions now route through the Cloudflare
@@ -198,7 +198,7 @@ function buildFallbackMessage(payload: NotifyWorkerPayload): { title: string; me
         case 'prayer_comment':
             return { title: '💬 Nouveau commentaire', message: `${name} a commenté votre demande de prière` };
         case 'prayer_no_response':
-            return { title: '🕊️ Votre demande attend', message: 'Votre demande n\'a pas encore reçu de prière. La communauté est là.' };
+            return { title: '🕊️ Votre demande attend', message: 'Votre demande n\'a pas encore reçu de prière. La forum est là.' };
         case 'group_access_request':
             return { title: '👥 Nouvelle demande d\'accès', message: `${name} souhaite rejoindre votre groupe "${payload.target_name}"` };
         case 'group_access_approved':
@@ -218,7 +218,7 @@ function buildFallbackMessage(payload: NotifyWorkerPayload): { title: string; me
         case 'friend_request_accepted':
             return { title: '👋 Ami ajouté !', message: `${name} a accepté votre demande d'ami` };
         case 'new_book_published':
-            return { title: '📚 Nouveau livre disponible', message: `"${payload.target_name}" vient d'être ajouté à la bibliothèque` };
+            return { title: '📚 Nouveau livre disponible', message: `"${payload.target_name}" vient d'être ajouté à la ressources` };
         default:
             return { title: 'Notification', message: payload.message_preview || 'Nouvelle notification' };
     }
@@ -453,7 +453,7 @@ export async function notifyGroupNewMessage({
 }) {
     try {
         const { data: members } = await supabase
-            .from('prayer_group_members')
+            .from('group_members')
             .select('user_id')
             .eq('group_id', groupId)
             .neq('user_id', senderId);
@@ -761,7 +761,7 @@ export async function notifyGroupMembers({
 }) {
     try {
         const { data: members } = await supabase
-            .from('prayer_group_members')
+            .from('group_members')
             .select('user_id')
             .eq('group_id', groupId)
             .neq('user_id', excludeUserId);

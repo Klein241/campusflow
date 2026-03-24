@@ -23,25 +23,25 @@ export const FEATURE_TUTORIALS: Record<string, FeatureTutorialConfig> = {
         id: 'community',
         emoji: '🙏',
         title: 'Priez ensemble',
-        description: 'Partagez vos sujets de prière, rejoignez les Chambres Hautes et les Maisons de Prière pour prier en communauté.',
+        description: 'Partagez vos sujets de prière, rejoignez les Chambres Hautes et les Maisons de Prière pour prier en forum.',
         tips: [
             '📤 Partagez vos sujets de prière',
             '❤️ Priez pour les demandes des autres',
             '🚪 Créez une Chambre Haute autour d\'une prière',
-            '🏠 Migrez vers une Maison de Prière permanente',
+            '🏠 Migrez vers une CentreFormation Pro permanente',
         ],
         color: 'from-amber-500 to-orange-600',
     },
-    bible: {
-        id: 'bible',
+    courses: {
+        id: 'courses',
         emoji: '📖',
-        title: 'Lisez la Bible',
-        description: 'Accédez à la Bible complète (LSG). Lisez, surlignez et partagez vos versets préférés.',
+        title: 'Lisez la courses',
+        description: 'Accédez à la courses complète (LSG). Lisez, surlignez et partagez vos versets préférés.',
         tips: [
             '🔍 Recherchez par livre, chapitre ou mot-clé',
             '📋 Copiez et partagez des versets',
             '🎨 Surlignez vos passages favoris',
-            '📤 Partagez dans vos groupes de prière',
+            '📤 Partagez dans vos groupes d'etude',
         ],
         color: 'from-emerald-500 to-teal-600',
     },
@@ -74,7 +74,7 @@ export const FEATURE_TUTORIALS: Record<string, FeatureTutorialConfig> = {
     journal: {
         id: 'journal',
         emoji: '📝',
-        title: 'Journal de prière',
+        title: 'Carnet de notes',
         description: 'Tenez un journal spirituel. Notez vos réflexions, prières et méditations quotidiennes.',
         tips: [
             '✍️ Écrivez vos pensées et prières',
@@ -87,7 +87,7 @@ export const FEATURE_TUTORIALS: Record<string, FeatureTutorialConfig> = {
         id: 'marketplace',
         emoji: '🛍️',
         title: 'Marketplace',
-        description: 'Découvrez des produits, événements et services proposés par la communauté.',
+        description: 'Découvrez des produits, événements et services proposés par la forum.',
         tips: [
             '🔍 Parcourez les annonces',
             '📞 Contactez les vendeurs',

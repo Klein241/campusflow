@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from "react";
-import { bibleApi, BibleBook, TRANSLATIONS as BIBLES, DEFAULT_TRANSLATION as DEFAULT_BIBLE_ID, BibleVerse } from "@/lib/unified-bible-api";
+import { coursesApi, coursesBook, TRANSLATIONS as coursesS, DEFAULT_TRANSLATION as DEFAULT_courses_ID, coursesVerse } from "@/lib/unified-courses-api";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,28 +16,28 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppStore } from "@/lib/store";
-import { useBibleFavorites, useBibleHighlights, shareVerse, copyVerse, HIGHLIGHT_COLORS, HighlightColor } from "@/lib/bible-features";
+import { usecoursesFavorites, usecoursesHighlights, shareVerse, copyVerse, HIGHLIGHT_COLORS, HighlightColor } from "@/lib/courses-features";
 import parse, { domToReact } from 'html-react-parser';
 import { useReadingPlanStore } from "@/lib/reading-plans";
 
 const OLD_TESTAMENT = ['GEN', 'EXO', 'LEV', 'NUM', 'DEU', 'JOS', 'JDG', 'RUT', '1SA', '2SA', '1KI', '2KI', '1CH', '2CH', 'EZR', 'NEH', 'EST', 'JOB', 'PSA', 'PRO', 'ECC', 'SNG', 'ISA', 'JER', 'LAM', 'EZK', 'DAN', 'HOS', 'JOL', 'AMO', 'OBA', 'JON', 'MIC', 'NAM', 'HAB', 'ZEP', 'HAG', 'ZEC', 'MAL'];
 
-interface BibleReaderProps {
+interface coursesReaderProps {
     onBack: () => void;
     initialBookId?: string;
     initialChapter?: string;
 }
 
-export function BibleReader({ onBack, initialBookId, initialChapter }: BibleReaderProps) {
-    const { bibleNavigation, setBibleNavigation, bibleSettings, setBibleSettings, user, appSettings } = useAppStore();
-    const { favorites, addFavorite, removeFavorite, isFavorite } = useBibleFavorites(user?.id);
-    const { highlights, addHighlight, removeHighlight, getHighlight } = useBibleHighlights(user?.id);
+export function coursesReader({ onBack, initialBookId, initialChapter }: coursesReaderProps) {
+    const { coursesNavigation, setcoursesNavigation, coursesSettings, setcoursesSettings, user, appSettings } = useAppStore();
+    const { favorites, addFavorite, removeFavorite, isFavorite } = usecoursesFavorites(user?.id);
+    const { highlights, addHighlight, removeHighlight, getHighlight } = usecoursesHighlights(user?.id);
     const { addMemoryCard } = useReadingPlanStore();
 
-    const [currentBibleId, setCurrentBibleId] = useState(DEFAULT_BIBLE_ID);
-    const [books, setBooks] = useState<BibleBook[]>([]);
+    const [currentcoursesId, setCurrentcoursesId] = useState(DEFAULT_courses_ID);
+    const [books, setBooks] = useState<coursesBook[]>([]);
     const [chapters, setChapters] = useState<number[]>([]);
-    const [activeBook, setActiveBook] = useState<BibleBook | null>(null);
+    const [activeBook, setActiveBook] = useState<coursesBook | null>(null);
     const [activeChapterNum, setActiveChapterNum] = useState("1");
     const [content, setContent] = useState("");
     const [loading, setLoading] = useState(false);
@@ -48,7 +48,7 @@ export function BibleReader({ onBack, initialBookId, initialChapter }: BibleRead
 
     // Init
     useEffect(() => {
-        const b = bibleApi.getBooks();
+        const b = coursesApi.getBooks();
         setBooks(b);
         loadVerseOfDay();
 
@@ -56,24 +56,24 @@ export function BibleReader({ onBack, initialBookId, initialChapter }: BibleRead
             const book = b.find(bk => bk.id === initialBookId);
             if (book) {
                 setActiveBook(book);
-                setChapters(bibleApi.getChapters(book.id));
+                setChapters(coursesApi.getChapters(book.id));
                 const ch = initialChapter || "1";
                 setActiveChapterNum(ch);
-                loadContent(currentBibleId, `${book.id}.${ch}`);
+                loadContent(currentcoursesId, `${book.id}.${ch}`);
             }
         }
     }, []);
 
     useEffect(() => {
-        if (bibleNavigation) {
-            handleNavigation(bibleNavigation.bookId, bibleNavigation.chapterId);
-            setBibleNavigation(null);
+        if (coursesNavigation) {
+            handleNavigation(coursesNavigation.bookId, coursesNavigation.chapterId);
+            setcoursesNavigation(null);
         }
-    }, [bibleNavigation]);
+    }, [coursesNavigation]);
 
     const loadVerseOfDay = async () => {
         try {
-            const verse = await bibleApi.getVerseOfTheDay(currentBibleId);
+            const verse = await coursesApi.getVerseOfTheDay(currentcoursesId);
             if (verse) setVerseOfDay({ reference: verse.reference, content: verse.text.substring(0, 300) });
         } catch { /* ignore */ }
     };
@@ -82,7 +82,7 @@ export function BibleReader({ onBack, initialBookId, initialChapter }: BibleRead
         setLoading(true);
         try {
             const [bookId, chapterNum] = cid.includes('.') ? cid.split('.') : [activeBook?.id || 'GEN', cid];
-            const data = await bibleApi.getChapterContent(bookId, parseInt(chapterNum), bid);
+            const data = await coursesApi.getChapterContent(bookId, parseInt(chapterNum), bid);
             if (data?.verses?.length) {
                 let html = '';
                 data.verses.forEach((v, i) => {
@@ -103,13 +103,13 @@ export function BibleReader({ onBack, initialBookId, initialChapter }: BibleRead
         const book = books.find(b => b.id === bookId) || books[0];
         if (!book) return;
         setActiveBook(book);
-        setChapters(bibleApi.getChapters(book.id));
+        setChapters(coursesApi.getChapters(book.id));
         let ch = "1";
         if (chapterId?.includes('.')) ch = chapterId.split('.')[1];
         else if (chapterId) ch = chapterId;
         setActiveChapterNum(ch);
         const loadId = chapterId.includes('.') ? chapterId : `${bookId}.${ch}`;
-        await loadContent(currentBibleId, loadId);
+        await loadContent(currentcoursesId, loadId);
     };
 
     const goChapter = (delta: number) => {
@@ -144,7 +144,7 @@ export function BibleReader({ onBack, initialBookId, initialChapter }: BibleRead
             if (fav) removeFavorite(fav.id);
             toast.info("Retiré des favoris");
         } else {
-            addFavorite(ref, text, currentBibleId);
+            addFavorite(ref, text, currentcoursesId);
             toast.success("Ajouté aux favoris ⭐");
         }
     };
@@ -156,7 +156,7 @@ export function BibleReader({ onBack, initialBookId, initialChapter }: BibleRead
             removeHighlight(existing.id);
             toast.info("Surlignage retiré");
         } else {
-            addHighlight(ref, text, currentBibleId, color);
+            addHighlight(ref, text, currentcoursesId, color);
             toast.success("Verset surligné");
         }
     };
@@ -200,7 +200,7 @@ export function BibleReader({ onBack, initialBookId, initialChapter }: BibleRead
                                     <Button size="icon" variant="ghost" className={cn("h-9 w-9 rounded-xl hover:bg-white/10", isFav && "text-amber-400")} onClick={() => handleFavorite(domNode, ref)}>
                                         <Star className={cn("h-4 w-4", isFav && "fill-current")} />
                                     </Button>
-                                    <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl hover:bg-white/10" onClick={() => { const text = getTextContent(domNode); shareVerse(ref, text, currentBibleId); }}>
+                                    <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl hover:bg-white/10" onClick={() => { const text = getTextContent(domNode); shareVerse(ref, text, currentcoursesId); }}>
                                         <Share2 className="h-4 w-4" />
                                     </Button>
                                     <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl hover:bg-white/10 text-purple-400" onClick={() => handleMemorize(domNode, ref)}>
@@ -261,7 +261,7 @@ export function BibleReader({ onBack, initialBookId, initialChapter }: BibleRead
                     </div>
                     <div className="grid grid-cols-4 gap-2">
                         {filteredBooks.map(book => (
-                            <button key={book.id} className="group flex flex-col items-center justify-center aspect-square rounded-2xl bg-white/[0.04] border border-white/[0.06] hover:bg-indigo-600/15 hover:border-indigo-500/30 transition-all duration-200" onClick={() => { setActiveBook(book); setChapters(bibleApi.getChapters(book.id)); setShowSelector(true); }}>
+                            <button key={book.id} className="group flex flex-col items-center justify-center aspect-square rounded-2xl bg-white/[0.04] border border-white/[0.06] hover:bg-indigo-600/15 hover:border-indigo-500/30 transition-all duration-200" onClick={() => { setActiveBook(book); setChapters(coursesApi.getChapters(book.id)); setShowSelector(true); }}>
                                 <span className="font-black text-[11px] text-white/80 group-hover:text-white transition-colors">{book.abbreviation}</span>
                                 <span className="text-[8px] text-slate-500 mt-0.5 truncate max-w-full px-1">{book.name}</span>
                             </button>
@@ -318,7 +318,7 @@ export function BibleReader({ onBack, initialBookId, initialChapter }: BibleRead
                 ) : (
                     <article className="max-w-3xl mx-auto px-6 py-8 pb-40">
                         <style jsx global>{`
-                            .bible-reader .v {
+                            .courses-reader .v {
                                 color: #818cf8;
                                 font-weight: 800;
                                 font-size: 0.7em;
@@ -326,13 +326,13 @@ export function BibleReader({ onBack, initialBookId, initialChapter }: BibleRead
                                 vertical-align: super;
                                 opacity: 0.8;
                             }
-                            .bible-reader p {
+                            .courses-reader p {
                                 line-height: 2.2;
                                 margin-bottom: 1.2em;
                                 color: rgba(226, 232, 240, 0.9);
                             }
                         `}</style>
-                        <div className="bible-reader font-serif text-slate-200" style={{ fontSize: `${fontSize}px` }}>
+                        <div className="courses-reader font-serif text-slate-200" style={{ fontSize: `${fontSize}px` }}>
                             {transformContent(content)}
                         </div>
                     </article>
@@ -367,13 +367,13 @@ export function BibleReader({ onBack, initialBookId, initialChapter }: BibleRead
                                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.15em]">Ancien Testament</p>
                                     <div className="grid grid-cols-3 gap-2 mb-4">
                                         {books.filter(b => b.testament === 'OT').map(b => (
-                                            <Button key={b.id} variant="ghost" className={cn("h-11 rounded-xl font-bold text-xs", activeBook?.id === b.id ? "bg-indigo-600 text-white" : "bg-white/5 hover:bg-white/10")} onClick={() => { setActiveBook(b); setChapters(bibleApi.getChapters(b.id)); }}>{b.abbreviation}</Button>
+                                            <Button key={b.id} variant="ghost" className={cn("h-11 rounded-xl font-bold text-xs", activeBook?.id === b.id ? "bg-indigo-600 text-white" : "bg-white/5 hover:bg-white/10")} onClick={() => { setActiveBook(b); setChapters(coursesApi.getChapters(b.id)); }}>{b.abbreviation}</Button>
                                         ))}
                                     </div>
                                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] pt-2">Nouveau Testament</p>
                                     <div className="grid grid-cols-3 gap-2">
                                         {books.filter(b => b.testament === 'NT').map(b => (
-                                            <Button key={b.id} variant="ghost" className={cn("h-11 rounded-xl font-bold text-xs", activeBook?.id === b.id ? "bg-indigo-600 text-white" : "bg-white/5 hover:bg-white/10")} onClick={() => { setActiveBook(b); setChapters(bibleApi.getChapters(b.id)); }}>{b.abbreviation}</Button>
+                                            <Button key={b.id} variant="ghost" className={cn("h-11 rounded-xl font-bold text-xs", activeBook?.id === b.id ? "bg-indigo-600 text-white" : "bg-white/5 hover:bg-white/10")} onClick={() => { setActiveBook(b); setChapters(coursesApi.getChapters(b.id)); }}>{b.abbreviation}</Button>
                                         ))}
                                     </div>
                                 </div>

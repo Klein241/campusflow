@@ -1,7 +1,7 @@
 /**
- * BIBLE STORE
+ * courses STORE
  * ===========
- * State management for Bible features: favorites, highlights, reading history
+ * State management for courses features: favorites, highlights, reading history
  * Uses Zustand with localStorage persistence
  */
 
@@ -9,7 +9,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
 // Types
-export interface BibleHighlight {
+export interface coursesHighlight {
     id: string;
     bookId: string;
     bookName: string;
@@ -20,7 +20,7 @@ export interface BibleHighlight {
     createdAt: string;
 }
 
-export interface BibleFavorite {
+export interface coursesFavorite {
     id: string;
     bookId: string;
     bookName: string;
@@ -58,23 +58,23 @@ export const HIGHLIGHT_COLORS: {
 
 export type GameLanguage = 'fr' | 'en';
 
-interface BibleState {
+interface coursesState {
     // Current reading position
     currentBook: string;
     currentChapter: number;
     setCurrentPosition: (bookId: string, chapter: number) => void;
 
     // Highlights
-    highlights: BibleHighlight[];
+    highlights: coursesHighlight[];
     addHighlight: (bookId: string, bookName: string, chapter: number, verse: number, text: string, color: HighlightColor) => void;
     removeHighlight: (id: string) => void;
     removeHighlightByVerse: (bookId: string, chapter: number, verse: number) => void;
-    getHighlight: (bookId: string, chapter: number, verse: number) => BibleHighlight | undefined;
+    getHighlight: (bookId: string, chapter: number, verse: number) => coursesHighlight | undefined;
     updateHighlightColor: (id: string, color: HighlightColor) => void;
     clearAllHighlights: () => void;
 
     // Favorites
-    favorites: BibleFavorite[];
+    favorites: coursesFavorite[];
     addFavorite: (bookId: string, bookName: string, chapter: number, verse: number, text: string, note?: string) => void;
     removeFavorite: (id: string) => void;
     removeFavoriteByVerse: (bookId: string, chapter: number, verse: number) => void;
@@ -110,7 +110,7 @@ interface BibleState {
     setReadingMode: (mode: 'verse' | 'paragraph') => void;
 }
 
-export const useBibleStore = create<BibleState>()(
+export const usecoursesStore = create<coursesState>()(
     persist(
         (set, get) => ({
             // Current reading position
@@ -275,7 +275,7 @@ export const useBibleStore = create<BibleState>()(
             setReadingMode: (mode) => set({ readingMode: mode }),
         }),
         {
-            name: 'bible-storage',
+            name: 'courses-storage',
             storage: createJSONStorage(() => localStorage),
             partialize: (state) => ({
                 currentBook: state.currentBook,
@@ -315,7 +315,7 @@ export async function copyMultipleVerses(verses: { reference: string; text: stri
 }
 
 export async function shareVerse(reference: string, text: string): Promise<boolean> {
-    const shareText = `📖 ${reference}\n\n"${text}"\n\n— Maison de Prière`;
+    const shareText = `📖 ${reference}\n\n"${text}"\n\n— CentreFormation Pro`;
 
     try {
         if (navigator.share) {
@@ -339,7 +339,7 @@ export async function shareVerse(reference: string, text: string): Promise<boole
 }
 
 export async function shareMultipleVerses(verses: { reference: string; text: string }[]): Promise<boolean> {
-    const shareText = verses.map(v => `📖 ${v.reference}\n"${v.text}"`).join('\n\n') + '\n\n— Maison de Prière';
+    const shareText = verses.map(v => `📖 ${v.reference}\n"${v.text}"`).join('\n\n') + '\n\n— CentreFormation Pro';
 
     try {
         if (navigator.share) {

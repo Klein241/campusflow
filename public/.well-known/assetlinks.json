@@ -5,7 +5,7 @@
         ],
         "target": {
             "namespace": "android_app",
-            "package_name": "com.maisondepriere.app",
+            "package_name": "com.centreformation.app",
             "sha256_cert_fingerprints": [
                 "REMPLACEZ_PAR_VOTRE_SHA256_FINGERPRINT"
             ]

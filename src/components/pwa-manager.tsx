@@ -150,7 +150,7 @@ export function PWAManager() {
             setIsInstalled(true);
             setDeferredPrompt(null);
             toast.success('🎉 Application installée !', {
-                description: 'Maison de Prière est maintenant sur votre écran d\'accueil.',
+                description: 'CentreFormation Pro est maintenant sur votre écran d\'accueil.',
             });
         };
 
@@ -188,7 +188,7 @@ export function PWAManager() {
                 // to avoid double-registration bugs. Do NOT subscribe here.
 
                 if (swRegistration) {
-                    swRegistration.showNotification('Maison de Prière', {
+                    swRegistration.showNotification('CentreFormation Pro', {
                         body: 'Les notifications sont activées ! Vous recevrez des rappels quotidiens.',
                         icon: '/icon-192.png',
                         badge: '/icon-192.png',

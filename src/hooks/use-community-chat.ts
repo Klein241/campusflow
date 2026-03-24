@@ -63,18 +63,18 @@ export function useCommunityChat(user: UserInfo | null, activeTab: string) {
         }
     }, [chatMessages, groupMessages]);
 
-    // Real-time subscription for prayer_requests deletions
+    // Real-time subscription for tutoring_requests deletions
     useEffect(() => {
-        const { removePrayerRequest } = useAppStore.getState();
+        const { removeTutoringRequest } = useAppStore.getState();
         const prayerChannel = supabase.channel('prayer-realtime')
             .on('postgres_changes', {
                 event: 'DELETE',
                 schema: 'public',
-                table: 'prayer_requests'
+                table: 'tutoring_requests'
             }, (payload) => {
                 const deletedId = (payload.old as any)?.id;
                 if (deletedId) {
-                    removePrayerRequest(deletedId);
+                    removeTutoringRequest(deletedId);
                 }
             })
             .subscribe();

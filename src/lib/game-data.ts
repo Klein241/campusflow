@@ -1,25 +1,25 @@
 /**
- * GAME DATA SERVICE - Unlimited Bible Games
+ * GAME DATA SERVICE - Unlimited courses Games
  * ==========================================
- * Provides static data for games to work without external Bible API dependencies.
- * Games can use this data when Bible is not available.
+ * Provides static data for games to work without external courses API dependencies.
+ * Games can use this data when courses is not available.
  * 
  * EXPANDED CONTENT: Over 300 questions/items added for "Pro" experience.
  */
 
 import { generateWordSearch } from './word-search-generator';
 
-// Extensive list of Bible questions for Quiz
-export const BIBLE_QUESTIONS = [
+// Extensive list of courses questions for Quiz
+export const courses_QUESTIONS = [
     // --- EASY QUESTIONS (GENESIS to REVELATION) ---
-    { question: "Qui a créé le monde selon la Bible?", options: ["Dieu", "Moïse", "Abraham", "Jésus"], answer: 0, difficulty: "easy" },
+    { question: "Qui a créé le monde selon la courses?", options: ["Dieu", "Moïse", "Abraham", "Jésus"], answer: 0, difficulty: "easy" },
     { question: "Combien de jours Dieu a-t-il utilisé pour créer le monde?", options: ["6", "7", "5", "3"], answer: 0, difficulty: "easy" },
-    { question: "Quel est le premier livre de la Bible?", options: ["Genèse", "Exode", "Matthieu", "Apocalypse"], answer: 0, difficulty: "easy" },
+    { question: "Quel est le premier livre de la courses?", options: ["Genèse", "Exode", "Matthieu", "Apocalypse"], answer: 0, difficulty: "easy" },
     { question: "Qui a construit l'arche?", options: ["Noé", "Abraham", "Moïse", "David"], answer: 0, difficulty: "easy" },
     { question: "Combien d'apôtres Jésus avait-il?", options: ["12", "10", "7", "3"], answer: 0, difficulty: "easy" },
     { question: "Dans quelle ville Jésus est-il né?", options: ["Bethléem", "Jérusalem", "Nazareth", "Capernaüm"], answer: 0, difficulty: "easy" },
     { question: "Qui a trahi Jésus?", options: ["Judas", "Pierre", "Jean", "Thomas"], answer: 0, difficulty: "easy" },
-    { question: "Combien de livres y a-t-il dans la Bible?", options: ["66", "72", "50", "100"], answer: 0, difficulty: "easy" },
+    { question: "Combien de livres y a-t-il dans la courses?", options: ["66", "72", "50", "100"], answer: 0, difficulty: "easy" },
     { question: "Qui était le premier homme?", options: ["Adam", "Noé", "Abraham", "Moïse"], answer: 0, difficulty: "easy" },
     { question: "Qui était la première femme?", options: ["Ève", "Marie", "Sarah", "Ruth"], answer: 0, difficulty: "easy" },
     { question: "Quelle mer Moïse a-t-il traversée?", options: ["Mer Rouge", "Mer Morte", "Mer Méditerranée", "Jourdain"], answer: 0, difficulty: "easy" },
@@ -32,7 +32,7 @@ export const BIBLE_QUESTIONS = [
     { question: "Qui était le frère d'Abel?", options: ["Caïn", "Seth", "Adam", "Noé"], answer: 0, difficulty: "easy" },
     { question: "Quel animal a parlé à Balaam?", options: ["Une ânesse", "Un lion", "Un serpent", "Un aigle"], answer: 0, difficulty: "easy" },
     { question: "Qui a été jeté dans la fosse aux lions?", options: ["Daniel", "David", "Samson", "Gédéon"], answer: 0, difficulty: "easy" },
-    { question: "Quel est le dernier livre de la Bible?", options: ["Apocalypse", "Actes", "Jude", "Malachie"], answer: 0, difficulty: "easy" },
+    { question: "Quel est le dernier livre de la courses?", options: ["Apocalypse", "Actes", "Jude", "Malachie"], answer: 0, difficulty: "easy" },
     { question: "Qui a marché sur l'eau avec Jésus?", options: ["Pierre", "Jean", "Jacques", "André"], answer: 0, difficulty: "easy" },
     { question: "De quelle ville Paul était-il originaire?", options: ["Tarse", "Rome", "Jérusalem", "Antioche"], answer: 0, difficulty: "easy" },
     { question: "Qui a baptisé Jésus?", options: ["Jean-Baptiste", "Pierre", "Paul", "Philippe"], answer: 0, difficulty: "easy" },
@@ -91,14 +91,14 @@ export const BIBLE_QUESTIONS = [
     { question: "Quel prophète a épousé une prostituée sur ordre de Dieu?", options: ["Osée", "Amos", "Michée", "Joël"], answer: 0, difficulty: "medium" },
 
     // --- HARD QUESTIONS ---
-    { question: "Quel est le verset le plus court de la Bible?", options: ["Jésus pleura", "Priez sans cesse", "Aimez-vous", "Soyez saints"], answer: 0, difficulty: "hard" },
+    { question: "Quel est le verset le plus court de la courses?", options: ["Jésus pleura", "Priez sans cesse", "Aimez-vous", "Soyez saints"], answer: 0, difficulty: "hard" },
     { question: "Combien de livres l'apôtre Paul a-t-il écrits?", options: ["13", "14", "10", "7"], answer: 0, difficulty: "hard" },
     { question: "Qui était Melchisédek?", options: ["Roi et sacrificateur", "Prophète", "Ange", "Juge"], answer: 0, difficulty: "hard" },
     { question: "Quel patriarche a vécu le plus longtemps?", options: ["Mathusalem", "Adam", "Noé", "Seth"], answer: 0, difficulty: "hard" },
     { question: "Quelle est la 'Grande Commission'?", options: ["Faire des disciples", "Construire le temple", "Jeûner 40 jours", "Vaincre les géants"], answer: 0, difficulty: "hard" },
     { question: "Qui était Barnabas?", options: ["Compagnon de Paul", "Apôtre de Jésus", "Prophète", "Ange"], answer: 0, difficulty: "hard" },
     { question: "Combien de fois le mot 'amour' apparaît-il dans 1 Corinthiens 13?", options: ["9 fois", "7 fois", "12 fois", "5 fois"], answer: 0, difficulty: "hard" },
-    { question: "Quel livre de la Bible ne mentionne pas Dieu?", options: ["Esther", "Ruth", "Jonas", "Amos"], answer: 0, difficulty: "hard" },
+    { question: "Quel livre de la courses ne mentionne pas Dieu?", options: ["Esther", "Ruth", "Jonas", "Amos"], answer: 0, difficulty: "hard" },
     { question: "Qui a écrit le livre des Proverbes?", options: ["Salomon principalement", "David", "Moïse", "Samuel"], answer: 0, difficulty: "hard" },
     { question: "Quel était le métier de Lydie dans Actes 16?", options: ["Marchande de pourpre", "Couturière", "Potière", "Tisserande"], answer: 0, difficulty: "hard" },
     { question: "Combien d'années les Israélites ont-ils erré dans le désert?", options: ["40 ans", "50 ans", "30 ans", "25 ans"], answer: 0, difficulty: "hard" },
@@ -133,7 +133,7 @@ export const BIBLE_QUESTIONS = [
     { question: "Qui a dit 'Que la lumière soit'?", options: ["Dieu", "Moïse", "Jésus", "Abraham"], answer: 0, difficulty: "easy" },
     { question: "Combien de frères Joseph avait-il?", options: ["11", "12", "10", "7"], answer: 0, difficulty: "easy" },
     { question: "Quelle était la profession de Pierre avant de suivre Jésus?", options: ["Pêcheur", "Charpentier", "Berger", "Collecteur d'impôts"], answer: 0, difficulty: "easy" },
-    { question: "Qui a donné son nom aux cinq premiers livres de la Bible?", options: ["Moïse", "David", "Salomon", "Abraham"], answer: 0, difficulty: "easy" },
+    { question: "Qui a donné son nom aux cinq premiers livres de la courses?", options: ["Moïse", "David", "Salomon", "Abraham"], answer: 0, difficulty: "easy" },
     { question: "Quelle nourriture Dieu a envoyée du ciel aux Israélites?", options: ["La manne", "Du pain", "Des figues", "Du miel"], answer: 0, difficulty: "easy" },
     { question: "Combien de fois Jésus a-t-il tenté par le diable dans le désert?", options: ["3", "7", "1", "40"], answer: 0, difficulty: "easy" },
     { question: "Quel disciple a douté de la résurrection de Jésus?", options: ["Thomas", "Pierre", "Jean", "Jacques"], answer: 0, difficulty: "easy" },
@@ -160,7 +160,7 @@ export const BIBLE_QUESTIONS = [
     { question: "Quel jour commémore-t-on la résurrection de Jésus?", options: ["Pâques", "Noël", "Pentecôte", "Ascension"], answer: 0, difficulty: "medium" },
     { question: "Qui était le frère de Marthe et Marie?", options: ["Lazare", "Simon", "Joseph", "André"], answer: 0, difficulty: "medium" },
     { question: "Dans quelle ville Paul a-t-il prêché sur l'Aréopage?", options: ["Athènes", "Rome", "Corinthe", "Éphèse"], answer: 0, difficulty: "medium" },
-    { question: "Quel livre de la Bible contient le plus de chapitres?", options: ["Psaumes", "Ésaïe", "Genèse", "Jérémie"], answer: 0, difficulty: "medium" },
+    { question: "Quel livre de la courses contient le plus de chapitres?", options: ["Psaumes", "Ésaïe", "Genèse", "Jérémie"], answer: 0, difficulty: "medium" },
 
     // --- BONUS HARD QUESTIONS ---
     { question: "Qui a dit 'Mon peuple périt faute de connaissance'?", options: ["Osée", "Amos", "Michée", "Joël"], answer: 0, difficulty: "hard" },
@@ -180,13 +180,13 @@ export const BIBLE_QUESTIONS = [
     { question: "Combien d'années Jacob a-t-il travaillé pour Rachel?", options: ["14", "7", "21", "10"], answer: 0, difficulty: "hard" },
     { question: "Quel prophète a été enterré vivant dans une citerne?", options: ["Jérémie", "Ésaïe", "Ézéchiel", "Daniel"], answer: 0, difficulty: "hard" },
     { question: "Qui a dit 'L'Éternel est mon berger, je ne manquerai de rien'?", options: ["David", "Salomon", "Moïse", "Abraham"], answer: 0, difficulty: "hard" },
-    { question: "Quel est le dernier mot de la Bible?", options: ["Amen", "Grâce", "Jésus", "Éternité"], answer: 0, difficulty: "hard" },
-    { question: "Combien de psaumes la Bible contient-elle?", options: ["150", "120", "100", "175"], answer: 0, difficulty: "hard" },
+    { question: "Quel est le dernier mot de la courses?", options: ["Amen", "Grâce", "Jésus", "Éternité"], answer: 0, difficulty: "hard" },
+    { question: "Combien de psaumes la courses contient-elle?", options: ["150", "120", "100", "175"], answer: 0, difficulty: "hard" },
     { question: "Qui était le beau-père de Moïse?", options: ["Jéthro", "Aaron", "Caleb", "Hobab"], answer: 0, difficulty: "hard" },
 ];
 
-// Famous Bible verses for Memory Game
-export const BIBLE_VERSES_PAIRS = [
+// Famous courses verses for Memory Game
+export const courses_VERSES_PAIRS = [
     { reference: "Jean 3:16", text: "Car Dieu a tant aimé le monde" },
     { reference: "Psaume 23:1", text: "L'Éternel est mon berger" },
     { reference: "Philippiens 4:13", text: "Je puis tout par celui qui me fortifie" },
@@ -236,10 +236,10 @@ export const BIBLE_VERSES_PAIRS = [
 ];
 
 // Biblical words for Word Search
-export const BIBLE_WORDS = {
+export const courses_WORDS = {
     easy: [
         "JESUS", "DIEU", "AMOUR", "FOI", "PAIX", "JOIE", "GRACE", "ESPRIT",
-        "BIBLE", "PRIERE", "AMEN", "CIEL", "VIE", "COEUR", "ANGE", "CROIX",
+        "courses", "PRIERE", "AMEN", "CIEL", "VIE", "COEUR", "ANGE", "CROIX",
         "ARCHE", "LION", "PAIN", "VIN", "ROI", "FILS", "PERE", "MERE",
         "EAU", "FEU", "VENT", "NOEL", "PSAUME", "LIVRE", "SAINT", "JUSTE"
     ],
@@ -288,8 +288,8 @@ export const BIBLE_WORDS = {
     ]
 };
 
-// Bible characters for games
-export const BIBLE_CHARACTERS = [
+// courses characters for games
+export const courses_CHARACTERS = [
     { name: "Adam", role: "Premier homme", testament: "AT" },
     { name: "Ève", role: "Première femme", testament: "AT" },
     { name: "Noé", role: "Constructeur de l'arche", testament: "AT" },
@@ -341,7 +341,7 @@ export const BIBLE_CHARACTERS = [
     { name: "Philémon", role: "Destinataire d'une lettre de Paul", testament: "NT" }
 ];
 
-// Chronological Bible events for chronology game - ORDERED from oldest to newest
+// Chronological courses events for chronology game - ORDERED from oldest to newest
 export const CHRONO_EVENTS = [
     { id: "creation", event: "Création du monde", year: "Au commencement" },
     { id: "adam_eve", event: "Adam et Ève dans le jardin d'Éden", year: "~4000 av. J.-C." },
@@ -635,8 +635,8 @@ export const WHO_AM_I_CHARACTERS = [
 ];
 
 // Get random questions for quiz - with shuffled options and deduplication
-export function getRandomQuestions(count: number, difficulty?: 'easy' | 'medium' | 'hard'): typeof BIBLE_QUESTIONS {
-    let questions = [...BIBLE_QUESTIONS];
+export function getRandomQuestions(count: number, difficulty?: 'easy' | 'medium' | 'hard'): typeof courses_QUESTIONS {
+    let questions = [...courses_QUESTIONS];
 
     if (difficulty) {
         questions = questions.filter(q => q.difficulty === difficulty);
@@ -675,8 +675,8 @@ export function getRandomQuestions(count: number, difficulty?: 'easy' | 'medium'
 }
 
 // Get pairs for memory game
-export function getMemoryPairs(count: number): typeof BIBLE_VERSES_PAIRS {
-    const pairs = [...BIBLE_VERSES_PAIRS];
+export function getMemoryPairs(count: number): typeof courses_VERSES_PAIRS {
+    const pairs = [...courses_VERSES_PAIRS];
 
     // Shuffle
     for (let i = pairs.length - 1; i > 0; i--) {
@@ -688,14 +688,14 @@ export function getMemoryPairs(count: number): typeof BIBLE_VERSES_PAIRS {
 }
 
 // Get words for word search
-export function getWordSearchWords(count: number, category?: keyof typeof BIBLE_WORDS): string[] {
+export function getWordSearchWords(count: number, category?: keyof typeof courses_WORDS): string[] {
     let words: string[] = [];
 
     if (category) {
-        words = [...BIBLE_WORDS[category]];
+        words = [...courses_WORDS[category]];
     } else {
         // Mix from all categories
-        Object.values(BIBLE_WORDS).forEach(arr => {
+        Object.values(courses_WORDS).forEach(arr => {
             words.push(...arr);
         });
     }
@@ -738,7 +738,7 @@ export function getRandomWhoAmICharacters(count: number = 5): typeof WHO_AM_I_CH
 // Generate game configuration based on game type
 export async function generateGameConfig(gameType: string): Promise<any> {
     switch (gameType) {
-        case 'bible_memory':
+        case 'courses_memory':
             return {
                 pairs: getMemoryPairs(8),
                 type: 'memory'
@@ -791,4 +791,4 @@ export async function generateGameConfig(gameType: string): Promise<any> {
     }
 }
 
-// All exports are named exports above (BIBLE_QUESTIONS, BIBLE_WORDS, etc.)
+// All exports are named exports above (courses_QUESTIONS, courses_WORDS, etc.)

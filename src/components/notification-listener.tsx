@@ -124,7 +124,7 @@ export function NotificationListener() {
 
                 // Check user is a member of that group
                 const { data: membership } = await supabase
-                    .from('prayer_group_members')
+                    .from('group_members')
                     .select('id')
                     .eq('group_id', salon.group_id)
                     .eq('user_id', user.id)

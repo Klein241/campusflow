@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
-import { Testimonial } from "@/lib/types";
+import { ExperienceFeedback } from "@/lib/types";
 import { PhotoGallery } from "@/components/ui/photo-upload";
 
 // Testimony Card Component
@@ -18,7 +18,7 @@ export function TestimonyCard({
     onLike,
     userId
 }: {
-    testimony: Testimonial;
+    testimony: ExperienceFeedback;
     onLike: () => void;
     userId?: string;
 }) {

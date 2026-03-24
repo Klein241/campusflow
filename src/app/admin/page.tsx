@@ -11,15 +11,15 @@ export default function AdminDashboardPage() {
     const [stats, setStats] = useState({
         users: 0,
         prayers: 0,
-        testimonials: 0,
+        experience_feedbacks: 0,
         recentUsers: [] as any[]
     })
 
     useEffect(() => {
         async function fetchStats() {
             const { count: usersCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true })
-            const { count: prayersCount } = await supabase.from('prayer_requests').select('*', { count: 'exact', head: true })
-            const { count: testimonialsCount } = await supabase.from('testimonials').select('*', { count: 'exact', head: true })
+            const { count: prayersCount } = await supabase.from('tutoring_requests').select('*', { count: 'exact', head: true })
+            const { count: experience_feedbacksCount } = await supabase.from('experience_feedbacks').select('*', { count: 'exact', head: true })
 
             const { data: recentUsers } = await supabase
                 .from('profiles')
@@ -30,7 +30,7 @@ export default function AdminDashboardPage() {
             setStats({
                 users: usersCount || 0,
                 prayers: prayersCount || 0,
-                testimonials: testimonialsCount || 0,
+                experience_feedbacks: experience_feedbacksCount || 0,
                 recentUsers: recentUsers || []
             })
         }
@@ -43,7 +43,7 @@ export default function AdminDashboardPage() {
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-3xl font-bold tracking-tight bg-linear-to-r from-primary to-purple-400 bg-clip-text text-transparent">Tableau de Bord</h2>
-                    <p className="text-muted-foreground mt-1">Vue d'ensemble de l'activité de Maison de Prière.</p>
+                    <p className="text-muted-foreground mt-1">Vue d'ensemble de l'activité de CentreFormation Pro.</p>
                 </div>
                 <div className="flex items-center gap-2 text-sm bg-muted/50 px-3 py-1 rounded-full border">
                     <span className="relative flex h-2 w-2">
@@ -57,7 +57,7 @@ export default function AdminDashboardPage() {
             {/* Main Stats Grid */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <StatsCard
-                    title="Communauté"
+                    title="Forum étudiant"
                     value={stats.users}
                     icon={Users}
                     description="+12% ce mois"
@@ -71,8 +71,8 @@ export default function AdminDashboardPage() {
                     className="border-l-4 border-l-purple-500 shadow-sm hover:shadow-md transition-shadow"
                 />
                 <StatsCard
-                    title="Témoignages"
-                    value={stats.testimonials}
+                    title="Retours d'expérience"
+                    value={stats.experience_feedbacks}
                     icon={MessageSquare}
                     description="Partagés avec foi"
                     className="border-l-4 border-l-pink-500 shadow-sm hover:shadow-md transition-shadow"
@@ -159,7 +159,7 @@ export default function AdminDashboardPage() {
                             </div>
                             <div>
                                 <h3 className="font-semibold text-lg">Modération</h3>
-                                <p className="text-sm text-muted-foreground">Prières & témoignages</p>
+                                <p className="text-sm text-muted-foreground">Prières & Retours d'expérience</p>
                             </div>
                         </CardContent>
                     </Card>

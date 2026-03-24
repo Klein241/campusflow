@@ -14,10 +14,10 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 const GAMES = [
-    { id: 'bible_memory', name: 'Memory Versets', icon: '🧩', desc: 'Reconstituez le verset' },
+    { id: 'courses_memory', name: 'Memory Versets', icon: '🧩', desc: 'Reconstituez le verset' },
     { id: 'quiz_duel', name: 'Quiz Duel', icon: '🧠', desc: 'Répondez le plus vite' },
     { id: 'who_am_i', name: 'Qui suis-je ?', icon: '❓', desc: 'Devinez le personnage' },
-    { id: 'chrono', name: 'ChronoBible', icon: '⏳', desc: 'Classez les événements' },
+    { id: 'chrono', name: 'Chronocourses', icon: '⏳', desc: 'Classez les événements' },
     { id: 'word_search', name: 'Mots Cachés', icon: '🔍', desc: 'Trouvez tous les mots' },
 ];
 
@@ -63,7 +63,7 @@ export function MultiplayerLobby({ onStartGame, onBack, initialView }: Multiplay
     const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
     const [players, setPlayers] = useState<Player[]>([]);
     const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
-    const [selectedGame, setSelectedGame] = useState('bible_memory');
+    const [selectedGame, setSelectedGame] = useState('courses_memory');
     const [publicRooms, setPublicRooms] = useState<(Room & { players: any[] })[]>([]);
     const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
     const [rounds, setRounds] = useState(3);

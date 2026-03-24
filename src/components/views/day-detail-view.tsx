@@ -29,8 +29,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useAppStore } from '@/lib/store';
-import { getDay, getTotalDays } from '@/lib/program-data';
-import { bibleApi } from '@/lib/unified-bible-api';
+import { getDay, getTotalDays } from '@/lib/curriculum-data';
+import { coursesApi } from '@/lib/unified-courses-api';
 import { supabase } from '@/lib/supabase';
 import { DayResource } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -147,9 +147,9 @@ export function DayDetailView({ dayNumber: initialDay, onBack }: DayDetailViewPr
         if (currentDayNum > 1) setCurrentDayNum(prev => prev - 1);
     };
 
-    const toggleTask = (task: 'prayer' | 'bible' | 'fasting') => {
+    const toggleTask = (task: 'prayer' | 'courses' | 'fasting') => {
         const field = task === 'prayer' ? 'prayerCompleted' :
-            task === 'bible' ? 'bibleReadingCompleted' : 'fastingCompleted';
+            task === 'courses' ? 'coursesReadingCompleted' : 'fastingCompleted';
         updateDayProgress(currentDayNum, { [field]: !progress?.[field] });
     };
 
@@ -240,7 +240,7 @@ export function DayDetailView({ dayNumber: initialDay, onBack }: DayDetailViewPr
                             className="glass-card p-8 mb-8"
                         >
                             <Badge variant="outline" className="border-white/20 text-slate-400 mb-4 font-normal">
-                                {dayData.bibleReading.reference}
+                                {dayData.coursesReading.reference}
                             </Badge>
 
                             <h3 className="text-3xl font-bold mb-6 text-white leading-tight">
@@ -248,31 +248,31 @@ export function DayDetailView({ dayNumber: initialDay, onBack }: DayDetailViewPr
                             </h3>
 
                             <div className="space-y-6">
-                                {/* Bible Passage */}
+                                {/* courses Passage */}
                                 <div className="space-y-4">
                                     <h4 className="text-sm font-semibold text-purple-400 uppercase tracking-wider">Lecture Biblique</h4>
                                     <blockquote className="font-scripture text-xl text-slate-200 italic leading-relaxed pl-4 border-l-4 border-purple-500/30">
-                                        &ldquo;{dayData.bibleReading.passage}&rdquo;
+                                        &ldquo;{dayData.coursesReading.passage}&rdquo;
                                     </blockquote>
                                 </div>
 
-                                {/* Link to Full Bible */}
+                                {/* Link to Full courses */}
                                 <Button
                                     onClick={() => {
-                                        const ref = bibleApi.parseReference(dayData.bibleReading.reference);
+                                        const ref = coursesApi.parseReference(dayData.coursesReading.reference);
                                         if (ref) {
-                                            const { setBibleNavigation } = useAppStore.getState();
-                                            setBibleNavigation({ bookId: ref.bookId, chapterId: `${ref.bookId}.${ref.chapter}` });
+                                            const { setcoursesNavigation } = useAppStore.getState();
+                                            setcoursesNavigation({ bookId: ref.bookId, chapterId: `${ref.bookId}.${ref.chapter}` });
                                         }
                                         // Always navigate, even if parse fails (fallback)
                                         const { setSelectedDay, setActiveTab } = useAppStore.getState();
                                         setSelectedDay(null); // Close detail view
-                                        setActiveTab('bible'); // Switch to Bible tab
+                                        setActiveTab('courses'); // Switch to courses tab
                                     }}
                                     className="w-full h-12 bg-white/10 hover:bg-white/20 text-white border border-white/10 rounded-xl font-medium flex items-center justify-center gap-2 group"
                                 >
                                     <BookOpen className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform" />
-                                    Lire {dayData.bibleReading.reference} dans la Bible
+                                    Lire {dayData.coursesReading.reference} dans la courses
                                     <ChevronRight className="w-4 h-4 opacity-50" />
                                 </Button>
 

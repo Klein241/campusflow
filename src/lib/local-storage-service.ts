@@ -13,7 +13,7 @@
  */
 
 // ── DB Config ─────────────────────────────────────────────────────────────
-const DB_NAME = 'MaisonDePriereDB';
+const DB_NAME = 'CentreFormationDB';
 const DB_VERSION = 1;
 const STORES = {
     messages: 'messages',       // Group & DM messages

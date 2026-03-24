@@ -14,7 +14,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
         { id: 'marketplace', icon: ShoppingBag, label: 'Marketplace', color: 'teal' },
         { id: 'community', icon: MessageSquare, label: 'Messages', color: 'indigo' },
         { id: 'library', icon: BookMarked, label: 'Livres', color: 'emerald' },
-        { id: 'bible', icon: BookOpen, label: 'Bible' },
+        { id: 'courses', icon: BookOpen, label: 'courses' },
         { id: 'profile', icon: User, label: 'Profil' },
     ];
 

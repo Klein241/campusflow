@@ -8,11 +8,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { bibleApi, BibleBook, TRANSLATIONS, DEFAULT_TRANSLATION } from '@/lib/unified-bible-api';
+import { coursesApi, coursesBook, TRANSLATIONS, DEFAULT_TRANSLATION } from '@/lib/unified-courses-api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
-interface BibleShareDialogProps {
+interface coursesShareDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onShareVerse: (text: string) => void;
@@ -22,10 +22,10 @@ const OLD_TESTAMENT_IDS = ['GEN', 'EXO', 'LEV', 'NUM', 'DEU', 'JOS', 'JDG', 'RUT
 
 type DialogStep = 'books' | 'chapters' | 'verses';
 
-export function BibleShareDialog({ open, onOpenChange, onShareVerse }: BibleShareDialogProps) {
+export function coursesShareDialog({ open, onOpenChange, onShareVerse }: coursesShareDialogProps) {
     const [step, setStep] = useState<DialogStep>('books');
-    const [books] = useState<BibleBook[]>(() => bibleApi.getBooks());
-    const [selectedBook, setSelectedBook] = useState<BibleBook | null>(null);
+    const [books] = useState<coursesBook[]>(() => coursesApi.getBooks());
+    const [selectedBook, setSelectedBook] = useState<coursesBook | null>(null);
     const [selectedChapter, setSelectedChapter] = useState<number>(1);
     const [chapters, setChapters] = useState<number[]>([]);
     const [verses, setVerses] = useState<{ verse: number; text: string }[]>([]);
@@ -34,9 +34,9 @@ export function BibleShareDialog({ open, onOpenChange, onShareVerse }: BibleShar
     const [searchFilter, setSearchFilter] = useState('');
     const [translationId, setTranslationId] = useState(DEFAULT_TRANSLATION);
 
-    const selectBook = useCallback((book: BibleBook) => {
+    const selectBook = useCallback((book: coursesBook) => {
         setSelectedBook(book);
-        const ch = bibleApi.getChapters(book.id);
+        const ch = coursesApi.getChapters(book.id);
         setChapters(ch);
         setSelectedVerses(new Set());
         setStep('chapters');
@@ -48,7 +48,7 @@ export function BibleShareDialog({ open, onOpenChange, onShareVerse }: BibleShar
         setLoading(true);
         setSelectedVerses(new Set());
         try {
-            const data = await bibleApi.getChapterContent(selectedBook.id, chapter, translationId);
+            const data = await coursesApi.getChapterContent(selectedBook.id, chapter, translationId);
             if (data?.verses) {
                 setVerses(data.verses.map((v, i) => ({
                     verse: v.verse || i + 1,
@@ -80,7 +80,7 @@ export function BibleShareDialog({ open, onOpenChange, onShareVerse }: BibleShar
 
         const text = selected.map(v =>
             `📖 ${selectedBook.name} ${selectedChapter}:${v.verse}\n"${v.text}"`
-        ).join('\n\n') + '\n\n— Maison de Prière';
+        ).join('\n\n') + '\n\n— CentreFormation Pro';
 
         onShareVerse(text);
         resetAndClose();
@@ -90,7 +90,7 @@ export function BibleShareDialog({ open, onOpenChange, onShareVerse }: BibleShar
         if (!selectedBook || verses.length === 0) return;
         const header = `📖 **${selectedBook.name} ${selectedChapter}** (chapitre complet)\n\n`;
         const body = verses.map(v => `${v.verse}. ${v.text}`).join('\n');
-        const text = header + body + '\n\n— Maison de Prière';
+        const text = header + body + '\n\n— CentreFormation Pro';
         onShareVerse(text);
         resetAndClose();
     };

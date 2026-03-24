@@ -7,7 +7,7 @@ import {
     Users, Clock, Send, Heart, BookOpen, MessageSquare,
     ChevronDown, Trash2, Crown, Sparkles, Target, Megaphone, FileText, PlusCircle
 } from 'lucide-react';
-import { programData } from '@/lib/program-data';
+import { curriculumData } from '@/lib/curriculum-data';
 import { DailyProgram } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -908,7 +908,7 @@ export function GroupToolsPanel({ groupId, userId, userName, isCreator, onClose,
         }
     }, [initialSection]);
 
-    const allProgramDays = [...programData, ...customDays];
+    const allProgramDays = [...curriculumData, ...customDays];
 
     const publishProgram = (dayNum: number) => {
         localStorage.setItem(`group_program_day_${groupId}`, String(dayNum));
@@ -924,7 +924,7 @@ export function GroupToolsPanel({ groupId, userId, userName, isCreator, onClose,
             day: nextDay,
             title: newDayTitle.trim(),
             theme: newDayTheme.trim(),
-            bibleReading: {
+            coursesReading: {
                 reference: newDayReading.trim() || 'À définir',
                 passage: newDayPassage.trim() || '',
             },
@@ -1206,9 +1206,9 @@ export function GroupToolsPanel({ groupId, userId, userName, isCreator, onClose,
                                                     <p className="text-xs text-slate-400 italic">{day.theme}</p>
                                                     <div className="bg-black/20 rounded-lg p-2 mt-2">
                                                         <p className="text-[10px] font-bold text-sky-400 uppercase">📖 Lecture</p>
-                                                        <p className="text-xs text-slate-300">{day.bibleReading.reference}</p>
-                                                        {day.bibleReading.passage && (
-                                                            <p className="text-xs text-slate-400 italic mt-1">{day.bibleReading.passage}</p>
+                                                        <p className="text-xs text-slate-300">{day.coursesReading.reference}</p>
+                                                        {day.coursesReading.passage && (
+                                                            <p className="text-xs text-slate-400 italic mt-1">{day.coursesReading.passage}</p>
                                                         )}
                                                     </div>
                                                     {day.prayerFocus.length > 0 && (
@@ -1255,7 +1255,7 @@ export function GroupToolsPanel({ groupId, userId, userName, isCreator, onClose,
                                                                 <div className="flex items-center gap-2">
                                                                     <span className={cn(
                                                                         "text-xs font-bold shrink-0 w-8 h-8 rounded-lg flex items-center justify-center",
-                                                                        day.day > programData.length
+                                                                        day.day > curriculumData.length
                                                                             ? "bg-linear-to-br from-orange-500 to-red-600 text-white"
                                                                             : "bg-linear-to-br from-lime-500 to-green-600 text-white"
                                                                     )}>

@@ -33,8 +33,8 @@ export function EditDayDialog({ day, trigger, onSuccess }: EditDayDialogProps) {
         theme: day.theme,
         meditation: day.meditation,
         practicalAction: day.practicalAction,
-        reference: day.bibleReading.reference,
-        passage: day.bibleReading.passage
+        reference: day.coursesReading.reference,
+        passage: day.coursesReading.passage
     })
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -49,7 +49,7 @@ export function EditDayDialog({ day, trigger, onSuccess }: EditDayDialogProps) {
                     theme: formData.theme,
                     meditation: formData.meditation,
                     practical_action: formData.practicalAction,
-                    bible_reading: {
+                    courses_reading: {
                         reference: formData.reference,
                         passage: formData.passage
                     }

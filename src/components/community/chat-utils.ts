@@ -1,4 +1,4 @@
-// Chat Utilities — pure functions extracted from whatsapp-chat.tsx
+// Chat Utilities — pure functions extracted from forum-chat.tsx
 
 export const MEMBER_COLORS = [
     '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6',

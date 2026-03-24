@@ -124,10 +124,10 @@ export default function SettingsPage() {
                             </div>
                         ))}
 
-                        {/* Fallback for Bible Key if not in DB yet but we want to show the UI field */}
-                        {!settings.find(s => s.key === 'bible_api_key') && (
+                        {/* Fallback for courses Key if not in DB yet but we want to show the UI field */}
+                        {!settings.find(s => s.key === 'courses_api_key') && (
                             <div className="grid w-full items-center gap-1.5 opacity-50 pointer-events-none">
-                                <Label>bible_api_key (Non configuré en base)</Label>
+                                <Label>courses_api_key (Non configuré en base)</Label>
                                 <Input placeholder="Exécutez update_schema_settings.sql" disabled />
                             </div>
                         )}

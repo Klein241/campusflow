@@ -303,7 +303,7 @@ function buildNotificationMessage(
         case 'prayer_no_response':
             return {
                 title: '🕊️ Votre demande attend',
-                message: 'Votre demande n\'a pas encore reçu de prière. La communauté est là.',
+                message: 'Votre demande n\'a pas encore reçu de prière. La forum est là.',
             };
 
         case 'group_access_request':
@@ -387,7 +387,7 @@ function buildNotificationMessage(
         case 'new_book_published':
             return {
                 title: '📚 Nouveau livre disponible',
-                message: `"${targetName}" vient d'être ajouté à la bibliothèque`,
+                message: `"${targetName}" vient d'être ajouté à la ressources`,
             };
 
         default:
@@ -758,7 +758,7 @@ async function sendWebPush(
 
     const jwt = await createVapidJwt(
         audience,
-        env.VAPID_EMAIL || 'mailto:admin@maisondepriere.app',
+        env.VAPID_EMAIL || 'mailto:admin@centreformation.app',
         env.VAPID_PUBLIC_KEY,
         env.VAPID_PRIVATE_KEY
     );
@@ -1218,7 +1218,7 @@ async function handleCron(env: Env): Promise<void> {
     const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
 
     try {
-        const prayers = await db.select('prayer_requests', {
+        const prayers = await db.select('tutoring_requests', {
             select: 'id,user_id,content,pray_count,created_at',
             filters: `created_at=lt.${cutoff}&pray_count=eq.0`,
             limit: 50,

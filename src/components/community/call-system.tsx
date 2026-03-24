@@ -25,7 +25,7 @@ export interface CallSignal {
     groupName?: string;
 }
 
-// ========== INCOMING CALL OVERLAY (for community-view global listener) ==========
+// ========== INCOMING CALL OVERLAY (for forum-view global listener) ==========
 export function IncomingCallOverlay({
     call,
     onAccept,
@@ -233,7 +233,7 @@ export function IncomingCallOverlay({
 
 // ========== GLOBAL CALL LISTENER HOOK ==========
 // This hook listens for incoming call signals via Supabase broadcast.
-// It should be mounted AT THE TOP LEVEL (community-view) so calls ring
+// It should be mounted AT THE TOP LEVEL (forum-view) so calls ring
 // no matter which page/tab the user is on.
 export function useCallListener(userId: string | undefined) {
     const [incomingCall, setIncomingCall] = useState<CallSignal | null>(null);

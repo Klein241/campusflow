@@ -26,7 +26,7 @@ interface QuizQuestion {
     explanation?: string;
 }
 
-interface BibleQuizProps {
+interface coursesQuizProps {
     onBack: () => void;
     onSaveScore?: (score: number, maxScore: number, difficulty: Difficulty, timeSeconds: number) => void;
 }
@@ -51,11 +51,11 @@ const QUESTIONS_EASY: QuizQuestion[] = [
     },
     {
         id: 3,
-        question: "Quel est le premier livre de la Bible ?",
+        question: "Quel est le premier livre de la courses ?",
         options: ["Exode", "Lévitique", "Genèse", "Nombres"],
         correct: 2,
         reference: "Genèse 1:1",
-        explanation: "La Genèse est le premier livre de la Bible et raconte la création du monde."
+        explanation: "La Genèse est le premier livre de la courses et raconte la création du monde."
     },
     {
         id: 4,
@@ -91,11 +91,11 @@ const QUESTIONS_EASY: QuizQuestion[] = [
     },
     {
         id: 8,
-        question: "Quel est le dernier livre de la Bible ?",
+        question: "Quel est le dernier livre de la courses ?",
         options: ["Jude", "Jean", "Apocalypse", "Malachie"],
         correct: 2,
         reference: "Apocalypse 1:1",
-        explanation: "L'Apocalypse est le dernier livre du Nouveau Testament et de toute la Bible."
+        explanation: "L'Apocalypse est le dernier livre du Nouveau Testament et de toute la courses."
     },
     {
         id: 9,
@@ -158,11 +158,11 @@ const QUESTIONS_EASY: QuizQuestion[] = [
 const QUESTIONS_MEDIUM: QuizQuestion[] = [
     {
         id: 1,
-        question: "Combien de livres y a-t-il dans la Bible ?",
+        question: "Combien de livres y a-t-il dans la courses ?",
         options: ["52", "66", "72", "81"],
         correct: 1,
         reference: "Canon biblique",
-        explanation: "La Bible contient 66 livres: 39 dans l'Ancien Testament et 27 dans le Nouveau."
+        explanation: "La courses contient 66 livres: 39 dans l'Ancien Testament et 27 dans le Nouveau."
     },
     {
         id: 2,
@@ -281,7 +281,7 @@ const QUESTIONS_MEDIUM: QuizQuestion[] = [
 const QUESTIONS_HARD: QuizQuestion[] = [
     {
         id: 1,
-        question: "Quel est le verset le plus court de la Bible en français ?",
+        question: "Quel est le verset le plus court de la courses en français ?",
         options: ["Jean 11:35", "Luc 17:32", "1 Thessaloniciens 5:16", "Exode 20:13"],
         correct: 0,
         reference: "Jean 11:35",
@@ -329,11 +329,11 @@ const QUESTIONS_HARD: QuizQuestion[] = [
     },
     {
         id: 7,
-        question: "Qui a vécu le plus longtemps selon la Bible ?",
+        question: "Qui a vécu le plus longtemps selon la courses ?",
         options: ["Adam (930 ans)", "Noé (950 ans)", "Mathusalem (969 ans)", "Jared (962 ans)"],
         correct: 2,
         reference: "Genèse 5:27",
-        explanation: "Mathusalem a vécu 969 ans, la plus longue durée de vie enregistrée dans la Bible."
+        explanation: "Mathusalem a vécu 969 ans, la plus longue durée de vie enregistrée dans la courses."
     },
     {
         id: 8,
@@ -385,11 +385,11 @@ const QUESTIONS_HARD: QuizQuestion[] = [
     },
     {
         id: 14,
-        question: "Quel est le chapitre le plus long de la Bible ?",
+        question: "Quel est le chapitre le plus long de la courses ?",
         options: ["Psaume 119", "Nombres 7", "1 Rois 8", "Lamentations 3"],
         correct: 0,
         reference: "Psaume 119",
-        explanation: "Le Psaume 119 compte 176 versets, ce qui en fait le plus long chapitre de la Bible."
+        explanation: "Le Psaume 119 compte 176 versets, ce qui en fait le plus long chapitre de la courses."
     },
 ];
 
@@ -402,7 +402,7 @@ const DIFFICULTY_CONFIG = {
 // Block progress helpers
 function getBlockProgress(): Record<string, { bestScore: number; completed: boolean; stars: number }> {
     try {
-        const data = localStorage.getItem('bible_quiz_block_progress');
+        const data = localStorage.getItem('courses_quiz_block_progress');
         return data ? JSON.parse(data) : {};
     } catch { return {}; }
 }
@@ -415,10 +415,10 @@ function saveBlockProgress(difficulty: string, block: number, score: number, max
     if (!existing || score > existing.bestScore) {
         progress[key] = { bestScore: score, completed: pct >= 50, stars };
     }
-    localStorage.setItem('bible_quiz_block_progress', JSON.stringify(progress));
+    localStorage.setItem('courses_quiz_block_progress', JSON.stringify(progress));
 }
 
-export function BibleQuiz({ onBack, onSaveScore }: BibleQuizProps) {
+export function coursesQuiz({ onBack, onSaveScore }: coursesQuizProps) {
     const [gameState, setGameState] = useState<GameState>('menu');
     const [difficulty, setDifficulty] = useState<Difficulty>('easy');
     const [selectedBlock, setSelectedBlock] = useState(1);

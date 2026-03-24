@@ -110,7 +110,7 @@ export function GroupGameDialog({
                                             groupId: currentGroup.id,
                                             players: [userId],
                                         });
-                                        supabase.from('prayer_group_messages').insert({
+                                        supabase.from('group_messages').insert({
                                             group_id: currentGroup.id,
                                             user_id: userId,
                                             content: `🎮 **JEU DE GROUPE LANCÉ !** 🎮\n\n${userName || 'Un membre'} a lancé un jeu biblique !\n\nCliquez sur le bouton 🎮 clignotant pour rejoindre !`,

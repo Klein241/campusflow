@@ -1,9 +1,9 @@
-# 🏠 Maison de Prière — Documentation Technique Complète
+# 🏠 CentreFormation Pro — Documentation Technique Complète
 
 > **Dernière mise à jour** : 23 mars 2026  
 > **Branche de production** : `principal2`  
-> **URL de production** : https://mickylegrand.netlify.app  
-> **Repository** : https://github.com/Klein241/maisondepri-re
+> **URL de production** : https://centreformation.netlify.app  
+> **Repository** : https://github.com/Klein241/centreformation
 
 ---
 
@@ -27,7 +27,7 @@
 
 ## Vue d'ensemble
 
-**Maison de Prière** est une application web progressive (PWA) communautaire chrétienne. Elle offre un programme de prière de 40 jours, un espace communautaire (chat en temps réel, groupes de prière), une bibliothèque numérique de livres chrétiens, un marketplace, et un espace de gestion administration.
+**CentreFormation Pro** est une application web progressive (PWA) communautaire chrétienne. Elle offre un programme de prière de 40 jours, un espace communautaire (chat en temps réel, Groupes d'etude), une Ressources pédagogiques de livres chrétiens, un marketplace, et un espace de gestion administration.
 
 L'application est conçue comme un **SPA statique** (Single Page Application), où toute la logique s'exécute côté client. Le backend est entièrement géré par **Supabase** (base de données, authentification, temps réel) et un **Cloudflare Worker** (notifications push, stockage R2).
 
@@ -49,7 +49,7 @@ L'application est conçue comme un **SPA statique** (Single Page Application), o
           │                  │
     ┌─────▼──────┐     ┌─────▼──────────────┐
     │  Supabase  │     │  Cloudflare Worker  │
-    │            │     │  (maisondepriere-   │
+    │            │     │  (centreformation-   │
     │ • Auth     │     │   notifications)    │
     │ • Database │     │                     │
     │ • Realtime │     │ • Push Notifications│
@@ -60,7 +60,7 @@ L'application est conçue comme un **SPA statique** (Single Page Application), o
 
 ### Flux de données
 
-1. **Auth** : Supabase Auth (email/password avec fake email `{phone}@marathon.local`, Google OAuth)
+1. **Auth** : Supabase Auth (email/password avec fake email `{phone}@centreformation.local`, Google OAuth)
 2. **Data** : Supabase PostgreSQL via REST API (`@supabase/supabase-js`)
 3. **Realtime** : Supabase Channels (Presence + postgres_changes)
 4. **Push** : Cloudflare Worker → Web Push Protocol (RFC 8188/8291)
@@ -79,31 +79,31 @@ holographic-ring/
 │   │   ├── layout.tsx           # Root layout (providers, fonts, listeners)
 │   │   └── admin/               # Panneau d'administration
 │   │       ├── page.tsx         # Dashboard admin principal
-│   │       ├── content/         # Gestion programme 40 jours + bibliothèque
+│   │       ├── content/         # Gestion cursus + ressources
 │   │       ├── marketplace/     # Gestion produits marketplace
 │   │       ├── users/           # Gestion utilisateurs
-│   │       ├── groups/          # Gestion groupes de prière
+│   │       ├── groups/          # Gestion Groupes d'etude
 │   │       ├── notifications/   # Envoi notifications push
 │   │       ├── moderation/      # Modération contenus
-│   │       ├── bible/           # Gestion versets/études bibliques
-│   │       ├── ads/             # Gestion publicités bibliothèque
+│   │       ├── courses/           # Gestion versets/études bibliques
+│   │       ├── ads/             # Gestion publicités ressources
 │   │       ├── settings/        # Paramètres application
 │   │       └── ...
 │   ├── components/
 │   │   ├── views/               # Vues principales (onglets)
 │   │   │   ├── auth-view.tsx     # Connexion / Inscription
-│   │   │   ├── home-view.tsx     # Accueil / Tableau de bord
-│   │   │   ├── community-view.tsx # Communauté (chat, groupes, prières)
-│   │   │   ├── library-view.tsx  # Bibliothèque numérique
-│   │   │   ├── marketplace-view.tsx # Marketplace
-│   │   │   ├── bible-view.tsx    # Lecteur Bible
-│   │   │   ├── journal-view.tsx  # Journal de prière
-│   │   │   ├── program-view.tsx  # Programme 40 jours
+│   │   │   ├── dashboard-view.tsx     # Accueil / Tableau de bord
+│   │   │   ├── forum-view.tsx # Forum étudiant (chat, groupes, prières)
+│   │   │   ├── resources-view.tsx  # Ressources pédagogiques
+│   │   │   ├── shop-view.tsx # Marketplace
+│   │   │   ├── courses-view.tsx    # Lecteur courses
+│   │   │   ├── grades-view.tsx  # Carnet de notes
+│   │   │   ├── curriculum-view.tsx  # cursus
 │   │   │   └── profile-view.tsx  # Profil utilisateur
 │   │   ├── community/
-│   │   │   └── whatsapp-chat.tsx # Chat temps réel (3700+ lignes)
+│   │   │   └── forum-chat.tsx # Chat temps réel (3700+ lignes)
 │   │   ├── admin/
-│   │   │   └── library-manager.tsx # Admin bibliothèque (upload, bulk, gestion)
+│   │   │   └── resources-manager.tsx # Admin ressources (upload, bulk, gestion)
 │   │   ├── auth-listener.tsx     # Gestion session auth (onAuthStateChange)
 │   │   ├── NotificationContext.tsx # Provider notifications in-app
 │   │   ├── notification-bell.tsx # Cloche de notifications UI
@@ -119,7 +119,7 @@ holographic-ring/
 │   │   ├── api-client.ts         # Fonctions API Supabase (profils, chat)
 │   │   ├── notifications.ts      # Logique envoi notifications
 │   │   ├── media-storage.ts      # IndexedDB + Google Drive backup
-│   │   ├── program-data.ts       # Données programme 40 jours
+│   │   ├── curriculum-data.ts       # Données cursus
 │   │   ├── types.ts              # Types TypeScript
 │   │   └── utils.ts              # Utilitaires (cn, formatDate, etc.)
 │   └── styles/                   # CSS global
@@ -157,7 +157,7 @@ Utilisateur entre : +237675052106
                     ↓
 normalizePhone() → "237675052106"
                     ↓
-email construit  → "237675052106@marathon.local"
+email construit  → "237675052106@centreformation.local"
                     ↓
 supabase.auth.signInWithPassword({ email, password })
                     ↓
@@ -199,29 +199,29 @@ AuthListener.onAuthStateChange(SIGNED_IN)
 | Table | Description |
 |-------|-------------|
 | `profiles` | Profils utilisateurs (is_online, last_seen, is_active, avatar, etc.) |
-| `prayer_requests` | Demandes de prière |
-| `testimonials` | Témoignages |
+| `tutoring_requests` | Demandes de tutorat |
+| `experience_feedbacks` | Retours d'expérience |
 | `conversations` | Conversations DM (last_message, participants) |
 | `direct_messages` | Messages privés |
-| `prayer_groups` | Groupes de prière |
-| `prayer_group_messages` | Messages de groupe |
-| `prayer_group_members` | Membres des groupes |
-| `user_progress` | Progression programme 40 jours |
-| `books` | Bibliothèque de livres |
-| `book_favorites` | Livres favoris |
-| `book_ratings` | Notes des livres |
-| `book_reading_history` | Historique de lecture |
+| `study_groups` | Groupes d'etude |
+| `group_messages` | Messages de groupe |
+| `group_members` | Membres des groupes |
+| `student_progress` | Progression cursus |
+| `books` | ressources de livres |
+| `resource_favorites` | Livres favoris |
+| `resource_ratings` | Notes des livres |
+| `resource_access_history` | Historique de lecture |
 | `notifications` | Notifications in-app |
 | `push_subscriptions` | Abonnements push |
 | `notification_preferences` | Préférences notifications |
-| `marketplace_products` | Produits marketplace |
-| `marketplace_orders` | Commandes marketplace |
+| `shop_products` | Produits marketplace |
+| `shop_orders` | Commandes marketplace |
 | `app_settings` | Paramètres globaux |
-| `library_ads` | Publicités bibliothèque |
+| `resource_banners` | Publicités ressources |
 
 ### Realtime
 
-- **Presence** : Canal `unified-presence` (track user online/offline)
+- **Presence** : Canal `campus-presence` (track user online/offline)
 - **postgres_changes** : Canal `presence-db-changes` (fallback DB pour présence)
 - **notifications** : Canal par userId pour les notifications en temps réel
 
@@ -234,15 +234,15 @@ AuthListener.onAuthStateChange(SIGNED_IN)
 - Tracking de progression par utilisateur
 - Système de streak (jours consécutifs)
 
-### 2. Communauté (Chat temps réel)
+### 2. Forum étudiant (Chat temps réel)
 - **Messages privés** : Chat 1-to-1 avec indicateur de présence
-- **Groupes de prière** : Création, gestion, chat de groupe
+- **Groupes d'etude** : Création, gestion, chat de groupe
 - **Appels vocaux/vidéo** : WebRTC (peer-to-peer)
 - **Messages vocaux** : Enregistrement et lecture
 - **Réactions** : Emojis sur les messages
 - **Transfert de fichiers** : Images, documents
 
-### 3. Bibliothèque numérique
+### 3. Ressources pédagogiques
 - Upload de livres (PDF/EPUB) vers Cloudflare R2
 - Extraction automatique de couverture depuis PDF
 - Système de notation (étoiles)
@@ -251,8 +251,8 @@ AuthListener.onAuthStateChange(SIGNED_IN)
 - Upload en masse (bulk upload 100-1000+ livres)
 - Publication programmée (scheduled_at)
 
-### 4. Bible intégrée
-- Lecteur Bible complet
+### 4. courses intégrée
+- Lecteur courses complet
 - Recherche par livre/chapitre/verset
 - Mode responsive mobile/desktop
 
@@ -270,7 +270,7 @@ AuthListener.onAuthStateChange(SIGNED_IN)
 ### 7. Panneau d'administration
 - Gestion utilisateurs (activer/désactiver)
 - Gestion contenu programme
-- Gestion bibliothèque (upload, bulk, publish/unpublish)
+- Gestion ressources (upload, bulk, publish/unpublish)
 - Envoi notifications push globales
 - Marketplace admin
 - Modération des contenus
@@ -300,7 +300,7 @@ AuthListener.onAuthStateChange(SIGNED_IN)
 
 ### Cloudflare Worker (Backend)
 
-**Repo** : `Klein241/bufferwave-cloudflare` → `maisondepriere-push/`
+**Repo** : `Klein241/bufferwave-cloudflare` → `centreformation-push/`
 
 **Routes** :
 - `GET /api/push/vapid-key` — Clé publique VAPID
@@ -384,8 +384,8 @@ AuthListener.onAuthStateChange(SIGNED_IN)
 ### Installation
 
 ```bash
-git clone https://github.com/Klein241/maisondepri-re.git
-cd maisondepri-re
+git clone https://github.com/Klein241/centreformation.git
+cd centreformation
 git checkout principal2
 npm install
 ```
@@ -396,7 +396,7 @@ Créer un fichier `.env.local` :
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://holomdzjifrgirkjuaqv.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
-NEXT_PUBLIC_WORKER_URL=https://maisondepriere-notifications.bufferwave.workers.dev
+NEXT_PUBLIC_WORKER_URL=https://centreformation-notifications.bufferwave.workers.dev
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id
 NEXT_PUBLIC_ADMIN_KEY=your_admin_key
 ```

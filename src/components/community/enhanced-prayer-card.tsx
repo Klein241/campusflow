@@ -23,9 +23,9 @@ import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { PRAYER_CATEGORIES, PrayerCategory } from '@/lib/types';
-import { JoinPrayerGroupButton } from './prayer-group-manager';
+import { JoinStudyGroupButton } from './prayer-group-manager';
 
-interface PrayerRequest {
+interface TutoringRequest {
     id: string;
     user_id: string;
     content: string;
@@ -44,12 +44,12 @@ interface PrayerRequest {
 }
 
 interface EnhancedPrayerCardProps {
-    prayer: PrayerRequest;
+    prayer: TutoringRequest;
     currentUserId?: string;
     onPray: () => void;
     onAnswered?: (prayerId: string, isAnswered: boolean) => void;
     onCreateTestimony?: (prayerId: string, prayerContent: string) => void;
-    onJoinPrayerGroup?: (prayerId: string) => void;
+    onJoinStudyGroup?: (prayerId: string) => void;
     isAdmin?: boolean;
 }
 
@@ -59,7 +59,7 @@ export function EnhancedPrayerCard({
     onPray,
     onAnswered,
     onCreateTestimony,
-    onJoinPrayerGroup,
+    onJoinStudyGroup,
     isAdmin = false
 }: EnhancedPrayerCardProps) {
     // Local state for optimistic UI
@@ -119,7 +119,7 @@ export function EnhancedPrayerCard({
 
         try {
             const { error } = await supabase
-                .from('prayer_requests')
+                .from('tutoring_requests')
                 .update({
                     is_answered: newStatus,
                     answered_at: newStatus ? new Date().toISOString() : null
@@ -132,7 +132,7 @@ export function EnhancedPrayerCard({
                 // Close associated prayer group automatically
                 try {
                     await supabase
-                        .from('prayer_groups')
+                        .from('study_groups')
                         .update({
                             status: 'answered',
                             is_open: false,
@@ -168,7 +168,7 @@ export function EnhancedPrayerCard({
 
         try {
             const { error } = await supabase
-                .from('prayer_requests')
+                .from('tutoring_requests')
                 .update({ is_locked: newStatus })
                 .eq('id', prayer.id);
 
@@ -191,7 +191,7 @@ export function EnhancedPrayerCard({
         setIsSubmitting(true);
         try {
             const { error } = await supabase
-                .from('testimonials')
+                .from('experience_feedbacks')
                 .insert({
                     user_id: currentUserId,
                     content: testimonyContent.trim(),
@@ -233,7 +233,7 @@ export function EnhancedPrayerCard({
     };
 
     const handleJoinGroup = () => {
-        onJoinPrayerGroup?.(prayer.id);
+        onJoinStudyGroup?.(prayer.id);
     };
 
     const getInitials = (name: string | null) => {
@@ -400,7 +400,7 @@ export function EnhancedPrayerCard({
                             </motion.button>
 
                             {/* Join Prayer Group - Always available */}
-                            <JoinPrayerGroupButton
+                            <JoinStudyGroupButton
                                 prayerId={prayer.id}
                                 prayerContent={prayer.content}
                                 prayerOwnerId={prayer.user_id}

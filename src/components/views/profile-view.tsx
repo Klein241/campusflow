@@ -58,7 +58,7 @@ import { SellerDashboard } from "@/components/marketplace/seller-dashboard"
 import { StorageManager } from "@/components/storage-manager"
 
 export function ProfileView() {
-    const { user, streak, totalDaysCompleted, achievements, unlockedAchievements, signOut, theme, setTheme, setUser, prayerRequests } = useAppStore()
+    const { user, streak, totalDaysCompleted, achievements, unlockedAchievements, signOut, theme, setTheme, setUser, tutoringRequests } = useAppStore()
     const { setTheme: setNextTheme, resolvedTheme } = useTheme()
 
     // Sync store theme ↔ next-themes
@@ -122,14 +122,14 @@ export function ProfileView() {
         try {
             // Get groups created by user
             const { data: created } = await supabase
-                .from('prayer_groups')
-                .select('*, member_count:prayer_group_members(count)')
+                .from('study_groups')
+                .select('*, member_count:group_members(count)')
                 .eq('created_by', user.id)
                 .order('created_at', { ascending: false })
 
             // Get groups user is member of
             const { data: memberships } = await supabase
-                .from('prayer_group_members')
+                .from('group_members')
                 .select('group_id')
                 .eq('user_id', user.id)
 
@@ -137,8 +137,8 @@ export function ProfileView() {
             let joinedGroups: any[] = []
             if (memberGroupIds.length > 0) {
                 const { data: joined } = await supabase
-                    .from('prayer_groups')
-                    .select('*, member_count:prayer_group_members(count)')
+                    .from('study_groups')
+                    .select('*, member_count:group_members(count)')
                     .in('id', memberGroupIds)
                     .neq('created_by', user.id)
                     .order('created_at', { ascending: false })
@@ -197,7 +197,7 @@ export function ProfileView() {
         try {
             // Get all members from source group
             const { data: sourceMembers, error: fetchErr } = await supabase
-                .from('prayer_group_members')
+                .from('group_members')
                 .select('user_id, role')
                 .eq('group_id', migrateSourceGroup)
 
@@ -205,7 +205,7 @@ export function ProfileView() {
 
             // Get existing members in target
             const { data: targetMembers } = await supabase
-                .from('prayer_group_members')
+                .from('group_members')
                 .select('user_id')
                 .eq('group_id', migrateTargetGroup)
 
@@ -220,7 +220,7 @@ export function ProfileView() {
 
             // Insert new members into target group
             const { error: insertErr } = await supabase
-                .from('prayer_group_members')
+                .from('group_members')
                 .insert(toMigrate.map((m: any) => ({
                     group_id: migrateTargetGroup,
                     user_id: m.user_id,
@@ -253,7 +253,7 @@ export function ProfileView() {
 
             const announcement = `🙏 **PRIÈRE EXAUCÉE !** 🎉\n\nCe sujet de prière pour lequel nous prions a été exaucé ! Merci pour votre participation à tous !\n\nDe ce fait, ce groupe sera fermé dans 24h.\n\nVeuillez rejoindre ces groupes :\n${suggestionList}\n\n— L'administrateur`
 
-            await supabase.from('prayer_group_messages').insert({
+            await supabase.from('group_messages').insert({
                 group_id: groupId,
                 user_id: user!.id,
                 content: announcement,
@@ -262,7 +262,7 @@ export function ProfileView() {
 
             // Update group to schedule closure (set a closing_at timestamp)
             const closingAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-            await supabase.from('prayer_groups').update({
+            await supabase.from('study_groups').update({
                 description: `🙏 PRIÈRE EXAUCÉE — Fermeture le ${new Date(closingAt).toLocaleDateString('fr-FR')} à ${new Date(closingAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
                 is_urgent: false,
             }).eq('id', groupId)
@@ -625,7 +625,7 @@ export function ProfileView() {
                                         <Users className="h-5 w-5 text-indigo-400" />
                                     </div>
                                     <div>
-                                        <h3 className="font-bold text-sm text-white">Ma Communauté</h3>
+                                        <h3 className="font-bold text-sm text-white">Ma Forum étudiant</h3>
                                         <p className="text-[10px] text-slate-400">{myGroups.length} groupe{myGroups.length !== 1 ? 's' : ''}</p>
                                     </div>
                                 </div>
@@ -709,9 +709,9 @@ export function ProfileView() {
                                                                 onClick={async () => {
                                                                     if (!window.confirm(`Supprimer le groupe "${group.name}" ? Cette action est irréversible.`)) return;
                                                                     try {
-                                                                        await supabase.from('prayer_group_members').delete().eq('group_id', group.id);
-                                                                        await supabase.from('prayer_group_messages').delete().eq('group_id', group.id);
-                                                                        await supabase.from('prayer_groups').delete().eq('id', group.id);
+                                                                        await supabase.from('group_members').delete().eq('group_id', group.id);
+                                                                        await supabase.from('group_messages').delete().eq('group_id', group.id);
+                                                                        await supabase.from('study_groups').delete().eq('id', group.id);
                                                                         setMyGroups(prev => prev.filter(g => g.id !== group.id));
                                                                         toast.success('Groupe supprimé');
                                                                     } catch (e) {
@@ -823,7 +823,7 @@ export function ProfileView() {
                                                                     try {
                                                                         const groupName = `${user?.name || 'Moi'} & ${friend.full_name}`;
                                                                         const { data, error } = await supabase
-                                                                            .from('prayer_groups')
+                                                                            .from('study_groups')
                                                                             .insert({
                                                                                 name: groupName,
                                                                                 created_by: user?.id,
@@ -833,7 +833,7 @@ export function ProfileView() {
                                                                             .single();
                                                                         if (error) throw error;
                                                                         // Add both members
-                                                                        await supabase.from('prayer_group_members').insert([
+                                                                        await supabase.from('group_members').insert([
                                                                             { group_id: data.id, user_id: user?.id, role: 'admin' },
                                                                             { group_id: data.id, user_id: friend.id, role: 'member' },
                                                                         ]);
@@ -867,14 +867,14 @@ export function ProfileView() {
                         </h3>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                        {/* Badge: Ma Communauté */}
+                        {/* Badge: Ma Forum étudiant */}
                         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                             <Card className="h-full border-none shadow-sm bg-linear-to-br from-indigo-500/10 to-purple-500/5 border-indigo-500/20">
                                 <CardContent className="p-4 flex flex-col items-center text-center h-full">
                                     <div className="p-3 rounded-full mb-3 shadow-inner bg-indigo-500/15">
                                         <Users className="h-6 w-6 text-indigo-400" />
                                     </div>
-                                    <h4 className="font-semibold text-sm mb-1">Ma Communauté</h4>
+                                    <h4 className="font-semibold text-sm mb-1">Ma Forum étudiant</h4>
                                     <p className="text-2xl font-bold text-indigo-400">{myGroups.length}</p>
                                     <p className="text-[10px] text-muted-foreground">groupe{myGroups.length !== 1 ? 's' : ''} rejoints</p>
                                 </CardContent>
@@ -904,7 +904,7 @@ export function ProfileView() {
                                     </div>
                                     <h4 className="font-semibold text-sm mb-1">Guerrier de Prière</h4>
                                     <p className="text-2xl font-bold text-amber-400">
-                                        {prayerRequests.filter(p => p.prayedBy?.includes(user?.id || '')).length}
+                                        {tutoringRequests.filter(p => p.prayedBy?.includes(user?.id || '')).length}
                                     </p>
                                     <p className="text-[10px] text-muted-foreground">prières soutenues</p>
                                 </CardContent>
@@ -1188,8 +1188,8 @@ export function ProfileView() {
                                 className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50 transition-colors"
                                 onClick={() => {
                                     const shareData = {
-                                        title: 'Maison de Prière',
-                                        text: 'Rejoins-moi sur Maison de Prière ! Une communauté de prière, Bible et partage spirituel.',
+                                        title: 'CentreFormation Pro',
+                                        text: 'Rejoins-moi sur CentreFormation Pro ! Une Forum étudiant de prière, Bible et partage spirituel.',
                                         url: window.location.origin
                                     };
                                     if (navigator.share && navigator.canShare(shareData)) {
@@ -1227,7 +1227,7 @@ export function ProfileView() {
                 </div>
 
                 <div className="text-center mt-8 text-xs text-slate-600">
-                    Version 1.4.0 • Maison de Prière
+                    Version 1.4.0 • CentreFormation Pro
                 </div>
 
                 {/* Migrate Members Dialog */}

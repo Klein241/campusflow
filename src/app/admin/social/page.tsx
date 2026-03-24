@@ -672,7 +672,7 @@ export default function SocialPage() {
                             URL de votre Cloudflare Worker pour les notifications push, lien preview et analytics.
                         </p>
                         <Input
-                            placeholder="Ex: https://maisondepriere-api.votre-compte.workers.dev"
+                            placeholder="Ex: https://centreformation-api.votre-compte.workers.dev"
                             value={liveProxyUrl}
                             onChange={(e) => setLiveProxyUrl(e.target.value)}
                         />

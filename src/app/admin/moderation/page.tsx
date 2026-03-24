@@ -18,7 +18,7 @@ import { toast } from "sonner"
 
 export default function ModerationPage() {
     const [prayers, setPrayers] = useState<any[]>([])
-    const [testimonials, setTestimonials] = useState<any[]>([])
+    const [experience_feedbacks, setexperience_feedbacks] = useState<any[]>([])
     const [isLoading, setIsLoading] = useState(true)
 
     const fetchData = async () => {
@@ -26,20 +26,20 @@ export default function ModerationPage() {
 
         // Fetch Prayers
         const { data: prayersData } = await supabase
-            .from('prayer_requests')
+            .from('tutoring_requests')
             .select('*, profiles(full_name, avatar_url)')
             .order('created_at', { ascending: false })
             .limit(50)
 
-        // Fetch Testimonials
-        const { data: testimonialsData } = await supabase
-            .from('testimonials')
+        // Fetch experience_feedbacks
+        const { data: experience_feedbacksData } = await supabase
+            .from('experience_feedbacks')
             .select('*, profiles(full_name, avatar_url)')
             .order('created_at', { ascending: false })
             .limit(50)
 
         setPrayers(prayersData || [])
-        setTestimonials(testimonialsData || [])
+        setexperience_feedbacks(experience_feedbacksData || [])
         setIsLoading(false)
     }
 
@@ -47,7 +47,7 @@ export default function ModerationPage() {
         fetchData()
     }, [])
 
-    const handleDelete = async (table: 'prayer_requests' | 'testimonials', id: string) => {
+    const handleDelete = async (table: 'tutoring_requests' | 'experience_feedbacks', id: string) => {
         try {
             const { error } = await supabase
                 .from(table)
@@ -62,10 +62,10 @@ export default function ModerationPage() {
         }
     }
 
-    const handleApproveTestimonial = async (id: string, currentStatus: boolean) => {
+    const handleApproveExperienceFeedback = async (id: string, currentStatus: boolean) => {
         try {
             const { error } = await supabase
-                .from('testimonials')
+                .from('experience_feedbacks')
                 .update({ is_approved: !currentStatus })
                 .eq('id', id)
 
@@ -89,13 +89,13 @@ export default function ModerationPage() {
         <div className="space-y-6">
             <div>
                 <h2 className="text-3xl font-bold tracking-tight">Centre de Modération</h2>
-                <p className="text-muted-foreground">Gérez le contenu publié par la communauté pour assurer la sécurité.</p>
+                <p className="text-muted-foreground">Gérez le contenu publié par la forum pour assurer la sécurité.</p>
             </div>
 
             <Tabs defaultValue="prayers" className="space-y-4">
                 <TabsList>
                     <TabsTrigger value="prayers">Requêtes de Prière ({prayers.length})</TabsTrigger>
-                    <TabsTrigger value="testimonials">Témoignages ({testimonials.length})</TabsTrigger>
+                    <TabsTrigger value="experience_feedbacks">Retours d'expérience ({experience_feedbacks.length})</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="prayers" className="space-y-4">
@@ -129,7 +129,7 @@ export default function ModerationPage() {
                                                 variant="destructive"
                                                 size="sm"
                                                 className="h-8 w-8 p-0"
-                                                onClick={() => handleDelete('prayer_requests', prayer.id)}
+                                                onClick={() => handleDelete('tutoring_requests', prayer.id)}
                                             >
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
@@ -146,9 +146,9 @@ export default function ModerationPage() {
                     </div>
                 </TabsContent>
 
-                <TabsContent value="testimonials" className="space-y-4">
+                <TabsContent value="experience_feedbacks" className="space-y-4">
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        {testimonials.map((testi) => (
+                        {experience_feedbacks.map((testi) => (
                             <Card key={testi.id} className="relative overflow-hidden transition-all hover:shadow-lg hover:border-primary/50">
                                 <CardHeader className="flex flex-row items-center gap-4 pb-2">
                                     <Avatar className="h-8 w-8">
@@ -183,7 +183,7 @@ export default function ModerationPage() {
                                         <div className="mb-3 rounded-lg overflow-hidden">
                                             <img
                                                 src={testi.photo_url}
-                                                alt="Testimonial"
+                                                alt="ExperienceFeedback"
                                                 className="w-full h-32 object-cover"
                                             />
                                         </div>
@@ -200,7 +200,7 @@ export default function ModerationPage() {
                                                 variant="destructive"
                                                 size="sm"
                                                 className="h-8 w-8 p-0"
-                                                onClick={() => handleDelete('testimonials', testi.id)}
+                                                onClick={() => handleDelete('experience_feedbacks', testi.id)}
                                             >
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
@@ -211,7 +211,7 @@ export default function ModerationPage() {
                                                     ? 'text-orange-500 hover:text-orange-600 border-orange-500/20 hover:bg-orange-500/10'
                                                     : 'text-green-500 hover:text-green-600 border-green-500/20 hover:bg-green-500/10'
                                                     }`}
-                                                onClick={() => handleApproveTestimonial(testi.id, testi.is_approved)}
+                                                onClick={() => handleApproveExperienceFeedback(testi.id, testi.is_approved)}
                                             >
                                                 {testi.is_approved ? (
                                                     <AlertOctagon className="h-4 w-4" />
@@ -224,7 +224,7 @@ export default function ModerationPage() {
                                 </CardContent>
                             </Card>
                         ))}
-                        {testimonials.length === 0 && (
+                        {experience_feedbacks.length === 0 && (
                             <div className="col-span-full py-12 text-center text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
                                 Aucun témoignage à modérer.
                             </div>

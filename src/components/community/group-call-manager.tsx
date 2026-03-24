@@ -171,7 +171,7 @@ export function GroupCallManager({ user, groupId, groupName, groupMembers, onSta
     const postMeetLinkToGroupChat = async (title: string, meetLink: string) => {
         if (!user || meetLink === 'webrtc') return;
         try {
-            await supabase.from('prayer_group_messages').insert({
+            await supabase.from('group_messages').insert({
                 group_id: groupId,
                 user_id: user.id,
                 content: `📹 **${title}**\n\n🔗 Lien de l'appel : ${meetLink}\n\nℹ️ Ce lien est réservé aux membres du groupe.`,

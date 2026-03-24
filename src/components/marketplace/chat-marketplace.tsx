@@ -116,14 +116,14 @@ export function ChatMarketplace({ userId, userName, userAvatar }: ChatMarketplac
             // Buyer conversations
             const { data: buyerConvos } = await supabase
                 .from('marketplace_conversations')
-                .select('*, product:marketplace_products(id, title, images, price, currency)')
+                .select('*, product:shop_products(id, title, images, price, currency)')
                 .eq('buyer_id', userId)
                 .order('last_message_at', { ascending: false });
 
             // Seller conversations
             const { data: sellerConvos } = await supabase
                 .from('marketplace_conversations')
-                .select('*, product:marketplace_products(id, title, images, price, currency)')
+                .select('*, product:shop_products(id, title, images, price, currency)')
                 .eq('seller_id', userId)
                 .order('last_message_at', { ascending: false });
 
@@ -191,7 +191,7 @@ export function ChatMarketplace({ userId, userName, userAvatar }: ChatMarketplac
 
             if (sellerProfile) {
                 const { data } = await supabase
-                    .from('marketplace_products')
+                    .from('shop_products')
                     .select('*')
                     .eq('seller_id', sellerProfile.id)
                     .eq('status', 'active')

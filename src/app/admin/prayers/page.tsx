@@ -16,7 +16,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/lib/supabase';
-import { PrayerRequest, PRAYER_CATEGORIES, PrayerCategory } from '@/lib/types';
+import { TutoringRequest, PRAYER_CATEGORIES, PrayerCategory } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow, format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -24,7 +24,7 @@ import { toast } from 'sonner';
 import Link from 'next/link';
 import confetti from 'canvas-confetti';
 
-interface ExtendedPrayerRequest {
+interface ExtendedTutoringRequest {
     id: string;
     user_id: string;
     content: string;
@@ -46,12 +46,12 @@ interface ExtendedPrayerRequest {
 }
 
 export default function PrayersManagementPage() {
-    const [prayers, setPrayers] = useState<ExtendedPrayerRequest[]>([]);
+    const [prayers, setPrayers] = useState<ExtendedTutoringRequest[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'answered'>('all');
     const [filterCategory, setFilterCategory] = useState<PrayerCategory | 'all'>('all');
-    const [selectedPrayer, setSelectedPrayer] = useState<ExtendedPrayerRequest | null>(null);
+    const [selectedPrayer, setSelectedPrayer] = useState<ExtendedTutoringRequest | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [answerNote, setAnswerNote] = useState('');
     const [processing, setProcessing] = useState(false);
@@ -72,7 +72,7 @@ export default function PrayersManagementPage() {
         setLoading(true);
         try {
             let query = supabase
-                .from('prayer_requests')
+                .from('tutoring_requests')
                 .select(`
                     *,
                     profiles:user_id (full_name, avatar_url, email)
@@ -119,7 +119,7 @@ export default function PrayersManagementPage() {
             if (error) {
                 // Fallback if RPC doesn't exist
                 await supabase
-                    .from('prayer_requests')
+                    .from('tutoring_requests')
                     .update({
                         is_answered: true,
                         answered_at: new Date().toISOString(),
@@ -148,7 +148,7 @@ export default function PrayersManagementPage() {
     const toggleLock = async (prayerId: string, currentLock: boolean) => {
         try {
             await supabase
-                .from('prayer_requests')
+                .from('tutoring_requests')
                 .update({ is_locked: !currentLock })
                 .eq('id', prayerId);
 

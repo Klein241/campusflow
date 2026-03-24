@@ -1,27 +1,27 @@
 /**
- * DYNAMIC BIBLE QUIZ GENERATOR
+ * DYNAMIC courses QUIZ GENERATOR
  * ==============================
  * 
- * Generates unlimited quiz questions using LOCAL Bible data.
+ * Generates unlimited quiz questions using LOCAL courses data.
  * No external API calls - fully offline capable.
  * 
  * Creates different types of questions:
  * - Fill in the blank (verse completion)
  * - Who said it? (character attribution)
- * - Where in the Bible? (book location)
+ * - Where in the courses? (book location)
  * - True/False (verse accuracy)
  * - Multiple choice
  */
 
 import {
-    BIBLE_BOOKS,
+    courses_BOOKS,
     getBookById,
-    BibleVerse
-} from './local-bible-data';
+    coursesVerse
+} from './local-courses-data';
 import {
     getRandomVerses
-} from './local-bible-service';
-import type { GameLanguage } from './bible-store';
+} from './local-courses-service';
+import type { GameLanguage } from './courses-store';
 
 // Types
 export interface QuizQuestion {
@@ -36,7 +36,7 @@ export interface QuizQuestion {
 }
 
 // Static knowledge base for character questions
-const BIBLE_CHARACTERS = [
+const courses_CHARACTERS = [
     { name: 'Jésus', nameEn: 'Jesus', aliases: ['Jésus-Christ', 'Christ', 'le Seigneur'] },
     { name: 'Moïse', nameEn: 'Moses', aliases: ['Moïse'] },
     { name: 'David', nameEn: 'David', aliases: ['le roi David', 'David'] },
@@ -83,10 +83,10 @@ const STATIC_QUESTIONS_FR: QuizQuestion[] = [
     {
         id: 'static_4',
         type: 'multiple_choice',
-        question: "Quel est le premier livre de la Bible ?",
+        question: "Quel est le premier livre de la courses ?",
         options: ["Exode", "Genèse", "Matthieu", "Psaumes"],
         correctIndex: 1,
-        reference: "Bible",
+        reference: "courses",
         difficulty: 'easy'
     },
     {
@@ -137,10 +137,10 @@ const STATIC_QUESTIONS_FR: QuizQuestion[] = [
     {
         id: 'static_10',
         type: 'multiple_choice',
-        question: "Quel est le dernier livre de la Bible ?",
+        question: "Quel est le dernier livre de la courses ?",
         options: ["Apocalypse", "Jude", "Actes", "Malachie"],
         correctIndex: 0,
-        reference: "Bible",
+        reference: "courses",
         difficulty: 'easy'
     },
     {
@@ -288,7 +288,7 @@ const STATIC_QUESTIONS_FR: QuizQuestion[] = [
         correctIndex: 3,
         reference: "Genèse 2-3",
         difficulty: 'medium',
-        explanation: "La Bible ne précise pas le type de fruit."
+        explanation: "La courses ne précise pas le type de fruit."
     },
     {
         id: 'static_17',
@@ -403,7 +403,7 @@ const STATIC_QUESTIONS_FR: QuizQuestion[] = [
     {
         id: 'static_19',
         type: 'multiple_choice',
-        question: "Quel est le verset le plus court de la Bible ?",
+        question: "Quel est le verset le plus court de la courses ?",
         options: ["Jean 11:35", "1 Thessaloniciens 5:16", "Exode 20:13", "Genèse 1:1"],
         correctIndex: 0,
         reference: "Jean 11:35 - 'Jésus pleura.'",
@@ -422,7 +422,7 @@ const STATIC_QUESTIONS_FR: QuizQuestion[] = [
     {
         id: 'static_21',
         type: 'multiple_choice',
-        question: "Quel livre de la Bible ne mentionne pas le nom de Dieu ?",
+        question: "Quel livre de la courses ne mentionne pas le nom de Dieu ?",
         options: ["Ruth", "Esther", "Cantique des Cantiques", "Proverbes"],
         correctIndex: 1,
         reference: "Livre d'Esther",
@@ -431,7 +431,7 @@ const STATIC_QUESTIONS_FR: QuizQuestion[] = [
     {
         id: 'static_22',
         type: 'multiple_choice',
-        question: "Qui est le plus vieil homme mentionné dans la Bible ?",
+        question: "Qui est le plus vieil homme mentionné dans la courses ?",
         options: ["Adam", "Noé", "Mathusalem", "Énoch"],
         correctIndex: 2,
         reference: "Genèse 5:27",
@@ -441,10 +441,10 @@ const STATIC_QUESTIONS_FR: QuizQuestion[] = [
     {
         id: 'static_23',
         type: 'multiple_choice',
-        question: "Combien de livres y a-t-il dans la Bible protestante ?",
+        question: "Combien de livres y a-t-il dans la courses protestante ?",
         options: ["66", "73", "81", "39"],
         correctIndex: 0,
-        reference: "Bible",
+        reference: "courses",
         difficulty: 'hard'
     },
     {
@@ -486,7 +486,7 @@ const STATIC_QUESTIONS_FR: QuizQuestion[] = [
     {
         id: 'static_hard_28',
         type: 'multiple_choice',
-        question: "Quel est le plus long chapitre de la Bible ?",
+        question: "Quel est le plus long chapitre de la courses ?",
         options: ["Psaume 119", "Psaume 1", "Matthieu 26", "Apocalypse 21"],
         correctIndex: 0,
         reference: "Psaume 119",
@@ -554,10 +554,10 @@ const STATIC_QUESTIONS_EN: QuizQuestion[] = [
     {
         id: 'static_en_4',
         type: 'multiple_choice',
-        question: "What is the first book of the Bible?",
+        question: "What is the first book of the courses?",
         options: ["Exodus", "Genesis", "Matthew", "Psalms"],
         correctIndex: 1,
-        reference: "Bible",
+        reference: "courses",
         difficulty: 'easy'
     },
     {
@@ -628,7 +628,7 @@ const STATIC_QUESTIONS_EN: QuizQuestion[] = [
     {
         id: 'static_en_12',
         type: 'multiple_choice',
-        question: "What is the shortest verse in the Bible?",
+        question: "What is the shortest verse in the courses?",
         options: ["John 11:35", "1 Thessalonians 5:16", "Exodus 20:13", "Genesis 1:1"],
         correctIndex: 0,
         reference: "John 11:35 - 'Jesus wept.'",
@@ -640,7 +640,7 @@ const STATIC_QUESTIONS_EN: QuizQuestion[] = [
  * Generate a fill-in-the-blank question from a verse
  */
 async function generateFillBlankQuestion(
-    verse: BibleVerse,
+    verse: coursesVerse,
     difficulty: 'easy' | 'medium' | 'hard',
     language: GameLanguage = 'fr'
 ): Promise<QuizQuestion | null> {
@@ -698,10 +698,10 @@ async function generateFillBlankQuestion(
 }
 
 /**
- * Generate a "Where in the Bible" question
+ * Generate a "Where in the courses" question
  */
 async function generateWhereQuestion(
-    verse: BibleVerse,
+    verse: coursesVerse,
     difficulty: 'easy' | 'medium' | 'hard',
     language: GameLanguage = 'fr'
 ): Promise<QuizQuestion | null> {
@@ -714,8 +714,8 @@ async function generateWhereQuestion(
 
     // Get distractor books from the same testament for harder questions
     const distractorPool = difficulty === 'easy'
-        ? BIBLE_BOOKS.filter(b => b.testament !== book.testament)
-        : BIBLE_BOOKS.filter(b => b.id !== book.id && b.testament === book.testament);
+        ? courses_BOOKS.filter(b => b.testament !== book.testament)
+        : courses_BOOKS.filter(b => b.id !== book.id && b.testament === book.testament);
 
     const distractors = distractorPool
         .sort(() => Math.random() - 0.5)
@@ -763,7 +763,7 @@ export const quizGenerator = {
         const filteredStatic = staticPool.filter(q => q.difficulty === difficulty);
         const shuffledStatic = [...filteredStatic].sort(() => Math.random() - 0.5);
 
-        // Generate dynamic questions from local Bible data
+        // Generate dynamic questions from local courses data
         try {
             const verses = await getRandomVerses(Math.ceil(count * 0.6));
 

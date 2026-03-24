@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { PrayerGroup, PrayerGroupJoinRequest } from '@/lib/types';
+import { StudyGroup, StudyGroupJoinRequest } from '@/lib/types';
 import { notifyGroupAccessRequest, notifyGroupAccessApproved } from '@/lib/notifications';
 import { toast } from 'sonner';
 
@@ -23,13 +23,13 @@ interface UserInfo {
  * • Group creation (RPC fallback to direct insert)
  */
 export function useGroups(user: UserInfo | null) {
-    const [groups, setGroups] = useState<PrayerGroup[]>([]);
+    const [groups, setGroups] = useState<StudyGroup[]>([]);
     const [userGroups, setUserGroups] = useState<string[]>([]);
-    const [selectedGroup, setSelectedGroup] = useState<PrayerGroup | null>(null);
+    const [selectedGroup, setSelectedGroup] = useState<StudyGroup | null>(null);
     const [groupMembers, setGroupMembers] = useState<any[]>([]);
 
     // Join request system
-    const [groupJoinRequests, setGroupJoinRequests] = useState<PrayerGroupJoinRequest[]>([]);
+    const [groupJoinRequests, setGroupJoinRequests] = useState<StudyGroupJoinRequest[]>([]);
     const [pendingRequestCounts, setPendingRequestCounts] = useState<Record<string, number>>({});
 
     // Create group dialog state
@@ -45,7 +45,7 @@ export function useGroups(user: UserInfo | null) {
     const loadGroups = useCallback(async () => {
         try {
             let { data, error } = await supabase
-                .from('prayer_groups')
+                .from('study_groups')
                 .select(`
                     *,
                     profiles:created_by (full_name, avatar_url)
@@ -55,7 +55,7 @@ export function useGroups(user: UserInfo | null) {
             if (error) {
                 console.log('Groups query error, trying simpler query:', error.message);
                 const simpleResult = await supabase
-                    .from('prayer_groups')
+                    .from('study_groups')
                     .select('*')
                     .order('created_at', { ascending: false });
                 data = simpleResult.data;
@@ -64,7 +64,7 @@ export function useGroups(user: UserInfo | null) {
             if (data) {
                 const groupsWithCounts = await Promise.all(data.map(async (g) => {
                     const { count } = await supabase
-                        .from('prayer_group_members')
+                        .from('group_members')
                         .select('*', { count: 'exact', head: true })
                         .eq('group_id', g.id);
                     return { ...g, memberCount: count || 0 };
@@ -82,7 +82,7 @@ export function useGroups(user: UserInfo | null) {
         if (!user) return;
         try {
             const { data, error } = await supabase
-                .from('prayer_group_members')
+                .from('group_members')
                 .select('group_id')
                 .eq('user_id', user.id);
 
@@ -98,7 +98,7 @@ export function useGroups(user: UserInfo | null) {
         if (!user) return;
         try {
             const { data: myGroups } = await supabase
-                .from('prayer_groups')
+                .from('study_groups')
                 .select('id')
                 .eq('created_by', user.id);
 
@@ -131,7 +131,7 @@ export function useGroups(user: UserInfo | null) {
         if (!user) return;
         try {
             const { error } = await supabase
-                .from('prayer_group_members')
+                .from('group_members')
                 .insert({
                     group_id: groupId,
                     user_id: user.id
@@ -151,7 +151,7 @@ export function useGroups(user: UserInfo | null) {
         if (!user) return;
         try {
             const { error } = await supabase
-                .from('prayer_group_members')
+                .from('group_members')
                 .delete()
                 .eq('group_id', groupId)
                 .eq('user_id', user.id);
@@ -209,7 +209,7 @@ export function useGroups(user: UserInfo | null) {
             }
 
             const { data: group } = await supabase
-                .from('prayer_groups')
+                .from('study_groups')
                 .select('created_by, name')
                 .eq('id', groupId)
                 .single();
@@ -234,7 +234,7 @@ export function useGroups(user: UserInfo | null) {
     const approveJoinRequest = useCallback(async (requestId: string, groupId: string, userId: string) => {
         try {
             const { error: memberError } = await supabase
-                .from('prayer_group_members')
+                .from('group_members')
                 .insert({ group_id: groupId, user_id: userId, role: 'member' });
 
             if (memberError && !memberError.message.includes('duplicate')) {
@@ -289,7 +289,7 @@ export function useGroups(user: UserInfo | null) {
     const loadGroupMembers = useCallback(async (groupId: string) => {
         try {
             const { data, error } = await supabase
-                .from('prayer_group_members')
+                .from('group_members')
                 .select(`
                     *,
                     profiles:user_id(id, full_name, avatar_url)
@@ -308,7 +308,7 @@ export function useGroups(user: UserInfo | null) {
         if (!user) return;
         try {
             await supabase
-                .from('prayer_group_members')
+                .from('group_members')
                 .delete()
                 .eq('group_id', groupId)
                 .eq('user_id', memberId);
@@ -352,7 +352,7 @@ export function useGroups(user: UserInfo | null) {
             if (rpcError) {
                 console.log('RPC failed, using direct insert:', rpcError.message);
                 const { data: insertData, error: insertError } = await supabase
-                    .from('prayer_groups')
+                    .from('study_groups')
                     .insert({
                         name: trimmedName,
                         description: newGroupDescription.trim() || null,
@@ -368,7 +368,7 @@ export function useGroups(user: UserInfo | null) {
                 groupId = insertData?.id;
 
                 if (groupId) {
-                    await supabase.from('prayer_group_members').insert({
+                    await supabase.from('group_members').insert({
                         group_id: groupId,
                         user_id: user.id,
                         role: 'admin'
@@ -377,7 +377,7 @@ export function useGroups(user: UserInfo | null) {
             } else {
                 groupId = rpcData;
                 if (groupId) {
-                    await supabase.from('prayer_groups')
+                    await supabase.from('study_groups')
                         .update({ slug, avatar_url: avatarUrl })
                         .eq('id', groupId);
                 }

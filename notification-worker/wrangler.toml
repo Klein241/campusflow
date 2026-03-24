@@ -1,9 +1,9 @@
 # ══════════════════════════════════════════════════════════
-# NOTIFICATION WORKER — Maison de Prière
+# NOTIFICATION WORKER — CentreFormation Pro
 # Advanced notification gateway with aggregation, KV counters, Queue + Cron
 # ══════════════════════════════════════════════════════════
 
-name = "maisondepriere-notifications"
+name = "centreformation-notifications"
 main = "src/index.ts"
 compatibility_date = "2025-06-01"
 
@@ -40,7 +40,7 @@ crons = ["0 * * * *"]
 
 # ── Environment Variables ────────────────────────────────
 [vars]
-VAPID_EMAIL = "mailto:admin@maisondepriere.app"
+VAPID_EMAIL = "mailto:admin@centreformation.app"
 # Rate limits
 RATE_LIMIT_PUSH_INTERVAL_MS = "10000"    # 10s between pushes per user
 RATE_LIMIT_HOURLY_MAX = "50"             # Max 50 notifs/hour per user
@@ -54,7 +54,7 @@ BROADCAST_RATE_LIMIT_MS = "100"          # 10 req/s for broadcasts
 # npx wrangler secret put ADMIN_KEY
 
 # ── R2 Bucket (10GB free) ────────────────────────────────
-# Create with: npx wrangler r2 bucket create maisondepriere-library
+# Create with: npx wrangler r2 bucket create centreformation-library
 [[r2_buckets]]
 binding = "LIBRARY_BUCKET"
-bucket_name = "maisondepriere-library"
+bucket_name = "centreformation-library"

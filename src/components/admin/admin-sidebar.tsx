@@ -53,8 +53,8 @@ const sidebarItems = [
         icon: BookOpen,
     },
     {
-        title: "Bible",
-        href: "/admin/bible",
+        title: "courses",
+        href: "/admin/courses",
         icon: Book,
     },
     {
@@ -158,7 +158,7 @@ function SidebarContent({ onLinkClick }: { onLinkClick?: () => void }) {
 
             <div className="px-3 md:px-4 py-2">
                 <h4 className="mb-2 px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Communauté
+                    Forum étudiant
                 </h4>
                 <nav className="space-y-1">
                     {sidebarItems.slice(8, 12).map((item) => {

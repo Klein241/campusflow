@@ -1,7 +1,7 @@
 {
-  "name": "Maison de Prière",
-  "short_name": "MaisonPriere",
-  "description": "Maison de Prière — Communauté de prière, Bible et partage spirituel",
+  "name": "CentreFormation Pro",
+  "short_name": "Formation",
+  "description": "CentreFormation Pro — Plateforme de gestion pour centre de formation. Cursus, notes, paiements et marketplace.",
   "start_url": "/",
   "id": "/",
   "display": "standalone",
@@ -11,14 +11,13 @@
   ],
   "orientation": "portrait",
   "background_color": "#0F172A",
-  "theme_color": "#0F172A",
+  "theme_color": "#4F46E5",
   "scope": "/",
   "lang": "fr",
   "dir": "ltr",
   "categories": [
-    "lifestyle",
-    "social",
-    "education"
+    "education",
+    "productivity"
   ],
   "icons": [
     {
@@ -49,10 +48,10 @@
   "screenshots": [],
   "shortcuts": [
     {
-      "name": "Programme du jour",
-      "short_name": "Aujourd'hui",
-      "description": "Accéder au programme du jour",
-      "url": "/?view=program",
+      "name": "Dashboard",
+      "short_name": "Accueil",
+      "description": "Accéder au tableau de bord",
+      "url": "/?view=dashboard",
       "icons": [
         {
           "src": "/icon-192.png",
@@ -61,10 +60,22 @@
       ]
     },
     {
-      "name": "Bible",
-      "short_name": "Bible",
-      "description": "Lire la Bible",
-      "url": "/?view=bible",
+      "name": "Cursus",
+      "short_name": "Cursus",
+      "description": "Voir mon cursus",
+      "url": "/?view=curriculum",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Boutique",
+      "short_name": "Shop",
+      "description": "Accéder à la marketplace",
+      "url": "/?view=shop",
       "icons": [
         {
           "src": "/icon-192.png",

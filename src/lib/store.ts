@@ -1,9 +1,8 @@
+import type { Filiere, Enrollment } from '@/lib/filieres/types'
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase } from './supabase';
-import { BibleVerse, DEFAULT_TRANSLATION as DEFAULT_BIBLE_ID } from './unified-bible-api';
-import { PrayerCategory, PrayerRequest as PrayerRequestType, Testimonial as TestimonialType } from './types';
-import { notifyPrayerPrayed, notifyFriendPrayed } from './notifications';
+import type { TutoringRequest as TutoringRequestType, ExperienceFeedback as ExperienceFeedbackType } from './types';
 
 // Types
 export interface DayProgress {
@@ -11,19 +10,19 @@ export interface DayProgress {
     completed: boolean;
     completedAt?: string;
     prayerCompleted: boolean;
-    bibleReadingCompleted: boolean;
+    coursesReadingCompleted: boolean;
     fastingCompleted: boolean;
     journalEntry?: string;
 }
 
-export interface BibleHighlight {
-    id: string; // bibleId + verseId
+export interface coursesHighlight {
+    id: string; // coursesId + verseId
     color: string;
 }
 
-export interface BibleFavorite {
+export interface coursesFavorite {
     id: string; // verseId (which includes book/chapter context)
-    bibleId: string;
+    coursesId: string;
     reference: string;
     text: string;
 }
@@ -44,8 +43,8 @@ export interface User {
 // But for now, we will just use the imported types in the AppState interface
 // and remove the local definitions if they clash, or rename them.
 
-export type PrayerRequest = PrayerRequestType;
-export type Testimonial = TestimonialType;
+export type TutoringRequest = TutoringRequestType;
+export type ExperienceFeedback = ExperienceFeedbackType;
 
 export interface Achievement {
     id: string;
@@ -66,6 +65,14 @@ interface AppState {
     isLoading: boolean;
     authError: string | null;
     setUser: (user: User | null) => void;
+
+    // ── CHAMPS CENTRE DE FORMATION ──
+    currentFiliere: Filiere | null
+    currentEnrollment: Enrollment | null
+    userRole: 'student' | 'teacher' | 'secretary' | 'director' | 'superadmin'
+    setCurrentFiliere: (f: Filiere | null) => void
+    setCurrentEnrollment: (e: Enrollment | null) => void
+    setUserRole: (r: 'student' | 'teacher' | 'secretary' | 'director' | 'superadmin') => void
     signIn: (email: string, password: string) => Promise<void>;
     signUp: (formData: any) => Promise<void>;
     signOut: () => Promise<void>;
@@ -91,15 +98,15 @@ interface AppState {
     unlockAchievement: (achievementId: string) => void;
 
     // Prayer Wall
-    prayerRequests: PrayerRequest[];
-    addPrayerRequest: (content: string, isAnonymous?: boolean, category?: PrayerCategory, photos?: string[]) => Promise<string | null>;
+    TutoringRequests: TutoringRequest[];
+    addTutoringRequest: (content: string, isAnonymous?: boolean, category?: PrayerCategory, photos?: string[]) => Promise<string | null>;
     prayForRequest: (requestId: string) => void;
-    removePrayerRequest: (requestId: string) => void;
+    removeTutoringRequest: (requestId: string) => void;
 
-    // Testimonials
-    testimonials: Testimonial[];
-    addTestimonial: (content: string, photos?: string[]) => void;
-    likeTestimonial: (testimonialId: string) => void;
+    // experience_feedbacks
+    experience_feedbacks: ExperienceFeedback[];
+    addExperienceFeedback: (content: string, photos?: string[]) => void;
+    likeExperienceFeedback: (ExperienceFeedbackId: string) => void;
 
     // Journal
     journalEntries: { date: string; content: string; mood?: string }[];
@@ -114,15 +121,15 @@ interface AppState {
     setHydrated: (state: boolean) => void;
 
     // Navigation Context
-    bibleNavigation: { bookId: string; chapterId: string } | null;
-    bibleViewTarget: 'home' | 'read' | 'study' | 'search' | 'favorites' | 'games' | null;
-    setBibleNavigation: (nav: { bookId: string; chapterId: string } | null) => void;
-    setBibleViewTarget: (target: 'home' | 'read' | 'study' | 'search' | 'favorites' | 'games' | null) => void;
+    coursesNavigation: { bookId: string; chapterId: string } | null;
+    CoursesViewTarget: 'home' | 'read' | 'study' | 'search' | 'favorites' | 'games' | null;
+    setcoursesNavigation: (nav: { bookId: string; chapterId: string } | null) => void;
+    setCoursesViewTarget: (target: 'home' | 'read' | 'study' | 'search' | 'favorites' | 'games' | null) => void;
 
     // UI State
-    activeTab: 'home' | 'marketplace' | 'program' | 'bible' | 'journal' | 'community' | 'profile' | 'games' | 'library';
+    activeTab: 'home' | 'marketplace' | 'program' | 'courses' | 'journal' | 'community' | 'profile' | 'games' | 'library';
     selectedDay: number | null;
-    setActiveTab: (tab: 'home' | 'marketplace' | 'program' | 'bible' | 'journal' | 'community' | 'profile' | 'games' | 'library') => void;
+    setActiveTab: (tab: 'home' | 'marketplace' | 'program' | 'courses' | 'journal' | 'community' | 'profile' | 'games' | 'library') => void;
     setSelectedDay: (day: number | null) => void;
 
     // Navigation from notifications (deep-link)
@@ -133,24 +140,24 @@ interface AppState {
     dmRefreshSignal: { conversationId: string; timestamp: number } | null;
     triggerDMRefresh: (conversationId: string) => void;
 
-    // Bible Persistence
-    bibleHighlights: BibleHighlight[];
-    bibleFavorites: BibleFavorite[];
-    addBibleHighlight: (highlight: BibleHighlight) => void;
-    removeBibleHighlight: (id: string) => void;
-    toggleBibleFavorite: (favorite: BibleFavorite) => void;
+    // courses Persistence
+    coursesHighlights: coursesHighlight[];
+    coursesFavorites: coursesFavorite[];
+    addcoursesHighlight: (highlight: coursesHighlight) => void;
+    removecoursesHighlight: (id: string) => void;
+    togglecoursesFavorite: (favorite: coursesFavorite) => void;
 
-    // Advanced Bible State
-    downloadedBibles: string[]; // IDs
-    toggleDownloadBible: (id: string) => void;
-    bibleSettings: {
+    // Advanced courses State
+    downloadedcoursess: string[]; // IDs
+    toggleDownloadcourses: (id: string) => void;
+    coursesSettings: {
         offlineMode: boolean;
         splitView: boolean;
-        parallelBibleId: string | null;
+        parallelcoursesId: string | null;
     };
-    setBibleSettings: (settings: Partial<AppState['bibleSettings']>) => void;
-    dailyVerse: BibleVerse | null;
-    setDailyVerse: (verse: BibleVerse | null) => void;
+    setcoursesSettings: (settings: Partial<AppState['coursesSettings']>) => void;
+    dailyVerse: coursesVerse | null;
+    setDailyVerse: (verse: coursesVerse | null) => void;
 
     // Global App Settings (Admin Controlled)
     appSettings: Record<string, string>;
@@ -190,7 +197,7 @@ const defaultAchievements: Achievement[] = [
     {
         id: 'prayer-warrior',
         name: 'Guerrier de Prière',
-        description: 'Priez pour 10 demandes de prière',
+        description: 'Priez pour 10 demandes de tutorat',
         icon: '🙏',
         requirement: { type: 'prayers', count: 10 },
     },
@@ -209,7 +216,7 @@ const initializeDayProgress = (): DayProgress[] => {
         dayNumber: i + 1,
         completed: false,
         prayerCompleted: false,
-        bibleReadingCompleted: false,
+        coursesReadingCompleted: false,
         fastingCompleted: false,
     }));
 };
@@ -222,6 +229,14 @@ export const useAppStore = create<AppState>()(
             isLoading: false,
             authError: null,
             setUser: (user) => set({ user }),
+
+            // ── Centre de Formation defaults ──
+            currentFiliere: null,
+            currentEnrollment: null,
+            userRole: 'student' as const,
+            setCurrentFiliere: (f: any) => set({ currentFiliere: f }),
+            setCurrentEnrollment: (e: any) => set({ currentEnrollment: e }),
+            setUserRole: (r: any) => set({ userRole: r }),
 
             signIn: async (email, password) => {
                 set({ isLoading: true, authError: null });
@@ -258,9 +273,9 @@ export const useAppStore = create<AppState>()(
                 set({ isLoading: true, authError: null });
                 try {
                     // Strategy: Use whatsapp number to generate a fake email for Supabase Auth
-                    // email: [clean_whatsapp]@marathon.local
+                    // email: [clean_whatsapp]@centreformation.local
                     const cleanPhone = formData.whatsapp.replace(/\D/g, '');
-                    const email = `${cleanPhone}@marathon.local`;
+                    const email = `${cleanPhone}@centreformation.local`;
                     const password = formData.password;
                     const fullName = `${formData.firstName} ${formData.lastName}`;
 
@@ -319,7 +334,7 @@ export const useAppStore = create<AppState>()(
                 try {
                     // Load Prayers (public - accessible even without login)
                     const { data: prayers, error: prayersError } = await supabase
-                        .from('prayer_requests')
+                        .from('tutoring_requests')
                         .select('*, profiles(full_name, avatar_url)')
                         .order('created_at', { ascending: false })
                         .limit(20);
@@ -343,19 +358,19 @@ export const useAppStore = create<AppState>()(
                             prayerCount: p.prayer_count || 0,
                             prayedBy: p.prayed_by || [],
                         }));
-                        set({ prayerRequests: formattedPrayers });
+                        set({ TutoringRequests: formattedPrayers });
                     }
 
-                    // Load Testimonials (public)
-                    const { data: testimonials } = await supabase
-                        .from('testimonials')
+                    // Load experience_feedbacks (public)
+                    const { data: experience_feedbacks } = await supabase
+                        .from('experience_feedbacks')
                         .select('*, profiles(full_name, avatar_url)')
                         .eq('is_approved', true)
                         .order('created_at', { ascending: false })
                         .limit(20);
 
-                    if (testimonials) {
-                        const formattedTestimonials = testimonials.map((t: any) => ({
+                    if (experience_feedbacks) {
+                        const formattedexperience_feedbacks = experience_feedbacks.map((t: any) => ({
                             id: t.id,
                             userId: t.user_id,
                             userName: t.profiles?.full_name || 'Utilisateur',
@@ -366,14 +381,14 @@ export const useAppStore = create<AppState>()(
                             likes: t.likes || 0,
                             likedBy: t.liked_by || [],
                         }));
-                        set({ testimonials: formattedTestimonials });
+                        set({ experience_feedbacks: formattedexperience_feedbacks });
                     }
 
                     // User-specific data requires login
                     if (!user) return;
                     // Load Progress
                     const { data: progressData } = await supabase
-                        .from('user_progress')
+                        .from('student_progress')
                         .select('*')
                         .eq('user_id', user.id);
 
@@ -387,7 +402,7 @@ export const useAppStore = create<AppState>()(
                                         completed: serverDay.completed,
                                         completedAt: serverDay.completed_at,
                                         prayerCompleted: serverDay.prayer_completed,
-                                        bibleReadingCompleted: serverDay.bible_reading_completed,
+                                        coursesReadingCompleted: serverDay.courses_reading_completed,
                                         fastingCompleted: serverDay.fasting_completed,
                                     };
                                 }
@@ -430,7 +445,7 @@ export const useAppStore = create<AppState>()(
                     try {
                         // Try upsert first, fallback to update if constraint doesn't exist
                         const { error } = await supabase
-                            .from('user_progress')
+                            .from('student_progress')
                             .upsert({
                                 user_id: user.id,
                                 day_number: dayNumber,
@@ -442,7 +457,7 @@ export const useAppStore = create<AppState>()(
                             // Fallback: try plain insert (ignore if already exists)
                             try {
                                 await supabase
-                                    .from('user_progress')
+                                    .from('student_progress')
                                     .insert({
                                         user_id: user.id,
                                         day_number: dayNumber,
@@ -480,7 +495,7 @@ export const useAppStore = create<AppState>()(
                 // Sync with Supabase - silently ignore errors
                 if (user) {
                     try {
-                        const { error } = await supabase.from('user_progress').upsert({
+                        const { error } = await supabase.from('student_progress').upsert({
                             user_id: user.id,
                             day_number: dayNumber,
                             completed: true,
@@ -490,7 +505,7 @@ export const useAppStore = create<AppState>()(
                         if (error) {
                             // Fallback: plain insert
                             try {
-                                await supabase.from('user_progress').insert({
+                                await supabase.from('student_progress').insert({
                                     user_id: user.id,
                                     day_number: dayNumber,
                                     completed: true,
@@ -540,8 +555,8 @@ export const useAppStore = create<AppState>()(
                 }),
 
             // Prayer Wall
-            prayerRequests: [],
-            addPrayerRequest: async (content, isAnonymous = false, category = 'other', photos = []) => {
+            TutoringRequests: [],
+            addTutoringRequest: async (content, isAnonymous = false, category = 'other', photos = []) => {
                 const { user } = get();
                 if (!user) return null;
 
@@ -556,7 +571,7 @@ export const useAppStore = create<AppState>()(
                     };
 
                     // Save to Supabase
-                    const { data, error } = await supabase.from('prayer_requests').insert([newRequest]).select();
+                    const { data, error } = await supabase.from('tutoring_requests').insert([newRequest]).select();
 
                     if (error) {
                         console.error('Error adding prayer request:', error);
@@ -566,7 +581,7 @@ export const useAppStore = create<AppState>()(
                     if (data && data[0]) {
                         const newId = data[0].id;
                         set((state) => ({
-                            prayerRequests: [{
+                            TutoringRequests: [{
                                 id: newId,
                                 userId: user.id,
                                 userName: user.name,
@@ -578,7 +593,7 @@ export const useAppStore = create<AppState>()(
                                 createdAt: data[0].created_at,
                                 prayerCount: 0,
                                 prayedBy: [],
-                            }, ...state.prayerRequests]
+                            }, ...state.TutoringRequests]
                         }));
                         return newId;
                     }
@@ -595,7 +610,7 @@ export const useAppStore = create<AppState>()(
                 try {
                     // First, get current prayer data
                     const { data: currentPrayer, error: fetchError } = await supabase
-                        .from('prayer_requests')
+                        .from('tutoring_requests')
                         .select('prayer_count, prayed_by')
                         .eq('id', requestId)
                         .single();
@@ -616,7 +631,7 @@ export const useAppStore = create<AppState>()(
 
                     // Update with new prayer
                     const { error: updateError } = await supabase
-                        .from('prayer_requests')
+                        .from('tutoring_requests')
                         .update({
                             prayer_count: currentCount + 1,
                             prayed_by: [...currentPrayedBy, user.id]
@@ -630,7 +645,7 @@ export const useAppStore = create<AppState>()(
 
                     // Update local state
                     set((state) => ({
-                        prayerRequests: state.prayerRequests.map((req) =>
+                        TutoringRequests: state.TutoringRequests.map((req) =>
                             req.id === requestId && !req.prayedBy.includes(user.id)
                                 ? {
                                     ...req,
@@ -642,7 +657,7 @@ export const useAppStore = create<AppState>()(
                     }));
 
                     // Send notification to prayer owner
-                    const prayerReq = get().prayerRequests.find(p => p.id === requestId);
+                    const prayerReq = get().TutoringRequests.find(p => p.id === requestId);
                     const prayerOwnerId = prayerReq?.userId;
                     if (prayerOwnerId && prayerOwnerId !== user.id) {
                         notifyPrayerPrayed({
@@ -668,36 +683,36 @@ export const useAppStore = create<AppState>()(
                 }
             },
 
-            removePrayerRequest: (requestId) => {
+            removeTutoringRequest: (requestId) => {
                 set((state) => ({
-                    prayerRequests: state.prayerRequests.filter(p => p.id !== requestId)
+                    TutoringRequests: state.TutoringRequests.filter(p => p.id !== requestId)
                 }));
             },
 
-            // Testimonials
-            testimonials: [],
-            addTestimonial: async (content, photos = []) => {
+            // experience_feedbacks
+            experience_feedbacks: [],
+            addExperienceFeedback: async (content, photos = []) => {
                 const { user } = get();
                 if (!user) return;
 
                 try {
                     // Start with minimal fields
-                    const newTestimonial: any = {
+                    const newExperienceFeedback: any = {
                         user_id: user.id,
                         content,
                     };
 
                     // Save to Supabase
-                    const { data, error } = await supabase.from('testimonials').insert([newTestimonial]).select();
+                    const { data, error } = await supabase.from('experience_feedbacks').insert([newExperienceFeedback]).select();
 
                     if (error) {
-                        console.error('Error adding testimonial:', error);
+                        console.error('Error adding ExperienceFeedback:', error);
                         throw error;
                     }
 
                     if (data) {
                         set((state) => ({
-                            testimonials: [{
+                            experience_feedbacks: [{
                                 id: data[0].id,
                                 userId: user.id,
                                 userName: user.name,
@@ -707,24 +722,24 @@ export const useAppStore = create<AppState>()(
                                 createdAt: data[0].created_at,
                                 likes: 0,
                                 likedBy: [],
-                            }, ...state.testimonials]
+                            }, ...state.experience_feedbacks]
                         }));
                     }
                 } catch (e) {
-                    console.error('Failed to add testimonial:', e);
+                    console.error('Failed to add ExperienceFeedback:', e);
                     throw e;
                 }
             },
-            likeTestimonial: async (testimonialId) => {
+            likeExperienceFeedback: async (ExperienceFeedbackId) => {
                 const { user } = get();
                 if (!user) return;
 
-                const { error } = await supabase.rpc('like_testimonial', { testimonial_id: testimonialId });
+                const { error } = await supabase.rpc('like_ExperienceFeedback', { ExperienceFeedback_id: ExperienceFeedbackId });
 
                 if (!error) {
                     set((state) => ({
-                        testimonials: state.testimonials.map((t) =>
-                            t.id === testimonialId && !t.likedBy.includes(user.id)
+                        experience_feedbacks: state.experience_feedbacks.map((t) =>
+                            t.id === ExperienceFeedbackId && !t.likedBy.includes(user.id)
                                 ? {
                                     ...t,
                                     likes: t.likes + 1,
@@ -755,13 +770,13 @@ export const useAppStore = create<AppState>()(
             setHydrated: (state) => set({ isHydrated: state }),
 
             // Navigation Context
-            bibleNavigation: null,
-            bibleViewTarget: null,
-            setBibleNavigation: (nav) => set({ bibleNavigation: nav }),
-            setBibleViewTarget: (target) => set({ bibleViewTarget: target }),
+            coursesNavigation: null,
+            CoursesViewTarget: null,
+            setcoursesNavigation: (nav) => set({ coursesNavigation: nav }),
+            setCoursesViewTarget: (target) => set({ CoursesViewTarget: target }),
 
             // UI State
-            activeTab: 'marketplace',
+            activeTab: 'home',
             selectedDay: null,
             setActiveTab: (tab) => set({ activeTab: tab }),
             setSelectedDay: (day) => set({ selectedDay: day }),
@@ -770,37 +785,37 @@ export const useAppStore = create<AppState>()(
             dmRefreshSignal: null,
             triggerDMRefresh: (conversationId) => set({ dmRefreshSignal: { conversationId, timestamp: Date.now() } }),
 
-            // Bible Persistence
-            bibleHighlights: [],
-            bibleFavorites: [],
-            addBibleHighlight: (highlight) => set((state) => ({
-                bibleHighlights: [...state.bibleHighlights.filter(h => h.id !== highlight.id), highlight]
+            // courses Persistence
+            coursesHighlights: [],
+            coursesFavorites: [],
+            addcoursesHighlight: (highlight) => set((state) => ({
+                coursesHighlights: [...state.coursesHighlights.filter(h => h.id !== highlight.id), highlight]
             })),
-            removeBibleHighlight: (id) => set((state) => ({
-                bibleHighlights: state.bibleHighlights.filter(h => h.id !== id)
+            removecoursesHighlight: (id) => set((state) => ({
+                coursesHighlights: state.coursesHighlights.filter(h => h.id !== id)
             })),
-            toggleBibleFavorite: (fav) => set((state) => {
-                const exists = state.bibleFavorites.find(f => f.id === fav.id && f.bibleId === fav.bibleId);
+            togglecoursesFavorite: (fav) => set((state) => {
+                const exists = state.coursesFavorites.find(f => f.id === fav.id && f.coursesId === fav.coursesId);
                 if (exists) {
-                    return { bibleFavorites: state.bibleFavorites.filter(f => !(f.id === fav.id && f.bibleId === fav.bibleId)) };
+                    return { coursesFavorites: state.coursesFavorites.filter(f => !(f.id === fav.id && f.coursesId === fav.coursesId)) };
                 }
-                return { bibleFavorites: [...state.bibleFavorites, fav] };
+                return { coursesFavorites: [...state.coursesFavorites, fav] };
             }),
 
-            // Advanced Bible Persistence
-            downloadedBibles: [DEFAULT_BIBLE_ID], // LSG downloaded by default
-            toggleDownloadBible: (id) => set((state) => ({
-                downloadedBibles: state.downloadedBibles.includes(id)
-                    ? state.downloadedBibles.filter(bid => bid !== id)
-                    : [...state.downloadedBibles, id]
+            // Advanced courses Persistence
+            downloadedcoursess: [DEFAULT_courses_ID], // LSG downloaded by default
+            toggleDownloadcourses: (id) => set((state) => ({
+                downloadedcoursess: state.downloadedcoursess.includes(id)
+                    ? state.downloadedcoursess.filter(bid => bid !== id)
+                    : [...state.downloadedcoursess, id]
             })),
-            bibleSettings: {
+            coursesSettings: {
                 offlineMode: false,
                 splitView: false,
-                parallelBibleId: null,
+                parallelcoursesId: null,
             },
-            setBibleSettings: (settings) => set((state) => ({
-                bibleSettings: { ...state.bibleSettings, ...settings }
+            setcoursesSettings: (settings) => set((state) => ({
+                coursesSettings: { ...state.coursesSettings, ...settings }
             })),
             dailyVerse: null,
             setDailyVerse: (verse) => set({ dailyVerse: verse }),
@@ -809,7 +824,7 @@ export const useAppStore = create<AppState>()(
             appSettings: {},
         }),
         {
-            name: 'prayer-marathon-storage',
+            name: 'centreformation-storage',
             partialize: (state) => ({
                 // Sync only local prefs
                 theme: state.theme,
@@ -822,10 +837,10 @@ export const useAppStore = create<AppState>()(
                 totalDaysCompleted: state.totalDaysCompleted,
                 unlockedAchievements: state.unlockedAchievements,
                 journalEntries: state.journalEntries,
-                bibleHighlights: state.bibleHighlights,
-                bibleFavorites: state.bibleFavorites,
-                downloadedBibles: state.downloadedBibles,
-                bibleSettings: state.bibleSettings,
+                coursesHighlights: state.coursesHighlights,
+                coursesFavorites: state.coursesFavorites,
+                downloadedcoursess: state.downloadedcoursess,
+                coursesSettings: state.coursesSettings,
                 dailyVerse: state.dailyVerse,
                 // Don't persist user/auth state ideally, rely on session check, 
                 // but for transitioning we might keep it or clear it on load if session invalid

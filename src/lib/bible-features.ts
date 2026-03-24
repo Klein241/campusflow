@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * BIBLE FEATURES HOOKS
+ * courses FEATURES HOOKS
  * ====================
  * Provides favorites, highlights, and verse comparison functionality
  */
@@ -11,7 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 // Types
-export interface BibleFavorite {
+export interface coursesFavorite {
     id: string;
     user_id: string;
     reference: string;
@@ -21,7 +21,7 @@ export interface BibleFavorite {
     notes?: string;
 }
 
-export interface BibleHighlight {
+export interface coursesHighlight {
     id: string;
     user_id: string;
     reference: string;
@@ -43,8 +43,8 @@ export const HIGHLIGHT_COLORS: Record<HighlightColor, { name: string; bgClass: s
 };
 
 // Hook for managing favorites
-export function useBibleFavorites(userId?: string) {
-    const [favorites, setFavorites] = useState<BibleFavorite[]>([]);
+export function usecoursesFavorites(userId?: string) {
+    const [favorites, setFavorites] = useState<coursesFavorite[]>([]);
     const [loading, setLoading] = useState(false);
 
     // Load favorites from Supabase
@@ -53,7 +53,7 @@ export function useBibleFavorites(userId?: string) {
         setLoading(true);
         try {
             const { data, error } = await supabase
-                .from('bible_favorites')
+                .from('courses_favorites')
                 .select('*')
                 .eq('user_id', userId)
                 .order('created_at', { ascending: false });
@@ -61,7 +61,7 @@ export function useBibleFavorites(userId?: string) {
             if (error) {
                 // Table might not exist yet - create it via localStorage fallback
                 console.log('Favorites table not available, using localStorage');
-                const stored = localStorage.getItem(`bible_favorites_${userId}`);
+                const stored = localStorage.getItem(`courses_favorites_${userId}`);
                 if (stored) {
                     setFavorites(JSON.parse(stored));
                 }
@@ -85,7 +85,7 @@ export function useBibleFavorites(userId?: string) {
             return false;
         }
 
-        const newFavorite: BibleFavorite = {
+        const newFavorite: coursesFavorite = {
             id: crypto.randomUUID(),
             user_id: userId,
             reference,
@@ -97,14 +97,14 @@ export function useBibleFavorites(userId?: string) {
 
         try {
             const { error } = await supabase
-                .from('bible_favorites')
+                .from('courses_favorites')
                 .insert(newFavorite);
 
             if (error) {
                 // Fallback to localStorage
                 const updated = [...favorites, newFavorite];
                 setFavorites(updated);
-                localStorage.setItem(`bible_favorites_${userId}`, JSON.stringify(updated));
+                localStorage.setItem(`courses_favorites_${userId}`, JSON.stringify(updated));
             } else {
                 setFavorites(prev => [newFavorite, ...prev]);
             }
@@ -121,7 +121,7 @@ export function useBibleFavorites(userId?: string) {
     const removeFavorite = async (id: string) => {
         try {
             const { error } = await supabase
-                .from('bible_favorites')
+                .from('courses_favorites')
                 .delete()
                 .eq('id', id);
 
@@ -129,7 +129,7 @@ export function useBibleFavorites(userId?: string) {
                 // Fallback to localStorage
                 const updated = favorites.filter(f => f.id !== id);
                 setFavorites(updated);
-                localStorage.setItem(`bible_favorites_${userId}`, JSON.stringify(updated));
+                localStorage.setItem(`courses_favorites_${userId}`, JSON.stringify(updated));
             } else {
                 setFavorites(prev => prev.filter(f => f.id !== id));
             }
@@ -148,8 +148,8 @@ export function useBibleFavorites(userId?: string) {
 }
 
 // Hook for managing highlights
-export function useBibleHighlights(userId?: string) {
-    const [highlights, setHighlights] = useState<BibleHighlight[]>([]);
+export function usecoursesHighlights(userId?: string) {
+    const [highlights, setHighlights] = useState<coursesHighlight[]>([]);
     const [loading, setLoading] = useState(false);
 
     // Load highlights
@@ -158,14 +158,14 @@ export function useBibleHighlights(userId?: string) {
         setLoading(true);
         try {
             const { data, error } = await supabase
-                .from('bible_highlights')
+                .from('courses_highlights')
                 .select('*')
                 .eq('user_id', userId)
                 .order('created_at', { ascending: false });
 
             if (error) {
                 console.log('Highlights table not available, using localStorage');
-                const stored = localStorage.getItem(`bible_highlights_${userId}`);
+                const stored = localStorage.getItem(`courses_highlights_${userId}`);
                 if (stored) {
                     setHighlights(JSON.parse(stored));
                 }
@@ -189,7 +189,7 @@ export function useBibleHighlights(userId?: string) {
             return false;
         }
 
-        const newHighlight: BibleHighlight = {
+        const newHighlight: coursesHighlight = {
             id: crypto.randomUUID(),
             user_id: userId,
             reference,
@@ -201,13 +201,13 @@ export function useBibleHighlights(userId?: string) {
 
         try {
             const { error } = await supabase
-                .from('bible_highlights')
+                .from('courses_highlights')
                 .insert(newHighlight);
 
             if (error) {
                 const updated = [...highlights, newHighlight];
                 setHighlights(updated);
-                localStorage.setItem(`bible_highlights_${userId}`, JSON.stringify(updated));
+                localStorage.setItem(`courses_highlights_${userId}`, JSON.stringify(updated));
             } else {
                 setHighlights(prev => [newHighlight, ...prev]);
             }
@@ -223,14 +223,14 @@ export function useBibleHighlights(userId?: string) {
     const removeHighlight = async (id: string) => {
         try {
             const { error } = await supabase
-                .from('bible_highlights')
+                .from('courses_highlights')
                 .delete()
                 .eq('id', id);
 
             if (error) {
                 const updated = highlights.filter(h => h.id !== id);
                 setHighlights(updated);
-                localStorage.setItem(`bible_highlights_${userId}`, JSON.stringify(updated));
+                localStorage.setItem(`courses_highlights_${userId}`, JSON.stringify(updated));
             } else {
                 setHighlights(prev => prev.filter(h => h.id !== id));
             }
@@ -241,7 +241,7 @@ export function useBibleHighlights(userId?: string) {
     };
 
     // Get highlight for reference
-    const getHighlight = (reference: string): BibleHighlight | undefined => {
+    const getHighlight = (reference: string): coursesHighlight | undefined => {
         return highlights.find(h => h.reference === reference);
     };
 
@@ -250,7 +250,7 @@ export function useBibleHighlights(userId?: string) {
 
 // Share verse function
 export async function shareVerse(reference: string, text: string, translation: string) {
-    const shareText = `📖 ${reference} (${translation})\n\n"${text}"\n\n— Maison de Prière`;
+    const shareText = `📖 ${reference} (${translation})\n\n"${text}"\n\n— CentreFormation Pro`;
 
     try {
         if (navigator.share) {
