@@ -1,297 +1,312 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import dynamic from 'next/dynamic';
-import BottomNav from '@/components/navigation/BottomNav';
-import type { AppTab } from '@/components/navigation/BottomNav';
-import type { UserRole } from '@/lib/roles';
-import { useAppStore } from '@/lib/store';
-import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
+import Link from 'next/link';
+import {
+  GraduationCap, School, BookOpen, Users, CreditCard, BarChart3,
+  Calendar, MessageSquare, ShieldCheck, ArrowRight, CheckCircle2,
+  Globe, Smartphone, Star, ChevronRight, Sparkles, Building2
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
-// Dynamic imports for code splitting
-const DashboardView = dynamic(() => import('@/components/views/dashboard-view').then(m => ({ default: m.DashboardView })), { ssr: false });
-const CurriculumView = dynamic(() => import('@/components/views/curriculum-view').then(m => ({ default: m.CurriculumView })), { ssr: false });
-const DayDetailView = dynamic(() => import('@/components/views/day-detail-view').then(m => ({ default: m.DayDetailView })), { ssr: false });
-const CoursesView = dynamic(() => import('@/components/views/courses-view').then(m => ({ default: m.CoursesView })), { ssr: false });
-const GradesView = dynamic(() => import('@/components/views/grades-view').then(m => ({ default: m.GradesView })), { ssr: false });
-const ForumView = dynamic(() => import('@/components/views/forum-view').then(m => ({ default: m.ForumView })), { ssr: false });
-const ProfileView = dynamic(() => import('@/components/views/profile-view').then(m => ({ default: m.ProfileView })), { ssr: false });
-const ResourcesView = dynamic(() => import('@/components/views/resources-view').then(m => ({ default: m.ResourcesView })), { ssr: false });
-const ShopView = dynamic(() => import('@/components/views/shop-view').then(m => ({ default: m.ShopView })), { ssr: false });
-const AuthView = dynamic(() => import('@/components/views/auth-view').then(m => ({ default: m.AuthView })), { ssr: false });
+// ═══════════════════════════════════════════════
+// CAMPUSFLOW — LANDING PAGE
+// ═══════════════════════════════════════════════
 
-// ── Vues administratives (placeholders évolutifs) ──
-function StudentsAdminView() {
+const fadeUp = {
+  hidden: { opacity: 0, y: 30 },
+  visible: (i: number) => ({
+    opacity: 1, y: 0,
+    transition: { delay: i * 0.1, duration: 0.6, ease: 'easeOut' }
+  })
+};
+
+const FEATURES = [
+  { icon: School, title: 'Multi-établissements', desc: 'Collège, Lycée, Université, Centre de formation — chaque type a son workflow adapté.' },
+  { icon: Users, title: 'Gestion des classes', desc: 'Créez vos filières, niveaux et salles de classe en quelques clics.' },
+  { icon: BookOpen, title: 'Matières & Emploi du temps', desc: 'Attribuez les matières, coefficients et planifiez les cours automatiquement.' },
+  { icon: GraduationCap, title: 'Notes & Évaluations', desc: 'Saisie des notes, moyennes pondérées, bulletins et suivi en temps réel.' },
+  { icon: CreditCard, title: 'Paiements scolarité', desc: 'Paiements Mobile Money (MTN MoMo, Orange Money) avec suivi des impayés.' },
+  { icon: BarChart3, title: 'Tableaux de bord', desc: 'KPIs en temps réel : effectifs, taux de réussite, finances, présences.' },
+  { icon: Calendar, title: 'Présences & Discipline', desc: 'Suivi automatique des absences, retards, avertissements et sanctions.' },
+  { icon: MessageSquare, title: 'Forum & Chat', desc: 'Messagerie entre profs-étudiants, groupes d\'étude et annonces officielles.' },
+  { icon: ShieldCheck, title: 'Sécurité & Rôles', desc: '5 niveaux d\'accès : Directeur, Secrétaire, Trésorier, Professeur, Étudiant.' },
+];
+
+const SCHOOL_TYPES = [
+  { emoji: '🏫', name: 'Collège', desc: '6ème à 3ème — Cycles 1er et 2nd' },
+  { emoji: '🎓', name: 'Lycée', desc: 'Seconde à Terminale — Séries A, C, D, E' },
+  { emoji: '🏛️', name: 'Université', desc: 'Facultés, départements, Licence/Master/Doctorat' },
+  { emoji: '⚙️', name: 'Centre de formation', desc: 'CQP, DQP — Filières professionnelles' },
+  { emoji: '📚', name: 'Institut de formation', desc: 'Formations spécialisées (santé, tech, commerce)' },
+  { emoji: '✨', name: 'Autre', desc: 'Auto-école, école de musique, centre linguistique...' },
+];
+
+const STEPS = [
+  { num: '01', title: 'Créez votre compte', desc: 'Renseignez vos informations personnelles et votre rôle.' },
+  { num: '02', title: 'Décrivez votre établissement', desc: 'Type, nom, localisation et documents justificatifs.' },
+  { num: '03', title: 'Configurez vos classes', desc: 'Ajoutez filières, niveaux, matières et professeurs.' },
+  { num: '04', title: 'Partagez le lien', desc: 'Profs et étudiants s\'inscrivent via votre URL personnalisée.' },
+];
+
+export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-[#0B0E14] text-white p-6 pb-24">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <span className="text-3xl">👥</span>
-          <h1 className="text-2xl font-bold bg-linear-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent">Gestion des Étudiants</h1>
-        </div>
-        <div className="grid gap-4">
-          {['Inscrire un nouvel étudiant', 'Liste par filière', 'Attestations & Certificats', 'Historique des inscriptions'].map((item, i) => (
-            <div key={i} className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-amber-500/30 transition-all cursor-pointer">
-              <p className="text-sm text-white/80">{item}</p>
+    <div className="min-h-screen bg-slate-950 text-white overflow-x-hidden">
+
+      {/* ═════ NAVBAR ═════ */}
+      <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-slate-950/80 border-b border-white/5">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center">
+              <GraduationCap className="w-5 h-5 text-white" />
             </div>
-          ))}
+            <span className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-blue-400 bg-clip-text text-transparent">
+              CampusFlow
+            </span>
+          </div>
+          <div className="hidden md:flex items-center gap-8 text-sm text-slate-400">
+            <a href="#features" className="hover:text-white transition-colors">Fonctionnalités</a>
+            <a href="#types" className="hover:text-white transition-colors">Établissements</a>
+            <a href="#how" className="hover:text-white transition-colors">Comment ça marche</a>
+          </div>
+          <div className="flex items-center gap-3">
+            <Link href="/login">
+              <Button variant="ghost" size="sm" className="text-slate-300 hover:text-white">
+                Se connecter
+              </Button>
+            </Link>
+            <Link href="/onboarding">
+              <Button size="sm" className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white shadow-lg shadow-indigo-500/25">
+                Commencer <ArrowRight className="w-4 h-4 ml-1" />
+              </Button>
+            </Link>
+          </div>
         </div>
-        <div className="mt-8 p-6 rounded-2xl bg-linear-to-br from-amber-500/10 to-orange-500/5 border border-amber-500/20">
-          <p className="text-sm text-amber-400 font-medium">Module en cours de développement</p>
-          <p className="text-xs text-white/50 mt-1">La gestion complète des étudiants sera disponible dans la prochaine mise à jour.</p>
-        </div>
-      </div>
-    </div>
-  );
-}
+      </nav>
 
-function PaymentsAdminView() {
-  return (
-    <div className="min-h-screen bg-[#0B0E14] text-white p-6 pb-24">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <span className="text-3xl">💳</span>
-          <h1 className="text-2xl font-bold bg-linear-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">Paiements & Scolarité</h1>
-        </div>
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          {[
-            { label: 'Total collecté', value: '0 XAF', color: 'from-green-500/20' },
-            { label: 'En attente', value: '0', color: 'from-amber-500/20' },
-            { label: 'Étudiants à jour', value: '0%', color: 'from-blue-500/20' },
-            { label: 'Ce mois', value: '0 XAF', color: 'from-purple-500/20' },
-          ].map((stat, i) => (
-            <div key={i} className={`p-4 rounded-xl bg-linear-to-br ${stat.color} to-transparent border border-white/10`}>
-              <p className="text-xs text-white/50">{stat.label}</p>
-              <p className="text-lg font-bold mt-1">{stat.value}</p>
-            </div>
-          ))}
-        </div>
-        <div className="mt-4 p-6 rounded-2xl bg-linear-to-br from-green-500/10 to-emerald-500/5 border border-green-500/20">
-          <p className="text-sm text-green-400 font-medium">Module Paiements</p>
-          <p className="text-xs text-white/50 mt-1">Enregistrement des paiements, reçus automatiques, et suivi des créances.</p>
-        </div>
-      </div>
-    </div>
-  );
-}
+      {/* ═════ HERO ═════ */}
+      <section className="relative pt-32 pb-20 px-4 sm:px-6 lg:px-8">
+        {/* Glow effects */}
+        <div className="absolute top-20 left-1/4 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-40 right-1/4 w-80 h-80 bg-blue-600/15 rounded-full blur-3xl pointer-events-none" />
 
-function ReportsView() {
-  return (
-    <div className="min-h-screen bg-[#0B0E14] text-white p-6 pb-24">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <span className="text-3xl">📊</span>
-          <h1 className="text-2xl font-bold bg-linear-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">Rapports & Statistiques</h1>
-        </div>
-        <div className="grid gap-4">
-          {[
-            { title: 'Effectifs par filière', desc: 'Répartition et évolution des inscriptions' },
-            { title: 'Taux de réussite', desc: 'Moyennes et performances par matière' },
-            { title: 'Suivi des présences', desc: 'Taux d\'assiduité par filière et promotion' },
-            { title: 'Revenus scolarité', desc: 'Suivi financier, créances et projections' },
-            { title: 'Activité forum', desc: 'Engagement étudiant et discussions populaires' },
-          ].map((report, i) => (
-            <div key={i} className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-blue-500/30 transition-all cursor-pointer">
-              <p className="text-sm font-medium text-white">{report.title}</p>
-              <p className="text-xs text-white/50 mt-1">{report.desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AdminPanelView() {
-  return (
-    <div className="min-h-screen bg-[#0B0E14] text-white p-6 pb-24">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <span className="text-3xl">⚙️</span>
-          <h1 className="text-2xl font-bold bg-linear-to-r from-red-400 to-rose-400 bg-clip-text text-transparent">Administration</h1>
-        </div>
-        <div className="grid gap-4">
-          {[
-            { title: '👤 Gestion des rôles', desc: 'Attribuer les rôles étudiant, professeur, secrétaire, directeur' },
-            { title: '📚 Filières & Matières', desc: 'Configurer les filières, UE et coefficients' },
-            { title: '🗓️ Emploi du temps', desc: 'Créer et gérer les plannings par filière' },
-            { title: '📢 Notifications', desc: 'Envoyer des annonces à toute la communauté' },
-            { title: '🏪 Boutique', desc: 'Gérer les produits et commandes' },
-            { title: '🔧 Paramètres', desc: 'Configuration générale du centre' },
-          ].map((item, i) => (
-            <div key={i} className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-red-500/30 transition-all cursor-pointer">
-              <p className="text-sm font-medium text-white">{item.title}</p>
-              <p className="text-xs text-white/50 mt-1">{item.desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Splash screen — CampusFlow
-function SplashScreen() {
-  return (
-    <motion.div
-      initial={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-linear-to-br from-indigo-900 via-blue-800 to-indigo-900/80"
-    >
-      <motion.div
-        initial={{ scale: 0.5, opacity: 0 }}
-        animate={{
-          scale: 1,
-          opacity: 1,
-          transition: { type: 'spring', stiffness: 260, damping: 20 }
-        }}
-        className="text-center text-white"
-      >
-        <motion.div
-          animate={{ y: [0, -10, 0] }}
-          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-          className="text-7xl mb-4"
-        >
-          🎓
-        </motion.div>
-        <h1 className="text-3xl font-bold mb-2" suppressHydrationWarning>CampusFlow</h1>
-        <p className="text-white/80">Votre avenir commence ici</p>
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: '100%' }}
-          transition={{ duration: 2, ease: 'easeInOut' }}
-          className="mt-6 h-0.5 bg-white/30 rounded-full overflow-hidden max-w-48 mx-auto"
-        >
+        <div className="max-w-5xl mx-auto text-center relative z-10">
           <motion.div
-            initial={{ x: '-100%' }}
-            animate={{ x: '100%' }}
-            transition={{ duration: 1, repeat: Infinity }}
-            className="h-full w-1/2 bg-white rounded-full"
-          />
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-sm mb-8"
+          >
+            <Sparkles className="w-4 h-4" />
+            Plateforme SaaS pour établissements scolaires
+          </motion.div>
+
+          <motion.h1
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15, duration: 0.7 }}
+            className="text-4xl sm:text-5xl lg:text-7xl font-bold leading-tight tracking-tight"
+          >
+            Gérez votre{' '}
+            <span className="bg-gradient-to-r from-indigo-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">
+              établissement
+            </span>
+            <br />
+            comme un pro
+          </motion.h1>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.6 }}
+            className="mt-6 text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed"
+          >
+            Classes, matières, professeurs, notes, paiements — tout-en-un.
+            Chaque école obtient son propre espace personnalisé avec une URL unique.
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.45, duration: 0.6 }}
+            className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4"
+          >
+            <Link href="/onboarding">
+              <Button
+                size="lg"
+                className="text-lg px-8 py-6 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 shadow-2xl shadow-indigo-500/30 rounded-xl"
+              >
+                <Building2 className="w-5 h-5 mr-2" />
+                Créer votre établissement
+              </Button>
+            </Link>
+            <Button
+              variant="outline"
+              size="lg"
+              className="text-lg px-8 py-6 border-white/10 text-slate-300 hover:bg-white/5 rounded-xl"
+            >
+              <Globe className="w-5 h-5 mr-2" />
+              Voir une démo
+            </Button>
+          </motion.div>
+
+          {/* Stats bar */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7, duration: 0.6 }}
+            className="mt-16 grid grid-cols-3 gap-4 max-w-lg mx-auto"
+          >
+            {[
+              { value: '100%', label: 'Gratuit au départ' },
+              { value: '5min', label: 'Pour commencer' },
+              { value: '24/7', label: 'Accès en ligne' },
+            ].map((s, i) => (
+              <div key={i} className="text-center">
+                <div className="text-2xl sm:text-3xl font-bold text-white">{s.value}</div>
+                <div className="text-xs text-slate-500 mt-1">{s.label}</div>
+              </div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ═════ FEATURES ═════ */}
+      <section id="features" className="py-24 px-4 sm:px-6 lg:px-8 relative">
+        <div className="max-w-7xl mx-auto">
+          <motion.div
+            initial="hidden" whileInView="visible" viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <motion.h2 variants={fadeUp} custom={0} className="text-3xl sm:text-4xl font-bold">
+              Tout ce dont votre école a besoin
+            </motion.h2>
+            <motion.p variants={fadeUp} custom={1} className="text-slate-400 mt-4 max-w-xl mx-auto">
+              Une plateforme complète qui s&apos;adapte à votre type d&apos;établissement.
+            </motion.p>
+          </motion.div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {FEATURES.map((f, i) => (
+              <motion.div
+                key={i}
+                initial="hidden" whileInView="visible" viewport={{ once: true }}
+                variants={fadeUp} custom={i}
+                className="group p-6 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-indigo-500/30 hover:bg-indigo-500/5 transition-all duration-300"
+              >
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500/20 to-blue-500/20 flex items-center justify-center mb-4 group-hover:from-indigo-500/30 group-hover:to-blue-500/30 transition-colors">
+                  <f.icon className="w-6 h-6 text-indigo-400" />
+                </div>
+                <h3 className="text-lg font-semibold mb-2">{f.title}</h3>
+                <p className="text-sm text-slate-400 leading-relaxed">{f.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═════ TYPES D'ÉTABLISSEMENTS ═════ */}
+      <section id="types" className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-slate-950 to-slate-900">
+        <div className="max-w-5xl mx-auto">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} className="text-center mb-16">
+            <motion.h2 variants={fadeUp} custom={0} className="text-3xl sm:text-4xl font-bold">
+              Pour tous les types d&apos;établissements
+            </motion.h2>
+            <motion.p variants={fadeUp} custom={1} className="text-slate-400 mt-4">
+              CampusFlow s&apos;adapte à votre structure, qu&apos;elle soit publique ou privée.
+            </motion.p>
+          </motion.div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {SCHOOL_TYPES.map((t, i) => (
+              <motion.div
+                key={i}
+                initial="hidden" whileInView="visible" viewport={{ once: true }}
+                variants={fadeUp} custom={i}
+                className="p-5 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-blue-500/20 transition-all text-center"
+              >
+                <div className="text-4xl mb-3">{t.emoji}</div>
+                <h3 className="font-semibold text-lg">{t.name}</h3>
+                <p className="text-sm text-slate-400 mt-1">{t.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═════ COMMENT ÇA MARCHE ═════ */}
+      <section id="how" className="py-24 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-4xl mx-auto">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} className="text-center mb-16">
+            <motion.h2 variants={fadeUp} custom={0} className="text-3xl sm:text-4xl font-bold">
+              Prêt en 4 étapes
+            </motion.h2>
+          </motion.div>
+
+          <div className="space-y-8">
+            {STEPS.map((step, i) => (
+              <motion.div
+                key={i}
+                initial="hidden" whileInView="visible" viewport={{ once: true }}
+                variants={fadeUp} custom={i}
+                className="flex gap-6 items-start"
+              >
+                <div className="shrink-0 w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-600 flex items-center justify-center text-xl font-bold shadow-lg shadow-indigo-500/20">
+                  {step.num}
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold">{step.title}</h3>
+                  <p className="text-slate-400 mt-1">{step.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═════ CTA FINAL ═════ */}
+      <section className="py-24 px-4 sm:px-6 lg:px-8">
+        <motion.div
+          initial="hidden" whileInView="visible" viewport={{ once: true }}
+          variants={fadeUp} custom={0}
+          className="max-w-3xl mx-auto text-center p-12 rounded-3xl bg-gradient-to-br from-indigo-600/20 via-blue-600/10 to-purple-600/20 border border-indigo-500/20"
+        >
+          <h2 className="text-3xl sm:text-4xl font-bold mb-4">
+            Prêt à digitaliser votre école ?
+          </h2>
+          <p className="text-slate-300 mb-8 max-w-lg mx-auto">
+            Rejoignez les établissements qui font confiance à CampusFlow pour la gestion de leur scolarité.
+          </p>
+          <Link href="/onboarding">
+            <Button
+              size="lg"
+              className="text-lg px-10 py-6 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 shadow-2xl shadow-indigo-500/30 rounded-xl"
+            >
+              Créer votre établissement gratuitement
+              <ArrowRight className="w-5 h-5 ml-2" />
+            </Button>
+          </Link>
         </motion.div>
-      </motion.div>
-    </motion.div>
-  );
-}
+      </section>
 
-export default function Home() {
-  const { user, isHydrated, activeTab, setActiveTab, selectedDay, setSelectedDay, userRole } = useAppStore();
-  const [showSplash, setShowSplash] = useState(true);
-  const [hideNav, setHideNav] = useState(false);
-
-  const setPendingNavigation = useAppStore(s => s.setPendingNavigation);
-
-  const handleHideNav = useCallback((hide: boolean) => {
-    setHideNav(hide);
-  }, []);
-
-  // Set default tab on load
-  useEffect(() => {
-    setActiveTab('dashboard');
-
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const navType = params.get('nav');
-      const navId = params.get('id');
-
-      if (navType && navId) {
-        if (navType === 'conversation') {
-          setPendingNavigation({ communityTab: 'chat', viewState: 'conversation', conversationId: navId });
-        } else if (navType === 'group') {
-          setPendingNavigation({ communityTab: 'chat', viewState: 'group-detail', groupId: navId });
-        }
-        window.history.replaceState({}, '', window.location.pathname);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    if (activeTab !== 'forum') setHideNav(false);
-  }, [activeTab]);
-
-  useEffect(() => {
-    const splashTimer = setTimeout(() => setShowSplash(false), 2500);
-    const hydrationTimer = setTimeout(() => {
-      try { useAppStore.getState().setHydrated(true); } catch { }
-    }, 2000);
-    return () => { clearTimeout(splashTimer); clearTimeout(hydrationTimer); };
-  }, []);
-
-  if (showSplash) return <SplashScreen />;
-
-  // Uncomment below to require login:
-  // if (!user) return <AuthView />;
-
-  const handleNavigateToDay = (day: number) => setSelectedDay(day);
-  const handleBackFromDay = () => setSelectedDay(null);
-  const handleNavigateTo = (tab: string) => setActiveTab(tab as any);
-
-  // Map activeTab to the correct view
-  const renderContent = () => {
-    if (selectedDay !== null) {
-      return <DayDetailView dayNumber={selectedDay} onBack={handleBackFromDay} />;
-    }
-
-    switch (activeTab) {
-      // ── Vues communes ──
-      case 'dashboard':
-      case 'home':
-        return <DashboardView onNavigateToDay={handleNavigateToDay} onNavigateTo={handleNavigateTo} />;
-      case 'curriculum':
-      case 'program':
-        return <CurriculumView onSelectDay={handleNavigateToDay} />;
-      case 'grades':
-      case 'journal':
-        return <GradesView />;
-      case 'forum':
-      case 'community':
-        return <ForumView onHideNav={handleHideNav} />;
-      case 'resources':
-      case 'library':
-        return <ResourcesView />;
-      case 'shop':
-      case 'marketplace':
-        return <ShopView />;
-      case 'profile':
-        return <ProfileView />;
-      case 'timetable':
-        return <CurriculumView onSelectDay={handleNavigateToDay} />;
-      case 'courses':
-        return <CoursesView />;
-
-      // ── Vues administratives (secrétaire, directeur, superadmin) ──
-      case 'students':
-        return <StudentsAdminView />;
-      case 'payments':
-        return <PaymentsAdminView />;
-      case 'reports':
-        return <ReportsView />;
-      case 'admin':
-        return <AdminPanelView />;
-
-      default:
-        return <DashboardView onNavigateToDay={handleNavigateToDay} onNavigateTo={handleNavigateTo} />;
-    }
-  };
-
-  return (
-    <main className={cn(
-      "bg-[#0B0E14] overflow-x-hidden",
-      hideNav ? "h-dvh overflow-hidden" : "min-h-screen pb-safe overflow-y-auto"
-    )}>
-      <div className={hideNav ? "h-full overflow-hidden" : "min-h-screen"}>
-        {renderContent()}
-      </div>
-
-      {/* Bottom navigation — role-adaptive */}
-      {selectedDay === null && !hideNav && (
-        <BottomNav
-          activeTab={activeTab as AppTab}
-          onTabChange={(tab) => setActiveTab(tab)}
-          userRole={(userRole || 'student') as UserRole}
-        />
-      )}
-    </main>
+      {/* ═════ FOOTER ═════ */}
+      <footer className="border-t border-white/5 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center">
+              <GraduationCap className="w-4 h-4 text-white" />
+            </div>
+            <span className="font-semibold text-slate-300">CampusFlow</span>
+          </div>
+          <p className="text-sm text-slate-500">
+            © 2026 SYGMA-TECH. Tous droits réservés.
+          </p>
+          <div className="flex items-center gap-1 text-sm text-slate-500">
+            <Smartphone className="w-4 h-4" />
+            PWA disponible sur mobile
+          </div>
+        </div>
+      </footer>
+    </div>
   );
 }
