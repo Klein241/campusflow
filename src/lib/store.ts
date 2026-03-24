@@ -4,6 +4,9 @@ import { persist } from 'zustand/middleware';
 import { supabase } from './supabase';
 import type { TutoringRequest as TutoringRequestType, ExperienceFeedback as ExperienceFeedbackType } from './types';
 
+// Default course catalog ID (legacy compatibility)
+const DEFAULT_courses_ID = 'LSG';
+
 // Types
 export interface DayProgress {
     dayNumber: number;
