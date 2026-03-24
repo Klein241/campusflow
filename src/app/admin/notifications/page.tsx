@@ -102,6 +102,12 @@ export default function NotificationsPage() {
 
         setLoading(true)
 
+        // Safety timeout — prevent infinite spinner
+        const safetyTimeout = setTimeout(() => {
+            setLoading(false)
+            toast.error('Timeout: l\'opération a pris trop de temps. Vérifiez la connexion.')
+        }, 15000)
+
         try {
             if (targetMode === 'all') {
                 // Try RPC broadcast first (sends to ALL users at once)
@@ -140,6 +146,7 @@ export default function NotificationsPage() {
                 // Send to selected users individually
                 if (selectedUsers.length === 0) {
                     toast.error("Sélectionnez au moins un utilisateur")
+                    clearTimeout(safetyTimeout)
                     setLoading(false)
                     return
                 }
@@ -160,19 +167,43 @@ export default function NotificationsPage() {
                 toast.success(`Notification envoyée à ${selectedUsers.length} utilisateur(s)!`)
             }
 
-            // Also send browser push notification via Service Worker
-            try {
-                if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-                    navigator.serviceWorker.controller.postMessage({
-                        type: 'SHOW_NOTIFICATION',
-                        title: formData.title,
-                        body: formData.message,
-                        tag: `admin-notif-${Date.now()}`,
-                        url: '/',
+            // ── Send real Web Push via Cloudflare Worker ──────────
+            const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL;
+            const ADMIN_KEY = process.env.NEXT_PUBLIC_ADMIN_KEY;
+            if (WORKER_URL) {
+                try {
+                    const pushRes = await fetch(`${WORKER_URL}/api/push/send`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(ADMIN_KEY ? { 'X-Admin-Key': ADMIN_KEY } : {}),
+                        },
+                        body: JSON.stringify({
+                            title: formData.title,
+                            body: formData.message,
+                            url: '/',
+                            icon: '/icons/icon-192x192.png',
+                            // targetUserIds only for specific users
+                            ...(targetMode !== 'all' ? { userIds: selectedUsers } : {}),
+                        }),
                     });
+                    const pushText = await pushRes.text();
+                    console.log('[Push Admin] Worker response:', pushRes.status, pushText);
+                    if (pushRes.ok) {
+                        try {
+                            const pushResult = JSON.parse(pushText);
+                            toast.success(`Push envoyé à ${pushResult.sent ?? pushResult.count ?? '?'} abonnés`);
+                        } catch {
+                            toast.success('Push envoyé via Worker');
+                        }
+                    } else {
+                        console.warn('[Push Admin] Worker error:', pushRes.status, pushText);
+                        toast.warning('Notification in-app envoyée, mais push browser a échoué');
+                    }
+                } catch (pushErr: any) {
+                    console.warn('[Push Admin] Worker unreachable:', pushErr.message);
+                    toast.warning('Notification in-app envoyée. Push non disponible.');
                 }
-            } catch (pushErr) {
-                console.warn('Push notification fallback:', pushErr);
             }
 
             setFormData({ title: "", message: "", type: "info" })
@@ -184,6 +215,7 @@ export default function NotificationsPage() {
             const errMsg = typeof error?.message === 'string' ? error.message : JSON.stringify(error?.message || 'Erreur inconnue');
             toast.error("Erreur: " + errMsg)
         } finally {
+            clearTimeout(safetyTimeout)
             setLoading(false)
         }
     }

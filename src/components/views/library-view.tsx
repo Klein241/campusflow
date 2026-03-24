@@ -115,39 +115,15 @@ function BookCover({ title, category }: { title: string; category: string }) {
     );
 }
 
-// Auth gate: overlay for non-logged-in users trying to use features
+// Auth gate: use shared AuthRequiredModal for non-logged-in users
+import { AuthRequiredModal } from '@/components/auth-required-modal';
 function AuthGate({ onClose }: { onClose: () => void }) {
     return (
-        <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-60 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
-            onClick={onClose}
-        >
-            <motion.div
-                initial={{ scale: 0.9, y: 20 }}
-                animate={{ scale: 1, y: 0 }}
-                className="bg-[#161B26] rounded-2xl p-6 max-w-sm w-full text-center border border-white/10"
-                onClick={e => e.stopPropagation()}
-            >
-                <Lock className="h-12 w-12 text-amber-400 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-white mb-2">Connexion requise</h3>
-                <p className="text-sm text-slate-400 mb-6">
-                    Connectez-vous pour télécharger, noter les livres et gérer vos favoris.
-                </p>
-                <Button
-                    className="w-full bg-linear-to-r from-primary to-purple-600 text-white"
-                    onClick={() => {
-                        // Navigate to auth - store will handle this
-                        window.location.hash = '#auth';
-                        onClose();
-                    }}
-                >
-                    Se connecter
-                </Button>
-            </motion.div>
-        </motion.div>
+        <AuthRequiredModal
+            isOpen={true}
+            onClose={onClose}
+            message="Connectez-vous pour télécharger, noter les livres et gérer vos favoris."
+        />
     );
 }
 

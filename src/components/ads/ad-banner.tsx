@@ -195,12 +195,13 @@ export function AdBanner({ placement, variant = 'banner', className, hideWhenEmp
                 onClick={handleClick}
                 className={cn(
                     "block rounded-xl overflow-hidden border border-amber-500/20 bg-linear-to-br from-amber-500/10 to-orange-500/10 hover:border-amber-400/40 transition-all group relative",
+                    "md:max-w-[600px] lg:max-w-[728px] mx-auto",
                     className
                 )}
             >
                 {ad.image_url && (
-                    <div className="aspect-video overflow-hidden">
-                        <img src={ad.image_url} alt={ad.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                    <div className="overflow-hidden max-h-[200px] sm:max-h-[250px] lg:max-h-[180px]">
+                        <img src={ad.image_url} alt={ad.title} className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform" />
                     </div>
                 )}
                 <div className="p-2.5">

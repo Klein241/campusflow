@@ -9,12 +9,12 @@ import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
-// ICE servers for STUN/TURN — TURN is critical for NAT traversal
 const ICE_SERVERS: RTCConfiguration = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        // Free TURN servers from Open Relay (metered.ca)
+        { urls: 'stun:stun2.l.google.com:19302' },
+        // TURN servers (metered.ca) — UDP, TCP, TLS
         {
             urls: 'turn:a.relay.metered.ca:80',
             username: 'e8dd65b92f6bce436e5d1345',
@@ -37,6 +37,7 @@ const ICE_SERVERS: RTCConfiguration = {
         },
     ],
     iceCandidatePoolSize: 10,
+    iceTransportPolicy: 'all',
 };
 
 interface Participant {

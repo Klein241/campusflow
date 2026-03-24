@@ -24,13 +24,24 @@ import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
-// ── ICE servers (STUN + TURN public gratuit) ──────────────────────────────
+// ── ICE servers (STUN + TURN — metered.ca) ──────────────────────────────
 const ICE_SERVERS: RTCConfiguration = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
         {
             urls: 'turn:a.relay.metered.ca:80',
+            username: 'e8dd65b92f6bce436e5d1345',
+            credential: 'dTSbp/tK+LKQbXmg',
+        },
+        {
+            urls: 'turn:a.relay.metered.ca:80?transport=tcp',
+            username: 'e8dd65b92f6bce436e5d1345',
+            credential: 'dTSbp/tK+LKQbXmg',
+        },
+        {
+            urls: 'turn:a.relay.metered.ca:443',
             username: 'e8dd65b92f6bce436e5d1345',
             credential: 'dTSbp/tK+LKQbXmg',
         },
@@ -41,6 +52,7 @@ const ICE_SERVERS: RTCConfiguration = {
         },
     ],
     iceCandidatePoolSize: 10,
+    iceTransportPolicy: 'all',
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────
