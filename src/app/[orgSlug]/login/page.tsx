@@ -39,8 +39,23 @@ export default function LoginPage() {
             const { data: profile } = await supabase.from('profiles').select('role, organization_id').eq('id', data.user.id).single();
             if (profile?.role === 'director' || profile?.role === 'superadmin') {
                 router.push(`/${orgSlug}/admin`);
+            } else if (profile?.role === 'teacher') {
+                router.push(`/${orgSlug}/prof/dashboard`);
+            } else if (profile?.role === 'student') {
+                router.push(`/${orgSlug}/student/dashboard`);
             } else {
-                router.push(`/${orgSlug}`);
+                // Fallback: check if user has a teacher or student profile
+                const { data: tp } = await supabase.from('teacher_profiles').select('id').eq('user_id', data.user.id).eq('organization_id', profile?.organization_id || '').limit(1);
+                if (tp && tp.length > 0) {
+                    router.push(`/${orgSlug}/prof/dashboard`);
+                } else {
+                    const { data: sp } = await supabase.from('student_profiles').select('id').eq('user_id', data.user.id).limit(1);
+                    if (sp && sp.length > 0) {
+                        router.push(`/${orgSlug}/student/dashboard`);
+                    } else {
+                        router.push(`/${orgSlug}`);
+                    }
+                }
             }
             toast.success('Connexion réussie !');
         } catch (e: any) {

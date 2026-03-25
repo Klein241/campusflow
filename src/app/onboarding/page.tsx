@@ -142,20 +142,61 @@ export default function OnboardingPage() {
         setIsSubmitting(true);
         try {
             const slug = generateSlug(data.schoolName);
+            const password = data.phone.replace(/\D/g, '').slice(-8) + 'Cf!';
 
-            // 1. Sign up or get current user
-            const { data: authData, error: authErr } = await supabase.auth.signUp({
+            // ═══ STEP 1: Create auth account ═══
+            // Try signup first. If email is already registered, sign in instead.
+            let userId: string | undefined;
+
+            const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
                 email: data.email,
-                password: data.phone.replace(/\D/g, '').slice(-8) + 'Cf!',
+                password,
+                options: {
+                    data: {
+                        full_name: `${data.firstName} ${data.lastName}`,
+                        phone: data.phone,
+                    },
+                },
             });
-            if (authErr && !authErr.message.includes('already registered')) {
-                throw authErr;
+
+            if (signUpErr) {
+                if (signUpErr.message.includes('already registered') || signUpErr.message.includes('rate limit')) {
+                    // User exists or rate limited → try sign in
+                    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+                        email: data.email,
+                        password,
+                    });
+                    if (signInErr) throw new Error('Compte existant. Vérifiez votre email/mot de passe ou réessayez plus tard.');
+                    userId = signInData.user?.id;
+                } else {
+                    throw signUpErr;
+                }
+            } else {
+                userId = signUpData.user?.id;
+                // If Supabase has email confirmation disabled, the session is set automatically.
+                // If email confirmation IS enabled, the user won't have a session yet.
+                // Try to sign in immediately to ensure we have a valid session:
+                if (!signUpData.session) {
+                    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+                        email: data.email,
+                        password,
+                    });
+                    if (signInErr) {
+                        throw new Error('Compte créé mais la confirmation email est requise. Désactivez la confirmation dans Supabase Dashboard → Auth → Email.');
+                    }
+                    userId = signInData.user?.id;
+                }
             }
 
-            const userId = authData?.user?.id || (await supabase.auth.getUser()).data?.user?.id;
-            if (!userId) throw new Error('Impossible de créer le compte');
+            if (!userId) throw new Error('Impossible de créer le compte utilisateur');
 
-            // 2. Create organization
+            // ═══ STEP 2: Verify we have a valid session ═══
+            const { data: sessionCheck } = await supabase.auth.getSession();
+            if (!sessionCheck.session) {
+                throw new Error('Session non établie. Veuillez vérifier votre email puis vous connecter.');
+            }
+
+            // ═══ STEP 3: Create organization (now RLS will pass) ═══
             const { data: org, error: orgErr } = await supabase
                 .from('organizations')
                 .insert({
@@ -182,7 +223,7 @@ export default function OnboardingPage() {
 
             if (orgErr) throw orgErr;
 
-            // 3. Upload logo if provided
+            // ═══ STEP 4: Upload logo ═══
             if (data.logoFile && org) {
                 const ext = data.logoFile.name.split('.').pop();
                 const path = `orgs/${org.id}/logo.${ext}`;
@@ -191,7 +232,7 @@ export default function OnboardingPage() {
                 await supabase.from('organizations').update({ logo_url: urlData.publicUrl }).eq('id', org.id);
             }
 
-            // 4. Upload documents
+            // ═══ STEP 5: Upload documents ═══
             if (data.documents.length > 0 && org) {
                 for (const doc of data.documents) {
                     const path = `orgs/${org.id}/docs/${Date.now()}_${doc.name}`;
@@ -199,7 +240,7 @@ export default function OnboardingPage() {
                 }
             }
 
-            // 5. Update profile
+            // ═══ STEP 6: Update profile ═══
             await supabase.from('profiles').upsert({
                 id: userId,
                 full_name: `${data.firstName} ${data.lastName}`,
@@ -307,8 +348,8 @@ export default function OnboardingPage() {
                                             key={r.id}
                                             onClick={() => update({ role: r.id })}
                                             className={`p-4 rounded-xl border text-left transition-all ${data.role === r.id
-                                                    ? 'border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/10'
-                                                    : 'border-white/10 bg-white/[0.02] hover:border-white/20'
+                                                ? 'border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/10'
+                                                : 'border-white/10 bg-white/[0.02] hover:border-white/20'
                                                 }`}
                                         >
                                             <span className="text-2xl">{r.emoji}</span>
@@ -343,8 +384,8 @@ export default function OnboardingPage() {
                                                     key={t.id}
                                                     onClick={() => update({ schoolType: t.id })}
                                                     className={`p-3 rounded-xl border text-left text-sm transition-all ${data.schoolType === t.id
-                                                            ? 'border-indigo-500 bg-indigo-500/10'
-                                                            : 'border-white/10 bg-white/[0.02] hover:border-white/20'
+                                                        ? 'border-indigo-500 bg-indigo-500/10'
+                                                        : 'border-white/10 bg-white/[0.02] hover:border-white/20'
                                                         }`}
                                                 >
                                                     <span className="text-lg">{t.emoji}</span>

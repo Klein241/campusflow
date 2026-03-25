@@ -1,70 +1,144 @@
-# 🔄 Table de correspondance — Maison de Prière → CampusFlow
+# 🔄 CampusFlow — Mapping Legacy et Architecture
 
-## Fonctionnalités conservées et renommées
+> **Dernière MAJ :** 25 mars 2026
+> Ce document trace la correspondance entre l'ancien projet "Maison de Prière" et CampusFlow SaaS.
 
-| # | Ancien (Maison de Prière) | Nouveau (CampusFlow) | Statut |
-|---|---------------------------|----------------------|--------|
-| 1 | Groupes de prière | **Groupes d'étude** (study groups) | ✅ Conservé |
-| 2 | Demandes de prière (prayer requests) | **Demandes de tutorat** (tutoring requests) | ✅ Renommé |
-| 3 | Prière exaucée | **Problème résolu** / Question répondue | 🔄 À adapter |
-| 4 | Lecteur biblique (Bible reader) | **Bibliothèque de cours** (course library) | 🔄 À refondre |
-| 5 | Jeux bibliques (quiz, mots mêlés) | **Quiz académiques** (quiz par matière) | 🔄 À adapter |
-| 6 | Étude biblique / Devotional | **Contenu pédagogique** (ressources de cours) | 🔄 À adapter |
-| 7 | Jeûne / Fasting | **Révisions intensives** / Prépa examens | 🔄 À adapter |
-| 8 | Témoignages (experience feedbacks) | **Avis étudiants** / Témoignages campus | ✅ Conservé |
-| 9 | Progression spirituelle (day progress) | **Progression académique** (suivi cursus) | 🔄 À adapter |
-| 10 | Chat temps réel | **Chat campus** (messages directs + groupes) | ✅ Conservé |
-| 11 | Forum communautaire | **Forum étudiant** (par filière) | ✅ Conservé |
-| 12 | Marketplace / Boutique | **Marketplace éducative** (B2C/B2B) | ✅ Conservé |
-| 13 | Live streaming | **Cours en direct** (live classes) | ✅ Conservé |
-| 14 | Notifications push | **Notifications campus** | ✅ Conservé |
-| 15 | Appels vidéo/audio (WebRTC) | **Visioconférence** (appels étude) | ✅ Conservé |
-| 16 | Salon vocal (Discord-style) | **Salon vocal** (étude collaborative) | ✅ Conservé |
-| 17 | Admin dashboard | **Backoffice directeur/secrétaire** | ✅ Conservé |
+---
 
-## Vocabulaire à remplacer dans le code
+## 🏗️ Architecture multi-tenant
 
-| Ancien terme | Nouveau terme | Fichiers concernés |
-|-------------|---------------|-------------------|
-| `prayer` | `tutoring` / `study` | store.ts, notifications.ts, types.ts |
-| `prière` | `tutorat` / `étude` | UI strings, labels |
-| `bible` | `cours` / `bibliothèque` | courses-view, chat, games |
-| `biblique` | `académique` / `pédagogique` | UI strings |
-| `spiritual` | `académique` | types.ts, marketplace |
-| `fasting` | `revision` / `préparation` | day-detail, store |
-| `devotional` | `contenu pédagogique` | curriculum-data |
-| `church` / `église` | `établissement` / `institut` | config, UI |
-| `croyant` | `étudiant` / `membre` | UI strings |
-| `pasteur` | `directeur` / `professeur` | roles, UI |
-| `verset` / `verse` | `extrait` / `ressource` | API, chat |
-| `Maison de Prière` | `CampusFlow` | branding, layout |
-| `CentreFormation Pro` | `CampusFlow` | auth, manifest |
-| `prayer_request_id` | `tutoring_request_id` | DB schema, code |
-| `is_prayer` | `is_academic` | group messages |
-| `prayer_count` | `help_count` | tutoring requests |
-| `prayed_by` | `helped_by` | tutoring requests |
+```
+┌─────────────────────────────────────────────────────────┐
+│                    CAMPUSFLOW SaaS                       │
+│                                                         │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐              │
+│  │ École A  │  │ École B  │  │ École C  │  ...          │
+│  │ /ecole-a │  │ /ecole-b │  │ /ecole-c │              │
+│  ├──────────┤  ├──────────┤  ├──────────┤              │
+│  │ Classes  │  │ Classes  │  │ Classes  │              │
+│  │ Matières │  │ Matières │  │ Matières │              │
+│  │ Profs    │  │ Profs    │  │ Profs    │              │
+│  │ Étudiants│  │ Étudiants│  │ Étudiants│              │
+│  │ Notes    │  │ Notes    │  │ Notes    │              │
+│  │ EDT      │  │ EDT      │  │ EDT      │              │
+│  │ Paiements│  │ Paiements│  │ Paiements│              │
+│  └──────────┘  └──────────┘  └──────────┘              │
+│                                                         │
+│  Isolation RLS par organization_id                      │
+│  Authentification Supabase Auth                         │
+│  Storage : organization-assets bucket                   │
+└─────────────────────────────────────────────────────────┘
+```
 
-## Tables SQL correspondantes
+---
 
-| Ancien nom | Nouveau nom | Notes |
-|-----------|-------------|-------|
-| `prayer_requests` → `tutoring_requests` | ✅ Déjà fait | Demandes d'aide |
-| `prayer_groups` → `study_groups` | ✅ Déjà fait | Groupes d'étude |
-| `student_progress` | ✅ Conservé | Progression cursus |
-| `experience_feedbacks` | ✅ Conservé | Témoignages campus |
-| `study_group_members` | ✅ Conservé | Membres des groupes |
-| `study_group_messages` | ✅ Conservé | Messages de groupe |
+## Tables SQL — Évolution complète
 
-## Nouvelles tables (spécifiques CampusFlow)
+### Tables CampusFlow (nouvelles, organization-scoped)
 
-| Table | Description |
-|-------|-------------|
-| `filieres` | Filières d'études (13 préconfigurées) |
-| `promotions` | Promotions par année et filière |
-| `enrollments` | Inscriptions étudiants |
-| `matieres` | Matières par filière |
-| `notes` | Notes et évaluations |
-| `timetable` | Emploi du temps |
-| `presences` | Suivi des présences |
-| `paiements` | Paiements scolarité |
-| `organizations` | Établissements (multi-tenant) — à créer |
+| Table | Description | Clé d'isolation |
+|-------|-------------|-----------------|
+| `organizations` | Établissements (nom, slug, type, owner_id) | `id` (racine) |
+| `classrooms` | Classes/filières | `organization_id` |
+| `subjects` | Matières (+coefficient) | `organization_id` |
+| `teacher_profiles` | Profils profs | `organization_id` |
+| `student_profiles` | Profils étudiants (+matricule auto) | `organization_id` |
+| `timetable_slots` | Emploi du temps | `organization_id` |
+| `evaluations` | Évaluations (devoir, examen, TP...) | `organization_id` |
+| `grades` | Notes par évaluation/étudiant | via `evaluation_id` |
+| `attendance` | Présences | `organization_id` |
+| `disciplines` | Sanctions disciplinaires | `organization_id` |
+| `school_payments` | Paiements scolarité (XAF, MoMo...) | `organization_id` |
+
+### Tables legacy conservées (compatibilité)
+
+| Table | Usage ancien | Usage actuel | Action |
+|-------|-------------|--------------|--------|
+| `profiles` | Profils tous utilisateurs | Toujours utilisé par le store | 🔶 Conserver |
+| `filieres` | 13 filières préconfigurées | Plus utilisé directement | 🔶 Conserver (référence) |
+| `promotions` | Promotions par année | Plus utilisé | ⚠️ Déprécié |
+| `enrollments` | Inscriptions ancien système | Plus utilisé | ⚠️ Déprécié |
+| `matieres` | Matières ancien système | Remplacé par `subjects` | ⚠️ Déprécié |
+| `notes` | Notes ancien système | Remplacé par `grades` | ⚠️ Déprécié |
+| `timetable` | EDT ancien | Remplacé par `timetable_slots` | ⚠️ Déprécié |
+| `presences` | Présences ancien | Remplacé par `attendance` | ⚠️ Déprécié |
+| `paiements` | Paiements ancien | Remplacé par `school_payments` | ⚠️ Déprécié |
+
+### Tables legacy à supprimer (post-migration)
+
+| Table | Contenu | Raison |
+|-------|---------|--------|
+| `tutoring_requests` | Demandes de prière | Religieux → hors scope |
+| `experience_feedbacks` | Témoignages spirituels | Hors scope |
+| `student_progress` | Programme 40 jours spirituel | Hors scope |
+| `study_groups` / `_members` / `_messages` / `_join_requests` | Groupes de prière | Hors scope |
+| `forum_threads` / `forum_replies` | Forum avec contenu religieux | 🔶 À réécrire si besoin |
+| `shop_products` / `shop_orders` | Boutique (fournitures + spirituel) | 🔶 À migrer vers Marketplace |
+| `direct_messages` | Chat WhatsApp-like | 🔶 À évaluer |
+| `livestream_comments` / `_reactions` | Livestream religieux | Hors scope |
+| `day_resources` / `day_views` | Ressources programme 40 jours | Hors scope |
+| `push_subscriptions` | Push notifications | 🔶 À conserver si push nécessaire |
+| `notifications` | Notifications in-app | 🔶 À conserver |
+| `app_settings` | Config globale | 🔶 À conserver |
+
+---
+
+## Fichiers sources — État de la purge
+
+### ✅ Fichiers réécrits (CampusFlow)
+
+| Fichier | Avant | Après |
+|---------|-------|-------|
+| `src/app/page.tsx` | Redirection vers dashboard legacy | Landing page CampusFlow |
+| `src/app/layout.tsx` | Metadata "Maison de Prière" | Metadata CampusFlow |
+| `src/components/views/dashboard-view.tsx` | Prière, Jeux Bibliques, courses, Chat | Dashboard CampusFlow role-based |
+| `src/components/views/courses-view.tsx` | Lecteur Bible + Programme 40 jours | Liste matières CampusFlow |
+
+### ✅ Fichiers créés (CampusFlow)
+
+| Fichier | Description |
+|---------|-------------|
+| `src/app/onboarding/page.tsx` | Wizard 6 étapes |
+| `src/app/[orgSlug]/page.tsx` | Page publique école |
+| `src/app/[orgSlug]/admin/page.tsx` | Backoffice 10 onglets |
+| `src/app/[orgSlug]/prof/page.tsx` | Inscription prof |
+| `src/app/[orgSlug]/student/page.tsx` | Inscription étudiant |
+| `src/app/[orgSlug]/login/page.tsx` | Login par école |
+| `src/app/login/page.tsx` | Login global |
+
+### ❌ Fichiers à supprimer
+
+| Fichier/Dossier | Contenu religieux |
+|-----------------|-------------------|
+| `src/components/views/games-view.tsx` | Jeux Bibliques |
+| `src/components/community/*.tsx` | Prières, groupes, livestream |
+| `src/components/bible/*.tsx` | Lecteur Bible |
+| `src/components/admin/*.tsx` | Panel admin Maison de Prière |
+| `src/app/admin/**` | Routes admin legacy |
+| `src/app/chat/page.tsx` | Chat WhatsApp |
+| `src/app/video/page.tsx` | Livestream |
+| `src/app/replay/page.tsx` | Replays |
+| `src/lib/curriculum-data.ts` | Programme 40 jours |
+| `src/lib/french-bible-data.ts` | Données Bible |
+| `src/lib/unified-bible-api.ts` | API Bible |
+| `src/lib/quiz-generator.ts` | Quiz bibliques |
+| `src/lib/local-bible-games.ts` | Jeux bibliques |
+| `src/components/bottom-nav.tsx` | Nav legacy |
+| `src/components/navigation/BottomNav.tsx` | Nav legacy |
+| `src/components/feature-tutorial.tsx` | Tutorial prière |
+| `src/components/app-tutorial.tsx` | Tutorial Maison de Prière |
+
+---
+
+## Prochaines étapes (par priorité)
+
+1. **P1** ✅ Fix RLS + Rate limit onboarding
+2. **P2** Purge complète des fichiers legacy (supprimer les fichiers listés ci-dessus)
+3. **P2** Créer `/[orgSlug]/dashboard` avec routing role-based
+4. **P3** Module Notes : saisie + moyennes + bulletins
+5. **P3** Module Présences : appel par classe
+6. **P3** Middleware Next.js pour protection des routes
+7. **P4** Paiement en ligne (Notch Pay / FedaPay)
+8. **P4** Bibliothèque numérique (migration depuis livre/)
+9. **P5** Marketplace CampusFlow
+10. **P5** Tests E2E du flux complet

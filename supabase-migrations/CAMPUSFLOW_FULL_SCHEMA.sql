@@ -938,6 +938,12 @@ CREATE POLICY "school_payment_read" ON public.school_payments FOR SELECT TO auth
         EXISTS (SELECT 1 FROM public.organizations WHERE id = sp.organization_id AND owner_id = auth.uid())
     ))
 );
+CREATE POLICY "school_payment_write" ON public.school_payments FOR ALL TO authenticated USING (
+    EXISTS (SELECT 1 FROM public.organizations WHERE id = school_payments.organization_id AND owner_id = auth.uid())
+);
+CREATE POLICY "school_payment_insert" ON public.school_payments FOR INSERT TO authenticated WITH CHECK (
+    EXISTS (SELECT 1 FROM public.organizations WHERE id = school_payments.organization_id AND owner_id = auth.uid())
+);
 
 -- ============================================================
 -- 26. FUNCTIONS
