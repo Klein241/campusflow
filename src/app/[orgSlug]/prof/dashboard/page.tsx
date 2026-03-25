@@ -32,7 +32,7 @@ export default function TeacherDashboard() {
     const { orgSlug } = useParams<{ orgSlug: string }>();
     const router = useRouter();
     const [org, setOrg] = useState<any>(null);
-    const [user, setUser] = useState<any>(null);
+
     const [teacher, setTeacher] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState<Tab>('dashboard');
@@ -50,20 +50,40 @@ export default function TeacherDashboard() {
     const [savingGrades, setSavingGrades] = useState(false);
 
     // ═══ LOAD ═══
+    const [showDeletedModal, setShowDeletedModal] = useState(false);
+    const [showDeactivatedModal, setShowDeactivatedModal] = useState(false);
+
     useEffect(() => {
         (async () => {
+            // 1. Get session from localStorage
+            const raw = localStorage.getItem('campusflow_session');
+            if (!raw) { router.push(`/${orgSlug}/login`); return; }
+            const session = JSON.parse(raw);
+            if (session.role !== 'teacher') { router.push(`/${orgSlug}/login`); return; }
+
+            // 2. Load org
             const { data: o } = await supabase.from('organizations').select('*').eq('slug', orgSlug).single();
             if (!o) { setLoading(false); return; }
             setOrg(o);
 
-            const { data: { user: u } } = await supabase.auth.getUser();
-            if (!u) { router.push(`/${orgSlug}/login`); return; }
-            setUser(u);
+            // 3. Re-fetch teacher profile by ID
+            const { data: t, error: tErr } = await supabase.from('teacher_profiles').select('*')
+                .eq('id', session.id).single();
 
-            // Get teacher profile
-            const { data: t } = await supabase.from('teacher_profiles').select('*')
-                .eq('organization_id', o.id).eq('user_id', u.id).single();
-            if (!t) { router.push(`/${orgSlug}/login`); return; }
+            if (tErr || !t) {
+                localStorage.removeItem('campusflow_session');
+                setShowDeletedModal(true);
+                setLoading(false);
+                return;
+            }
+
+            if (t.is_active === false) {
+                localStorage.removeItem('campusflow_session');
+                setShowDeactivatedModal(true);
+                setLoading(false);
+                return;
+            }
+
             setTeacher(t);
 
             // Subjects assigned to this teacher
@@ -74,20 +94,17 @@ export default function TeacherDashboard() {
             // Extract unique classrooms
             const classIds = [...new Set((subs || []).map((s: any) => s.classroom_id).filter(Boolean))];
 
-            // All classes (for timetable lookup by subject)
             if (classIds.length > 0) {
                 const { data: clsData } = await supabase.from('classrooms').select('*').in('id', classIds);
                 setMyClasses(clsData || []);
             }
 
-            // Load all students for my classes
             if (classIds.length > 0) {
                 const { data: studs } = await supabase.from('student_profiles').select('*')
                     .eq('organization_id', o.id).in('classroom_id', classIds);
                 setStudents(studs || []);
             }
 
-            // Timetable slots for my subjects
             const subjectIds = (subs || []).map((s: any) => s.id);
             if (subjectIds.length > 0) {
                 const { data: slots } = await supabase.from('timetable_slots')
@@ -96,7 +113,6 @@ export default function TeacherDashboard() {
                 setMySlots(slots || []);
             }
 
-            // Evaluations for my subjects
             if (subjectIds.length > 0) {
                 const { data: evs } = await supabase.from('evaluations')
                     .select('*, classrooms:classroom_id(name), subjects:subject_id(name)')
@@ -171,16 +187,38 @@ export default function TeacherDashboard() {
     };
 
     // ═══ SIGN OUT ═══
-    const signOut = async () => {
-        await supabase.auth.signOut();
+    const signOut = () => {
+        localStorage.removeItem('campusflow_session');
         router.push(`/${orgSlug}/login`);
     };
 
     const today = new Date().getDay(); // 0=Sun, 1=Mon...
     const todaySlots = mySlots.filter((s: any) => s.day_of_week === (today === 0 ? 7 : today));
 
-    if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="w-8 h-8 text-emerald-400 animate-spin" /></div>;
-    if (!org || !teacher) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white"><h1>Non autorisé</h1></div>;
+    // ═══ MODAL: ACCOUNT DELETED ═══
+    if (showDeletedModal) return (
+        <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center p-4">
+            <div className="max-w-sm w-full p-8 rounded-2xl bg-red-600/5 border border-red-500/20 text-center">
+                <div className="w-16 h-16 rounded-full bg-red-600/20 flex items-center justify-center mx-auto mb-4"><AlertCircle className="w-8 h-8 text-red-400" /></div>
+                <h2 className="text-xl font-bold text-white mb-2">Compte supprimé</h2>
+                <p className="text-sm text-slate-400 mb-6">Votre compte a été supprimé. Veuillez contacter l'administration de votre établissement.</p>
+                <Button onClick={() => router.push(`/${orgSlug}`)} className="bg-white/10 hover:bg-white/20 text-white">Retour</Button>
+            </div>
+        </div>
+    );
+    if (showDeactivatedModal) return (
+        <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center p-4">
+            <div className="max-w-sm w-full p-8 rounded-2xl bg-amber-600/5 border border-amber-500/20 text-center">
+                <div className="w-16 h-16 rounded-full bg-amber-600/20 flex items-center justify-center mx-auto mb-4"><AlertCircle className="w-8 h-8 text-amber-400" /></div>
+                <h2 className="text-xl font-bold text-white mb-2">Compte désactivé</h2>
+                <p className="text-sm text-slate-400 mb-6">Votre compte a été temporairement désactivé. Contactez votre établissement.</p>
+                <Button onClick={() => router.push(`/${orgSlug}`)} className="bg-white/10 hover:bg-white/20 text-white">Retour</Button>
+            </div>
+        </div>
+    );
+
+    if (loading) return <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center"><Loader2 className="w-8 h-8 text-teal-400 animate-spin" /></div>;
+    if (!org || !teacher) return <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center text-white"><h1>Non autorisé</h1></div>;
 
     return (
         <div className="min-h-screen bg-slate-950 text-white flex flex-col">

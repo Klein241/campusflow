@@ -80,27 +80,27 @@ export default function LoginPage() {
     const handleAccessCodeLogin = async () => {
         const code = accessCode.trim().toUpperCase();
         if (code.length !== 12) { toast.error('Le code doit contenir 12 caractères'); return; }
+        if (!org) { toast.error('Établissement non trouvé'); return; }
         setSaving(true);
         try {
-            // Try teacher first
+            // Try teacher first — SCOPED to this organization
             const { data: teacher } = await supabase
                 .from('teacher_profiles')
                 .select('id, first_name, last_name, pin_set, pin_code, organization_id, is_active')
+                .eq('organization_id', org.id)
                 .eq('access_code', code)
                 .single();
 
             if (teacher) {
-                if (teacher.is_active === false) { toast.error('Votre compte a été désactivé'); setSaving(false); return; }
+                if (teacher.is_active === false) { toast.error('Votre compte a été désactivé. Contactez l\'administration.'); setSaving(false); return; }
                 const profile: UserProfile = { id: teacher.id, first_name: teacher.first_name, last_name: teacher.last_name, role: 'teacher', pin_set: teacher.pin_set || false, organization_id: teacher.organization_id };
                 setUserProfile(profile);
 
                 if (!teacher.pin_set) {
-                    // First login — create PIN
                     setMode('pin_create');
                     setPinStep('create');
                     setTimeout(() => pinRefs[0].current?.focus(), 100);
                 } else {
-                    // Verify PIN
                     setMode('pin_verify');
                     setTimeout(() => pinRefs[0].current?.focus(), 100);
                 }
@@ -108,15 +108,16 @@ export default function LoginPage() {
                 return;
             }
 
-            // Try student
+            // Try student — SCOPED to this organization
             const { data: student } = await supabase
                 .from('student_profiles')
                 .select('id, first_name, last_name, pin_set, pin_code, organization_id, classroom_id, is_active')
+                .eq('organization_id', org.id)
                 .eq('access_code', code)
                 .single();
 
             if (student) {
-                if (student.is_active === false) { toast.error('Votre compte a été désactivé'); setSaving(false); return; }
+                if (student.is_active === false) { toast.error('Votre compte a été désactivé. Contactez l\'administration.'); setSaving(false); return; }
                 const profile: UserProfile = { id: student.id, first_name: student.first_name, last_name: student.last_name, role: 'student', pin_set: student.pin_set || false, organization_id: student.organization_id, classroom_id: student.classroom_id };
                 setUserProfile(profile);
 

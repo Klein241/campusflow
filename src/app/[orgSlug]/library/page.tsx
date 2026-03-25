@@ -254,14 +254,9 @@ export default function LibraryPage() {
         }
 
         if (item.file_url) {
-            if (item.file_type === 'link') {
-                window.open(item.file_url, '_blank');
-            } else if (item.file_type === 'pdf' || item.file_type === 'doc') {
-                setReadingItem(item);
-                setIsReading(true);
-            } else {
-                window.open(item.file_url, '_blank');
-            }
+            // Always use built-in reader — never open external tabs
+            setReadingItem(item);
+            setIsReading(true);
         } else {
             toast.info('Fichier non disponible');
         }
@@ -289,8 +284,10 @@ export default function LibraryPage() {
             window.URL.revokeObjectURL(url);
             toast.success('Téléchargement terminé 📥');
         } catch {
-            window.open(item.file_url, '_blank');
-            toast.success('Téléchargement lancé 📥');
+            // Fallback: open in built-in reader
+            setReadingItem(item);
+            setIsReading(true);
+            toast.success('Ouverture du fichier 📖');
         }
     }, []);
 

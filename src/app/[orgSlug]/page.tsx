@@ -87,19 +87,9 @@ export default function SchoolPublicPage() {
                     </div>
 
                     <div className="flex flex-wrap gap-3 mt-8 justify-center sm:justify-start">
-                        <Link href={`/${orgSlug}/student`}>
-                            <Button size="lg" className="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 rounded-xl">
-                                <Users className="w-5 h-5 mr-2" /> S&apos;inscrire comme étudiant
-                            </Button>
-                        </Link>
-                        <Link href={`/${orgSlug}/prof`}>
-                            <Button size="lg" variant="outline" className="border-white/20 text-white hover:bg-white/10 rounded-xl">
-                                <BookOpen className="w-5 h-5 mr-2" /> Espace professeur
-                            </Button>
-                        </Link>
                         <Link href={`/${orgSlug}/login`}>
-                            <Button size="lg" variant="ghost" className="text-white/70 hover:text-white rounded-xl">
-                                Se connecter <ArrowRight className="w-4 h-4 ml-1" />
+                            <Button size="lg" className="bg-gradient-to-r from-teal-600 to-indigo-600 hover:from-teal-500 hover:to-indigo-500 rounded-xl">
+                                Se connecter <ArrowRight className="w-4 h-4 ml-2" />
                             </Button>
                         </Link>
                     </div>

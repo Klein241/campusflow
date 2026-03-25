@@ -29,6 +29,7 @@ export async function middleware(request: NextRequest) {
             'localhost',
             '127.0.0.1',
             'campusflow.netlify.app',
+            'campusfl.netlify.app',
             'campusflow.app',
         ];
         const isCustomDomain = !platformDomains.some(d => hostname.includes(d));
@@ -67,6 +68,7 @@ export async function middleware(request: NextRequest) {
         'localhost',
         '127.0.0.1',
         'campusflow.netlify.app',
+        'campusfl.netlify.app',
         'campusflow.app',
     ];
     const isCustomDomain = !platformDomains.some(d => hostname.includes(d));
