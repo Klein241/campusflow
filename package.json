@@ -20,7 +20,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "framer-motion": "^12.31.0",
+    "framer-motion": "^12.38.0",
     "hls.js": "^1.6.15",
     "html-react-parser": "^5.2.16",
     "lucide-react": "^0.563.0",
