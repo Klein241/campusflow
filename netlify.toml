@@ -1,23 +1,13 @@
 [build]
   command = "npm run build"
-  publish = "out"
+  publish = ".next"
 
 [build.environment]
   NODE_VERSION = "20"
   NEXT_TELEMETRY_DISABLED = "1"
-  NEXT_PUBLIC_SUPABASE_URL = "https://nuisijvopyudmbcqpaua.supabase.co"
-  NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51aXNpanZvcHl1ZG1iY3FwYXVhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNTQyMDksImV4cCI6MjA4OTkzMDIwOX0.gAelghYCc0u5i0LeesZhVjUIQy7sQthWCMTRtbZV0OE"
-  NEXT_PUBLIC_WORKER_URL = "https://centreformation-notifications.bufferwave.workers.dev"
-  NEXT_PUBLIC_ADMIN_KEY = "00b9ddb0f9014c6386f0d8c53fee6530e4d22e78cf454e0b"
-  NEXT_PUBLIC_USE_MOCK_DATA = "false"
 
-# Site statique (output: 'export') — pas besoin de @netlify/plugin-nextjs
-
-# SPA fallback — toutes les routes servies par index.html
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
 
 # Headers sécurité
 [[headers]]
@@ -44,30 +34,9 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
-[[headers]]
-  for = "/*.woff2"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
-
-[[headers]]
-  for = "/*.png"
-  [headers.values]
-    Cache-Control = "public, max-age=2592000"
-
-[[headers]]
-  for = "/*.webp"
-  [headers.values]
-    Cache-Control = "public, max-age=2592000"
-
 # PWA manifest
 [[headers]]
   for = "/manifest.json"
   [headers.values]
     Content-Type = "application/manifest+json"
-    Cache-Control = "public, max-age=0, must-revalidate"
-
-# Service worker - never cache
-[[headers]]
-  for = "/sw.js"
-  [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
