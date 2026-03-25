@@ -187,7 +187,6 @@ export async function ensureUserProfile(userData: {
                 email: userData.email || '',
                 full_name: userData.full_name || 'Utilisateur',
                 avatar_url: userData.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(userData.full_name || 'U')}`,
-                first_name: userData.first_name || null,
             }, {
                 onConflict: 'id',
                 ignoreDuplicates: false,
