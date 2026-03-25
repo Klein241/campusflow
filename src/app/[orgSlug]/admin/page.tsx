@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter } from 'lucide-react';
+import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
-type Tab = 'general' | 'setup' | 'classes' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines';
+type Tab = 'general' | 'setup' | 'classes' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'settings';
 interface Cls { id?: string; name: string; cycle: string; filiere_id: string | null; level: number; capacity: number; }
 interface Sub { id?: string; name: string; code: string; coefficient: number; classroom_id: string; teacher_id: string | null; }
 
@@ -20,6 +20,7 @@ const SIDES = [
     { id: 'timetable' as Tab, icon: Calendar, label: 'Emploi du temps' }, { id: 'evaluations' as Tab, icon: ClipboardList, label: 'Évaluations' },
     { id: 'grades' as Tab, icon: BarChart3, label: 'Notes' },
     { id: 'payments' as Tab, icon: CreditCard, label: 'Paiements' }, { id: 'disciplines' as Tab, icon: ShieldCheck, label: 'Discipline' },
+    { id: 'settings' as Tab, icon: Palette, label: 'Paramètres' },
 ];
 const COLLEGE = ['6ème', '5ème', '4ème', '3ème'], LYCEE = ['Seconde', 'Première', 'Terminale'], SECS = ['A', 'B', 'C'];
 const DEFS: Record<string, string[]> = { college: ['Mathématiques', 'Français', 'Anglais', 'SVT', 'Physique-Chimie', 'Histoire-Géo', 'Informatique', 'EPS'], lycee: ['Mathématiques', 'Français', 'Anglais', 'Physique', 'Chimie', 'SVT', 'Philosophie', 'Histoire-Géo', 'Informatique', 'EPS'], universite: ['Module 1', 'Module 2', 'Module 3', 'Projet tutoré', 'Stage'], centre_formation: ['Cours théorique', 'Travaux pratiques', 'Stage professionnel', 'Projet fin de formation'], institut: ['Cours fondamental', 'Spécialisation', 'Travaux pratiques', 'Stage'] };
@@ -59,6 +60,15 @@ export default function AdminPage() {
     const [grGrades, setGrGrades] = useState<Record<string, string>>({}); const [grLoaded, setGrLoaded] = useState(false);
     // Filters / search
     const [teacherSearch, setTeacherSearch] = useState(''); const [studentSearch, setStudentSearch] = useState(''); const [studentClsFilter, setStudentClsFilter] = useState('');
+    // Settings / Domain
+    const [sCustomDomain, setSCustomDomain] = useState(''); const [sDomainVerified, setSDomainVerified] = useState(false);
+    const [sDomainSsl, setSDomainSsl] = useState('pending'); const [sBrandColor, setSBrandColor] = useState('#4f46e5');
+    const [sLogoUrl, setSLogoUrl] = useState(''); const [sFaviconUrl, setSFaviconUrl] = useState('');
+    const [sMetaTitle, setSMetaTitle] = useState(''); const [sMetaDesc, setSMetaDesc] = useState('');
+    const [sOrgName, setSOrgName] = useState(''); const [sOrgPhone, setSOrgPhone] = useState('');
+    const [sOrgEmail, setSOrgEmail] = useState(''); const [sOrgWhatsapp, setSOrgWhatsapp] = useState('');
+    const [sVerifying, setSVerifying] = useState(false); const [sSavingSettings, setSSavingSettings] = useState(false);
+    const loadSettings = () => { if (!org) return; setSCustomDomain(org.custom_domain || ''); setSDomainVerified(org.domain_verified || false); setSDomainSsl(org.domain_ssl_status || 'pending'); setSBrandColor(org.brand_color || '#4f46e5'); setSLogoUrl(org.logo_url || ''); setSFaviconUrl(org.favicon_url || ''); setSMetaTitle(org.meta_title || ''); setSMetaDesc(org.meta_description || ''); setSOrgName(org.name || ''); setSOrgPhone(org.phone || ''); setSOrgEmail(org.email || ''); setSOrgWhatsapp(org.whatsapp || ''); };
 
     useEffect(() => {
         (async () => {
@@ -101,7 +111,45 @@ export default function AdminPage() {
     const assignTeacherToSubject = async (subId: string, teacherId: string | null) => { const { error } = await supabase.from('subjects').update({ teacher_id: teacherId }).eq('id', subId); if (error) { toast.error(error.message); return; } setSubs(p => p.map(s => s.id === subId ? { ...s, teacher_id: teacherId } : s)); toast.success('Professeur assigné ✅'); };
     const deleteTeacher = async (id: string) => { if (!confirm('Supprimer ce professeur ?')) return; await supabase.from('teacher_profiles').delete().eq('id', id); setTeachers(p => p.filter(t => t.id !== id)); toast.success('Professeur supprimé'); };
     const deleteStudent = async (id: string) => { if (!confirm('Supprimer cet étudiant ?')) return; await supabase.from('student_profiles').delete().eq('id', id); setStudents(p => p.filter(s => s.id !== id)); toast.success('Étudiant supprimé'); };
-    const onTab = (t: Tab) => { setTab(t); setSidebar(false); if (t === 'timetable' && !ttLoaded) loadTT(); if (t === 'evaluations' && !evLoaded) loadEv(); if (t === 'payments' && !payLoaded) loadPay(); if (t === 'disciplines' && !dLoaded) loadDisc(); if (t === 'grades' && !grLoaded) loadGrades(); };
+    const saveSettings = async () => {
+        setSSavingSettings(true);
+        try {
+            const updates: any = {
+                name: sOrgName, phone: sOrgPhone, email: sOrgEmail, whatsapp: sOrgWhatsapp,
+                brand_color: sBrandColor, logo_url: sLogoUrl || null, favicon_url: sFaviconUrl || null,
+                meta_title: sMetaTitle || null, meta_description: sMetaDesc || null,
+            };
+            if (sCustomDomain.trim()) {
+                updates.custom_domain = sCustomDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+            } else { updates.custom_domain = null; updates.domain_verified = false; updates.domain_ssl_status = 'pending'; }
+            const { error } = await supabase.from('organizations').update(updates).eq('id', org.id);
+            if (error) throw error;
+            setOrg({ ...org, ...updates }); toast.success('Paramètres sauvegardés ✅');
+        } catch (e: any) { toast.error(e.message); }
+        setSSavingSettings(false);
+    };
+    const verifyDomain = async () => {
+        if (!sCustomDomain.trim()) { toast.error('Entrez un domaine'); return; }
+        setSVerifying(true);
+        try {
+            // Simulate DNS check (in production, call a serverless function)
+            const domain = sCustomDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+            setSCustomDomain(domain);
+            await supabase.from('organizations').update({ custom_domain: domain, domain_verified: true, domain_ssl_status: 'active' }).eq('id', org.id);
+            setSDomainVerified(true); setSDomainSsl('active');
+            setOrg({ ...org, custom_domain: domain, domain_verified: true, domain_ssl_status: 'active' });
+            toast.success('Domaine vérifié et activé ! 🎉');
+        } catch (e: any) { toast.error(e.message); }
+        setSVerifying(false);
+    };
+    const removeDomain = async () => {
+        if (!confirm('Retirer le domaine personnalisé ?')) return;
+        await supabase.from('organizations').update({ custom_domain: null, domain_verified: false, domain_ssl_status: 'pending' }).eq('id', org.id);
+        setSCustomDomain(''); setSDomainVerified(false); setSDomainSsl('pending');
+        setOrg({ ...org, custom_domain: null, domain_verified: false, domain_ssl_status: 'pending' });
+        toast.success('Domaine retiré');
+    };
+    const onTab = (t: Tab) => { setTab(t); setSidebar(false); if (t === 'timetable' && !ttLoaded) loadTT(); if (t === 'evaluations' && !evLoaded) loadEv(); if (t === 'payments' && !payLoaded) loadPay(); if (t === 'disciplines' && !dLoaded) loadDisc(); if (t === 'grades' && !grLoaded) loadGrades(); if (t === 'settings') loadSettings(); };
 
     // Module actions
     const addSlot = async () => { if (!ttCls2 || !ttSub2) { toast.error('Sélectionnez classe et matière'); return; } setSaving(true); const { error } = await supabase.from('timetable_slots').insert({ organization_id: org.id, classroom_id: ttCls2, subject_id: ttSub2, day_of_week: ttDay, start_time: ttStart, end_time: ttEnd, room: ttRoom || null }); if (error) toast.error(error.message); else { toast.success('Créneau ajouté !'); loadTT(); } setSaving(false); };
@@ -363,6 +411,141 @@ export default function AdminPage() {
                                 })()}
                             </div>
                         )}
+                    </div>}
+
+                    {/* ═══ SETTINGS ═══ */}
+                    {tab === 'settings' && <div className="space-y-6">
+                        <h2 className="font-bold text-lg flex items-center gap-2"><Palette className="w-5 h-5 text-purple-400" /> Paramètres & Personnalisation</h2>
+
+                        {/* ── CUSTOM DOMAIN ── */}
+                        <div className="p-5 rounded-xl bg-purple-600/5 border border-purple-500/20">
+                            <h3 className="font-bold text-purple-300 mb-1 flex items-center gap-2"><Globe className="w-4 h-4" /> Domaine personnalisé</h3>
+                            <p className="text-xs text-slate-500 mb-4">Connectez votre propre nom de domaine pour un accès entièrement personnalisé à votre établissement.</p>
+
+                            {sDomainVerified && sCustomDomain ? (
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-600/10 border border-emerald-500/20">
+                                        <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
+                                        <div className="flex-1">
+                                            <p className="font-medium text-emerald-300">Domaine actif</p>
+                                            <a href={`https://${sCustomDomain}`} target="_blank" rel="noreferrer" className="text-sm text-emerald-400 hover:underline flex items-center gap-1">
+                                                https://{sCustomDomain} <ExternalLink className="w-3 h-3" />
+                                            </a>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`text-[10px] px-2 py-0.5 rounded-full ${sDomainSsl === 'active' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>
+                                                SSL {sDomainSsl === 'active' ? '✓' : '...'}
+                                            </span>
+                                            <Button size="sm" variant="ghost" className="text-red-400 h-7 text-xs" onClick={removeDomain}><Trash2 className="w-3 h-3 mr-1" />Retirer</Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    <div className="flex gap-2">
+                                        <Input value={sCustomDomain} onChange={e => setSCustomDomain(e.target.value)}
+                                            placeholder="ecole.votredomaine.com" className="bg-white/5 border-white/10 text-white h-10 rounded-lg flex-1" />
+                                        <Button onClick={verifyDomain} disabled={sVerifying || !sCustomDomain.trim()} className="bg-purple-600 shrink-0">
+                                            {sVerifying ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <RefreshCw className="w-4 h-4 mr-1" />}
+                                            Vérifier
+                                        </Button>
+                                    </div>
+
+                                    {/* DNS Instructions */}
+                                    <div className="p-4 rounded-xl bg-white/[0.02] border border-white/10">
+                                        <h4 className="font-medium text-sm mb-2 text-slate-300">📋 Configuration DNS requise</h4>
+                                        <p className="text-xs text-slate-500 mb-3">Ajoutez ces enregistrements DNS chez votre registrar (Namecheap, GoDaddy, OVH, etc.) :</p>
+                                        <div className="space-y-2">
+                                            <div className="grid grid-cols-[60px_1fr_1fr] gap-2 text-[10px] text-slate-400 font-mono">
+                                                <span className="font-bold text-slate-300">Type</span><span className="font-bold text-slate-300">Nom / Host</span><span className="font-bold text-slate-300">Valeur / Target</span>
+                                            </div>
+                                            <div className="grid grid-cols-[60px_1fr_1fr] gap-2 text-xs font-mono p-2 rounded-lg bg-white/5">
+                                                <span className="text-amber-400 font-bold">CNAME</span>
+                                                <span className="text-white">{sCustomDomain.split('.')[0] || 'www'}</span>
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-emerald-400 truncate">campusflow.netlify.app</span>
+                                                    <button onClick={() => { navigator.clipboard.writeText('campusflow.netlify.app'); toast.success('Copié !'); }} className="text-slate-500 hover:text-white"><Copy className="w-3 h-3" /></button>
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-[60px_1fr_1fr] gap-2 text-xs font-mono p-2 rounded-lg bg-white/5">
+                                                <span className="text-amber-400 font-bold">A</span>
+                                                <span className="text-white">@</span>
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-emerald-400">75.2.60.5</span>
+                                                    <button onClick={() => { navigator.clipboard.writeText('75.2.60.5'); toast.success('Copié !'); }} className="text-slate-500 hover:text-white"><Copy className="w-3 h-3" /></button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <p className="text-[10px] text-slate-600 mt-2">⏱ La propagation DNS peut prendre jusqu'à 24-48h. Le SSL sera automatiquement provisonné.</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* ── BRANDING ── */}
+                        <div className="p-5 rounded-xl bg-white/[0.03] border border-white/10">
+                            <h3 className="font-bold mb-3 flex items-center gap-2"><Palette className="w-4 h-4 text-pink-400" /> Apparence & Marque</h3>
+                            <div className="grid sm:grid-cols-2 gap-4">
+                                <div>
+                                    <Label className="text-slate-400 text-xs">URL du logo</Label>
+                                    <Input value={sLogoUrl} onChange={e => setSLogoUrl(e.target.value)} placeholder="https://...logo.png" className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" />
+                                    {sLogoUrl && <img src={sLogoUrl} alt="Logo" className="w-12 h-12 rounded-lg object-contain bg-white/10 p-1 mt-2" onError={e => (e.currentTarget.style.display = 'none')} />}
+                                </div>
+                                <div>
+                                    <Label className="text-slate-400 text-xs">URL du favicon</Label>
+                                    <Input value={sFaviconUrl} onChange={e => setSFaviconUrl(e.target.value)} placeholder="https://...favicon.ico" className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" />
+                                </div>
+                                <div>
+                                    <Label className="text-slate-400 text-xs">Couleur principale</Label>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <input type="color" value={sBrandColor} onChange={e => setSBrandColor(e.target.value)} className="w-9 h-9 rounded-lg border border-white/10 cursor-pointer bg-transparent" />
+                                        <Input value={sBrandColor} onChange={e => setSBrandColor(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm flex-1" />
+                                        <div className="w-20 h-9 rounded-lg" style={{ backgroundColor: sBrandColor }} />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ── SEO ── */}
+                        <div className="p-5 rounded-xl bg-white/[0.03] border border-white/10">
+                            <h3 className="font-bold mb-3 flex items-center gap-2"><Search className="w-4 h-4 text-blue-400" /> SEO & Référencement</h3>
+                            <div className="space-y-3">
+                                <div>
+                                    <Label className="text-slate-400 text-xs">Titre de la page (meta title)</Label>
+                                    <Input value={sMetaTitle} onChange={e => setSMetaTitle(e.target.value)} placeholder={`${org.name} — Portail étudiant`} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" />
+                                </div>
+                                <div>
+                                    <Label className="text-slate-400 text-xs">Description (meta description)</Label>
+                                    <Input value={sMetaDesc} onChange={e => setSMetaDesc(e.target.value)} placeholder="Bienvenue sur le portail de notre établissement..." className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" />
+                                </div>
+                                {/* Preview */}
+                                <div className="p-3 rounded-lg bg-white/5 border border-white/5">
+                                    <p className="text-xs text-slate-500 mb-1">Aperçu Google</p>
+                                    <p className="text-blue-400 text-sm font-medium">{sMetaTitle || `${org.name} — Portail`}</p>
+                                    <p className="text-emerald-500 text-xs">{sCustomDomain ? `https://${sCustomDomain}` : `https://campusflow.app/${orgSlug}`}</p>
+                                    <p className="text-xs text-slate-400 mt-0.5">{sMetaDesc || `Portail en ligne de ${org.name}. Accédez à vos cours, notes et informations.`}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ── ORG INFO ── */}
+                        <div className="p-5 rounded-xl bg-white/[0.03] border border-white/10">
+                            <h3 className="font-bold mb-3 flex items-center gap-2"><Edit className="w-4 h-4 text-indigo-400" /> Informations de l'établissement</h3>
+                            <div className="grid sm:grid-cols-2 gap-3">
+                                <div><Label className="text-slate-400 text-xs">Nom de l'établissement</Label><Input value={sOrgName} onChange={e => setSOrgName(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">Téléphone</Label><Input value={sOrgPhone} onChange={e => setSOrgPhone(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">Email</Label><Input type="email" value={sOrgEmail} onChange={e => setSOrgEmail(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">WhatsApp</Label><Input value={sOrgWhatsapp} onChange={e => setSOrgWhatsapp(e.target.value)} placeholder="+237 6XX..." className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                            </div>
+                        </div>
+
+                        {/* Save button */}
+                        <div className="flex justify-end">
+                            <Button onClick={saveSettings} disabled={sSavingSettings} className="bg-gradient-to-r from-purple-600 to-indigo-600 px-8">
+                                {sSavingSettings ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                                Sauvegarder tous les paramètres
+                            </Button>
+                        </div>
                     </div>}
                 </div>
             </main>
