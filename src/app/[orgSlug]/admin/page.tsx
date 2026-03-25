@@ -91,8 +91,8 @@ export default function AdminPage() {
         })();
     }, [orgSlug]);
 
-    if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="w-8 h-8 text-indigo-400 animate-spin" /></div>;
-    if (!org) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white"><h1 className="text-2xl font-bold">Introuvable</h1></div>;
+    if (loading) return <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center"><Loader2 className="w-8 h-8 text-teal-400 animate-spin" /></div>;
+    if (!org) return <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center text-white"><h1 className="text-2xl font-black">Introuvable</h1></div>;
 
     const isCL = ['college', 'lycee'].includes(org.type);
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -175,41 +175,46 @@ export default function AdminPage() {
     );
 
     return (
-        <div className="min-h-screen bg-slate-950 text-white flex">
+        <div className="min-h-screen bg-[#0B0E14] text-white flex">
+            {/* Ambient background */}
+            <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+                <div className="absolute top-[-25%] right-[-15%] w-[50%] h-[50%] bg-teal-600/4 blur-[150px] rounded-full" />
+                <div className="absolute bottom-[-25%] left-[-15%] w-[40%] h-[40%] bg-indigo-600/4 blur-[150px] rounded-full" />
+            </div>
             {/* Sidebar */}
-            <aside className={`fixed lg:static inset-y-0 left-0 z-40 w-60 bg-slate-900 border-r border-white/5 transform transition-transform lg:transform-none ${sidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+            <aside className={`fixed lg:static inset-y-0 left-0 z-40 w-60 bg-[#0F1219]/90 backdrop-blur-xl border-r border-white/5 transform transition-transform lg:transform-none ${sidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
                 <div className="p-4 border-b border-white/5">
-                    <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center"><GraduationCap className="w-4 h-4" /></div><span className="font-semibold text-sm truncate">{org.name}</span></div>
+                    <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-xl bg-gradient-to-br from-teal-500 to-indigo-600 flex items-center justify-center"><GraduationCap className="w-4 h-4" /></div><span className="font-bold text-sm truncate">{org.name}</span></div>
                     <p className="text-xs text-slate-500 mt-1">Backoffice</p>
                 </div>
-                <nav className="p-2 space-y-0.5">{SIDES.map(i => (<button key={i.id} onClick={() => onTab(i.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ${tab === i.id ? 'bg-indigo-600/20 text-indigo-300 font-medium' : 'text-slate-400 hover:bg-white/5'}`}><i.icon className="w-4 h-4" />{i.label}</button>))}
+                <nav className="p-2 space-y-0.5">{SIDES.map(i => (<button key={i.id} onClick={() => onTab(i.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${tab === i.id ? 'bg-teal-600/15 text-teal-300 font-medium' : 'text-slate-400 hover:bg-white/5'}`}><i.icon className="w-4 h-4" />{i.label}</button>))}
                     <div className="mt-3 pt-3 border-t border-white/5 space-y-0.5">
-                        <button onClick={() => router.push(`/${orgSlug}/library`)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-emerald-400 hover:bg-emerald-600/10"><BookMarked className="w-4 h-4" />Bibliothèque</button>
-                        <button onClick={() => router.push(`/${orgSlug}/shop`)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-teal-400 hover:bg-teal-600/10"><ShoppingBag className="w-4 h-4" />Marketplace</button>
-                        <button onClick={() => router.push(`/${orgSlug}/messages`)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-indigo-400 hover:bg-indigo-600/10"><MessageSquare className="w-4 h-4" />Messages</button>
+                        <button onClick={() => router.push(`/${orgSlug}/library`)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-emerald-400 hover:bg-emerald-600/10"><BookMarked className="w-4 h-4" />Bibliothèque</button>
+                        <button onClick={() => router.push(`/${orgSlug}/shop`)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-teal-400 hover:bg-teal-600/10"><ShoppingBag className="w-4 h-4" />Marketplace</button>
+                        <button onClick={() => router.push(`/${orgSlug}/messages`)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-indigo-400 hover:bg-indigo-600/10"><MessageSquare className="w-4 h-4" />Messages</button>
                     </div>
                 </nav>
                 <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-white/5"><Button variant="ghost" size="sm" className="w-full text-xs text-slate-500" onClick={() => router.push(`/${orgSlug}`)}><Globe className="w-3 h-3 mr-1" />Page publique</Button></div>
             </aside>
             {sidebar && <div className="fixed inset-0 bg-black/50 z-30 lg:hidden" onClick={() => setSidebar(false)} />}
 
-            <main className="flex-1 min-h-screen">
-                <header className="sticky top-0 z-20 bg-slate-950/80 backdrop-blur-xl border-b border-white/5 px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3"><button onClick={() => setSidebar(true)} className="lg:hidden p-2 hover:bg-white/5 rounded-lg"><Settings className="w-5 h-5" /></button><h1 className="text-lg font-semibold">{SIDES.find(i => i.id === tab)?.label}</h1></div>
+            <main className="flex-1 min-h-screen relative z-10">
+                <header className="sticky top-0 z-20 bg-[#0B0E14]/80 backdrop-blur-xl border-b border-white/5 px-4 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3"><button onClick={() => setSidebar(true)} className="lg:hidden p-2 hover:bg-white/5 rounded-xl"><Settings className="w-5 h-5" /></button><h1 className="text-lg font-black text-gradient-primary">{SIDES.find(i => i.id === tab)?.label}</h1></div>
                     <span className="text-xs text-slate-500">{students.length} étudiants • {teachers.length} profs</span>
                 </header>
 
                 <div className="p-4 sm:p-6 max-w-5xl">
                     {/* ═══ GENERAL ═══ */}
                     {tab === 'general' && <div className="space-y-6">
-                        <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/10"><h2 className="text-xl font-bold mb-4">Informations</h2><div className="grid sm:grid-cols-2 gap-3 text-sm">{[['Nom', org.name], ['Type', org.type], ['Ville', `${org.city}, ${org.country}`], ['Tél', org.phone], ['Email', org.email], ['WhatsApp', org.whatsapp || '—']].map(([k, v], i) => <div key={i}><span className="text-slate-500">{k}:</span> <span className="ml-2">{v}</span></div>)}</div></div>
-                        <div className="p-6 rounded-2xl bg-indigo-500/5 border border-indigo-500/10"><h3 className="font-bold text-indigo-300 mb-3 flex items-center gap-2"><Link2 className="w-5 h-5" />Liens</h3><div className="space-y-2 text-sm">{[['Page publique', `${origin}/${orgSlug}`, 'text-indigo-300'], ['Inscription prof', `${origin}/${orgSlug}/prof`, 'text-emerald-300'], ['Inscription étudiant', `${origin}/${orgSlug}/student`, 'text-blue-300']].map(([l, u, c], i) => <div key={i} className="flex items-center gap-2"><span className="text-slate-400">{l}:</span><code className={`px-2 py-1 rounded bg-white/5 ${c}`}>{u}</code></div>)}</div></div>
-                        <div className="grid sm:grid-cols-4 gap-4">{[{ l: 'Classes', v: cls.length, c: 'from-indigo-600 to-blue-600' }, { l: 'Matières', v: subs.length, c: 'from-emerald-600 to-green-600' }, { l: 'Profs', v: teachers.length, c: 'from-orange-600 to-amber-600' }, { l: 'Étudiants', v: students.length, c: 'from-purple-600 to-pink-600' }].map((s, i) => <div key={i} className={`p-4 rounded-xl bg-gradient-to-br ${s.c} text-center`}><div className="text-3xl font-bold">{s.v}</div><div className="text-sm text-white/80">{s.l}</div></div>)}</div>
+                        <div className="p-6 rounded-2xl bg-card/50 backdrop-blur-sm border border-white/10"><h2 className="text-xl font-black mb-4 text-gradient-primary">Informations</h2><div className="grid sm:grid-cols-2 gap-3 text-sm">{[['Nom', org.name], ['Type', org.type], ['Ville', `${org.city}, ${org.country}`], ['Tél', org.phone], ['Email', org.email], ['WhatsApp', org.whatsapp || '—']].map(([k, v], i) => <div key={i}><span className="text-slate-500">{k}:</span> <span className="ml-2">{v}</span></div>)}</div></div>
+                        <div className="p-6 rounded-2xl bg-teal-500/5 backdrop-blur-sm border border-teal-500/10"><h3 className="font-bold text-teal-300 mb-3 flex items-center gap-2"><Link2 className="w-5 h-5" />Liens</h3><div className="space-y-2 text-sm">{[['Page publique', `${origin}/${orgSlug}`, 'text-teal-300'], ['Inscription prof', `${origin}/${orgSlug}/prof`, 'text-emerald-300'], ['Inscription étudiant', `${origin}/${orgSlug}/student`, 'text-indigo-300']].map(([l, u, c], i) => <div key={i} className="flex items-center gap-2"><span className="text-slate-400">{l}:</span><code className={`px-2 py-1 rounded-lg bg-white/5 ${c}`}>{u}</code></div>)}</div></div>
+                        <div className="grid sm:grid-cols-4 gap-4">{[{ l: 'Classes', v: cls.length, c: 'from-teal-600 to-emerald-600', shadow: 'shadow-teal-600/20' }, { l: 'Matières', v: subs.length, c: 'from-indigo-600 to-blue-600', shadow: 'shadow-indigo-600/20' }, { l: 'Profs', v: teachers.length, c: 'from-amber-600 to-orange-600', shadow: 'shadow-amber-600/20' }, { l: 'Étudiants', v: students.length, c: 'from-purple-600 to-pink-600', shadow: 'shadow-purple-600/20' }].map((s, i) => <div key={i} className={`p-4 rounded-xl bg-gradient-to-br ${s.c} text-center shadow-lg ${s.shadow}`}><div className="text-3xl font-black">{s.v}</div><div className="text-sm text-white/80">{s.l}</div></div>)}</div>
                     </div>}
 
                     {/* ═══ SETUP ═══ */}
                     {tab === 'setup' && <div className="space-y-6">
-                        <div className="flex items-center justify-center gap-2 mb-6">{['Classes', 'Matières', 'Professeurs'].map((s, i) => <div key={i} className="flex items-center gap-2"><button onClick={() => setStep(i)} className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${step === i ? 'bg-indigo-600' : step > i ? 'bg-green-600' : 'bg-white/10 text-slate-500'}`}>{step > i ? <CheckCircle2 className="w-5 h-5" /> : i + 1}</button><span className={`text-sm hidden sm:inline ${step === i ? 'text-white font-medium' : 'text-slate-500'}`}>{s}</span>{i < 2 && <div className="w-8 h-0.5 bg-white/10" />}</div>)}</div>
+                        <div className="flex items-center justify-center gap-2 mb-6">{['Classes', 'Matières', 'Professeurs'].map((s, i) => <div key={i} className="flex items-center gap-2"><button onClick={() => setStep(i)} className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all ${step === i ? 'bg-gradient-to-br from-teal-500 to-emerald-600 shadow-lg shadow-teal-600/25' : step > i ? 'bg-emerald-600' : 'bg-white/10 text-slate-500'}`}>{step > i ? <CheckCircle2 className="w-5 h-5" /> : i + 1}</button><span className={`text-sm hidden sm:inline ${step === i ? 'text-white font-medium' : 'text-slate-500'}`}>{s}</span>{i < 2 && <div className="w-8 h-0.5 bg-white/10" />}</div>)}</div>
                         {step === 0 && <div className="space-y-4"><div className="p-5 rounded-xl bg-white/[0.03] border border-white/10"><h3 className="font-bold text-lg mb-3">{isCL ? '🏫 Salles de classe' : '📚 Filières et niveaux'}</h3>{isCL && <div className="mb-4"><p className="text-sm text-slate-400 mb-2">Ajout rapide:</p><div className="flex flex-wrap gap-2">{(org.type === 'college' ? COLLEGE : [...COLLEGE, ...LYCEE]).map(l => <Button key={l} size="sm" variant="outline" className="text-xs border-white/10" onClick={() => quickAdd(l)}><Plus className="w-3 h-3 mr-1" />{l}</Button>)}</div></div>}<div className="flex gap-2"><Input value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addClass()} placeholder={isCL ? '6ème A...' : 'Niveau 1...'} className="bg-white/5 border-white/10 text-white h-10 rounded-lg" /><Button onClick={addClass} disabled={!newName.trim()} className="bg-indigo-600 shrink-0"><Plus className="w-4 h-4" /></Button></div></div>
                             {cls.length > 0 && <div className="space-y-2">{cls.map((c, i) => <div key={i} className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-white/5 border border-white/10"><div className="flex items-center gap-3"><School className="w-4 h-4 text-indigo-400" /><span className="text-sm font-medium">{c.name}</span>{!c.id && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300">nouveau</span>}</div><button onClick={() => setCls(p => p.filter((_, j) => j !== i))} className="text-red-400"><Trash2 className="w-4 h-4" /></button></div>)}</div>}
                             <div className="flex justify-end"><Button onClick={async () => { const saved = await saveCls(); setCls(saved); setStep(1); }} disabled={cls.length === 0 || saving} className="bg-indigo-600">{saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Suivant<ArrowRight className="w-4 h-4 ml-2" /></Button></div></div>}

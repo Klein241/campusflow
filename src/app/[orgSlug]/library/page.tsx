@@ -131,9 +131,21 @@ export default function LibraryPage() {
             if (!o) { setLoading(false); return; }
             setOrg(o);
 
+            // Session from localStorage (access code auth)
+            const raw = localStorage.getItem('campusflow_session');
+            let userId: string | null = null;
+            if (raw) {
+                const sess = JSON.parse(raw);
+                setUser(sess);
+                userId = sess.id;
+                if (sess.role === 'admin' || sess.role === 'owner') setIsOwner(true);
+            }
+            // Also check supabase auth for admin/owner
             const { data: { user: u } } = await supabase.auth.getUser();
-            setUser(u);
-            setIsOwner(u?.id === o.owner_id);
+            if (u) {
+                if (!userId) { setUser(u); userId = u.id; }
+                if (u.id === o.owner_id) setIsOwner(true);
+            }
 
             const [{ data: li }, { data: s }, { data: c }] = await Promise.all([
                 supabase.from('library_items').select('*, subjects:subject_id(name), classrooms:classroom_id(name)')
@@ -146,15 +158,15 @@ export default function LibraryPage() {
             setClasses(c || []);
 
             // Load favorites & history (user-specific, try/catch for tables that may not exist)
-            if (u?.id) {
+            if (userId) {
                 try {
                     const { data: favs } = await supabase.from('library_favorites')
-                        .select('item_id').eq('user_id', u.id).eq('organization_id', o.id);
+                        .select('item_id').eq('user_id', userId).eq('organization_id', o.id);
                     if (favs) setFavorites(new Set(favs.map((f: any) => f.item_id)));
                 } catch { /* table may not exist */ }
                 try {
                     const { data: hist } = await supabase.from('library_reading_history')
-                        .select('*').eq('user_id', u.id).order('last_read_at', { ascending: false }).limit(30);
+                        .select('*').eq('user_id', userId).order('last_read_at', { ascending: false }).limit(30);
                     if (hist) setReadHistory(hist);
                 } catch { /* table may not exist */ }
             }
@@ -332,13 +344,13 @@ export default function LibraryPage() {
         });
 
     if (loading) return (
-        <div className="min-h-screen bg-gradient-to-b from-[#0B0E14] to-[#0F1219] flex items-center justify-center">
-            <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
+        <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center">
+            <Loader2 className="w-8 h-8 text-teal-400 animate-spin" />
         </div>
     );
     if (!org) return (
-        <div className="min-h-screen bg-gradient-to-b from-[#0B0E14] to-[#0F1219] flex items-center justify-center text-white">
-            <h1 className="text-2xl font-bold">Établissement introuvable</h1>
+        <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center text-white">
+            <h1 className="text-2xl font-black">Établissement introuvable</h1>
         </div>
     );
 
@@ -392,10 +404,11 @@ export default function LibraryPage() {
         const suggestions = items.filter(i => i.id !== selectedItem.id && i.category === selectedItem.category).slice(0, 6);
 
         return (
-            <div className="min-h-screen bg-gradient-to-b from-[#0B0E14] to-[#0F1219] text-white pb-24 overflow-y-auto">
+            <div className="min-h-screen bg-[#0B0E14] text-white pb-24 overflow-y-auto">
                 {/* Background blur */}
                 <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-                    <div className="absolute top-[-20%] right-[-20%] w-[60%] h-[60%] bg-emerald-600/5 blur-[150px] rounded-full" />
+                    <div className="ambient-blob-teal" style={{ top: '-20%', right: '-20%' }} />
+                    <div className="ambient-blob-indigo" style={{ bottom: '-20%', left: '-20%' }} />
                 </div>
 
                 <div className="relative z-10 max-w-lg mx-auto w-full px-4 pt-4">
@@ -508,11 +521,11 @@ export default function LibraryPage() {
 
     // ═══════════════════════ MAIN LIBRARY VIEW ═══════════════════════
     return (
-        <div className="min-h-screen bg-gradient-to-b from-[#0B0E14] to-[#0F1219] text-white pb-24 overflow-y-auto">
+        <div className="min-h-screen bg-[#0B0E14] text-white pb-24 overflow-y-auto">
             {/* Background */}
             <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-                <div className="absolute top-[-20%] right-[-20%] w-[60%] h-[60%] bg-emerald-600/5 blur-[150px] rounded-full" />
-                <div className="absolute bottom-[-20%] left-[-20%] w-[50%] h-[50%] bg-teal-600/5 blur-[150px] rounded-full" />
+                <div className="ambient-blob-teal" style={{ top: '-20%', right: '-20%' }} />
+                <div className="ambient-blob-indigo" style={{ bottom: '-20%', left: '-20%' }} />
             </div>
 
             <div className="relative z-10 max-w-4xl mx-auto w-full px-4 pt-6">
