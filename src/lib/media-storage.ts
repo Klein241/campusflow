@@ -292,7 +292,7 @@ export async function downloadAndCache(
 // sur le propre Google Drive de l'utilisateur
 // ═══════════════════════════════════════════════════
 
-const GOOGLE_DRIVE_FOLDER = 'Maison de Prière';
+const GOOGLE_DRIVE_FOLDER = 'CampusFlow';
 const GD_STORAGE_KEY = 'mdp_gdrive_status';
 
 /** Charger le script Google Identity Services */
@@ -473,7 +473,7 @@ export function disconnectGoogleDrive(): void {
     saveGoogleDriveStatus(newStatus);
 }
 
-/** Trouver ou créer le dossier "Maison de Prière" sur Google Drive */
+/** Trouver ou créer le dossier "CampusFlow" sur Google Drive */
 async function getOrCreateDriveFolder(accessToken: string): Promise<string | null> {
     const headers = { Authorization: `Bearer ${accessToken}` };
 

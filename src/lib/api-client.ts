@@ -52,7 +52,7 @@ export async function loadGroupMessages(groupId: string, forceRefresh = false): 
     try {
         // Load last 50 with inline join — descending then reverse for correct order
         const { data: messages, error } = await supabase
-            .from('prayer_group_messages')
+            .from('group_messages')
             .select('id, group_id, user_id, content, type, voice_url, voice_duration, created_at, profiles(full_name, avatar_url)')
             .eq('group_id', groupId)
             .order('created_at', { ascending: false })
@@ -84,7 +84,7 @@ export async function loadGroupMessages(groupId: string, forceRefresh = false): 
  */
 async function loadGroupMessagesFallback(groupId: string): Promise<GroupMessage[]> {
     const { data: rawMessages, error } = await supabase
-        .from('prayer_group_messages')
+        .from('group_messages')
         .select('id, group_id, user_id, content, type, voice_url, voice_duration, created_at')
         .eq('group_id', groupId)
         .order('created_at', { ascending: true });
@@ -142,7 +142,7 @@ export async function sendGroupMessage({
         if (voiceDuration) insertData.voice_duration = voiceDuration;
 
         const { data, error } = await supabase
-            .from('prayer_group_messages')
+            .from('group_messages')
             .insert(insertData)
             .select('id, group_id, user_id, content, type, voice_url, voice_duration, created_at')
             .single();
@@ -187,7 +187,6 @@ export async function ensureUserProfile(userData: {
                 email: userData.email || '',
                 full_name: userData.full_name || 'Utilisateur',
                 avatar_url: userData.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(userData.full_name || 'U')}`,
-                first_name: userData.first_name || null,
             }, {
                 onConflict: 'id',
                 ignoreDuplicates: false,
@@ -205,18 +204,18 @@ export async function ensureUserProfile(userData: {
 }
 
 /**
- * Fetch Bible passage — LOCAL ONLY (LSG)
- * All data comes from /public/bible/ .txt files via unified-bible-api
+ * Fetch courses passage — LOCAL ONLY (LSG)
+ * All data comes from /public/courses/ .txt files via unified-courses-api
  */
-export async function fetchBiblePassage(reference: string, _translation: string = 'lsg'): Promise<any> {
+export async function fetchcoursesPassage(reference: string, _translation: string = 'lsg'): Promise<any> {
     try {
-        // Use the local Bible service exclusively
-        const { bibleApi } = await import('./unified-bible-api');
-        const parsed = bibleApi.parseReference(reference);
+        // Use the local courses service exclusively
+        const { coursesApi } = await import('./unified-courses-api');
+        const parsed = coursesApi.parseReference(reference);
         if (!parsed) return null;
 
         if (parsed.verseStart && parsed.verseEnd) {
-            const chapter = await bibleApi.getChapter(parsed.bookId, parsed.chapter);
+            const chapter = await coursesApi.getChapter(parsed.bookId, parsed.chapter);
             if (!chapter) return null;
             const selectedVerses = chapter.verses.filter(
                 v => v.verse! >= parsed.verseStart! && v.verse! <= parsed.verseEnd!
@@ -227,11 +226,11 @@ export async function fetchBiblePassage(reference: string, _translation: string 
                 verses: selectedVerses
             };
         } else {
-            const chapter = await bibleApi.getChapter(parsed.bookId, parsed.chapter);
+            const chapter = await coursesApi.getChapter(parsed.bookId, parsed.chapter);
             return chapter;
         }
     } catch (e) {
-        console.error('[bible] Local fetch error:', e);
+        console.error('[courses] Local fetch error:', e);
         return null;
     }
 }

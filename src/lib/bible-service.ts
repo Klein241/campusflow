@@ -1,14 +1,14 @@
 /**
- * BIBLE SERVICE - SUPABASE BASED
+ * courses SERVICE - SUPABASE BASED
  * ===============================
- * Simple Bible service that reads from Supabase
+ * Simple courses service that reads from Supabase
  * Books are uploaded via admin panel
  */
 
 import { supabase } from '@/lib/supabase';
 
 // Types
-export interface BibleBook {
+export interface coursesBook {
     id: string;
     book_id: string;
     name: string;
@@ -21,23 +21,23 @@ export interface BibleBook {
     file_url?: string;
 }
 
-export interface BibleVerse {
+export interface coursesVerse {
     verse: number;
     text: string;
 }
 
-export interface BibleChapter {
+export interface coursesChapter {
     book_id: string;
     book_name: string;
     chapter: number;
-    verses: BibleVerse[];
+    verses: coursesVerse[];
 }
 
 // Cache for loaded chapters
-const chapterCache: Map<string, BibleChapter> = new Map();
+const chapterCache: Map<string, coursesChapter> = new Map();
 
 // Parse verse from line format: "1  verse text" or "1 verse text"
-export function parseVerseLine(line: string): BibleVerse | null {
+export function parseVerseLine(line: string): coursesVerse | null {
     const match = line.trim().match(/^(\d+)\s+(.+)$/);
     if (match) {
         return {
@@ -49,9 +49,9 @@ export function parseVerseLine(line: string): BibleVerse | null {
 }
 
 // Get all books from database
-export async function getAllBooks(): Promise<BibleBook[]> {
+export async function getAllBooks(): Promise<coursesBook[]> {
     const { data, error } = await supabase
-        .from('bible_books')
+        .from('courses_books')
         .select('*')
         .order('book_order');
 
@@ -63,9 +63,9 @@ export async function getAllBooks(): Promise<BibleBook[]> {
 }
 
 // Get only uploaded books
-export async function getUploadedBooks(): Promise<BibleBook[]> {
+export async function getUploadedBooks(): Promise<coursesBook[]> {
     const { data, error } = await supabase
-        .from('bible_books')
+        .from('courses_books')
         .select('*')
         .eq('is_uploaded', true)
         .order('book_order');
@@ -78,9 +78,9 @@ export async function getUploadedBooks(): Promise<BibleBook[]> {
 }
 
 // Get book by ID
-export async function getBookById(bookId: string): Promise<BibleBook | null> {
+export async function getBookById(bookId: string): Promise<coursesBook | null> {
     const { data, error } = await supabase
-        .from('bible_books')
+        .from('courses_books')
         .select('*')
         .eq('book_id', bookId)
         .single();
@@ -93,7 +93,7 @@ export async function getBookById(bookId: string): Promise<BibleBook | null> {
 }
 
 // Load chapter content
-export async function loadChapter(bookId: string, chapterNum: number): Promise<BibleChapter | null> {
+export async function loadChapter(bookId: string, chapterNum: number): Promise<coursesChapter | null> {
     const cacheKey = `${bookId}_${chapterNum}`;
 
     // Check cache
@@ -103,14 +103,14 @@ export async function loadChapter(bookId: string, chapterNum: number): Promise<B
 
     // First check if chapter is cached in database
     const { data: cachedChapter } = await supabase
-        .from('bible_chapters')
+        .from('courses_chapters')
         .select('*')
         .eq('book_id', bookId)
         .eq('chapter_number', chapterNum)
         .single();
 
     if (cachedChapter) {
-        const chapter: BibleChapter = {
+        const chapter: coursesChapter = {
             book_id: bookId,
             book_name: '',
             chapter: chapterNum,
@@ -146,7 +146,7 @@ export async function loadChapter(bookId: string, chapterNum: number): Promise<B
             return null;
         }
 
-        const chapter: BibleChapter = {
+        const chapter: coursesChapter = {
             book_id: bookId,
             book_name: book.name,
             chapter: chapterNum,
@@ -252,7 +252,7 @@ export async function getVerseOfTheDay(): Promise<{ reference: string; text: str
 }
 
 // Search in uploaded books
-export async function searchBible(query: string, maxResults: number = 20): Promise<Array<{ reference: string; text: string }>> {
+export async function searchcourses(query: string, maxResults: number = 20): Promise<Array<{ reference: string; text: string }>> {
     const books = await getUploadedBooks();
     const results: Array<{ reference: string; text: string }> = [];
     const lowerQuery = query.toLowerCase();
@@ -280,20 +280,20 @@ export async function searchBible(query: string, maxResults: number = 20): Promi
 }
 
 // Clear cache
-export function clearBibleCache(): void {
+export function clearcoursesCache(): void {
     chapterCache.clear();
 }
 
 // Export for games
-export const bibleService = {
+export const coursesService = {
     getAllBooks,
     getUploadedBooks,
     getBookById,
     loadChapter,
     getRandomVerse,
     getVerseOfTheDay,
-    searchBible,
-    clearBibleCache
+    searchcourses,
+    clearcoursesCache
 };
 
-export default bibleService;
+export default coursesService;

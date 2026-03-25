@@ -72,7 +72,7 @@ async function seed() {
     }
 
     // Attempt to seed a demo prayer request if empty
-    const { data: prayers } = await supabase.from('prayer_requests').select('id').limit(1);
+    const { data: prayers } = await supabase.from('tutoring_requests').select('id').limit(1);
     if (prayers && prayers.length === 0) {
         console.log('📝 Seeding first prayer request...');
         // We need a user ID. If we are anon, we might fail unless RLS allows.

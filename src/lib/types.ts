@@ -1,11 +1,11 @@
-// Types for the Prayer Marathon App - V3 Extended
+// Types for the CampusFlow SaaS App - V3 Extended
 // ================================================
 
 export interface DailyProgram {
     day: number;
     title: string;
     theme: string;
-    bibleReading: {
+    coursesReading: {
         reference: string;
         passage: string;
     };
@@ -14,7 +14,7 @@ export interface DailyProgram {
     practicalAction: string;
 }
 
-export interface BibleVerse {
+export interface coursesVerse {
     reference: string;
     text: string;
     version: string;
@@ -38,7 +38,7 @@ export interface DayProgress {
     completed: boolean;
     completedAt?: string;
     prayerCompleted: boolean;
-    bibleReadingCompleted: boolean;
+    coursesReadingCompleted: boolean;
     fastingCompleted: boolean;
     journalEntry?: string;
 }
@@ -77,7 +77,7 @@ export const PRAYER_CATEGORIES: PrayerCategoryInfo[] = [
     { id: 'other', nameFr: 'Autre', nameEn: 'Other', icon: '✨', color: '#6b7280' },
 ];
 
-export interface PrayerRequest {
+export interface TutoringRequest {
     id: string;
     userId: string;
     userName: string;
@@ -95,7 +95,7 @@ export interface PrayerRequest {
     groupId?: string;
 }
 
-export interface Testimonial {
+export interface ExperienceFeedback {
     id: string;
     userId: string;
     userName: string;
@@ -163,9 +163,9 @@ export interface DayView {
 }
 
 // Prayer Groups
-export interface PrayerGroup {
+export interface StudyGroup {
     id: string;
-    prayerRequestId?: string;
+    TutoringRequestId?: string;
     prayer_request_id?: string;
     name: string;
     description?: string;
@@ -197,7 +197,7 @@ export interface PrayerGroup {
     };
 }
 
-export interface PrayerGroupMember {
+export interface StudyGroupMember {
     id: string;
     groupId: string;
     userId: string;
@@ -209,7 +209,7 @@ export interface PrayerGroupMember {
     };
 }
 
-export interface PrayerGroupJoinRequest {
+export interface StudyGroupJoinRequest {
     id: string;
     group_id: string;
     user_id: string;
@@ -223,7 +223,7 @@ export interface PrayerGroupJoinRequest {
     };
 }
 
-export interface PrayerGroupMessage {
+export interface StudyGroupMessage {
     id: string;
     groupId: string;
     userId: string;
@@ -260,11 +260,11 @@ export interface Conversation {
     unreadCount: number;
 }
 
-// Bible Games
+// courses Games
 export type GameType = 'quiz' | 'memory' | 'word_search' | 'crossword' | 'verse_order';
 export type GameDifficulty = 'easy' | 'medium' | 'hard';
 
-export interface BibleGameResult {
+export interface coursesGameResult {
     id: string;
     userId: string;
     gameType: GameType;
@@ -286,7 +286,7 @@ export interface LeaderboardEntry {
     rank: number;
 }
 
-export type TabType = 'home' | 'marketplace' | 'program' | 'bible' | 'journal' | 'community' | 'profile' | 'library' | 'games';
+export type TabType = 'home' | 'marketplace' | 'program' | 'courses' | 'journal' | 'community' | 'profile' | 'library' | 'games';
 
 export interface AppSettings {
     notifications: {
@@ -307,8 +307,8 @@ export interface AppSettings {
     };
 }
 
-// Bible API Types
-export interface BibleVersion {
+// courses API Types
+export interface coursesVersion {
     id: string;
     name: string;
     abbreviation: string;
@@ -317,9 +317,9 @@ export interface BibleVersion {
     hasAudio?: boolean;
 }
 
-export interface BibleBookInfo {
+export interface coursesBookInfo {
     id: string;
-    bibleId: string;
+    coursesId: string;
     abbreviation: string;
     name: string;
     nameLong: string;
@@ -327,7 +327,7 @@ export interface BibleBookInfo {
     testament: 'OT' | 'NT';
 }
 
-export interface BibleSearchResult {
+export interface coursesSearchResult {
     id: string;
     reference: string;
     text: string;
@@ -341,7 +341,7 @@ export interface AdminStats {
     activeUsers: number;
     totalPrayers: number;
     answeredPrayers: number;
-    totalTestimonials: number;
+    totalExperienceFeedbacks: number;
     totalJournalEntries: number;
     averageProgress: number;
     dailyActiveUsers: number[];

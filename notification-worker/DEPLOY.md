@@ -93,21 +93,21 @@ npx wrangler deploy
 
 Le worker sera disponible à :
 ```
-https://maisondepriere-notifications.<votre-subdomain>.workers.dev
+https://centreformation-notifications.<votre-subdomain>.workers.dev
 ```
 
 ## ── Étape 7: Configurer l'App ──────────────────────
 
 Ajouter dans `.env.local` :
 ```env
-NEXT_PUBLIC_NOTIFICATION_WORKER_URL=https://maisondepriere-notifications.votre-subdomain.workers.dev
+NEXT_PUBLIC_NOTIFICATION_WORKER_URL=https://centreformation-notifications.votre-subdomain.workers.dev
 ```
 
 ## ── Étape 8: Vérifier ─────────────────────────────
 
 ```bash
 # Health check
-curl https://maisondepriere-notifications.votre-subdomain.workers.dev/health
+curl https://centreformation-notifications.votre-subdomain.workers.dev/health
 
 # Devrait retourner :
 # {
@@ -124,7 +124,7 @@ curl https://maisondepriere-notifications.votre-subdomain.workers.dev/health
 
 ```bash
 # Tester POST /notify
-curl -X POST https://maisondepriere-notifications.votre-subdomain.workers.dev/notify \
+curl -X POST https://centreformation-notifications.votre-subdomain.workers.dev/notify \
   -H "Content-Type: application/json" \
   -d '{
     "action_type": "prayer_prayed",
@@ -171,7 +171,7 @@ npx wrangler deploy
 ## ── Cron (Automatique) ────────────────────────────
 
 Le Cron Trigger s'exécute **toutes les heures** et :
-1. Cherche les demandes de prière > 48h sans aucune prière
+1. Cherche les demandes de tutorat > 48h sans aucune prière
 2. Envoie une notification `prayer_no_response` au propriétaire
 3. Utilise déduplication KV pour ne pas renvoyer (TTL 7 jours)
 

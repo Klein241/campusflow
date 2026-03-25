@@ -1,11 +1,11 @@
 /**
- * LOCAL BIBLE DATA
+ * LOCAL courses DATA
  * ================
- * Complete Bible data structure for French and English translations
- * Uses local .txt files stored in public/bible/
+ * Complete courses data structure for French and English translations
+ * Uses local .txt files stored in public/courses/
  */
 
-export interface BibleBook {
+export interface coursesBook {
     id: string;
     name: string;
     shortName: string;
@@ -14,7 +14,7 @@ export interface BibleBook {
     nameEn?: string; // English name for bilingual support
 }
 
-export interface BibleVerse {
+export interface coursesVerse {
     book: string;
     bookName: string;
     chapter: number;
@@ -22,15 +22,15 @@ export interface BibleVerse {
     text: string;
 }
 
-export interface BibleChapter {
+export interface coursesChapter {
     book: string;
     bookName: string;
     chapter: number;
-    verses: BibleVerse[];
+    verses: coursesVerse[];
 }
 
-// Complete list of Bible books with French and English names
-export const BIBLE_BOOKS: BibleBook[] = [
+// Complete list of courses books with French and English names
+export const courses_BOOKS: coursesBook[] = [
     // Ancien Testament (39 books)
     { id: 'genese', name: 'Genèse', shortName: 'Gen', chapters: 50, testament: 'AT', nameEn: 'Genesis' },
     { id: 'exode', name: 'Exode', shortName: 'Exo', chapters: 40, testament: 'AT', nameEn: 'Exodus' },
@@ -102,8 +102,8 @@ export const BIBLE_BOOKS: BibleBook[] = [
     { id: 'apocalypse', name: 'Apocalypse', shortName: 'Apo', chapters: 22, testament: 'NT', nameEn: 'Revelation' },
 ];
 
-export const OLD_TESTAMENT_BOOKS = BIBLE_BOOKS.filter(b => b.testament === 'AT');
-export const NEW_TESTAMENT_BOOKS = BIBLE_BOOKS.filter(b => b.testament === 'NT');
+export const OLD_TESTAMENT_BOOKS = courses_BOOKS.filter(b => b.testament === 'AT');
+export const NEW_TESTAMENT_BOOKS = courses_BOOKS.filter(b => b.testament === 'NT');
 
 // Parse verse text from file line format: "1  verse text here"
 // Also strips Hebrew cross-reference prefixes like "(7:26)" that appear in some LSG files
@@ -124,7 +124,7 @@ export function parseVerseLine(line: string): { verse: number; text: string } | 
 
 // Format reference for display
 export function formatReference(bookId: string, chapter: number, verse?: number, language: 'fr' | 'en' = 'fr'): string {
-    const bookInfo = BIBLE_BOOKS.find(b => b.id === bookId);
+    const bookInfo = courses_BOOKS.find(b => b.id === bookId);
     const bookName = language === 'en' && bookInfo?.nameEn ? bookInfo.nameEn : (bookInfo?.name || bookId);
     if (verse) {
         return `${bookName} ${chapter}:${verse}`;
@@ -133,14 +133,14 @@ export function formatReference(bookId: string, chapter: number, verse?: number,
 }
 
 // Get book by ID
-export function getBookById(id: string): BibleBook | undefined {
-    return BIBLE_BOOKS.find(b => b.id === id.toLowerCase());
+export function getBookById(id: string): coursesBook | undefined {
+    return courses_BOOKS.find(b => b.id === id.toLowerCase());
 }
 
 // Get book by name (French or English)
-export function getBookByName(name: string): BibleBook | undefined {
+export function getBookByName(name: string): coursesBook | undefined {
     const normalizedName = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    return BIBLE_BOOKS.find(b =>
+    return courses_BOOKS.find(b =>
         b.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === normalizedName ||
         b.nameEn?.toLowerCase() === normalizedName ||
         b.shortName.toLowerCase() === normalizedName
@@ -155,5 +155,5 @@ export function getChapterCount(bookId: string): number {
 
 // Get total verse count (approximate - for display purposes)
 export function getTotalVerseCount(): number {
-    return 31102; // Total verses in the Bible
+    return 31102; // Total verses in the courses
 }

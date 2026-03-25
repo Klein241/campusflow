@@ -1,6 +1,6 @@
 {
-  "name": "prayer-marathon-app",
-  "version": "0.1.0",
+  "name": "campusflow",
+  "version": "1.0.0",
   "private": true,
   "engines": {
     "node": ">=20.9.0"
@@ -20,7 +20,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "framer-motion": "^12.31.0",
+    "framer-motion": "^12.38.0",
     "hls.js": "^1.6.15",
     "html-react-parser": "^5.2.16",
     "lucide-react": "^0.563.0",
@@ -36,6 +36,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@netlify/plugin-nextjs": "^5.15.9",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

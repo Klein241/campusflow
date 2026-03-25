@@ -60,8 +60,9 @@ export function usePresence(userId: string | undefined) {
                 if (!error && data) {
                     const onlineMap: Record<string, boolean> = {};
                     const lastSeenMap: Record<string, string> = {};
-                    // 60 seconds stale window (heartbeat is every 20s, so 3 missed = offline)
-                    const staleThreshold = Date.now() - 60 * 1000;
+                    // 120 seconds stale window (heartbeat is every 20s, so 6 missed = offline)
+                    // More generous to avoid false negatives on slow networks
+                    const staleThreshold = Date.now() - 120 * 1000;
 
                     data.forEach(u => {
                         const lastSeenTime = u.last_seen ? new Date(u.last_seen).getTime() : 0;
@@ -92,7 +93,7 @@ export function usePresence(userId: string | undefined) {
         }, 20000);
 
         // ── 4. Real-time: Supabase Presence channel (INSTANT) ────
-        const presenceChannel = supabase.channel('unified-presence');
+        const presenceChannel = supabase.channel('campus-presence');
         channelRef.current = presenceChannel;
 
         presenceChannel
@@ -141,7 +142,7 @@ export function usePresence(userId: string | undefined) {
                 const profile = payload.new as any;
                 if (profile.id) {
                     const lastSeenTime = profile.last_seen ? new Date(profile.last_seen).getTime() : 0;
-                    const isReallyOnline = profile.is_online === true && lastSeenTime > (Date.now() - 60 * 1000);
+                    const isReallyOnline = profile.is_online === true && lastSeenTime > (Date.now() - 120 * 1000);
                     setOnlineUsers(prev => ({ ...prev, [profile.id]: isReallyOnline }));
                     if (profile.last_seen) {
                         setUserLastSeen(prev => ({ ...prev, [profile.id]: profile.last_seen }));
@@ -212,7 +213,7 @@ export function usePresence(userId: string | undefined) {
         window.addEventListener('beforeunload', handleBeforeUnload);
 
         // ── 8. Periodic re-fetch to catch stale users (every 30s) ─
-        const onlineRefreshInterval = setInterval(fetchOnlineUsers, 30000);
+        const onlineRefreshInterval = setInterval(fetchOnlineUsers, 15000);
 
         // ── Cleanup ──────────────────────────────────────────────
         return () => {

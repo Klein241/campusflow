@@ -1,26 +1,26 @@
 /**
- * LOCAL BIBLE SERVICE
+ * LOCAL courses SERVICE
  * ===================
- * Load and manage Bible data from local .txt files
+ * Load and manage courses data from local .txt files
  * Complete offline support - no API calls needed
  */
 
 import {
-    BibleBook,
-    BibleVerse,
-    BibleChapter,
-    BIBLE_BOOKS,
+    coursesBook,
+    coursesVerse,
+    coursesChapter,
+    courses_BOOKS,
     parseVerseLine,
     getBookById,
     formatReference
-} from './local-bible-data';
+} from './local-courses-data';
 
 // Cache for loaded chapters
-const chapterCache: Map<string, BibleChapter> = new Map();
+const chapterCache: Map<string, coursesChapter> = new Map();
 
-// Load a chapter from local .txt files (public/bible/)
-// All Bible data is offline — Louis Segond 1910 complete
-export async function loadChapter(bookId: string, chapter: number): Promise<BibleChapter | null> {
+// Load a chapter from local .txt files (public/courses/)
+// All courses data is offline — Louis Segond 1910 complete
+export async function loadChapter(bookId: string, chapter: number): Promise<coursesChapter | null> {
     const cacheKey = `${bookId}_${chapter}`;
 
     // Check cache first
@@ -41,8 +41,8 @@ export async function loadChapter(bookId: string, chapter: number): Promise<Bibl
     }
 
     try {
-        // Load from local file: /bible/genese_1.txt
-        const url = `/bible/${bookId}_${chapter}.txt`;
+        // Load from local file: /courses/genese_1.txt
+        const url = `/courses/${bookId}_${chapter}.txt`;
         const response = await fetch(url);
 
         if (!response.ok) {
@@ -53,7 +53,7 @@ export async function loadChapter(bookId: string, chapter: number): Promise<Bibl
         const text = await response.text();
         const lines = text.split('\n').filter(line => line.trim());
 
-        const verses: BibleVerse[] = [];
+        const verses: coursesVerse[] = [];
         for (const line of lines) {
             // Try standard parsing first
             let parsed = parseVerseLine(line);
@@ -82,7 +82,7 @@ export async function loadChapter(bookId: string, chapter: number): Promise<Bibl
             }
         }
 
-        const chapterData: BibleChapter = {
+        const chapterData: coursesChapter = {
             book: bookId,
             bookName: book.name,
             chapter,
@@ -100,7 +100,7 @@ export async function loadChapter(bookId: string, chapter: number): Promise<Bibl
 }
 
 // Load a specific verse
-export async function loadVerse(bookId: string, chapter: number, verse: number): Promise<BibleVerse | null> {
+export async function loadVerse(bookId: string, chapter: number, verse: number): Promise<coursesVerse | null> {
     const chapterData = await loadChapter(bookId, chapter);
     if (!chapterData) return null;
 
@@ -113,7 +113,7 @@ export async function loadVerseRange(
     chapter: number,
     startVerse: number,
     endVerse: number
-): Promise<BibleVerse[]> {
+): Promise<coursesVerse[]> {
     const chapterData = await loadChapter(bookId, chapter);
     if (!chapterData) return [];
 
@@ -121,11 +121,11 @@ export async function loadVerseRange(
 }
 
 // Search verses by text
-export async function searchBible(query: string, maxResults: number = 50): Promise<BibleVerse[]> {
-    const results: BibleVerse[] = [];
+export async function searchcourses(query: string, maxResults: number = 50): Promise<coursesVerse[]> {
+    const results: coursesVerse[] = [];
     const lowerQuery = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-    for (const book of BIBLE_BOOKS) {
+    for (const book of courses_BOOKS) {
         if (results.length >= maxResults) break;
 
         for (let chapter = 1; chapter <= book.chapters; chapter++) {
@@ -147,7 +147,7 @@ export async function searchBible(query: string, maxResults: number = 50): Promi
     return results;
 }
 
-// Advanced search: search entire Bible, group by book with occurrence count
+// Advanced search: search entire courses, group by book with occurrence count
 export interface AdvancedSearchResult {
     bookId: string;
     bookName: string;
@@ -156,11 +156,11 @@ export interface AdvancedSearchResult {
     verses: { chapter: number; verse: number; text: string; reference: string }[];
 }
 
-export async function advancedSearchBible(query: string): Promise<AdvancedSearchResult[]> {
+export async function advancedSearchcourses(query: string): Promise<AdvancedSearchResult[]> {
     const lowerQuery = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const bookResults: Map<string, AdvancedSearchResult> = new Map();
 
-    for (const book of BIBLE_BOOKS) {
+    for (const book of courses_BOOKS) {
         for (let chapter = 1; chapter <= book.chapters; chapter++) {
             const chapterData = await loadChapter(book.id, chapter);
             if (!chapterData) continue;
@@ -198,14 +198,14 @@ export async function advancedSearchBible(query: string): Promise<AdvancedSearch
 }
 
 // Get a random verse (for games and daily verse)
-export async function getRandomVerse(): Promise<BibleVerse | null> {
-    const randomBook = BIBLE_BOOKS[Math.floor(Math.random() * BIBLE_BOOKS.length)];
+export async function getRandomVerse(): Promise<coursesVerse | null> {
+    const randomBook = courses_BOOKS[Math.floor(Math.random() * courses_BOOKS.length)];
     const randomChapter = Math.floor(Math.random() * randomBook.chapters) + 1;
 
     const chapterData = await loadChapter(randomBook.id, randomChapter);
     if (!chapterData || chapterData.verses.length === 0) {
         // Try again with a fallback
-        const fallbackBook = BIBLE_BOOKS.find(b => b.id === 'psaumes') || BIBLE_BOOKS[0];
+        const fallbackBook = courses_BOOKS.find(b => b.id === 'psaumes') || courses_BOOKS[0];
         const fallbackChapter = Math.floor(Math.random() * Math.min(10, fallbackBook.chapters)) + 1;
         const fallbackData = await loadChapter(fallbackBook.id, fallbackChapter);
         if (!fallbackData || fallbackData.verses.length === 0) return null;
@@ -216,8 +216,8 @@ export async function getRandomVerse(): Promise<BibleVerse | null> {
 }
 
 // Get verses from a specific testament
-export async function getRandomVerseFromTestament(testament: 'AT' | 'NT'): Promise<BibleVerse | null> {
-    const books = BIBLE_BOOKS.filter(b => b.testament === testament);
+export async function getRandomVerseFromTestament(testament: 'AT' | 'NT'): Promise<coursesVerse | null> {
+    const books = courses_BOOKS.filter(b => b.testament === testament);
     const randomBook = books[Math.floor(Math.random() * books.length)];
     const randomChapter = Math.floor(Math.random() * randomBook.chapters) + 1;
 
@@ -230,7 +230,7 @@ export async function getRandomVerseFromTestament(testament: 'AT' | 'NT'): Promi
 }
 
 // Get a random verse from popular/well-known books (for better game experience)
-export async function getRandomPopularVerse(): Promise<BibleVerse | null> {
+export async function getRandomPopularVerse(): Promise<coursesVerse | null> {
     const popularBooks = ['psaumes', 'proverbes', 'jean', 'matthieu', 'romains', 'genese', 'exode', 'actes'];
     const randomBook = popularBooks[Math.floor(Math.random() * popularBooks.length)];
     const book = getBookById(randomBook);
@@ -247,8 +247,8 @@ export async function getRandomPopularVerse(): Promise<BibleVerse | null> {
 }
 
 // Get multiple random verses (for games)
-export async function getRandomVerses(count: number): Promise<BibleVerse[]> {
-    const verses: BibleVerse[] = [];
+export async function getRandomVerses(count: number): Promise<coursesVerse[]> {
+    const verses: coursesVerse[] = [];
     const attempts = count * 3; // Try more times in case some fail
 
     for (let i = 0; i < attempts && verses.length < count; i++) {
@@ -264,7 +264,7 @@ export async function getRandomVerses(count: number): Promise<BibleVerse[]> {
 }
 
 // Get verse of the day (deterministic based on date)
-export async function getVerseOfTheDay(): Promise<BibleVerse | null> {
+export async function getVerseOfTheDay(): Promise<coursesVerse | null> {
     // Popular verses for verse of the day
     const popularVerses = [
         { book: 'jean', chapter: 3, verse: 16 },
@@ -320,7 +320,7 @@ export async function getVerseOfTheDay(): Promise<BibleVerse | null> {
 }
 
 // Clear cache (useful for memory management)
-export function clearBibleCache(): void {
+export function clearcoursesCache(): void {
     chapterCache.clear();
 }
 
@@ -345,4 +345,4 @@ export async function preloadPopularBooks(): Promise<void> {
 }
 
 // Re-export types and data for convenience
-export { BIBLE_BOOKS, getBookById, formatReference, type BibleVerse, type BibleChapter, type BibleBook } from './local-bible-data';
+export { courses_BOOKS, getBookById, formatReference, type coursesVerse, type coursesChapter, type coursesBook } from './local-courses-data';

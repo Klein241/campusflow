@@ -1,4 +1,4 @@
-# 🏠 Maison de Prière — Documentation Fonctionnelle Complète
+# 🏠 CentreFormation Pro — Documentation Fonctionnelle Complète
 
 > **But de ce document :** Servir de base de connaissances pour la création d'un chatbot intelligent qui gère l'intégralité de la plateforme. Ce document décrit TOUS les scénarios d'utilisation, les entités, les commandes possibles, et les flux utilisateur.
 
@@ -11,11 +11,11 @@
 3. [Rôles et permissions](#3-rôles-et-permissions)
 4. [Module : Authentification](#4-module--authentification)
 5. [Module : Accueil (Home)](#5-module--accueil-home)
-6. [Module : Programme de 40 jours](#6-module--programme-de-40-jours)
-7. [Module : Bible](#7-module--bible)
+6. [Module : Cursus de formation](#6-module--programme-de-40-jours)
+7. [Module : courses](#7-module--courses)
 8. [Module : Journal spirituel](#8-module--journal-spirituel)
-9. [Module : Communauté](#9-module--communauté)
-10. [Module : Groupes de prière](#10-module--groupes-de-prière)
+9. [Module : Forum étudiant](#9-module--Forum étudiant)
+10. [Module : Groupes d'etude](#10-module--groupes-de-prière)
 11. [Module : Messagerie (DM)](#11-module--messagerie-dm)
 12. [Module : Système d'amis](#12-module--système-damis)
 13. [Module : Notifications](#13-module--notifications)
@@ -32,17 +32,17 @@
 
 ## 1. Vue d'ensemble
 
-**Maison de Prière** est une application web progressive (PWA) communautaire chrétienne. Elle permet aux croyants de :
+**CentreFormation Pro** est une application web progressive (PWA) communautaire chrétienne. Elle permet aux croyants de :
 
 - Suivre un **marathon de prière de 40 jours** (prière, lecture biblique, jeûne)
-- Publier et prier pour des **demandes de prière** de la communauté
-- Rejoindre des **groupes de prière** avec chat, appels vocaux, et outils collaboratifs
-- Lire et étudier la **Bible** (multiples versions, recherche, favoris, surligneur)
+- Publier et prier pour des **Demandes de tutorat** de la Forum étudiant
+- Rejoindre des **Groupes d'etude** avec chat, appels vocaux, et outils collaboratifs
+- Lire et étudier la **courses** (multiples versions, recherche, favoris, surligneur)
 - Participer à des **jeux bibliques** (quiz, memory, mot caché, "Qui suis-je?")
 - Regarder des **lives/replays** avec commentaires en temps réel
 - Envoyer des **messages directs** (chat privé)
 - Gérer son **profil** et ses **paramètres de notification**
-- Partager des **témoignages**
+- Partager des **Retours d'expérience**
 
 **Langues :** Français (langue principale), interface bilingue possible
 **Plateforme :** Web (Next.js PWA), installable sur mobile via navigateur
@@ -86,7 +86,7 @@
 | Rôle | Description | Permissions |
 |------|-------------|-------------|
 | `user` | Utilisateur standard | Publier des prières, prier pour les autres, rejoindre des groupes, envoyer des messages, jouer aux jeux |
-| `moderator` | Modérateur | Tout `user` + approuver témoignages, modérer les messages |
+| `moderator` | Modérateur | Tout `user` + approuver Retours d'expérience, modérer les messages |
 | `admin` | Administrateur | Tout `moderator` + gérer les utilisateurs, créer des groupes officiels, gérer les lives, modifier les paramètres de l'app, voir les stats |
 
 **Rôle de groupe :**
@@ -102,7 +102,7 @@
 
 ### Flux d'inscription
 1. L'utilisateur entre : **prénom**, **nom**, **pays**, **ville**, **WhatsApp** (numéro obligatoire)
-2. Le système génère un **pseudo-email** : `[numéro_nettoyé]@marathon.local`
+2. Le système génère un **pseudo-email** : `[numéro_nettoyé]@centreformation.local`
 3. L'utilisateur choisit un **mot de passe**
 4. Supabase Auth crée le compte
 5. Un avatar par défaut est généré via DiceBear (initiales)
@@ -112,14 +112,14 @@
 1. L'utilisateur entre son **email** (ou numéro WhatsApp converti) + **mot de passe**
 2. Session Supabase créée
 3. Le profil complet est chargé depuis la table `profiles`
-4. Les données initiales sont chargées (prières, témoignages, progression)
+4. Les données initiales sont chargées (prières, Retours d'expérience, progression)
 
 ### Récupération de mot de passe
 - Via **email de récupération** (si configuré dans le profil)
 - L'utilisateur peut configurer un email de récupération dans les paramètres
 
 ### États
-- `non connecté` → Peut voir les prières, témoignages, et l'accueil (lecture seule)
+- `non connecté` → Peut voir les prières, Retours d'expérience, et l'accueil (lecture seule)
 - `connecté` → Accès complet à toutes les fonctionnalités
 - `admin` → Panneau d'administration visible dans le profil
 
@@ -140,8 +140,8 @@ L'écran d'accueil affiche :
 - Bouton "Continuer" vers le jour en cours
 
 ### 5.3 Actions rapides
-- 🙏 **Prier** → Tab communauté > Prières
-- 📖 **Bible** → Tab Bible
+- 🙏 **Prier** → Tab Forum étudiant > Prières
+- 📖 **courses** → Tab courses
 - 🏆 **Succès** → Section achievements
 - 📈 **Stats** → Résumé de progression
 - 🎮 **Jeux** → Tab Jeux
@@ -162,7 +162,7 @@ L'écran d'accueil affiche :
 
 ---
 
-## 6. Module : Programme de 40 jours
+## 6. Module : Cursus de formation
 
 ### 6.1 Structure d'un jour
 Chaque jour (1 à 40) contient :
@@ -176,7 +176,7 @@ Chaque jour (1 à 40) contient :
 ### 6.2 Suivi de progression
 Pour chaque jour, l'utilisateur coche :
 - ✅ Prière effectuée (`prayerCompleted`)
-- ✅ Lecture biblique effectuée (`bibleReadingCompleted`)
+- ✅ Lecture biblique effectuée (`coursesReadingCompleted`)
 - ✅ Jeûne effectué (`fastingCompleted`)
 - 📝 Entrée de journal (optionnel)
 
@@ -203,7 +203,7 @@ Le **streak** est le nombre de jours consécutifs complétés (de la fin vers le
 
 ---
 
-## 7. Module : Bible
+## 7. Module : courses
 
 ### 7.1 Lecture
 - **Multiple versions** : LSG (Louis Segond), NEG, S21, BDS, King James, etc.
@@ -212,7 +212,7 @@ Le **streak** est le nombre de jours consécutifs complétés (de la fin vers le
 - **Vue en parallèle** (split view avec 2 versions côte à côte)
 
 ### 7.2 Recherche
-- Recherche textuelle dans toute la Bible
+- Recherche textuelle dans toute la courses
 - Résultats avec référence, texte, et contexte
 - Filtrage par testament (AT/NT)
 
@@ -246,9 +246,9 @@ Le **streak** est le nombre de jours consécutifs complétés (de la fin vers le
 
 ---
 
-## 9. Module : Communauté
+## 9. Module : Forum étudiant
 
-La communauté est l'espace social de l'application, organisé en **3 sous-onglets** :
+La Forum étudiant est l'espace social de l'application, organisé en **3 sous-onglets** :
 
 ### 9.1 Onglet Prières (`prieres`)
 
@@ -277,7 +277,7 @@ La communauté est l'espace social de l'application, organisé en **3 sous-ongle
 - Fils de commentaires (réponses)
 - Notification envoyée au propriétaire et aux autres commentateurs
 
-### 9.2 Onglet Témoignages (`temoignages`)
+### 9.2 Onglet Retours d'expérience (`temoignages`)
 
 #### Publier un témoignage
 - Contenu textuel (obligatoire)
@@ -297,7 +297,7 @@ La communauté est l'espace social de l'application, organisé en **3 sous-ongle
 
 ---
 
-## 10. Module : Groupes de prière
+## 10. Module : Groupes d'etude
 
 ### 10.1 Créer un groupe
 - Nom du groupe (obligatoire)
@@ -433,7 +433,7 @@ Chaque notification contient des données de navigation permettant d'aller direc
 | Jeu | Description | Mode |
 |-----|-------------|------|
 | **Quiz biblique** | QCM sur les versets et histoires bibliques | Solo |
-| **Bible Memory** | Jeu de mémoire avec cartes de versets | Solo |
+| **courses Memory** | Jeu de mémoire avec cartes de versets | Solo |
 | **Mot caché** | Trouver des mots bibliques dans une grille | Solo |
 
 | **Qui suis-je ?** | Deviner un personnage biblique avec des indices | Solo |
@@ -450,7 +450,7 @@ Chaque notification contient des données de navigation permettant d'aller direc
 - Score total cumulé
 - Nombre de parties jouées
 - Score moyen
-- Rang dans la communauté
+- Rang dans la Forum étudiant
 
 ### 14.4 Multijoueur
 - **Lobby** : Créer/rejoindre une salle de jeu
@@ -507,10 +507,10 @@ Pour les non-inscrits qui veulent commenter :
   - Nombre total d'utilisateurs
   - Utilisateurs actifs
   - Total de prières / prières exaucées
-  - Total de témoignages
+  - Total de Retours d'expérience
   - Progression moyenne du marathon
 - **Gestion des contenu** :
-  - Approuver/rejeter les témoignages
+  - Approuver/rejeter les Retours d'expérience
   - Approuver/rejeter les prières
   - Gérer les ressources par jour
   - Modifier les liens sociaux (lives)
@@ -535,8 +535,8 @@ Table clé-valeur pour configurer l'app globalement :
 - Activation/désactivation de fonctionnalités
 
 ### 17.2 Approbation de contenu
-- Les témoignages doivent être approuvés avant publication
-- Les demandes de prière peuvent nécessiter approbation (`is_approved`)
+- Les Retours d'expérience doivent être approuvés avant publication
+- Les Demandes de tutorat peuvent nécessiter approbation (`is_approved`)
 
 ### 17.3 Broadcast
 - Envoi d'une notification à **tous les utilisateurs** (annonces)
@@ -560,7 +560,7 @@ Voici les scénarios que le chatbot devra gérer, organisés par catégorie :
 | Commande utilisateur | Action chatbot |
 |---------------------|---------------|
 | "Publier une prière" | Demander le contenu, la catégorie, et si c'est anonyme |
-| "Montrer les demandes de prière" | Afficher les dernières prières avec bouton "prier" |
+| "Montrer les Demandes de tutorat" | Afficher les dernières prières avec bouton "prier" |
 | "Prier pour [nom/ID]" | Exécuter `prayForRequest` |
 | "Mes prières" | Filtrer et afficher les prières de l'utilisateur |
 | "Marquer ma prière comme exaucée" | Marquer `is_answered = true` |
@@ -584,12 +584,12 @@ Voici les scénarios que le chatbot devra gérer, organisés par catégorie :
 | "Mes conversations" | Lister les conversations avec dernier message |
 | "Messages non-lus" | Afficher le nombre de messages non-lus |
 
-### 📖 Bible
+### 📖 courses
 | Commande utilisateur | Action chatbot |
 |---------------------|---------------|
 | "Lire [Référence]" | Ex: "Lire Jean 3:16" → Afficher le verset |
 | "Verset du jour" | Afficher le verset quotidien |
-| "Chercher [mot] dans la Bible" | Recherche textuelle |
+| "Chercher [mot] dans la courses" | Recherche textuelle |
 | "Mes versets favoris" | Liste des favoris |
 
 ### 🎮 Jeux
@@ -649,15 +649,15 @@ Pour un chatbot de type Telegram/Discord, voici les commandes slash :
 /streak         — Voir son streak
 /jour [N]       — Détails du jour N du programme
 /prier          — Publier une demande de prière
-/prieres        — Voir les demandes de prière récentes
+/prieres        — Voir les Demandes de tutorat récentes
 /groupes        — Mes groupes
 /rejoindre [G]  — Rejoindre un groupe
 /creergroupe    — Créer un nouveau groupe
 /message [nom]  — Envoyer un message à quelqu'un
 /conversations  — Voir mes conversations
-/bible [ref]    — Lire un passage biblique
+/courses [ref]    — Lire un passage biblique
 /verset         — Verset du jour
-/recherche [mot]— Chercher dans la Bible
+/recherche [mot]— Chercher dans la courses
 /quiz           — Jouer au quiz biblique
 /classement     — Voir le leaderboard
 /notifs         — Mes notifications
@@ -676,12 +676,12 @@ Pour un chatbot de type Telegram/Discord, voici les commandes slash :
 | Table | Description | Clés principales |
 |-------|-------------|-----------------|
 | `profiles` | Profils utilisateur | `id` (= auth.users.id), `full_name`, `avatar_url`, `role`, `is_online`, `last_seen` |
-| `prayer_requests` | Demandes de prière | `id`, `user_id`, `content`, `category`, `is_anonymous`, `prayer_count`, `prayed_by[]`, `is_answered` |
+| `tutoring_requests` | Demandes de tutorat | `id`, `user_id`, `content`, `category`, `is_anonymous`, `prayer_count`, `prayed_by[]`, `is_answered` |
 | `prayer_comments` | Commentaires sur les prières | `id`, `prayer_id`, `user_id`, `content`, `parent_id` |
-| `testimonials` | Témoignages | `id`, `user_id`, `content`, `is_approved`, `likes`, `liked_by[]` |
-| `prayer_groups` | Groupes de prière | `id`, `name`, `description`, `created_by`, `is_open`, `requires_approval`, `max_members` |
-| `prayer_group_members` | Membres des groupes | `group_id`, `user_id`, `role` |
-| `prayer_group_messages` | Messages de groupe | `id`, `group_id`, `user_id`, `content`, `is_prayer` |
+| `experience_feedbacks` | Retours d'expérience | `id`, `user_id`, `content`, `is_approved`, `likes`, `liked_by[]` |
+| `study_groups` | Groupes d'etude | `id`, `name`, `description`, `created_by`, `is_open`, `requires_approval`, `max_members` |
+| `group_members` | Membres des groupes | `group_id`, `user_id`, `role` |
+| `group_messages` | Messages de groupe | `id`, `group_id`, `user_id`, `content`, `is_prayer` |
 | `prayer_group_join_requests` | Demandes d'adhésion | `id`, `group_id`, `user_id`, `status` |
 | `community_messages` | Chat communautaire global | `id`, `user_id`, `content` |
 | `conversations` | Conversations privées | `id`, `participant1_id`, `participant2_id`, `last_message_at` |
@@ -690,7 +690,7 @@ Pour un chatbot de type Telegram/Discord, voici les commandes slash :
 | `notifications` | Notifications | `id`, `user_id`, `title`, `message`, `type`, `action_type`, `action_data`, `actors`, `is_read`, `priority` |
 | `notification_preferences` | Préférences de notification | `user_id`, `action_type`, `in_app`, `push_enabled` |
 | `push_tokens` | Tokens push (Web Push) | `user_id`, `subscription_json`, `platform` |
-| `user_progress` | Progression du marathon | `user_id`, `day_number`, `completed`, `prayer_completed`, `bible_reading_completed` |
+| `student_progress` | Progression du marathon | `user_id`, `day_number`, `completed`, `prayer_completed`, `courses_reading_completed` |
 | `app_settings` | Paramètres globaux de l'app | `key`, `value` |
 | `social_links` | Liens sociaux (lives, YouTube) | `id`, `platform`, `title`, `url` |
 
@@ -708,7 +708,7 @@ Le chatbot doit pouvoir naviguer l'utilisateur vers les bonnes sections :
 | Ouvrir une conversation DM | `{ tab: 'community', communityTab: 'chat', viewState: 'conversation', conversationId: '...' }` |
 | Voir les demandes d'ami | `{ tab: 'profil', viewState: 'friend-requests' }` |
 | Liste des groupes | `{ tab: 'community', viewState: 'groups' }` |
-| Ouvrir la Bible | `{ tab: 'bible' }` |
+| Ouvrir la courses | `{ tab: 'courses' }` |
 | Voir les jeux | `{ tab: 'games' }` |
 | Voir le programme | `{ tab: 'program' }` |
 | Voir le journal | `{ tab: 'journal' }` |
@@ -723,7 +723,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhb...
 
 # Cloudflare Notification Worker
-NEXT_PUBLIC_NOTIFICATION_WORKER_URL=https://maisondepriere-notifications.xxx.workers.dev
+NEXT_PUBLIC_NOTIFICATION_WORKER_URL=https://centreformation-notifications.xxx.workers.dev
 
 # VAPID (Push Notifications)
 NEXT_PUBLIC_VAPID_KEY=BK...
