@@ -38,9 +38,15 @@ export default function AdminPage() {
     const [teachers, setTeachers] = useState<any[]>([]);
     const [students, setStudents] = useState<any[]>([]);
     const [saving, setSaving] = useState(false);
-    const [newName, setNewName] = useState('');
-    const [newSub, setNewSub] = useState('');
-    const [selCls, setSelCls] = useState('');
+    const [newName, setNewName] = useState(''); const [newSub, setNewSub] = useState(''); const [selCls, setSelCls] = useState('');
+    // Teacher creation form
+    const [tFN, setTFN] = useState(''); const [tLN, setTLN] = useState(''); const [tSpec, setTSpec] = useState(''); const [tEmail, setTEmail] = useState(''); const [tPhone, setTPhone] = useState('');
+    const [tNat, setTNat] = useState('Camerounaise'); const [tMarital, setTMarital] = useState('celibataire'); const [tChildren, setTChildren] = useState('0'); const [tRes, setTRes] = useState('');
+    const [tShowCode, setTShowCode] = useState('');
+    // Student creation form
+    const [sFN, setSFN] = useState(''); const [sLN, setSLN] = useState(''); const [sSex, setSSex] = useState('M'); const [sBirth, setSBirth] = useState(''); const [sClsId, setSClsId] = useState('');
+    const [sPhone, setSPhone] = useState(''); const [sGuardian, setSGuardian] = useState(''); const [sGuardianPhone, setSGuardianPhone] = useState(''); const [sNat, setSNat] = useState('Camerounaise'); const [sRes, setSRes] = useState('');
+    const [sShowCode, setSShowCode] = useState(''); const [showAddTeacher, setShowAddTeacher] = useState(false); const [showAddStudent, setShowAddStudent] = useState(false);
     const [sidebar, setSidebar] = useState(false);
     // Timetable
     const [ttSlots, setTtSlots] = useState<any[]>([]);
@@ -92,13 +98,16 @@ export default function AdminPage() {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
     // Setup helpers
+    const genCode = () => { const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let code = ''; for (let i = 0; i < 12; i++) code += chars[Math.floor(Math.random() * chars.length)]; return code; };
     const addClass = () => { if (!newName.trim()) return; setCls(p => [...p, { name: newName.trim(), cycle: '', filiere_id: null, level: 1, capacity: 50 }]); setNewName(''); };
     const quickAdd = (lv: string) => { const nc = SECS.map(s => ({ name: `${lv} ${s}`, cycle: COLLEGE.includes(lv) ? '1er_cycle' : '2nd_cycle', filiere_id: null, level: 1, capacity: 50 })); setCls(p => [...p, ...nc.filter(x => !p.some(y => y.name === x.name))]); };
     const addSub = () => { if (!newSub.trim() || !selCls) return; setSubs(p => [...p, { name: newSub.trim(), code: newSub.slice(0, 4).toUpperCase(), coefficient: 1, classroom_id: selCls, teacher_id: null }]); setNewSub(''); };
     const addDefs = () => { if (!selCls) { toast.error('Sélectionnez une classe'); return; } const d = DEFS[org.type] || DEFS.centre_formation; setSubs(p => [...p, ...d.map(n => ({ name: n, code: n.slice(0, 4).toUpperCase(), coefficient: 1, classroom_id: selCls, teacher_id: null })).filter(x => !p.some(y => y.name === x.name && y.classroom_id === x.classroom_id))]); };
-    const saveCls = async () => { setSaving(true); try { const u = cls.filter(c => !c.id); if (u.length > 0) { const { data, error } = await supabase.from('classrooms').insert(u.map(c => ({ organization_id: org.id, name: c.name, cycle: c.cycle || null, filiere_id: c.filiere_id, level: c.level, capacity: c.capacity }))).select(); if (error) throw error; if (data) setCls(p => [...p.filter(c => c.id), ...data.map((d: any) => ({ id: d.id, name: d.name, cycle: d.cycle || '', filiere_id: d.filiere_id, level: d.level, capacity: d.capacity }))]); } toast.success('Classes sauvegardées !'); } catch (e: any) { toast.error(e.message); } finally { setSaving(false); } };
+    const saveCls = async (): Promise<Cls[]> => { setSaving(true); try { const unsaved = cls.filter(c => !c.id); if (unsaved.length > 0) { const { data, error } = await supabase.from('classrooms').insert(unsaved.map(c => ({ organization_id: org.id, name: c.name, cycle: c.cycle || null, filiere_id: c.filiere_id, level: c.level, capacity: c.capacity }))).select(); if (error) throw error; const saved = (data || []).map((d: any) => ({ id: d.id, name: d.name, cycle: d.cycle || '', filiere_id: d.filiere_id, level: d.level, capacity: d.capacity })); const merged = [...cls.filter(c => c.id), ...saved]; setCls(merged); toast.success('Classes sauvegardées !'); setSaving(false); return merged; } toast.success('Classes OK'); setSaving(false); return cls; } catch (e: any) { toast.error(e.message); setSaving(false); return cls; } };
     const saveSubs = async () => { setSaving(true); try { const u = subs.filter(s => !s.id); if (u.length > 0) { const { error } = await supabase.from('subjects').insert(u.map(s => ({ organization_id: org.id, name: s.name, code: s.code, coefficient: s.coefficient, classroom_id: s.classroom_id, teacher_id: s.teacher_id }))); if (error) throw error; } const { data } = await supabase.from('subjects').select('*').eq('organization_id', org.id); setSubs((data || []).map((x: any) => ({ id: x.id, name: x.name, code: x.code, coefficient: x.coefficient, classroom_id: x.classroom_id, teacher_id: x.teacher_id }))); toast.success('Matières sauvegardées !'); } catch (e: any) { toast.error(e.message); } finally { setSaving(false); } };
     const finishSetup = async () => { await saveCls(); await saveSubs(); await supabase.from('organizations').update({ setup_completed: true }).eq('id', org.id); setOrg({ ...org, setup_completed: true }); setTab('general'); toast.success('🎉 Configuration terminée !'); };
+    const createTeacher = async () => { if (!tFN.trim() || !tLN.trim()) { toast.error('Nom et prénom obligatoires'); return; } setSaving(true); try { const code = genCode(); const { data, error } = await supabase.from('teacher_profiles').insert({ organization_id: org.id, first_name: tFN.trim(), last_name: tLN.trim(), speciality: tSpec || null, email: tEmail || null, phone: tPhone || null, nationality: tNat, marital_status: tMarital, children_count: parseInt(tChildren) || 0, residence: tRes || null, access_code: code, pin_set: false }).select().single(); if (error) throw error; setTeachers(p => [...p, data]); setTShowCode(code); setTFN(''); setTLN(''); setTSpec(''); setTEmail(''); setTPhone(''); setTRes(''); toast.success('Professeur créé ! Code: ' + code); } catch (e: any) { toast.error(e.message); } setSaving(false); };
+    const createStudent = async () => { if (!sFN.trim() || !sLN.trim() || !sClsId) { toast.error('Nom, prénom et classe obligatoires'); return; } setSaving(true); try { const code = genCode(); const mat = `STU${Date.now().toString(36).toUpperCase()}`; const { data, error } = await supabase.from('student_profiles').insert({ organization_id: org.id, first_name: sFN.trim(), last_name: sLN.trim(), sex: sSex, birth_date: sBirth || null, classroom_id: sClsId, phone: sPhone || null, guardian_name: sGuardian || null, guardian_phone: sGuardianPhone || null, nationality: sNat, residence: sRes || null, matricule: mat, access_code: code, pin_set: false }).select().single(); if (error) throw error; setStudents(p => [...p, data]); setSShowCode(code); setSFN(''); setSLN(''); setSBirth(''); setSPhone(''); setSGuardian(''); setSGuardianPhone(''); setSRes(''); toast.success('Étudiant créé ! Code: ' + code); } catch (e: any) { toast.error(e.message); } setSaving(false); };
 
     // Module loaders
     const loadTT = async () => { const { data } = await supabase.from('timetable_slots').select('*,classrooms:classroom_id(name),subjects:subject_id(name)').eq('organization_id', org.id).order('start_time'); setTtSlots(data || []); setTtLoaded(true); };
@@ -203,7 +212,7 @@ export default function AdminPage() {
                         <div className="flex items-center justify-center gap-2 mb-6">{['Classes', 'Matières', 'Professeurs'].map((s, i) => <div key={i} className="flex items-center gap-2"><button onClick={() => setStep(i)} className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${step === i ? 'bg-indigo-600' : step > i ? 'bg-green-600' : 'bg-white/10 text-slate-500'}`}>{step > i ? <CheckCircle2 className="w-5 h-5" /> : i + 1}</button><span className={`text-sm hidden sm:inline ${step === i ? 'text-white font-medium' : 'text-slate-500'}`}>{s}</span>{i < 2 && <div className="w-8 h-0.5 bg-white/10" />}</div>)}</div>
                         {step === 0 && <div className="space-y-4"><div className="p-5 rounded-xl bg-white/[0.03] border border-white/10"><h3 className="font-bold text-lg mb-3">{isCL ? '🏫 Salles de classe' : '📚 Filières et niveaux'}</h3>{isCL && <div className="mb-4"><p className="text-sm text-slate-400 mb-2">Ajout rapide:</p><div className="flex flex-wrap gap-2">{(org.type === 'college' ? COLLEGE : [...COLLEGE, ...LYCEE]).map(l => <Button key={l} size="sm" variant="outline" className="text-xs border-white/10" onClick={() => quickAdd(l)}><Plus className="w-3 h-3 mr-1" />{l}</Button>)}</div></div>}<div className="flex gap-2"><Input value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addClass()} placeholder={isCL ? '6ème A...' : 'Niveau 1...'} className="bg-white/5 border-white/10 text-white h-10 rounded-lg" /><Button onClick={addClass} disabled={!newName.trim()} className="bg-indigo-600 shrink-0"><Plus className="w-4 h-4" /></Button></div></div>
                             {cls.length > 0 && <div className="space-y-2">{cls.map((c, i) => <div key={i} className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-white/5 border border-white/10"><div className="flex items-center gap-3"><School className="w-4 h-4 text-indigo-400" /><span className="text-sm font-medium">{c.name}</span>{!c.id && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300">nouveau</span>}</div><button onClick={() => setCls(p => p.filter((_, j) => j !== i))} className="text-red-400"><Trash2 className="w-4 h-4" /></button></div>)}</div>}
-                            <div className="flex justify-end"><Button onClick={() => { saveCls(); setStep(1); }} disabled={cls.length === 0 || saving} className="bg-indigo-600">{saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Suivant<ArrowRight className="w-4 h-4 ml-2" /></Button></div></div>}
+                            <div className="flex justify-end"><Button onClick={async () => { const saved = await saveCls(); setCls(saved); setStep(1); }} disabled={cls.length === 0 || saving} className="bg-indigo-600">{saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Suivant<ArrowRight className="w-4 h-4 ml-2" /></Button></div></div>}
                         {step === 1 && <div className="space-y-4"><div className="p-5 rounded-xl bg-white/[0.03] border border-white/10"><h3 className="font-bold text-lg mb-3">📖 Matières par classe</h3><Label className="text-slate-400 text-sm mb-1 block">Classe</Label><Sel v={selCls} onChange={setSelCls} opts={cls.filter(c => c.id).map(c => ({ id: c.id!, label: c.name }))} ph="Choisir..." />{selCls && <div className="mt-3"><Button size="sm" variant="outline" className="mb-3 text-xs border-white/10" onClick={addDefs}><Plus className="w-3 h-3 mr-1" />Par défaut</Button><div className="flex gap-2"><Input value={newSub} onChange={e => setNewSub(e.target.value)} onKeyDown={e => e.key === 'Enter' && addSub()} placeholder="Nom matière" className="bg-white/5 border-white/10 text-white h-10 rounded-lg" /><Button onClick={addSub} disabled={!newSub.trim()} className="bg-emerald-600 shrink-0"><Plus className="w-4 h-4" /></Button></div></div>}</div>
                             {cls.filter(c => c.id).map(c => { const cs = subs.filter(s => s.classroom_id === c.id); if (!cs.length) return null; return <div key={c.id} className="p-4 rounded-xl bg-white/[0.02] border border-white/5"><h4 className="font-medium text-sm text-indigo-300 mb-2">{c.name}</h4><div className="flex flex-wrap gap-2">{cs.map((s, i) => <span key={i} className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10">{s.name}</span>)}</div></div>; })}
                             <div className="flex justify-between"><Button variant="ghost" onClick={() => setStep(0)}><ArrowLeft className="w-4 h-4 mr-2" />Retour</Button><Button onClick={() => { saveSubs(); setStep(2); }} disabled={saving} className="bg-indigo-600">{saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Suivant<ArrowRight className="w-4 h-4 ml-2" /></Button></div></div>}
@@ -218,18 +227,34 @@ export default function AdminPage() {
 
                     {/* ═══ TEACHERS ═══ */}
                     {tab === 'teachers' && <div className="space-y-4">
-                        <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-between flex-wrap gap-3">
-                            <p className="text-sm text-emerald-300">🔗 Lien prof: <code className="ml-2 px-2 py-1 rounded bg-white/5">{origin}/{orgSlug}/prof</code></p>
-                            <Button size="sm" variant="outline" className="border-emerald-500/20 text-emerald-300" onClick={() => { navigator.clipboard.writeText(`${origin}/${orgSlug}/prof`); toast.success('Lien copié !'); }}>📋 Copier</Button>
+                        <div className="flex items-center justify-between">
+                            <p className="text-sm text-slate-400">{teachers.length} professeur(s)</p>
+                            <Button size="sm" className="bg-emerald-600" onClick={() => { setShowAddTeacher(!showAddTeacher); setTShowCode(''); }}><Plus className="w-4 h-4 mr-1" />{showAddTeacher ? 'Fermer' : 'Ajouter un professeur'}</Button>
                         </div>
-                        <div className="relative">
-                            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
-                            <Input value={teacherSearch} onChange={e => setTeacherSearch(e.target.value)} placeholder="Rechercher un professeur..." className="bg-white/5 border-white/10 text-white h-10 pl-10 rounded-lg" />
-                        </div>
-                        <p className="text-xs text-slate-500">{teachers.length} professeur(s) inscrits</p>
-                        {teachers.filter((t: any) => !teacherSearch || `${t.first_name} ${t.last_name} ${t.speciality || ''}`.toLowerCase().includes(teacherSearch.toLowerCase())).length === 0 ? (
-                            <div className="text-center py-12 text-slate-500"><Users className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>Aucun professeur trouvé</p></div>
-                        ) : teachers.filter((t: any) => !teacherSearch || `${t.first_name} ${t.last_name} ${t.speciality || ''}`.toLowerCase().includes(teacherSearch.toLowerCase())).map((t: any) => {
+                        {showAddTeacher && <div className="p-5 rounded-xl bg-emerald-600/5 border border-emerald-500/20 space-y-3">
+                            <h3 className="font-bold text-emerald-300">👨‍🏫 Nouveau professeur</h3>
+                            <div className="grid sm:grid-cols-3 gap-3">
+                                <div><Label className="text-slate-400 text-xs">Prénom *</Label><Input value={tFN} onChange={e => setTFN(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">Nom *</Label><Input value={tLN} onChange={e => setTLN(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">Spécialité</Label><Input value={tSpec} onChange={e => setTSpec(e.target.value)} placeholder="Mathématiques" className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">Email</Label><Input type="email" value={tEmail} onChange={e => setTEmail(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">Téléphone</Label><Input value={tPhone} onChange={e => setTPhone(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">Nationalité</Label><Input value={tNat} onChange={e => setTNat(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">Situation matrimoniale</Label><Sel v={tMarital} onChange={setTMarital} opts={[{ id: 'celibataire', label: 'Célibataire' }, { id: 'marie', label: 'Marié(e)' }, { id: 'divorce', label: 'Divorcé(e)' }, { id: 'veuf', label: 'Veuf/Veuve' }]} /></div>
+                                <div><Label className="text-slate-400 text-xs">Nombre d'enfants</Label><Input type="number" value={tChildren} onChange={e => setTChildren(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">Lieu de résidence</Label><Input value={tRes} onChange={e => setTRes(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                            </div>
+                            <Button onClick={createTeacher} disabled={saving || !tFN.trim() || !tLN.trim()} className="bg-emerald-600">{saving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}<UserPlus className="w-4 h-4 mr-1" />Créer le professeur</Button>
+                            {tShowCode && <div className="p-4 rounded-xl bg-emerald-600/10 border border-emerald-500/30 mt-2">
+                                <p className="text-sm font-bold text-emerald-300">✅ Professeur créé ! Code d'accès :</p>
+                                <div className="flex items-center gap-3 mt-2"><code className="text-2xl font-mono font-bold tracking-widest text-white bg-white/10 px-4 py-2 rounded-lg">{tShowCode}</code><Button size="sm" variant="outline" className="border-emerald-500/20" onClick={() => { navigator.clipboard.writeText(tShowCode); toast.success('Code copié !'); }}>📋 Copier</Button></div>
+                                <p className="text-[10px] text-slate-500 mt-2">⚠️ Ce code unique permet au professeur de se connecter. Transmettez-le de manière sécurisée.</p>
+                            </div>}
+                        </div>}
+                        <div className="relative"><Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" /><Input value={teacherSearch} onChange={e => setTeacherSearch(e.target.value)} placeholder="Rechercher un professeur..." className="bg-white/5 border-white/10 text-white h-10 pl-10 rounded-lg" /></div>
+                        {teachers.filter((t: any) => !teacherSearch || `${t.first_name} ${t.last_name} ${t.speciality || ''} ${t.access_code || ''}`.toLowerCase().includes(teacherSearch.toLowerCase())).length === 0 ? (
+                            <div className="text-center py-12 text-slate-500"><Users className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>Aucun professeur</p></div>
+                        ) : teachers.filter((t: any) => !teacherSearch || `${t.first_name} ${t.last_name} ${t.speciality || ''} ${t.access_code || ''}`.toLowerCase().includes(teacherSearch.toLowerCase())).map((t: any) => {
                             const assignedSubs = subs.filter(s => s.teacher_id === t.id);
                             return (
                                 <div key={t.id} className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
@@ -237,21 +262,16 @@ export default function AdminPage() {
                                         <div className="w-10 h-10 rounded-full bg-emerald-600/20 flex items-center justify-center font-bold text-emerald-400 shrink-0">{t.first_name?.[0]}{t.last_name?.[0]}</div>
                                         <div className="flex-1 min-w-0">
                                             <p className="font-medium">{t.first_name} {t.last_name}</p>
-                                            <p className="text-xs text-slate-500">{t.speciality || '—'} • {t.email || t.phone || '—'}</p>
+                                            <p className="text-xs text-slate-500">{t.speciality || '—'} • {t.nationality || '—'} • {t.marital_status || '—'}</p>
+                                            <p className="text-[10px] text-slate-600">{t.email || ''} {t.phone ? `• ${t.phone}` : ''} {t.residence ? `• ${t.residence}` : ''}</p>
                                         </div>
-                                        <button onClick={() => deleteTeacher(t.id)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-4 h-4" /></button>
+                                        <div className="flex items-center gap-1">
+                                            {t.access_code && <button onClick={() => { navigator.clipboard.writeText(t.access_code); toast.success('Code copié !'); }} className="text-xs px-2 py-1 rounded bg-emerald-600/10 text-emerald-300 font-mono hover:bg-emerald-600/20">{t.access_code}</button>}
+                                            <button onClick={() => deleteTeacher(t.id)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-4 h-4" /></button>
+                                        </div>
                                     </div>
-                                    {/* Assigned subjects */}
-                                    {assignedSubs.length > 0 && <div className="flex flex-wrap gap-1 mt-2">
-                                        {assignedSubs.map(s => <span key={s.id} className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-600/10 text-emerald-300">📘 {s.name} ({cls.find(c => c.id === s.classroom_id)?.name || '—'})</span>)}
-                                    </div>}
-                                    {/* Assign to subject */}
-                                    <div className="mt-2">
-                                        <select onChange={e => { if (e.target.value) assignTeacherToSubject(e.target.value, t.id); e.target.value = ''; }} className="text-xs h-7 rounded bg-white/5 border border-white/10 text-slate-400 px-2 w-full">
-                                            <option value="" className="bg-slate-900">+ Assigner une matière...</option>
-                                            {subs.filter(s => !s.teacher_id).map(s => <option key={s.id} value={s.id} className="bg-slate-900">{s.name} ({cls.find(c => c.id === s.classroom_id)?.name})</option>)}
-                                        </select>
-                                    </div>
+                                    {assignedSubs.length > 0 && <div className="flex flex-wrap gap-1 mt-2">{assignedSubs.map(s => <span key={s.id} className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-600/10 text-emerald-300">📘 {s.name} ({cls.find(c => c.id === s.classroom_id)?.name || '—'})</span>)}</div>}
+                                    <div className="mt-2"><select onChange={e => { if (e.target.value) assignTeacherToSubject(e.target.value, t.id); e.target.value = ''; }} className="text-xs h-7 rounded bg-white/5 border border-white/10 text-slate-400 px-2 w-full"><option value="" className="bg-slate-900">+ Assigner une matière...</option>{subs.filter(s => !s.teacher_id).map(s => <option key={s.id} value={s.id} className="bg-slate-900">{s.name} ({cls.find(c => c.id === s.classroom_id)?.name})</option>)}</select></div>
                                 </div>
                             );
                         })}
@@ -259,45 +279,59 @@ export default function AdminPage() {
 
                     {/* ═══ STUDENTS ═══ */}
                     {tab === 'students' && <div className="space-y-4">
-                        <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/10 flex items-center justify-between flex-wrap gap-3">
-                            <p className="text-sm text-blue-300">🔗 Lien étudiant: <code className="ml-2 px-2 py-1 rounded bg-white/5">{origin}/{orgSlug}/student</code></p>
-                            <Button size="sm" variant="outline" className="border-blue-500/20 text-blue-300" onClick={() => { navigator.clipboard.writeText(`${origin}/${orgSlug}/student`); toast.success('Lien copié !'); }}>📋 Copier</Button>
+                        <div className="flex items-center justify-between">
+                            <p className="text-sm text-slate-400">{students.length} étudiant(s)</p>
+                            <Button size="sm" className="bg-blue-600" onClick={() => { setShowAddStudent(!showAddStudent); setSShowCode(''); }}><Plus className="w-4 h-4 mr-1" />{showAddStudent ? 'Fermer' : 'Inscrire un étudiant'}</Button>
                         </div>
-                        <div className="flex gap-2">
-                            <div className="relative flex-1">
-                                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
-                                <Input value={studentSearch} onChange={e => setStudentSearch(e.target.value)} placeholder="Chercher par nom ou matricule..." className="bg-white/5 border-white/10 text-white h-10 pl-10 rounded-lg" />
+                        {showAddStudent && <div className="p-5 rounded-xl bg-blue-600/5 border border-blue-500/20 space-y-3">
+                            <h3 className="font-bold text-blue-300">🎓 Nouvel étudiant</h3>
+                            <div className="grid sm:grid-cols-3 gap-3">
+                                <div><Label className="text-slate-400 text-xs">Prénom *</Label><Input value={sFN} onChange={e => setSFN(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">Nom *</Label><Input value={sLN} onChange={e => setSLN(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">Sexe</Label><Sel v={sSex} onChange={setSSex} opts={[{ id: 'M', label: 'Masculin' }, { id: 'F', label: 'Féminin' }]} /></div>
+                                <div><Label className="text-slate-400 text-xs">Date de naissance</Label><Input type="date" value={sBirth} onChange={e => setSBirth(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">Classe *</Label><Sel v={sClsId} onChange={setSClsId} opts={cls.filter(c => c.id).map(c => ({ id: c.id!, label: c.name }))} ph="Choisir..." /></div>
+                                <div><Label className="text-slate-400 text-xs">Nationalité</Label><Input value={sNat} onChange={e => setSNat(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">Téléphone</Label><Input value={sPhone} onChange={e => setSPhone(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">Nom du tuteur</Label><Input value={sGuardian} onChange={e => setSGuardian(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">Tél. tuteur</Label><Input value={sGuardianPhone} onChange={e => setSGuardianPhone(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">Lieu de résidence</Label><Input value={sRes} onChange={e => setSRes(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
                             </div>
-                            <select value={studentClsFilter} onChange={e => setStudentClsFilter(e.target.value)} className="h-10 rounded-lg bg-white/5 border border-white/10 text-white px-3 text-sm">
-                                <option value="" className="bg-slate-900">Toutes classes</option>
-                                {cls.filter(c => c.id).map(c => <option key={c.id} value={c.id!} className="bg-slate-900">{c.name}</option>)}
-                            </select>
+                            <Button onClick={createStudent} disabled={saving || !sFN.trim() || !sLN.trim() || !sClsId} className="bg-blue-600">{saving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}<UserPlus className="w-4 h-4 mr-1" />Inscrire l'étudiant</Button>
+                            {sShowCode && <div className="p-4 rounded-xl bg-blue-600/10 border border-blue-500/30 mt-2">
+                                <p className="text-sm font-bold text-blue-300">✅ Étudiant inscrit ! Code d'accès :</p>
+                                <div className="flex items-center gap-3 mt-2"><code className="text-2xl font-mono font-bold tracking-widest text-white bg-white/10 px-4 py-2 rounded-lg">{sShowCode}</code><Button size="sm" variant="outline" className="border-blue-500/20" onClick={() => { navigator.clipboard.writeText(sShowCode); toast.success('Code copié !'); }}>📋 Copier</Button></div>
+                                <p className="text-[10px] text-slate-500 mt-2">⚠️ Ce code unique permet à l'étudiant de se connecter. Transmettez-le de manière sécurisée.</p>
+                            </div>}
+                        </div>}
+                        <div className="flex gap-2">
+                            <div className="relative flex-1"><Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" /><Input value={studentSearch} onChange={e => setStudentSearch(e.target.value)} placeholder="Chercher par nom, matricule ou code..." className="bg-white/5 border-white/10 text-white h-10 pl-10 rounded-lg" /></div>
+                            <select value={studentClsFilter} onChange={e => setStudentClsFilter(e.target.value)} className="h-10 rounded-lg bg-white/5 border border-white/10 text-white px-3 text-sm"><option value="" className="bg-slate-900">Toutes classes</option>{cls.filter(c => c.id).map(c => <option key={c.id} value={c.id!} className="bg-slate-900">{c.name}</option>)}</select>
                         </div>
                         <p className="text-xs text-slate-500">{students.length} étudiant(s) • {cls.filter(c => c.id).map(c => `${c.name}: ${students.filter((s: any) => s.classroom_id === c.id).length}`).join(' • ')}</p>
                         {(() => {
                             const filtered = students.filter((s: any) => {
-                                const matchSearch = !studentSearch || `${s.first_name} ${s.last_name} ${s.matricule || ''}`.toLowerCase().includes(studentSearch.toLowerCase());
+                                const matchSearch = !studentSearch || `${s.first_name} ${s.last_name} ${s.matricule || ''} ${s.access_code || ''}`.toLowerCase().includes(studentSearch.toLowerCase());
                                 const matchCls = !studentClsFilter || s.classroom_id === studentClsFilter;
                                 return matchSearch && matchCls;
                             });
                             return filtered.length === 0 ? (
                                 <div className="text-center py-12 text-slate-500"><GraduationCap className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>Aucun étudiant trouvé</p></div>
                             ) : (
-                                <div className="space-y-2">
-                                    {filtered.map((s: any) => (
-                                        <div key={s.id} className="flex items-center gap-4 p-4 rounded-xl bg-white/[0.03] border border-white/10">
-                                            <div className="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center font-bold text-blue-400 shrink-0">{s.first_name?.[0]}{s.last_name?.[0]}</div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-medium">{s.first_name} {s.last_name}</p>
-                                                <p className="text-xs text-slate-500">
-                                                    Mat: {s.matricule || '—'} • {cls.find(c => c.id === s.classroom_id)?.name || 'Non assigné'}
-                                                    {s.phone && ` • ${s.phone}`} {s.birth_date && ` • ${s.birth_date}`}
-                                                </p>
-                                            </div>
+                                <div className="space-y-2">{filtered.map((s: any) => (
+                                    <div key={s.id} className="flex items-center gap-4 p-4 rounded-xl bg-white/[0.03] border border-white/10">
+                                        <div className="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center font-bold text-blue-400 shrink-0">{s.first_name?.[0]}{s.last_name?.[0]}</div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-medium">{s.first_name} {s.last_name} <span className="text-xs text-slate-500">{s.sex === 'F' ? '♀' : '♂'}</span></p>
+                                            <p className="text-xs text-slate-500">Mat: {s.matricule || '—'} • {cls.find(c => c.id === s.classroom_id)?.name || '—'}{s.birth_date ? ` • ${s.birth_date}` : ''}{s.nationality ? ` • ${s.nationality}` : ''}</p>
+                                            <p className="text-[10px] text-slate-600">{s.guardian_name ? `Tuteur: ${s.guardian_name}` : ''}{s.guardian_phone ? ` (${s.guardian_phone})` : ''}{s.residence ? ` • ${s.residence}` : ''}</p>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            {s.access_code && <button onClick={() => { navigator.clipboard.writeText(s.access_code); toast.success('Code copié !'); }} className="text-xs px-2 py-1 rounded bg-blue-600/10 text-blue-300 font-mono hover:bg-blue-600/20">{s.access_code}</button>}
                                             <button onClick={() => deleteStudent(s.id)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-4 h-4" /></button>
                                         </div>
-                                    ))}
-                                </div>
+                                    </div>
+                                ))}</div>
                             );
                         })()}
                     </div>}
