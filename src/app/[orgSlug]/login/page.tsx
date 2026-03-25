@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { useWhiteLabel } from '@/hooks/use-white-label';
 
 export default function LoginPage() {
     const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -19,6 +20,7 @@ export default function LoginPage() {
     const [showPwd, setShowPwd] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const { showPlatformBranding, routePath, logoUrl, brandColor, orgName: wlName } = useWhiteLabel(orgSlug);
 
     useEffect(() => {
         (async () => {
@@ -102,17 +104,19 @@ export default function LoginPage() {
                 <div className="mt-6 text-center text-sm text-slate-500 space-y-2">
                     <p>Pas encore inscrit ?</p>
                     <div className="flex gap-3 justify-center">
-                        <Link href={`/${orgSlug}/student`} className="text-blue-400 hover:underline">Étudiant</Link>
+                        <Link href={routePath('/student')} className="text-blue-400 hover:underline">Étudiant</Link>
                         <span className="text-slate-700">•</span>
-                        <Link href={`/${orgSlug}/prof`} className="text-emerald-400 hover:underline">Professeur</Link>
+                        <Link href={routePath('/prof')} className="text-emerald-400 hover:underline">Professeur</Link>
                     </div>
                 </div>
 
-                <div className="mt-8 text-center">
-                    <Link href="/" className="text-xs text-slate-600 hover:text-slate-400">
-                        Propulsé par CampusFlow
-                    </Link>
-                </div>
+                {showPlatformBranding && (
+                    <div className="mt-8 text-center">
+                        <Link href="/" className="text-xs text-slate-600 hover:text-slate-400">
+                            Propulsé par CampusFlow
+                        </Link>
+                    </div>
+                )}
             </div>
         </div>
     );
