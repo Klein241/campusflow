@@ -65,7 +65,7 @@ export function useCommunityChat(user: UserInfo | null, activeTab: string) {
 
     // Real-time subscription for tutoring_requests deletions
     useEffect(() => {
-        const { removeTutoringRequest } = useAppStore.getState();
+        const { removeSupportRequest } = useAppStore.getState();
         const prayerChannel = supabase.channel('prayer-realtime')
             .on('postgres_changes', {
                 event: 'DELETE',
@@ -74,7 +74,7 @@ export function useCommunityChat(user: UserInfo | null, activeTab: string) {
             }, (payload) => {
                 const deletedId = (payload.old as any)?.id;
                 if (deletedId) {
-                    removeTutoringRequest(deletedId);
+                    removeSupportRequest(deletedId);
                 }
             })
             .subscribe();

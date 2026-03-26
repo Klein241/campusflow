@@ -1,8 +1,4 @@
-// ── PATCH MOCK LOCAL (généré par 08_test_local.ps1) ──────────
-// Pour désactiver : retirer ces lignes + mettre NEXT_PUBLIC_USE_MOCK_DATA=false dans .env.local
-import { supabaseMock } from '@/lib/supabase-mock'
-const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true'
-// ─────────────────────────────────────────────────────────────
+// ── Supabase Client — CampusFlow ──────────────────────
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 

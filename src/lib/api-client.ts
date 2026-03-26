@@ -203,34 +203,5 @@ export async function ensureUserProfile(userData: {
     }
 }
 
-/**
- * Fetch courses passage — LOCAL ONLY (LSG)
- * All data comes from /public/courses/ .txt files via unified-courses-api
- */
-export async function fetchcoursesPassage(reference: string, _translation: string = 'lsg'): Promise<any> {
-    try {
-        // Use the local courses service exclusively
-        const { coursesApi } = await import('./unified-courses-api');
-        const parsed = coursesApi.parseReference(reference);
-        if (!parsed) return null;
+// Legacy fetchcoursesPassage removed — Bible/courses reading not applicable to CampusFlow SaaS
 
-        if (parsed.verseStart && parsed.verseEnd) {
-            const chapter = await coursesApi.getChapter(parsed.bookId, parsed.chapter);
-            if (!chapter) return null;
-            const selectedVerses = chapter.verses.filter(
-                v => v.verse! >= parsed.verseStart! && v.verse! <= parsed.verseEnd!
-            );
-            return {
-                reference: chapter.reference,
-                text: selectedVerses.map(v => `${v.verse}. ${v.text}`).join('\n'),
-                verses: selectedVerses
-            };
-        } else {
-            const chapter = await coursesApi.getChapter(parsed.bookId, parsed.chapter);
-            return chapter;
-        }
-    } catch (e) {
-        console.error('[courses] Local fetch error:', e);
-        return null;
-    }
-}

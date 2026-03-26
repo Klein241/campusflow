@@ -11,6 +11,35 @@ import { toast } from 'sonner';
 
 type LoginMode = 'choose' | 'admin' | 'access_code' | 'pin_create' | 'pin_verify' | 'dashboard_redirect';
 
+// Session TTL: 24 hours in milliseconds
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** Check if an existing session is still valid (not expired) */
+export function isSessionValid(): boolean {
+    try {
+        const raw = localStorage.getItem('campusflow_session');
+        if (!raw) return false;
+        const session = JSON.parse(raw);
+        if (!session.logged_in_at || !session.expires_at) return false;
+        return new Date(session.expires_at).getTime() > Date.now();
+    } catch {
+        return false;
+    }
+}
+
+/** Get the current session or null if expired */
+export function getSession() {
+    if (!isSessionValid()) {
+        localStorage.removeItem('campusflow_session');
+        return null;
+    }
+    try {
+        return JSON.parse(localStorage.getItem('campusflow_session') || 'null');
+    } catch {
+        return null;
+    }
+}
+
 interface UserProfile {
     id: string;
     first_name: string;
@@ -84,9 +113,10 @@ export default function LoginPage() {
         setSaving(true);
         try {
             // Try teacher first — SCOPED to this organization
+            // NOTE: We no longer select pin_code — PIN is verified server-side via RPC
             const { data: teacher } = await supabase
                 .from('teacher_profiles')
-                .select('id, first_name, last_name, pin_set, pin_code, organization_id, is_active')
+                .select('id, first_name, last_name, pin_set, organization_id, is_active')
                 .eq('organization_id', org.id)
                 .eq('access_code', code)
                 .single();
@@ -109,9 +139,10 @@ export default function LoginPage() {
             }
 
             // Try student — SCOPED to this organization
+            // NOTE: We no longer select pin_code — PIN is verified server-side via RPC
             const { data: student } = await supabase
                 .from('student_profiles')
-                .select('id, first_name, last_name, pin_set, pin_code, organization_id, classroom_id, is_active')
+                .select('id, first_name, last_name, pin_set, organization_id, classroom_id, is_active')
                 .eq('organization_id', org.id)
                 .eq('access_code', code)
                 .single();
@@ -189,9 +220,14 @@ export default function LoginPage() {
 
         setSaving(true);
         try {
-            const table = userProfile!.role === 'teacher' ? 'teacher_profiles' : 'student_profiles';
-            const { error } = await supabase.from(table).update({ pin_code: pinStr, pin_set: true }).eq('id', userProfile!.id);
+            // Use server-side RPC to set PIN (never expose pin_code on client)
+            const { data: success, error } = await supabase.rpc('set_pin', {
+                p_profile_id: userProfile!.id,
+                p_role: userProfile!.role,
+                p_pin: pinStr,
+            });
             if (error) throw error;
+            if (!success) throw new Error('Impossible de créer le PIN');
             toast.success('PIN créé avec succès ! 🎉');
             redirectToDashboard();
         } catch (e: any) {
@@ -207,11 +243,15 @@ export default function LoginPage() {
 
         setSaving(true);
         try {
-            const table = userProfile!.role === 'teacher' ? 'teacher_profiles' : 'student_profiles';
-            const { data, error } = await supabase.from(table).select('pin_code').eq('id', userProfile!.id).single();
+            // Use server-side RPC to verify PIN (never fetch pin_code to client)
+            const { data: isValid, error } = await supabase.rpc('verify_pin', {
+                p_profile_id: userProfile!.id,
+                p_role: userProfile!.role,
+                p_pin: pinStr,
+            });
             if (error) throw error;
 
-            if (data.pin_code === pinStr) {
+            if (isValid) {
                 toast.success(`Bienvenue, ${userProfile!.first_name} !`);
                 redirectToDashboard();
             } else {
@@ -227,7 +267,8 @@ export default function LoginPage() {
 
     const redirectToDashboard = () => {
         if (!userProfile) return;
-        // Store session in localStorage
+        const now = new Date();
+        // Store session in localStorage WITH expiration
         localStorage.setItem('campusflow_session', JSON.stringify({
             id: userProfile.id,
             first_name: userProfile.first_name,
@@ -235,7 +276,8 @@ export default function LoginPage() {
             role: userProfile.role,
             organization_id: userProfile.organization_id,
             classroom_id: userProfile.classroom_id,
-            logged_in_at: new Date().toISOString(),
+            logged_in_at: now.toISOString(),
+            expires_at: new Date(now.getTime() + SESSION_TTL_MS).toISOString(),
         }));
         if (userProfile.role === 'teacher') {
             router.push(`/${orgSlug}/prof/dashboard`);

@@ -36,8 +36,9 @@ export default function FiliereCard({
           ? `linear-gradient(135deg, ${filiere.couleur}18, ${filiere.couleur}08)`
           : undefined,
         borderColor: selected ? filiere.couleur : undefined,
-        ringColor: selected ? filiere.couleur : undefined
-      }}
+        // Use CSS custom property for Tailwind's ring color
+        '--tw-ring-color': selected ? filiere.couleur : undefined,
+      } as React.CSSProperties}
     >
       {/* Barre de couleur en haut */}
       <div

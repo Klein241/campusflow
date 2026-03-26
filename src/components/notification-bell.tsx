@@ -391,7 +391,6 @@ export function NotificationBell() {
             viewState: actionData.viewState,
             groupId: actionData.groupId,
             groupName: actionData.groupName,
-            prayerId: actionData.prayerId,
             communityTab: actionData.communityTab,
             conversationId: actionData.conversationId,
         });
