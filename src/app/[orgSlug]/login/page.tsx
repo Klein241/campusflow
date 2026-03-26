@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
-type LoginMode = 'choose' | 'admin' | 'access_code' | 'pin_create' | 'pin_verify' | 'dashboard_redirect';
+type LoginMode = 'choose' | 'admin' | 'access_code' | 'pin_create' | 'pin_verify' | 'dashboard_redirect' | 'forgot_password';
 
 // Session TTL: 24 hours in milliseconds
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -101,6 +101,22 @@ export default function LoginPage() {
             }
         } catch (e: any) {
             toast.error(e.message === 'Invalid login credentials' ? 'Email ou mot de passe incorrect' : e.message);
+        }
+        setSaving(false);
+    };
+    // ═══ FORGOT PASSWORD (admin) ═══
+    const handleForgotPassword = async () => {
+        if (!email) { toast.error('Entrez votre email administrateur'); return; }
+        setSaving(true);
+        try {
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/${orgSlug}/login`,
+            });
+            if (error) throw error;
+            toast.success('📧 Un email de réinitialisation a été envoyé ! Vérifiez votre boîte de réception.');
+            setMode('admin');
+        } catch (e: any) {
+            toast.error(e.message || "Erreur lors de l'envoi");
         }
         setSaving(false);
     };
@@ -552,10 +568,56 @@ export default function LoginPage() {
                                     {saving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <ShieldCheck className="w-5 h-5 mr-2" />}
                                     Connexion admin
                                 </Button>
+
+                                <button
+                                    onClick={() => setMode('forgot_password')}
+                                    className="w-full text-xs text-indigo-400 hover:text-indigo-300 transition-colors mt-1"
+                                >
+                                    Mot de passe oublié ?
+                                </button>
                             </div>
 
                             <Button variant="ghost" className="w-full text-slate-400" onClick={() => { setMode('choose'); setEmail(''); setPassword(''); }}>
                                 <ArrowLeft className="w-4 h-4 mr-2" /> Retour
+                            </Button>
+                        </motion.div>
+                    )}
+
+                    {/* ═══ FORGOT PASSWORD ═══ */}
+                    {mode === 'forgot_password' && (
+                        <motion.div key="forgot" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+                            <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 space-y-4">
+                                <div className="text-center">
+                                    <Mail className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+                                    <h2 className="font-bold text-white">Réinitialiser le mot de passe</h2>
+                                    <p className="text-xs text-slate-400 mt-1">Entrez votre email. Vous recevrez un lien de réinitialisation.</p>
+                                </div>
+
+                                <div className="relative">
+                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                    <Input
+                                        type="email"
+                                        value={email}
+                                        onChange={e => setEmail(e.target.value)}
+                                        placeholder="Email administrateur"
+                                        className="pl-10 bg-white/5 border-white/10 text-white h-12 rounded-xl"
+                                        onKeyDown={e => e.key === 'Enter' && handleForgotPassword()}
+                                        autoFocus
+                                    />
+                                </div>
+
+                                <Button
+                                    onClick={handleForgotPassword}
+                                    disabled={saving || !email}
+                                    className="w-full h-12 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold rounded-xl shadow-lg shadow-amber-600/25"
+                                >
+                                    {saving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Mail className="w-5 h-5 mr-2" />}
+                                    Envoyer le lien
+                                </Button>
+                            </div>
+
+                            <Button variant="ghost" className="w-full text-slate-400" onClick={() => setMode('admin')}>
+                                <ArrowLeft className="w-4 h-4 mr-2" /> Retour à la connexion
                             </Button>
                         </motion.div>
                     )}
