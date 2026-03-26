@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { GraduationCap, Mail, Lock, Loader2, Eye, EyeOff, ArrowLeft, KeyRound } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { GraduationCap, Mail, Lock, Loader2, Eye, EyeOff, ArrowLeft, KeyRound, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 
-type Mode = 'login' | 'forgot';
+type Mode = 'login' | 'forgot' | 'reset_password' | 'reset_success';
 
 export default function GlobalLogin() {
     const router = useRouter();
@@ -22,6 +22,32 @@ export default function GlobalLogin() {
     const [mode, setMode] = useState<Mode>('login');
     const [resetSent, setResetSent] = useState(false);
 
+    // Reset password fields
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showNewPwd, setShowNewPwd] = useState(false);
+
+    // ═══ Detect recovery token from Supabase email link ═══
+    useEffect(() => {
+        // Supabase redirects with hash: #access_token=...&type=recovery
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const type = hashParams.get('type');
+        if (type === 'recovery') {
+            setMode('reset_password');
+            return;
+        }
+
+        // Also listen for auth state change
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+            if (event === 'PASSWORD_RECOVERY') {
+                setMode('reset_password');
+            }
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
+
+    // ═══ LOGIN ═══
     const submit = async () => {
         if (!email.trim() || !password.trim()) { toast.error('Remplissez tous les champs'); return; }
         setSubmitting(true);
@@ -48,6 +74,7 @@ export default function GlobalLogin() {
         } finally { setSubmitting(false); }
     };
 
+    // ═══ FORGOT PASSWORD ═══
     const handleForgotPassword = async () => {
         if (!email.trim()) { toast.error('Entrez votre email'); return; }
         setSubmitting(true);
@@ -60,6 +87,25 @@ export default function GlobalLogin() {
             toast.success('📧 Email de réinitialisation envoyé !');
         } catch (e: any) {
             toast.error(e.message || "Erreur lors de l'envoi");
+        }
+        setSubmitting(false);
+    };
+
+    // ═══ UPDATE PASSWORD ═══
+    const handleUpdatePassword = async () => {
+        if (!newPassword || !confirmPassword) { toast.error('Remplissez les deux champs'); return; }
+        if (newPassword.length < 6) { toast.error('Le mot de passe doit contenir au moins 6 caractères'); return; }
+        if (newPassword !== confirmPassword) { toast.error('Les mots de passe ne correspondent pas'); return; }
+        setSubmitting(true);
+        try {
+            const { error } = await supabase.auth.updateUser({ password: newPassword });
+            if (error) throw error;
+            setMode('reset_success');
+            toast.success('✅ Mot de passe mis à jour !');
+            // Clean URL hash
+            window.history.replaceState(null, '', window.location.pathname);
+        } catch (e: any) {
+            toast.error(e.message || 'Erreur lors de la mise à jour');
         }
         setSubmitting(false);
     };
@@ -78,7 +124,11 @@ export default function GlobalLogin() {
                         <GraduationCap className="w-7 h-7" />
                     </div>
                     <h1 className="text-2xl font-bold">CampusFlow</h1>
-                    <p className="text-slate-400 text-sm mt-1">Connexion à votre espace</p>
+                    <p className="text-slate-400 text-sm mt-1">
+                        {mode === 'reset_password' ? 'Créer un nouveau mot de passe' :
+                         mode === 'reset_success' ? 'Mot de passe mis à jour' :
+                         'Connexion à votre espace'}
+                    </p>
                 </div>
 
                 <AnimatePresence mode="wait">
@@ -104,7 +154,6 @@ export default function GlobalLogin() {
                                 {submitting && <Loader2 className="w-5 h-5 animate-spin mr-2" />}Se connecter
                             </Button>
 
-                            {/* Forgot password link */}
                             <button
                                 onClick={() => { setMode('forgot'); setResetSent(false); }}
                                 className="w-full text-sm text-indigo-400 hover:text-indigo-300 transition-colors text-center"
@@ -164,7 +213,7 @@ export default function GlobalLogin() {
                                             onClick={() => setResetSent(false)}
                                             className="text-xs text-indigo-400 hover:text-indigo-300 mt-3"
                                         >
-                                            Renvoyer l'email
+                                            Renvoyer l&apos;email
                                         </button>
                                     </div>
                                 )}
@@ -172,6 +221,100 @@ export default function GlobalLogin() {
 
                             <Button variant="ghost" className="w-full text-slate-400" onClick={() => setMode('login')}>
                                 <ArrowLeft className="w-4 h-4 mr-2" /> Retour à la connexion
+                            </Button>
+                        </motion.div>
+                    )}
+
+                    {/* ═══ RESET PASSWORD MODE (after clicking email link) ═══ */}
+                    {mode === 'reset_password' && (
+                        <motion.div key="reset" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-4">
+                            <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 space-y-4">
+                                <div className="text-center">
+                                    <ShieldCheck className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
+                                    <h2 className="font-bold text-lg text-white">Nouveau mot de passe</h2>
+                                    <p className="text-xs text-slate-400 mt-1">Choisissez un mot de passe sécurisé (6 caractères minimum)</p>
+                                </div>
+
+                                <div>
+                                    <Label className="text-slate-400 text-xs">Nouveau mot de passe</Label>
+                                    <div className="relative mt-1">
+                                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                        <Input
+                                            type={showNewPwd ? 'text' : 'password'}
+                                            value={newPassword}
+                                            onChange={e => setNewPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            className="pl-10 pr-10 bg-white/5 border-white/10 text-white h-12 rounded-xl"
+                                            autoFocus
+                                        />
+                                        <button onClick={() => setShowNewPwd(!showNewPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">
+                                            {showNewPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-slate-400 text-xs">Confirmer le mot de passe</Label>
+                                    <div className="relative mt-1">
+                                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                        <Input
+                                            type="password"
+                                            value={confirmPassword}
+                                            onChange={e => setConfirmPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            className="pl-10 bg-white/5 border-white/10 text-white h-12 rounded-xl"
+                                            onKeyDown={e => e.key === 'Enter' && handleUpdatePassword()}
+                                        />
+                                    </div>
+                                    {confirmPassword && newPassword !== confirmPassword && (
+                                        <p className="text-xs text-red-400 mt-1">Les mots de passe ne correspondent pas</p>
+                                    )}
+                                    {confirmPassword && newPassword === confirmPassword && newPassword.length >= 6 && (
+                                        <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Mots de passe identiques</p>
+                                    )}
+                                </div>
+
+                                {/* Password strength indicator */}
+                                <div className="flex gap-1">
+                                    {[1, 2, 3, 4].map(i => (
+                                        <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${
+                                            newPassword.length === 0 ? 'bg-white/10' :
+                                            newPassword.length < 6 ? (i <= 1 ? 'bg-red-500' : 'bg-white/10') :
+                                            newPassword.length < 8 ? (i <= 2 ? 'bg-amber-500' : 'bg-white/10') :
+                                            newPassword.length < 12 ? (i <= 3 ? 'bg-emerald-500' : 'bg-white/10') :
+                                            'bg-emerald-400'
+                                        }`} />
+                                    ))}
+                                </div>
+
+                                <Button
+                                    onClick={handleUpdatePassword}
+                                    disabled={submitting || newPassword.length < 6 || newPassword !== confirmPassword}
+                                    className="w-full h-12 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/25"
+                                >
+                                    {submitting ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <ShieldCheck className="w-5 h-5 mr-2" />}
+                                    Enregistrer le nouveau mot de passe
+                                </Button>
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {/* ═══ RESET SUCCESS ═══ */}
+                    {mode === 'reset_success' && (
+                        <motion.div key="success" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="space-y-4">
+                            <div className="p-8 rounded-2xl bg-white/[0.03] border border-white/10 text-center">
+                                <div className="w-20 h-20 rounded-full bg-emerald-600/20 flex items-center justify-center mx-auto mb-4">
+                                    <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+                                </div>
+                                <h2 className="font-bold text-xl text-white mb-2">Mot de passe mis à jour !</h2>
+                                <p className="text-sm text-slate-400">Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.</p>
+                            </div>
+
+                            <Button
+                                onClick={() => { setMode('login'); setNewPassword(''); setConfirmPassword(''); }}
+                                className="w-full h-12 bg-gradient-to-r from-indigo-600 to-blue-600 rounded-xl text-lg shadow-lg shadow-indigo-600/20"
+                            >
+                                Se connecter
                             </Button>
                         </motion.div>
                     )}
