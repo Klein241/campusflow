@@ -5,9 +5,9 @@
 [build.environment]
   NODE_VERSION = "20"
   NEXT_TELEMETRY_DISABLED = "1"
-  NEXT_PUBLIC_SUPABASE_URL = "https://holomdzjifrgirkjuaqv.supabase.co"
-  NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhvbG9tZHpqaWZyZ2lya2p1YXF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMjIwODEsImV4cCI6MjA4NTY5ODA4MX0.RK_zCz3b2LazVZ-LtIRmcK2rC3KLXbSuXfc-mUE9S34"
-  NEXT_PUBLIC_WORKER_URL = "https://maisondepriere-notifications.bufferwave.workers.dev"
+  NEXT_PUBLIC_SUPABASE_URL = "https://nuisijvopyudmbcqpaua.supabase.co"
+  NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51aXNpanZvcHl1ZG1iY3FwYXVhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNTQyMDksImV4cCI6MjA4OTkzMDIwOX0.gAelghYCc0u5i0LeesZhVjUIQy7sQthWCMTRtbZV0OE"
+  NEXT_PUBLIC_WORKER_URL = "https://campusflow-notifications.bufferwave.workers.dev"
   NEXT_PUBLIC_GOOGLE_CLIENT_ID = "585921336296-np8i09h6l468i0lu7oh97jckgilmp5ah.apps.googleusercontent.com"
   # NEXT_PUBLIC_ADMIN_KEY — Set this in Netlify Dashboard > Site Settings > Environment Variables
   # DO NOT commit secrets to version control

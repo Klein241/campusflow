@@ -99,7 +99,6 @@ export function PWAManager() {
             });
             if (swRegistration && 'sync' in swRegistration) {
                 (swRegistration as any).sync.register('sync-progress').catch(() => { });
-                (swRegistration as any).sync.register('sync-prayers').catch(() => { });
             }
         };
 
@@ -281,8 +280,8 @@ export function PWAManager() {
 
         setTimeout(() => {
             sendLocalNotification(
-                '🙏 Temps de prière',
-                'Commencez votre journée avec la Parole !'
+                '📚 Rappel CampusFlow',
+                'N\'oubliez pas de consulter vos cours et activités !'
             );
             scheduleLocalReminder();
         }, delay);

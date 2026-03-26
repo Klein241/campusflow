@@ -17,7 +17,7 @@ interface AppNotification {
     id: string;
     title: string;
     message: string;
-    type: 'message' | 'friend_request' | 'group' | 'prayer' | 'system';
+    type: 'message' | 'friend_request' | 'group' | 'support' | 'system';
     read: boolean;
     created_at: string;
     sender_name?: string;
@@ -165,7 +165,7 @@ export function NotificationBell() {
                     id: `supa_${n.id}`,
                     title: n.title,
                     message: n.message,
-                    type: (n.type === 'message' ? 'message' : n.type === 'prayer' ? 'prayer' : n.type === 'success' ? 'group' : 'system') as any,
+                    type: (n.type === 'message' ? 'message' : n.type === 'support' ? 'support' : n.type === 'success' ? 'group' : 'system') as any,
                     read: n.is_read || false,
                     created_at: n.created_at,
                     action_type: n.action_type,
@@ -374,7 +374,7 @@ export function NotificationBell() {
             } else if (notif.type === 'friend_request') {
                 actionData.tab = 'community';
                 actionData.viewState = 'friends';
-            } else if (notif.type === 'prayer') {
+            } else if (notif.type === 'support') {
                 actionData.tab = 'community';
                 actionData.communityTab = 'prayers';
             } else {
@@ -403,7 +403,7 @@ export function NotificationBell() {
             case 'message': return <MessageSquare className="h-4 w-4 text-blue-400" />;
             case 'friend_request': return <Users className="h-4 w-4 text-green-400" />;
             case 'group': return <Users className="h-4 w-4 text-purple-400" />;
-            case 'prayer': return <Heart className="h-4 w-4 text-pink-400" />;
+            case 'support': return <Heart className="h-4 w-4 text-pink-400" />;
             default: return <Sparkles className="h-4 w-4 text-amber-400" />;
         }
     };

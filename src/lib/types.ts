@@ -44,11 +44,6 @@ export const SUPPORT_CATEGORIES: SupportCategoryInfo[] = [
     { id: 'other', nameFr: 'Autre', nameEn: 'Other', icon: '✨', color: '#6b7280' },
 ];
 
-/** @deprecated Use SupportCategory. Kept for backward compatibility with DB */
-export type PrayerCategory = SupportCategory;
-/** @deprecated Use SUPPORT_CATEGORIES */
-export const PRAYER_CATEGORIES = SUPPORT_CATEGORIES;
-
 export interface SupportRequest {
     id: string;
     userId: string;
@@ -66,9 +61,6 @@ export interface SupportRequest {
     isLocked?: boolean;
     groupId?: string;
 }
-
-/** @deprecated Use SupportRequest */
-export type TutoringRequest = SupportRequest;
 
 // ── Experience Feedbacks ─────────────────────────────
 

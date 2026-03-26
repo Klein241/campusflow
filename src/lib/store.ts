@@ -5,10 +5,8 @@ import { supabase } from './supabase';
 import type { SupportRequest, ExperienceFeedback, SupportCategory } from './types';
 
 // ══════════════════════════════════════════════════════════
-// CampusFlow Zustand Store — Clean v4
-// Removed: Bible/Courses, Prayer Wall, 40-day program,
-//          Journal, Games, Achievements, Fasting
-// Kept:    Auth, Organisation, UI, Notifications, DM
+// CampusFlow Zustand Store — Clean v5
+// Auth, Organisation, UI, Notifications, DM, Support
 // ══════════════════════════════════════════════════════════
 
 // ── Types ────────────────────────────────────────────────
@@ -25,8 +23,7 @@ export interface User {
     role?: string;
 }
 
-// Re-export for backward compat
-export type { SupportRequest as TutoringRequest, ExperienceFeedback };
+export type { ExperienceFeedback };
 
 // ── Store Interface ──────────────────────────────────────
 
@@ -52,20 +49,16 @@ interface AppState {
     clearAuthError: () => void;
     loadInitialData: () => Promise<void>;
 
-    // Support Requests (formerly Prayer Wall / TutoringRequests)
+    // Support Requests
     supportRequests: SupportRequest[];
     addSupportRequest: (content: string, isAnonymous?: boolean, category?: SupportCategory, photos?: string[]) => Promise<string | null>;
     supportRequest: (requestId: string) => void;
     removeSupportRequest: (requestId: string) => void;
-    /** @deprecated Use supportRequests */
-    TutoringRequests: SupportRequest[];
 
     // Experience Feedbacks
     experienceFeedbacks: ExperienceFeedback[];
     addExperienceFeedback: (content: string, photos?: string[]) => void;
     likeExperienceFeedback: (feedbackId: string) => void;
-    /** @deprecated Use experienceFeedbacks */
-    experience_feedbacks: ExperienceFeedback[];
 
     // Theme
     theme: 'light' | 'dark' | 'system';
@@ -228,7 +221,7 @@ export const useAppStore = create<AppState>()(
                             supportCount: (p.prayer_count as number) || 0,
                             supportedBy: (p.prayed_by as string[]) || [],
                         }));
-                        set({ supportRequests: formatted, TutoringRequests: formatted });
+                        set({ supportRequests: formatted });
                     }
 
                     // Load Experience Feedbacks (public)
@@ -251,7 +244,7 @@ export const useAppStore = create<AppState>()(
                             likes: (t.likes as number) || 0,
                             likedBy: (t.liked_by as string[]) || [],
                         }));
-                        set({ experienceFeedbacks: formatted, experience_feedbacks: formatted });
+                        set({ experienceFeedbacks: formatted });
                     }
 
                     if (!user) return;
@@ -263,7 +256,6 @@ export const useAppStore = create<AppState>()(
 
             // ── Support Requests ─────────────────────────
             supportRequests: [],
-            TutoringRequests: [], // backward compat alias
             addSupportRequest: async (content, isAnonymous = false, category = 'other', photos = []) => {
                 const { user } = get();
                 if (!user) return null;
@@ -298,7 +290,6 @@ export const useAppStore = create<AppState>()(
                         };
                         set((state) => ({
                             supportRequests: [newRequest, ...state.supportRequests],
-                            TutoringRequests: [newRequest, ...state.supportRequests],
                         }));
                         return data[0].id;
                     }
@@ -313,6 +304,7 @@ export const useAppStore = create<AppState>()(
                 if (!user) return;
 
                 try {
+                    // Note: DB columns are still prayer_count/prayed_by
                     const { data: current, error: fetchError } = await supabase
                         .from('tutoring_requests')
                         .select('prayer_count, prayed_by')
@@ -340,7 +332,7 @@ export const useAppStore = create<AppState>()(
                                 ? { ...req, supportCount: req.supportCount + 1, supportedBy: [...req.supportedBy, user.id] }
                                 : req
                         );
-                        return { supportRequests: updated, TutoringRequests: updated };
+                        return { supportRequests: updated };
                     });
                 } catch {
                     // Silent
@@ -350,13 +342,12 @@ export const useAppStore = create<AppState>()(
             removeSupportRequest: (requestId) => {
                 set((state) => {
                     const filtered = state.supportRequests.filter((r) => r.id !== requestId);
-                    return { supportRequests: filtered, TutoringRequests: filtered };
+                    return { supportRequests: filtered };
                 });
             },
 
             // ── Experience Feedbacks ─────────────────────
             experienceFeedbacks: [],
-            experience_feedbacks: [], // backward compat alias
             addExperienceFeedback: async (content, photos = []) => {
                 const { user } = get();
                 if (!user) return;
@@ -383,7 +374,6 @@ export const useAppStore = create<AppState>()(
                         };
                         set((state) => ({
                             experienceFeedbacks: [newFeedback, ...state.experienceFeedbacks],
-                            experience_feedbacks: [newFeedback, ...state.experienceFeedbacks],
                         }));
                     }
                 } catch {
@@ -404,7 +394,7 @@ export const useAppStore = create<AppState>()(
                                 ? { ...t, likes: t.likes + 1, likedBy: [...t.likedBy, user.id] }
                                 : t
                         );
-                        return { experienceFeedbacks: updated, experience_feedbacks: updated };
+                        return { experienceFeedbacks: updated };
                     });
                 }
             },

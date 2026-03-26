@@ -1,6 +1,7 @@
-// Social Features Service
-// =======================
-// Handles likes, favorites, sharing, and experience_feedbacks
+// Social Features Service — CampusFlow v5 (Clean)
+// =================================================
+// Handles likes, favorites, sharing, support requests, and messaging
+// All legacy prayer/bible references have been removed.
 
 import { supabase } from './supabase';
 
@@ -19,7 +20,6 @@ export const socialService = {
 
     async toggleExperienceFeedbackLike(ExperienceFeedbackId: string, userId: string): Promise<SocialAction> {
         try {
-            // Try to use the database function first
             const { data, error } = await supabase
                 .rpc('toggle_ExperienceFeedback_like', {
                     ExperienceFeedback_id: ExperienceFeedbackId,
@@ -40,7 +40,6 @@ export const socialService = {
                 const alreadyLiked = likedBy.includes(userId);
 
                 if (alreadyLiked) {
-                    // Remove like
                     await supabase
                         .from('experience_feedbacks')
                         .update({
@@ -51,7 +50,6 @@ export const socialService = {
 
                     return { success: true, liked: false, count: Math.max(0, (ExperienceFeedback.likes || 0) - 1) };
                 } else {
-                    // Add like
                     await supabase
                         .from('experience_feedbacks')
                         .update({
@@ -86,49 +84,53 @@ export const socialService = {
     },
 
     // ========================
-    // PRAYER REQUEST LIKES
+    // SUPPORT REQUEST LIKES
     // ========================
 
-    async togglePrayerLike(prayerId: string, userId: string): Promise<SocialAction> {
+    async toggleSupportLike(requestId: string, userId: string): Promise<SocialAction> {
         try {
-            const { data: prayer } = await supabase
+            // Note: DB columns are still prayer_count/prayed_by — mapped here to support terminology
+            const { data: request } = await supabase
                 .from('tutoring_requests')
                 .select('prayer_count, prayed_by')
-                .eq('id', prayerId)
+                .eq('id', requestId)
                 .single();
 
-            if (!prayer) throw new Error('Prayer request not found');
+            if (!request) throw new Error('Support request not found');
 
-            const prayedBy = prayer.prayed_by || [];
-            const alreadyPrayed = prayedBy.includes(userId);
+            const supportedBy: string[] = request.prayed_by || [];
+            const alreadySupported = supportedBy.includes(userId);
 
-            if (alreadyPrayed) {
-                // Remove prayer
+            if (alreadySupported) {
                 await supabase
                     .from('tutoring_requests')
                     .update({
-                        prayer_count: Math.max(0, (prayer.prayer_count || 0) - 1),
-                        prayed_by: prayedBy.filter((id: string) => id !== userId)
+                        prayer_count: Math.max(0, (request.prayer_count || 0) - 1),
+                        prayed_by: supportedBy.filter((id: string) => id !== userId)
                     })
-                    .eq('id', prayerId);
+                    .eq('id', requestId);
 
-                return { success: true, liked: false, count: Math.max(0, (prayer.prayer_count || 0) - 1) };
+                return { success: true, liked: false, count: Math.max(0, (request.prayer_count || 0) - 1) };
             } else {
-                // Add prayer
                 await supabase
                     .from('tutoring_requests')
                     .update({
-                        prayer_count: (prayer.prayer_count || 0) + 1,
-                        prayed_by: [...prayedBy, userId]
+                        prayer_count: (request.prayer_count || 0) + 1,
+                        prayed_by: [...supportedBy, userId]
                     })
-                    .eq('id', prayerId);
+                    .eq('id', requestId);
 
-                return { success: true, liked: true, count: (prayer.prayer_count || 0) + 1 };
+                return { success: true, liked: true, count: (request.prayer_count || 0) + 1 };
             }
         } catch (e: any) {
-            console.error('Error toggling prayer:', e);
+            console.error('Error toggling support:', e);
             return { success: false, error: e.message };
         }
+    },
+
+    /** @deprecated Use toggleSupportLike */
+    togglePrayerLike(requestId: string, userId: string) {
+        return this.toggleSupportLike(requestId, userId);
     },
 
     // ========================
@@ -148,7 +150,7 @@ export const socialService = {
 
             if (error) {
                 if (error.message.includes('duplicate')) {
-                    return { success: true, favorited: true }; // Already favorited
+                    return { success: true, favorited: true };
                 }
                 throw error;
             }
@@ -225,7 +227,7 @@ export const socialService = {
     },
 
     // ========================
-    // experience_feedbacks
+    // EXPERIENCE FEEDBACKS
     // ========================
 
     async createExperienceFeedback(userId: string, content: string, photoUrl?: string, photos?: string[]): Promise<SocialAction> {
@@ -287,10 +289,10 @@ export const socialService = {
     },
 
     // ========================
-    // PRAYER REQUESTS
+    // SUPPORT REQUESTS
     // ========================
 
-    async createTutoringRequest(
+    async createSupportRequest(
         userId: string,
         content: string,
         category: string = 'other',
@@ -313,12 +315,17 @@ export const socialService = {
             if (error) throw error;
             return { success: true };
         } catch (e: any) {
-            console.error('Error creating prayer request:', e);
+            console.error('Error creating support request:', e);
             return { success: false, error: e.message };
         }
     },
 
-    async getTutoringRequests(category?: string) {
+    /** @deprecated Use createSupportRequest */
+    createTutoringRequest(userId: string, content: string, category?: string, isAnonymous?: boolean, photos?: string[]) {
+        return this.createSupportRequest(userId, content, category, isAnonymous, photos);
+    },
+
+    async getSupportRequests(category?: string) {
         try {
             let query = supabase
                 .from('tutoring_requests')
@@ -344,19 +351,24 @@ export const socialService = {
                 category: p.category,
                 isAnonymous: p.is_anonymous,
                 photos: p.photos || [],
-                prayerCount: p.prayer_count || 0,
-                prayedBy: p.prayed_by || [],
-                isAnswered: p.is_answered,
-                answeredAt: p.answered_at,
+                supportCount: p.prayer_count || 0,
+                supportedBy: p.prayed_by || [],
+                isResolved: p.is_answered,
+                resolvedAt: p.answered_at,
                 createdAt: p.created_at
             })) || [];
         } catch (e) {
-            console.error('Error fetching prayer requests:', e);
+            console.error('Error fetching support requests:', e);
             return [];
         }
     },
 
-    async markPrayerAnswered(prayerId: string): Promise<SocialAction> {
+    /** @deprecated Use getSupportRequests */
+    getTutoringRequests(category?: string) {
+        return this.getSupportRequests(category);
+    },
+
+    async markRequestResolved(requestId: string): Promise<SocialAction> {
         try {
             const { error } = await supabase
                 .from('tutoring_requests')
@@ -364,22 +376,26 @@ export const socialService = {
                     is_answered: true,
                     answered_at: new Date().toISOString()
                 })
-                .eq('id', prayerId);
+                .eq('id', requestId);
 
             if (error) throw error;
             return { success: true };
         } catch (e: any) {
-            console.error('Error marking prayer answered:', e);
+            console.error('Error marking request resolved:', e);
             return { success: false, error: e.message };
         }
+    },
+
+    /** @deprecated Use markRequestResolved */
+    markPrayerAnswered(requestId: string) {
+        return this.markRequestResolved(requestId);
     },
 
     // ========================
     // SHARE FUNCTIONALITY
     // ========================
 
-    async shareContent(type: 'testimony' | 'prayer' | 'verse', content: string, title?: string) {
-        // Use Web Share API if available
+    async shareContent(type: 'feedback' | 'support' | 'post', content: string, title?: string) {
         if (navigator.share) {
             try {
                 await navigator.share({
@@ -389,11 +405,9 @@ export const socialService = {
                 });
                 return { success: true };
             } catch (e) {
-                // User cancelled or error
                 return { success: false };
             }
         } else {
-            // Fallback: Copy to clipboard
             try {
                 await navigator.clipboard.writeText(content);
                 return { success: true };
@@ -407,32 +421,16 @@ export const socialService = {
     // CHAT MESSAGES
     // ========================
 
-    async sendChatMessage(groupId: string | null, userId: string, content: string, isPrayer: boolean = false) {
+    async sendChatMessage(groupId: string | null, userId: string, content: string) {
         try {
-            if (groupId) {
-                // Group message
-                const { error } = await supabase
-                    .from('group_messages')
-                    .insert({
-                        group_id: groupId,
-                        user_id: userId,
-                        content: content,
-                        is_prayer: isPrayer
-                    });
-                if (error) throw error;
-            } else {
-                // Community message (if table exists)
-                // First try the community_messages table
-                const { error } = await supabase
-                    .from('group_messages')
-                    .insert({
-                        group_id: null, // Community chat
-                        user_id: userId,
-                        content: content,
-                        is_prayer: isPrayer
-                    });
-                if (error) throw error;
-            }
+            const { error } = await supabase
+                .from('group_messages')
+                .insert({
+                    group_id: groupId,
+                    user_id: userId,
+                    content: content,
+                });
+            if (error) throw error;
             return { success: true };
         } catch (e: any) {
             console.error('Error sending message:', e);
@@ -442,7 +440,6 @@ export const socialService = {
 
     async getGroupMessages(groupId: string, limit: number = 50) {
         try {
-            // Fetch messages without embedded join (avoids PostgREST FK issues)
             const { data: rawMsgs, error } = await supabase
                 .from('group_messages')
                 .select('id, group_id, user_id, content, type, voice_url, voice_duration, created_at, is_pinned')
@@ -454,7 +451,6 @@ export const socialService = {
             const msgs = rawMsgs || [];
             if (msgs.length === 0) return [];
 
-            // Batch fetch profiles
             const uids = [...new Set(msgs.map(m => m.user_id))];
             const { data: profiles } = await supabase
                 .from('profiles')
@@ -533,7 +529,6 @@ export const socialService = {
 
     async getConversations(userId: string) {
         try {
-            // Get all unique users we've messaged with
             const { data: sent } = await supabase
                 .from('direct_messages')
                 .select('receiver_id')
@@ -551,7 +546,6 @@ export const socialService = {
 
             if (userIds.size === 0) return [];
 
-            // Get user profiles
             const { data: profiles } = await supabase
                 .from('profiles')
                 .select('id, full_name, avatar_url')

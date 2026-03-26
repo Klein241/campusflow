@@ -18,6 +18,25 @@ export async function adminDeleteContent({
     table: string;
     id: string;
 }): Promise<{ success: boolean; error?: string }> {
+    // Security: only allow deletion from known content tables
+    const ALLOWED_TABLES = [
+        'experience_feedbacks',
+        'tutoring_requests',
+        'group_messages',
+        'direct_messages',
+        'notifications',
+        'favorites',
+        'timetable_slots',
+        'evaluations',
+        'grades',
+        'school_payments',
+        'disciplines',
+    ];
+
+    if (!ALLOWED_TABLES.includes(table)) {
+        return { success: false, error: `Table "${table}" is not allowed for deletion` };
+    }
+
     try {
         const { error } = await supabase
             .from(table)

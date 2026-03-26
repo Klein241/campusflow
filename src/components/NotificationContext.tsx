@@ -240,7 +240,7 @@ function inferNavigationFromType(actionType: string, legacyType: string): any {
         default:
             // Legacy type inference
             if (legacyType === 'message') return { tab: 'community', communityTab: 'chat' };
-            if (legacyType === 'prayer') return { tab: 'community', communityTab: 'prieres' };
+            if (legacyType === 'support') return { tab: 'community', communityTab: 'support' };
             return { tab: 'community' };
     }
 }

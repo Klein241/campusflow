@@ -176,7 +176,7 @@ export function NotificationListener() {
             case 'success': return <CheckCircle2 className="h-6 w-6 text-green-500" />;
             case 'warning': return <AlertTriangle className="h-6 w-6 text-amber-500" />;
             case 'error': return <X className="h-6 w-6 text-red-500" />;
-            case 'prayer': return <Heart className="h-6 w-6 text-pink-500" />;
+            case 'support': return <Heart className="h-6 w-6 text-pink-500" />;
             case 'testimony': return <Sparkles className="h-6 w-6 text-amber-400" />;
             case 'message': return <MessageSquare className="h-6 w-6 text-blue-500" />;
             case 'info': return <Users className="h-6 w-6 text-indigo-500" />;
@@ -189,7 +189,7 @@ export function NotificationListener() {
             case 'success': return 'from-green-600/20 to-emerald-600/20 border-green-500/30';
             case 'warning': return 'from-amber-600/20 to-orange-600/20 border-amber-500/30';
             case 'error': return 'from-red-600/20 to-rose-600/20 border-red-500/30';
-            case 'prayer': return 'from-pink-600/20 to-rose-600/20 border-pink-500/30';
+            case 'support': return 'from-pink-600/20 to-rose-600/20 border-pink-500/30';
             case 'testimony': return 'from-amber-600/20 to-yellow-600/20 border-amber-500/30';
             case 'message': return 'from-blue-600/20 to-cyan-600/20 border-blue-500/30';
             default: return 'from-indigo-600/20 to-purple-600/20 border-indigo-500/30';

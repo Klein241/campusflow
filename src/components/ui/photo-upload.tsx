@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 interface PhotoUploadProps {
-    bucket: 'prayer-photos' | 'testimony-photos' | 'day-resources';
+    bucket: 'support-photos' | 'testimony-photos' | 'day-resources';
     maxPhotos?: number;
     onPhotosChange: (urls: string[]) => void;
     initialPhotos?: string[];

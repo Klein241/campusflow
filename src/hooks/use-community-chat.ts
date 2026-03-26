@@ -20,7 +20,7 @@ interface UserInfo {
  * • Loading/sending community messages
  * • Real-time subscription for new messages
  * • Loading/sending group messages with optimistic updates
- * • Prayer request deletion sync
+ * • Support request deletion sync
  */
 export function useCommunityChat(user: UserInfo | null, activeTab: string) {
     const [chatMessages, setChatMessages] = useState<any[]>([]);
@@ -66,7 +66,7 @@ export function useCommunityChat(user: UserInfo | null, activeTab: string) {
     // Real-time subscription for tutoring_requests deletions
     useEffect(() => {
         const { removeSupportRequest } = useAppStore.getState();
-        const prayerChannel = supabase.channel('prayer-realtime')
+        const supportChannel = supabase.channel('support-realtime')
             .on('postgres_changes', {
                 event: 'DELETE',
                 schema: 'public',
@@ -80,7 +80,7 @@ export function useCommunityChat(user: UserInfo | null, activeTab: string) {
             .subscribe();
 
         return () => {
-            prayerChannel.unsubscribe();
+            supportChannel.unsubscribe();
         };
     }, []);
 

@@ -76,22 +76,47 @@ export default function AdminPage() {
     const [sVerifying, setSVerifying] = useState(false); const [sSavingSettings, setSSavingSettings] = useState(false);
     const loadSettings = () => { if (!org) return; setSCustomDomain(org.custom_domain || ''); setSDomainVerified(org.domain_verified || false); setSDomainSsl(org.domain_ssl_status || 'pending'); setSBrandColor(org.brand_color || '#4f46e5'); setSLogoUrl(org.logo_url || ''); setSFaviconUrl(org.favicon_url || ''); setSMetaTitle(org.meta_title || ''); setSMetaDesc(org.meta_description || ''); setSOrgName(org.name || ''); setSOrgPhone(org.phone || ''); setSOrgEmail(org.email || ''); setSOrgWhatsapp(org.whatsapp || ''); };
 
+    const [authChecked, setAuthChecked] = useState(false);
+    const [isAuthorized, setIsAuthorized] = useState(false);
+
     useEffect(() => {
         (async () => {
+            // ── AUTH GUARD: verify the user is logged in and owns this org ──
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            if (!authUser) {
+                setAuthChecked(true);
+                setLoading(false);
+                return;
+            }
+
             const { data: o } = await supabase.from('organizations').select('*').eq('slug', orgSlug).single();
-            if (!o) { setLoading(false); return; } setOrg(o);
+            if (!o) { setAuthChecked(true); setLoading(false); return; }
+
+            // Verify ownership
+            if (o.owner_id !== authUser.id) {
+                setAuthChecked(true);
+                setLoading(false);
+                return;
+            }
+
+            setIsAuthorized(true);
+            setOrg(o);
             const { data: c } = await supabase.from('classrooms').select('*').eq('organization_id', o.id).order('name');
             setCls((c || []).map((x: any) => ({ id: x.id, name: x.name, cycle: x.cycle || '', filiere_id: x.filiere_id, level: x.level || 1, capacity: x.capacity || 50 })));
             const { data: s } = await supabase.from('subjects').select('*').eq('organization_id', o.id).order('name');
             setSubs((s || []).map((x: any) => ({ id: x.id, name: x.name, code: x.code || '', coefficient: x.coefficient || 1, classroom_id: x.classroom_id, teacher_id: x.teacher_id })));
-            const { data: t } = await supabase.from('teacher_profiles').select('*').eq('organization_id', o.id); setTeachers(t || []);
-            const { data: st } = await supabase.from('student_profiles').select('*').eq('organization_id', o.id); setStudents(st || []);
+            const { data: t } = await supabase.from('teacher_profiles').select('id, organization_id, first_name, last_name, speciality, email, phone, nationality, marital_status, children_count, residence, access_code, pin_set, created_at').eq('organization_id', o.id);
+            setTeachers(t || []);
+            const { data: st } = await supabase.from('student_profiles').select('id, organization_id, first_name, last_name, sex, birth_date, classroom_id, phone, guardian_name, guardian_phone, nationality, residence, matricule, access_code, pin_set, created_at').eq('organization_id', o.id);
+            setStudents(st || []);
             if (!o.setup_completed && (c || []).length === 0) setTab('setup');
+            setAuthChecked(true);
             setLoading(false);
         })();
     }, [orgSlug]);
 
-    if (loading) return <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center"><Loader2 className="w-8 h-8 text-teal-400 animate-spin" /></div>;
+    if (loading || !authChecked) return <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center"><Loader2 className="w-8 h-8 text-teal-400 animate-spin" /></div>;
+    if (!isAuthorized) return <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center text-white"><div className="text-center"><h1 className="text-2xl font-black mb-2">🔒 Accès refusé</h1><p className="text-slate-400 text-sm mb-4">Vous devez être connecté en tant que propriétaire de cet établissement.</p><button onClick={() => router.push(`/${orgSlug}/login`)} className="px-4 py-2 bg-indigo-600 rounded-xl text-sm hover:bg-indigo-500 transition">Se connecter</button></div></div>;
     if (!org) return <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center text-white"><h1 className="text-2xl font-black">Introuvable</h1></div>;
 
     const isCL = ['college', 'lycee'].includes(org.type);

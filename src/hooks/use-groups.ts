@@ -13,7 +13,7 @@ interface UserInfo {
 }
 
 /**
- * useGroups — Manage prayer groups: CRUD, join/leave, join requests, members.
+ * useGroups — Manage study groups: CRUD, join/leave, join requests, members.
  *
  * Encapsulates:
  * • Loading all groups with member counts
@@ -250,7 +250,7 @@ export function useGroups(user: UserInfo | null) {
             notifyGroupAccessApproved({
                 userId,
                 groupId,
-                groupName: groupData?.name || selectedGroup?.name || 'Chambre haute',
+                groupName: groupData?.name || selectedGroup?.name || 'Groupe',
             }).catch(console.error);
 
             setGroupJoinRequests(prev => prev.filter(r => r.id !== requestId));
@@ -383,7 +383,7 @@ export function useGroups(user: UserInfo | null) {
                 }
             }
 
-            toast.success('🚪 Chambre haute créée avec succès!');
+            toast.success('🚪 Groupe créé avec succès!');
             setNewGroupName('');
             setNewGroupDescription('');
             setIsGroupPublic(true);

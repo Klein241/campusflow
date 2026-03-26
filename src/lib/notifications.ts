@@ -2,24 +2,26 @@ import { supabase } from './supabase';
 
 /**
  * ══════════════════════════════════════════════════════════
- * NOTIFICATION CLIENT — CampusFlow v2
+ * NOTIFICATION CLIENT — CampusFlow v5 (Clean)
  * ══════════════════════════════════════════════════════════
  *
- * All notification functions now route through the Cloudflare
+ * All notification functions route through the Cloudflare
  * Notification Worker for aggregation, rate-limiting, and push.
  *
  * Fallback: If WORKER_URL is not set, inserts directly into
  * Supabase (legacy behavior).
+ *
+ * Legacy prayer_* action types have been renamed to support_*.
  */
 
 // ── Types ────────────────────────────────────────────────
 
 export type NotificationActionType =
-    | 'prayer_prayed'
-    | 'friend_prayed'
-    | 'new_prayer_published'
-    | 'prayer_comment'
-    | 'prayer_no_response'
+    | 'support_received'
+    | 'friend_supported'
+    | 'new_support_published'
+    | 'support_comment'
+    | 'support_no_response'
     | 'group_access_request'
     | 'group_access_approved'
     | 'group_new_message'
@@ -37,7 +39,7 @@ export interface NotificationActionData {
     viewState?: string;
     groupId?: string;
     groupName?: string;
-    prayerId?: string;
+    requestId?: string;
     conversationId?: string;
     communityTab?: string;
     scrollToComments?: boolean;
@@ -62,9 +64,7 @@ interface NotifyWorkerPayload {
 // ── Worker URL ───────────────────────────────────────────
 
 function getWorkerUrl(): string {
-    // Priority: env var > app_settings from store (loaded at runtime)
     if (typeof window !== 'undefined') {
-        // Client-side: check env var
         const envUrl = process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL
             || process.env.NEXT_PUBLIC_WORKER_URL;
         if (envUrl) return envUrl;
@@ -91,7 +91,6 @@ async function sendToWorker(payload: NotifyWorkerPayload): Promise<boolean> {
         }
     }
 
-    // Fallback: direct Supabase insert (no aggregation, no push)
     return sendFallback(payload);
 }
 
@@ -116,7 +115,6 @@ async function sendFallback(payload: NotifyWorkerPayload): Promise<boolean> {
 
     if (notifications.length === 0) return true;
 
-    // Batch insert (50 at a time)
     for (let i = 0; i < notifications.length; i += 50) {
         const batch = notifications.slice(i, i + 50);
         const { error } = await supabase.from('notifications').insert(batch);
@@ -130,12 +128,12 @@ async function sendFallback(payload: NotifyWorkerPayload): Promise<boolean> {
 
 function mapActionTypeToLegacyType(actionType: NotificationActionType): string {
     switch (actionType) {
-        case 'prayer_prayed':
-        case 'friend_prayed':
-        case 'new_prayer_published':
-        case 'prayer_comment':
-        case 'prayer_no_response':
-            return 'prayer';
+        case 'support_received':
+        case 'friend_supported':
+        case 'new_support_published':
+        case 'support_comment':
+        case 'support_no_response':
+            return 'support';
         case 'dm_new_message':
         case 'group_new_message':
         case 'group_mention':
@@ -154,12 +152,12 @@ function mapActionTypeToLegacyType(actionType: NotificationActionType): string {
 function buildFallbackActionData(payload: NotifyWorkerPayload): NotificationActionData {
     const actionType = payload.action_type;
     switch (actionType) {
-        case 'prayer_prayed':
-        case 'friend_prayed':
-        case 'new_prayer_published':
-        case 'prayer_comment':
-        case 'prayer_no_response':
-            return { tab: 'community', communityTab: 'prieres', prayerId: payload.target_id };
+        case 'support_received':
+        case 'friend_supported':
+        case 'new_support_published':
+        case 'support_comment':
+        case 'support_no_response':
+            return { tab: 'community', communityTab: 'support', requestId: payload.target_id };
         case 'group_access_request':
             return { tab: 'community', viewState: 'group-detail', groupId: payload.target_id, groupName: payload.target_name };
         case 'group_access_approved':
@@ -189,16 +187,16 @@ function buildFallbackMessage(payload: NotifyWorkerPayload): { title: string; me
     const short = (s?: string, len = 60) => s ? (s.length > len ? s.substring(0, len) + '…' : s) : '';
 
     switch (payload.action_type) {
-        case 'prayer_prayed':
-            return { title: '🙏 Quelqu\'un a prié pour vous', message: `${name} a prié pour votre demande : "${short(payload.target_name)}"` };
-        case 'friend_prayed':
-            return { title: '🙏 Votre ami a prié', message: `Votre ami ${name} a aussi prié pour ce sujet` };
-        case 'new_prayer_published':
-            return { title: '📢 Nouvelle demande de prière', message: `${name} a publié : "${short(payload.target_name)}"` };
-        case 'prayer_comment':
-            return { title: '💬 Nouveau commentaire', message: `${name} a commenté votre demande de prière` };
-        case 'prayer_no_response':
-            return { title: '🕊️ Votre demande attend', message: 'Votre demande n\'a pas encore reçu de prière. La forum est là.' };
+        case 'support_received':
+            return { title: '🤝 Quelqu\'un vous soutient', message: `${name} a soutenu votre demande : "${short(payload.target_name)}"` };
+        case 'friend_supported':
+            return { title: '🤝 Votre ami vous soutient', message: `Votre ami ${name} a aussi soutenu ce sujet` };
+        case 'new_support_published':
+            return { title: '📢 Nouvelle demande de soutien', message: `${name} a publié : "${short(payload.target_name)}"` };
+        case 'support_comment':
+            return { title: '💬 Nouveau commentaire', message: `${name} a commenté votre demande de soutien` };
+        case 'support_no_response':
+            return { title: '📋 Votre demande attend', message: 'Votre demande n\'a pas encore reçu de soutien. Le forum est là.' };
         case 'group_access_request':
             return { title: '👥 Nouvelle demande d\'accès', message: `${name} souhaite rejoindre votre groupe "${payload.target_name}"` };
         case 'group_access_approved':
@@ -218,55 +216,58 @@ function buildFallbackMessage(payload: NotifyWorkerPayload): { title: string; me
         case 'friend_request_accepted':
             return { title: '👋 Ami ajouté !', message: `${name} a accepté votre demande d'ami` };
         case 'new_book_published':
-            return { title: '📚 Nouveau livre disponible', message: `"${payload.target_name}" vient d'être ajouté à la ressources` };
+            return { title: '📚 Nouveau livre disponible', message: `"${payload.target_name}" vient d'être ajouté aux ressources` };
         default:
             return { title: 'Notification', message: payload.message_preview || 'Nouvelle notification' };
     }
 }
 
 // ══════════════════════════════════════════════════════════
-// 🙏 PRAYER NOTIFICATIONS
+// 🤝 SUPPORT NOTIFICATIONS
 // ══════════════════════════════════════════════════════════
 
-/** [A] prayer_prayed — Someone prayed for your request */
-export async function notifyPrayerPrayed({
-    prayerOwnerId,
-    prayerContent,
-    prayerUserName,
-    prayerId,
+/** Someone supported your request */
+export async function notifySupportReceived({
+    requestOwnerId,
+    requestContent,
+    supporterName,
+    requestId,
     actorId,
     actorAvatar,
 }: {
-    prayerOwnerId: string;
-    prayerContent: string;
-    prayerUserName: string;
-    prayerId: string;
+    requestOwnerId: string;
+    requestContent: string;
+    supporterName: string;
+    requestId: string;
     actorId: string;
     actorAvatar?: string;
 }) {
     await sendToWorker({
-        action_type: 'prayer_prayed',
+        action_type: 'support_received',
         actor_id: actorId,
-        actor_name: prayerUserName,
+        actor_name: supporterName,
         actor_avatar: actorAvatar,
-        recipient_id: prayerOwnerId,
-        target_id: prayerId,
-        target_name: prayerContent.substring(0, 60),
+        recipient_id: requestOwnerId,
+        target_id: requestId,
+        target_name: requestContent.substring(0, 60),
     });
 }
 
-/** [B] friend_prayed — Your friend prayed for any request */
-export async function notifyFriendPrayed({
+/** @deprecated Use notifySupportReceived */
+export const notifyPrayerPrayed = notifySupportReceived;
+
+/** Your friend supported a request */
+export async function notifyFriendSupported({
     userId,
     userName,
-    prayerContent,
-    prayerId,
+    requestContent,
+    requestId,
     actorAvatar,
 }: {
     userId: string;
     userName: string;
-    prayerContent: string;
-    prayerId: string;
+    requestContent: string;
+    requestId: string;
     actorAvatar?: string;
 }) {
     try {
@@ -283,31 +284,34 @@ export async function notifyFriendPrayed({
         );
 
         await sendToWorker({
-            action_type: 'friend_prayed',
+            action_type: 'friend_supported',
             actor_id: userId,
             actor_name: userName,
             actor_avatar: actorAvatar,
             recipient_ids: friendIds,
-            target_id: prayerId,
-            target_name: prayerContent.substring(0, 50),
+            target_id: requestId,
+            target_name: requestContent.substring(0, 50),
         });
     } catch (e) {
-        console.error('[Notification] Friend prayed error:', e);
+        console.error('[Notification] Friend supported error:', e);
     }
 }
 
-/** [C] new_prayer_published — New prayer request broadcast */
-export async function notifyNewPrayer({
+/** @deprecated Use notifyFriendSupported */
+export const notifyFriendPrayed = notifyFriendSupported;
+
+/** New support request broadcast */
+export async function notifyNewSupportRequest({
     excludeUserId,
-    prayerContent,
+    requestContent,
     userName,
-    prayerId,
+    requestId,
     isAnonymous,
 }: {
     excludeUserId: string;
-    prayerContent: string;
+    requestContent: string;
     userName: string;
-    prayerId: string;
+    requestId: string;
     isAnonymous: boolean;
 }) {
     try {
@@ -321,74 +325,77 @@ export async function notifyNewPrayer({
             const recipientIds = users.map((u: any) => u.id);
 
             await sendToWorker({
-                action_type: 'new_prayer_published',
+                action_type: 'new_support_published',
                 actor_id: excludeUserId,
                 actor_name: isAnonymous ? 'Anonyme' : userName,
                 is_anonymous: isAnonymous,
                 recipient_ids: recipientIds,
-                target_id: prayerId,
-                target_name: prayerContent.substring(0, 60),
+                target_id: requestId,
+                target_name: requestContent.substring(0, 60),
             });
         }
     } catch (e) {
-        console.error('[Notification] New prayer error:', e);
+        console.error('[Notification] New support request error:', e);
     }
 }
 
-/** [D] prayer_comment — Someone commented on your prayer (NEW) */
-export async function notifyPrayerComment({
-    prayerId,
-    prayerOwnerId,
+/** @deprecated Use notifyNewSupportRequest */
+export const notifyNewPrayer = notifyNewSupportRequest;
+
+/** Someone commented on your support request */
+export async function notifySupportComment({
+    requestId,
+    requestOwnerId,
     commenterId,
     commenterName,
     commenterAvatar,
     commentPreview,
 }: {
-    prayerId: string;
-    prayerOwnerId: string;
+    requestId: string;
+    requestOwnerId: string;
     commenterId: string;
     commenterName: string;
     commenterAvatar?: string;
     commentPreview?: string;
 }) {
     try {
-        // Get all unique commenters (to notify them too)
         const { data: commenters } = await supabase
             .from('prayer_comments')
             .select('user_id')
-            .eq('prayer_id', prayerId)
+            .eq('prayer_id', requestId)
             .neq('user_id', commenterId);
 
         const recipientIds = new Set<string>();
-        recipientIds.add(prayerOwnerId); // Always notify owner
+        recipientIds.add(requestOwnerId);
         if (commenters) {
             commenters.forEach((c: any) => recipientIds.add(c.user_id));
         }
-        recipientIds.delete(commenterId); // Don't notify self
+        recipientIds.delete(commenterId);
 
         if (recipientIds.size === 0) return;
 
         await sendToWorker({
-            action_type: 'prayer_comment',
+            action_type: 'support_comment',
             actor_id: commenterId,
             actor_name: commenterName,
             actor_avatar: commenterAvatar,
             recipient_ids: Array.from(recipientIds),
-            target_id: prayerId,
+            target_id: requestId,
             message_preview: commentPreview,
         });
     } catch (e) {
-        console.error('[Notification] Prayer comment error:', e);
+        console.error('[Notification] Support comment error:', e);
     }
 }
 
-// Note: [E] prayer_no_response is handled by the Cloudflare Worker Cron trigger
+/** @deprecated Use notifySupportComment */
+export const notifyPrayerComment = notifySupportComment;
 
 // ══════════════════════════════════════════════════════════
 // 👥 GROUP NOTIFICATIONS
 // ══════════════════════════════════════════════════════════
 
-/** [F] group_access_request — User requests to join group */
+/** User requests to join group */
 export async function notifyGroupAccessRequest({
     groupOwnerId,
     groupId,
@@ -415,7 +422,7 @@ export async function notifyGroupAccessRequest({
     });
 }
 
-/** [G] group_access_approved — Join request approved */
+/** Join request approved */
 export async function notifyGroupAccessApproved({
     userId,
     groupId,
@@ -435,7 +442,7 @@ export async function notifyGroupAccessApproved({
     });
 }
 
-/** [H] group_new_message — New message in group */
+/** New message in group */
 export async function notifyGroupNewMessage({
     groupId,
     groupName,
@@ -477,7 +484,7 @@ export async function notifyGroupNewMessage({
     }
 }
 
-/** [I] admin_new_group — Admin created official group */
+/** Admin created official group */
 export async function notifyAdminNewGroup({
     groupId,
     groupName,
@@ -509,7 +516,7 @@ export async function notifyAdminNewGroup({
     }
 }
 
-/** [J] group_invitation — User invited to a group */
+/** User invited to a group */
 export async function notifyGroupInvitation({
     userId,
     inviterName,
@@ -536,7 +543,7 @@ export async function notifyGroupInvitation({
     });
 }
 
-/** [K] group_mention — @mention in group chat (NEW) */
+/** @mention in group chat */
 export async function notifyGroupMention({
     mentionedUserId,
     mentionerName,
@@ -573,7 +580,7 @@ export async function notifyGroupMention({
 // 💬 SOCIAL & MESSAGING NOTIFICATIONS
 // ══════════════════════════════════════════════════════════
 
-/** [L] dm_new_message — New direct message */
+/** New direct message */
 export async function notifyDirectMessage({
     recipientId,
     senderId,
@@ -602,7 +609,7 @@ export async function notifyDirectMessage({
     });
 }
 
-/** [M] friend_request_received — Someone sent you a friend request (NEW) */
+/** Friend request received */
 export async function notifyFriendRequestReceived({
     recipientId,
     senderId,
@@ -623,7 +630,7 @@ export async function notifyFriendRequestReceived({
     });
 }
 
-/** [N] friend_request_accepted — Your friend request was accepted */
+/** Friend request accepted */
 export async function notifyFriendRequestAccepted({
     userId,
     accepterId,
@@ -635,7 +642,6 @@ export async function notifyFriendRequestAccepted({
     accepterName: string;
     accepterAvatar?: string;
 }) {
-    // Try to find existing conversation for deep-link
     let conversationId: string | undefined;
     try {
         const { data: conv } = await supabase
@@ -660,7 +666,7 @@ export async function notifyFriendRequestAccepted({
 // 📚 LIBRARY NOTIFICATIONS
 // ══════════════════════════════════════════════════════════
 
-/** [N] new_book_published — Admin published a new book */
+/** Admin published a new book */
 export async function notifyNewBook({
     bookId,
     bookTitle,
@@ -675,7 +681,6 @@ export async function notifyNewBook({
     publisherName: string;
 }) {
     try {
-        // Notify all users except the publisher
         const { data: users } = await supabase
             .from('profiles')
             .select('id')
@@ -704,7 +709,6 @@ export async function notifyNewBook({
 
 /**
  * @deprecated Use specific notification functions instead.
- * Kept for backward compatibility.
  */
 export async function sendNotification({
     userId,

@@ -37,41 +37,41 @@ interface SettingItem {
 }
 
 const SETTINGS_CONFIG: SettingItem[] = [
-    // 🙏 Prayer
+    // 🤝 Support
     {
-        key: 'prayer_prayed',
-        label: 'Prière reçue',
-        description: 'Quelqu\'un a prié pour votre demande',
+        key: 'support_received',
+        label: 'Soutien reçu',
+        description: 'Quelqu\'un a soutenu votre demande',
         icon: <Heart className="h-4 w-4 text-pink-400" />,
-        category: '🙏 Prière',
+        category: '🤝 Soutien',
     },
     {
-        key: 'friend_prayed',
-        label: 'Ami a prié',
-        description: 'Un ami a prié pour un sujet',
+        key: 'friend_supported',
+        label: 'Ami a soutenu',
+        description: 'Un ami a soutenu un sujet',
         icon: <Heart className="h-4 w-4 text-pink-300" />,
-        category: '🙏 Prière',
+        category: '🤝 Soutien',
     },
     {
-        key: 'new_prayer_published',
+        key: 'new_support_published',
         label: 'Nouvelle demande',
-        description: 'Nouvelle demande de prière publiée',
+        description: 'Nouvelle demande de soutien publiée',
         icon: <Sparkles className="h-4 w-4 text-amber-400" />,
-        category: '🙏 Prière',
+        category: '🤝 Soutien',
     },
     {
-        key: 'prayer_comment',
+        key: 'support_comment',
         label: 'Commentaire',
         description: 'Quelqu\'un a commenté votre demande',
         icon: <MessageSquare className="h-4 w-4 text-amber-300" />,
-        category: '🙏 Prière',
+        category: '🤝 Soutien',
     },
     {
-        key: 'prayer_no_response',
+        key: 'support_no_response',
         label: 'Rappel sans réponse',
-        description: 'Votre demande n\'a pas reçu de prière (48h)',
+        description: 'Votre demande n\'a pas reçu de soutien (48h)',
         icon: <Clock className="h-4 w-4 text-slate-400" />,
-        category: '🙏 Prière',
+        category: '🤝 Soutien',
     },
 
     // 👥 Groups
@@ -143,11 +143,11 @@ const SETTINGS_CONFIG: SettingItem[] = [
 ];
 
 const DEFAULT_PREFERENCES: PreferenceMap = {
-    prayer_prayed: { in_app: true, push: true },
-    friend_prayed: { in_app: true, push: false },
-    new_prayer_published: { in_app: true, push: false },
-    prayer_comment: { in_app: true, push: true },
-    prayer_no_response: { in_app: false, push: true },
+    support_received: { in_app: true, push: true },
+    friend_supported: { in_app: true, push: false },
+    new_support_published: { in_app: true, push: false },
+    support_comment: { in_app: true, push: true },
+    support_no_response: { in_app: false, push: true },
     group_access_request: { in_app: true, push: true },
     group_access_approved: { in_app: true, push: true },
     group_new_message: { in_app: true, push: true },
