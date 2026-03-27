@@ -3,13 +3,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GraduationCap, Loader2, Eye, EyeOff, KeyRound, ShieldCheck, ArrowLeft, Lock, UserCircle, Mail } from 'lucide-react';
+import { GraduationCap, Loader2, Eye, EyeOff, KeyRound, ShieldCheck, ArrowLeft, Lock, UserCircle, Mail, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
-type LoginMode = 'choose' | 'admin' | 'access_code' | 'pin_create' | 'pin_verify' | 'dashboard_redirect' | 'forgot_password';
+type LoginMode = 'choose' | 'admin' | 'access_code' | 'pin_create' | 'pin_verify' | 'dashboard_redirect' | 'forgot_password' | 'reset_password' | 'reset_success';
 
 // Session TTL: 24 hours in milliseconds
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -63,6 +64,12 @@ export default function LoginPage() {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
 
+    // Reset password
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showNewPwd, setShowNewPwd] = useState(false);
+    const [resetSent, setResetSent] = useState(false);
+
     // Access code login
     const [accessCode, setAccessCode] = useState('');
 
@@ -81,6 +88,59 @@ export default function LoginPage() {
             setLoading(false);
         })();
     }, [orgSlug]);
+
+    // ═══ Detect password recovery token from Supabase email link ═══
+    useEffect(() => {
+        const handleRecovery = async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const errorParam = urlParams.get('error');
+            const errorDesc = urlParams.get('error_description');
+
+            // Handle Supabase error params
+            if (errorParam) {
+                toast.error(errorDesc || 'Le lien de réinitialisation a expiré');
+                window.history.replaceState(null, '', window.location.pathname);
+                return;
+            }
+
+            // 1. PKCE flow: Supabase redirects with ?code=xxx
+            const code = urlParams.get('code');
+            if (code) {
+                try {
+                    const { error } = await supabase.auth.exchangeCodeForSession(code);
+                    if (error) {
+                        toast.error('Le lien a expiré. Veuillez en demander un nouveau.');
+                        window.history.replaceState(null, '', window.location.pathname);
+                        return;
+                    }
+                    setMode('reset_password');
+                    window.history.replaceState(null, '', window.location.pathname);
+                    return;
+                } catch {
+                    toast.error('Erreur lors de la vérification du lien');
+                }
+            }
+
+            // 2. Implicit flow: Supabase redirects with #access_token=...&type=recovery
+            const hashParams = new URLSearchParams(window.location.hash.substring(1));
+            const type = hashParams.get('type');
+            if (type === 'recovery') {
+                setMode('reset_password');
+                return;
+            }
+        };
+
+        handleRecovery();
+
+        // 3. Listen for PASSWORD_RECOVERY event (works with both flows)
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+            if (event === 'PASSWORD_RECOVERY') {
+                setMode('reset_password');
+            }
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
 
     // ═══ ADMIN LOGIN (email/password) ═══
     const handleAdminLogin = async () => {
@@ -109,14 +169,34 @@ export default function LoginPage() {
         if (!email) { toast.error('Entrez votre email administrateur'); return; }
         setSaving(true);
         try {
+            // redirectTo must point back to THIS page so the recovery token is processed here
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
                 redirectTo: `${window.location.origin}/${orgSlug}/login`,
             });
             if (error) throw error;
-            toast.success('📧 Un email de réinitialisation a été envoyé ! Vérifiez votre boîte de réception.');
-            setMode('admin');
+            setResetSent(true);
+            toast.success('📧 Email de réinitialisation envoyé !');
         } catch (e: any) {
             toast.error(e.message || "Erreur lors de l'envoi");
+        }
+        setSaving(false);
+    };
+
+    // ═══ UPDATE PASSWORD (after clicking email link) ═══
+    const handleUpdatePassword = async () => {
+        if (!newPassword || !confirmPassword) { toast.error('Remplissez les deux champs'); return; }
+        if (newPassword.length < 6) { toast.error('Le mot de passe doit contenir au moins 6 caractères'); return; }
+        if (newPassword !== confirmPassword) { toast.error('Les mots de passe ne correspondent pas'); return; }
+        setSaving(true);
+        try {
+            const { error } = await supabase.auth.updateUser({ password: newPassword });
+            if (error) throw error;
+            setMode('reset_success');
+            toast.success('✅ Mot de passe mis à jour !');
+            // Clean the URL hash so token is not reused
+            window.history.replaceState(null, '', window.location.pathname);
+        } catch (e: any) {
+            toast.error(e.message || 'Erreur lors de la mise à jour');
         }
         setSaving(false);
     };
@@ -304,6 +384,113 @@ export default function LoginPage() {
 
     if (loading) return <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center"><Loader2 className="w-8 h-8 text-teal-400 animate-spin" /></div>;
     if (!org) return <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center text-white"><h1 className="text-2xl font-bold">Établissement introuvable</h1></div>;
+
+    // ═══════════════════════ RESET PASSWORD SCREEN ═══════════════════════
+    if (mode === 'reset_password') {
+        return (
+            <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center px-4">
+                <div className="fixed inset-0 pointer-events-none overflow-hidden">
+                    <div className="absolute top-[-30%] right-[-20%] w-[60%] h-[60%] bg-emerald-600/8 blur-[150px] rounded-full" />
+                    <div className="absolute bottom-[-30%] left-[-20%] w-[50%] h-[50%] bg-teal-600/8 blur-[150px] rounded-full" />
+                </div>
+                <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="relative z-10 w-full max-w-sm">
+                    <div className="text-center mb-6">
+                        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mx-auto mb-4 shadow-2xl shadow-emerald-500/20">
+                            <ShieldCheck className="w-10 h-10 text-white" />
+                        </div>
+                        <h1 className="text-2xl font-bold text-white mb-2">Nouveau mot de passe</h1>
+                        <p className="text-sm text-slate-400">Choisissez un mot de passe sécurisé (6 caractères minimum)</p>
+                    </div>
+
+                    <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 space-y-4">
+                        <div>
+                            <Label className="text-slate-400 text-xs">Nouveau mot de passe</Label>
+                            <div className="relative mt-1">
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                <Input
+                                    type={showNewPwd ? 'text' : 'password'}
+                                    value={newPassword}
+                                    onChange={e => setNewPassword(e.target.value)}
+                                    placeholder="••••••••"
+                                    className="pl-10 pr-10 bg-white/5 border-white/10 text-white h-12 rounded-xl"
+                                    autoFocus
+                                />
+                                <button onClick={() => setShowNewPwd(!showNewPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white">
+                                    {showNewPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <Label className="text-slate-400 text-xs">Confirmer le mot de passe</Label>
+                            <div className="relative mt-1">
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                <Input
+                                    type="password"
+                                    value={confirmPassword}
+                                    onChange={e => setConfirmPassword(e.target.value)}
+                                    placeholder="••••••••"
+                                    className="pl-10 bg-white/5 border-white/10 text-white h-12 rounded-xl"
+                                    onKeyDown={e => e.key === 'Enter' && handleUpdatePassword()}
+                                />
+                            </div>
+                            {confirmPassword && newPassword !== confirmPassword && (
+                                <p className="text-xs text-red-400 mt-1">Les mots de passe ne correspondent pas</p>
+                            )}
+                            {confirmPassword && newPassword === confirmPassword && newPassword.length >= 6 && (
+                                <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Mots de passe identiques</p>
+                            )}
+                        </div>
+
+                        {/* Password strength */}
+                        <div className="flex gap-1">
+                            {[1, 2, 3, 4].map(i => (
+                                <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${
+                                    newPassword.length === 0 ? 'bg-white/10' :
+                                    newPassword.length < 6 ? (i <= 1 ? 'bg-red-500' : 'bg-white/10') :
+                                    newPassword.length < 8 ? (i <= 2 ? 'bg-amber-500' : 'bg-white/10') :
+                                    newPassword.length < 12 ? (i <= 3 ? 'bg-emerald-500' : 'bg-white/10') :
+                                    'bg-emerald-400'
+                                }`} />
+                            ))}
+                        </div>
+
+                        <Button
+                            onClick={handleUpdatePassword}
+                            disabled={saving || newPassword.length < 6 || newPassword !== confirmPassword}
+                            className="w-full h-12 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/25"
+                        >
+                            {saving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <ShieldCheck className="w-5 h-5 mr-2" />}
+                            Enregistrer le nouveau mot de passe
+                        </Button>
+                    </div>
+                </motion.div>
+            </div>
+        );
+    }
+
+    // ═══════════════════════ RESET SUCCESS SCREEN ═══════════════════════
+    if (mode === 'reset_success') {
+        return (
+            <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center px-4">
+                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="relative z-10 w-full max-w-sm">
+                    <div className="p-8 rounded-2xl bg-white/[0.03] border border-white/10 text-center">
+                        <div className="w-20 h-20 rounded-full bg-emerald-600/20 flex items-center justify-center mx-auto mb-4">
+                            <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+                        </div>
+                        <h2 className="font-bold text-2xl text-white mb-2">Mot de passe mis à jour !</h2>
+                        <p className="text-sm text-slate-400 mb-6">Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.</p>
+                        <Button
+                            onClick={() => { setMode('admin'); setNewPassword(''); setConfirmPassword(''); }}
+                            className="w-full h-12 bg-gradient-to-r from-indigo-600 to-violet-600 rounded-xl text-white font-bold shadow-lg shadow-indigo-600/25"
+                        >
+                            <ShieldCheck className="w-5 h-5 mr-2" /> Se connecter
+                        </Button>
+                    </div>
+                </motion.div>
+            </div>
+        );
+    }
 
     // ═══════════════════════ PIN CREATE SCREEN ═══════════════════════
     if (mode === 'pin_create') {
@@ -590,33 +777,55 @@ export default function LoginPage() {
                                 <div className="text-center">
                                     <Mail className="w-8 h-8 text-amber-400 mx-auto mb-2" />
                                     <h2 className="font-bold text-white">Réinitialiser le mot de passe</h2>
-                                    <p className="text-xs text-slate-400 mt-1">Entrez votre email. Vous recevrez un lien de réinitialisation.</p>
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        {resetSent
+                                            ? 'Un email a été envoyé ! Vérifiez votre boîte de réception (et les spams).'
+                                            : 'Entrez votre email. Vous recevrez un lien de réinitialisation.'
+                                        }
+                                    </p>
                                 </div>
 
-                                <div className="relative">
-                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                                    <Input
-                                        type="email"
-                                        value={email}
-                                        onChange={e => setEmail(e.target.value)}
-                                        placeholder="Email administrateur"
-                                        className="pl-10 bg-white/5 border-white/10 text-white h-12 rounded-xl"
-                                        onKeyDown={e => e.key === 'Enter' && handleForgotPassword()}
-                                        autoFocus
-                                    />
-                                </div>
-
-                                <Button
-                                    onClick={handleForgotPassword}
-                                    disabled={saving || !email}
-                                    className="w-full h-12 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold rounded-xl shadow-lg shadow-amber-600/25"
-                                >
-                                    {saving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Mail className="w-5 h-5 mr-2" />}
-                                    Envoyer le lien
-                                </Button>
+                                {!resetSent ? (
+                                    <>
+                                        <div className="relative">
+                                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                            <Input
+                                                type="email"
+                                                value={email}
+                                                onChange={e => setEmail(e.target.value)}
+                                                placeholder="Email administrateur"
+                                                className="pl-10 bg-white/5 border-white/10 text-white h-12 rounded-xl"
+                                                onKeyDown={e => e.key === 'Enter' && handleForgotPassword()}
+                                                autoFocus
+                                            />
+                                        </div>
+                                        <Button
+                                            onClick={handleForgotPassword}
+                                            disabled={saving || !email}
+                                            className="w-full h-12 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold rounded-xl shadow-lg shadow-amber-600/25"
+                                        >
+                                            {saving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Mail className="w-5 h-5 mr-2" />}
+                                            Envoyer le lien
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <div className="text-center py-4">
+                                        <div className="w-16 h-16 rounded-full bg-emerald-600/20 flex items-center justify-center mx-auto mb-3">
+                                            <Mail className="w-8 h-8 text-emerald-400" />
+                                        </div>
+                                        <p className="text-sm text-emerald-300 font-medium">Email envoyé à</p>
+                                        <p className="text-xs text-slate-400 mt-1">{email}</p>
+                                        <button
+                                            onClick={() => setResetSent(false)}
+                                            className="text-xs text-amber-400 hover:text-amber-300 mt-3"
+                                        >
+                                            Renvoyer l&apos;email
+                                        </button>
+                                    </div>
+                                )}
                             </div>
 
-                            <Button variant="ghost" className="w-full text-slate-400" onClick={() => setMode('admin')}>
+                            <Button variant="ghost" className="w-full text-slate-400" onClick={() => { setMode('admin'); setResetSent(false); }}>
                                 <ArrowLeft className="w-4 h-4 mr-2" /> Retour à la connexion
                             </Button>
                         </motion.div>

@@ -2,19 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload } from 'lucide-react';
+import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
-type Tab = 'general' | 'setup' | 'classes' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'settings';
+type Tab = 'general' | 'landing' | 'setup' | 'classes' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'settings';
 interface Cls { id?: string; name: string; cycle: string; filiere_id: string | null; level: number; capacity: number; }
 interface Sub { id?: string; name: string; code: string; coefficient: number; classroom_id: string; teacher_id: string | null; }
 
 const SIDES = [
-    { id: 'general' as Tab, icon: Home, label: 'Général' }, { id: 'setup' as Tab, icon: Settings, label: 'Configuration' },
+    { id: 'general' as Tab, icon: Home, label: 'Général' }, { id: 'landing' as Tab, icon: LayoutDashboard, label: 'Page d\'accueil' }, { id: 'setup' as Tab, icon: Settings, label: 'Configuration' },
     { id: 'classes' as Tab, icon: School, label: 'Classes' }, { id: 'subjects' as Tab, icon: BookOpen, label: 'Matières' },
     { id: 'teachers' as Tab, icon: Users, label: 'Professeurs' }, { id: 'students' as Tab, icon: GraduationCap, label: 'Étudiants' },
     { id: 'timetable' as Tab, icon: Calendar, label: 'Emploi du temps' }, { id: 'evaluations' as Tab, icon: ClipboardList, label: 'Évaluations' },
@@ -74,7 +74,16 @@ export default function AdminPage() {
     const [sOrgName, setSOrgName] = useState(''); const [sOrgPhone, setSOrgPhone] = useState('');
     const [sOrgEmail, setSOrgEmail] = useState(''); const [sOrgWhatsapp, setSOrgWhatsapp] = useState('');
     const [sVerifying, setSVerifying] = useState(false); const [sSavingSettings, setSSavingSettings] = useState(false);
+    // Landing page config
+    const [lHeroImage, setLHeroImage] = useState(''); const [lHeroTitle, setLHeroTitle] = useState(''); const [lHeroSubtitle, setLHeroSubtitle] = useState('');
+    const [lAboutText, setLAboutText] = useState(''); const [lAboutImage, setLAboutImage] = useState('');
+    const [lGalleryImages, setLGalleryImages] = useState<string[]>([]); const [lGalleryInput, setLGalleryInput] = useState('');
+    const [lSocialFb, setLSocialFb] = useState(''); const [lSocialIg, setLSocialIg] = useState(''); const [lSocialTw, setLSocialTw] = useState('');
+    const [lSocialTt, setLSocialTt] = useState(''); const [lSocialYt, setLSocialYt] = useState(''); const [lSocialLi, setLSocialLi] = useState('');
+    const [lFooterText, setLFooterText] = useState(''); const [lSaving, setLSaving] = useState(false);
     const loadSettings = () => { if (!org) return; setSCustomDomain(org.custom_domain || ''); setSDomainVerified(org.domain_verified || false); setSDomainSsl(org.domain_ssl_status || 'pending'); setSBrandColor(org.brand_color || '#4f46e5'); setSLogoUrl(org.logo_url || ''); setSFaviconUrl(org.favicon_url || ''); setSMetaTitle(org.meta_title || ''); setSMetaDesc(org.meta_description || ''); setSOrgName(org.name || ''); setSOrgPhone(org.phone || ''); setSOrgEmail(org.email || ''); setSOrgWhatsapp(org.whatsapp || ''); };
+    const loadLanding = () => { if (!org) return; setLHeroImage(org.hero_image_url || ''); setLHeroTitle(org.hero_title || ''); setLHeroSubtitle(org.hero_subtitle || ''); setLAboutText(org.about_text || ''); setLAboutImage(org.about_image_url || ''); setLGalleryImages(org.gallery_images || []); setLSocialFb(org.social_facebook || ''); setLSocialIg(org.social_instagram || ''); setLSocialTw(org.social_twitter || ''); setLSocialTt(org.social_tiktok || ''); setLSocialYt(org.social_youtube || ''); setLSocialLi(org.social_linkedin || ''); setLFooterText(org.footer_text || ''); };
+    const saveLanding = async () => { setLSaving(true); try { const updates: any = { hero_image_url: lHeroImage || null, hero_title: lHeroTitle || null, hero_subtitle: lHeroSubtitle || null, about_text: lAboutText || null, about_image_url: lAboutImage || null, gallery_images: lGalleryImages, social_facebook: lSocialFb || null, social_instagram: lSocialIg || null, social_twitter: lSocialTw || null, social_tiktok: lSocialTt || null, social_youtube: lSocialYt || null, social_linkedin: lSocialLi || null, footer_text: lFooterText || null }; const { error } = await supabase.from('organizations').update(updates).eq('id', org.id); if (error) throw error; setOrg({ ...org, ...updates }); toast.success('Page d\'accueil mise à jour ✅'); } catch (e: any) { toast.error(e.message); } setLSaving(false); };
 
     const [authChecked, setAuthChecked] = useState(false);
     const [isAuthorized, setIsAuthorized] = useState(false);
@@ -183,7 +192,7 @@ export default function AdminPage() {
         setOrg({ ...org, custom_domain: null, domain_verified: false, domain_ssl_status: 'pending' });
         toast.success('Domaine retiré');
     };
-    const onTab = (t: Tab) => { setTab(t); setSidebar(false); if (t === 'timetable' && !ttLoaded) loadTT(); if (t === 'evaluations' && !evLoaded) loadEv(); if (t === 'payments' && !payLoaded) loadPay(); if (t === 'disciplines' && !dLoaded) loadDisc(); if (t === 'grades' && !grLoaded) loadGrades(); if (t === 'settings') loadSettings(); };
+    const onTab = (t: Tab) => { setTab(t); setSidebar(false); if (t === 'timetable' && !ttLoaded) loadTT(); if (t === 'evaluations' && !evLoaded) loadEv(); if (t === 'payments' && !payLoaded) loadPay(); if (t === 'disciplines' && !dLoaded) loadDisc(); if (t === 'grades' && !grLoaded) loadGrades(); if (t === 'settings') loadSettings(); if (t === 'landing') loadLanding(); };
 
     // Module actions
     const addSlot = async () => { if (!ttCls2 || !ttSub2) { toast.error('Sélectionnez classe et matière'); return; } setSaving(true); const { error } = await supabase.from('timetable_slots').insert({ organization_id: org.id, classroom_id: ttCls2, subject_id: ttSub2, day_of_week: ttDay, start_time: ttStart, end_time: ttEnd, room: ttRoom || null }); if (error) toast.error(error.message); else { toast.success('Créneau ajouté !'); loadTT(); } setSaving(false); };
@@ -475,6 +484,109 @@ export default function AdminPage() {
                                 })()}
                             </div>
                         )}
+                    </div>}
+
+                    {/* ═══ LANDING PAGE CONFIG ═══ */}
+                    {tab === 'landing' && <div className="space-y-6">
+                        <div className="flex items-center justify-between">
+                            <h2 className="font-bold text-lg flex items-center gap-2"><LayoutDashboard className="w-5 h-5 text-cyan-400" /> Personnaliser votre page d&apos;accueil</h2>
+                            <a href={`/${orgSlug}`} target="_blank" rel="noreferrer" className="text-xs px-3 py-1.5 rounded-lg bg-teal-600/10 text-teal-300 hover:bg-teal-600/20 flex items-center gap-1 transition"><ExternalLink className="w-3 h-3" />Voir la page</a>
+                        </div>
+                        <p className="text-xs text-slate-500 -mt-3">Les coordonnées (téléphone, email, adresse) s&apos;affichent automatiquement depuis vos informations d&apos;inscription.</p>
+
+                        {/* Hero */}
+                        <div className="p-5 rounded-xl bg-cyan-600/5 border border-cyan-500/20">
+                            <h3 className="font-bold text-cyan-300 mb-3 flex items-center gap-2"><Upload className="w-4 h-4" /> Hero / Bannière</h3>
+                            <div className="grid sm:grid-cols-2 gap-4">
+                                <div>
+                                    <Label className="text-slate-400 text-xs">Image bannière (URL)</Label>
+                                    <Input value={lHeroImage} onChange={e => setLHeroImage(e.target.value)} placeholder="https://...banner.jpg" className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" />
+                                    {lHeroImage && <img src={lHeroImage} alt="" className="w-full h-28 rounded-lg object-cover mt-2 border border-white/10" onError={e => (e.currentTarget.style.display='none')} />}
+                                </div>
+                                <div className="space-y-3">
+                                    <div>
+                                        <Label className="text-slate-400 text-xs">Titre hero (défaut: nom de l&apos;école)</Label>
+                                        <Input value={lHeroTitle} onChange={e => setLHeroTitle(e.target.value)} placeholder={org.name} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" />
+                                    </div>
+                                    <div>
+                                        <Label className="text-slate-400 text-xs">Sous-titre / Slogan</Label>
+                                        <Input value={lHeroSubtitle} onChange={e => setLHeroSubtitle(e.target.value)} placeholder={org.motto || 'Bienvenue sur notre portail'} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* About */}
+                        <div className="p-5 rounded-xl bg-white/[0.03] border border-white/10">
+                            <h3 className="font-bold mb-3 flex items-center gap-2"><Edit className="w-4 h-4 text-indigo-400" /> À propos de l&apos;établissement</h3>
+                            <div className="grid sm:grid-cols-2 gap-4">
+                                <div>
+                                    <Label className="text-slate-400 text-xs">Description</Label>
+                                    <textarea value={lAboutText} onChange={e => setLAboutText(e.target.value)} placeholder="Décrivez votre établissement, son histoire, ses valeurs..." rows={5} className="w-full mt-1 p-3 rounded-lg bg-white/5 border border-white/10 text-white text-sm resize-none focus:outline-none focus:border-indigo-500/50 transition" />
+                                </div>
+                                <div>
+                                    <Label className="text-slate-400 text-xs">Image section À propos (URL)</Label>
+                                    <Input value={lAboutImage} onChange={e => setLAboutImage(e.target.value)} placeholder="https://...about.jpg" className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" />
+                                    {lAboutImage && <img src={lAboutImage} alt="" className="w-full h-36 rounded-lg object-cover mt-2 border border-white/10" onError={e => (e.currentTarget.style.display='none')} />}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Gallery */}
+                        <div className="p-5 rounded-xl bg-white/[0.03] border border-white/10">
+                            <h3 className="font-bold mb-3 flex items-center gap-2"><Upload className="w-4 h-4 text-amber-400" /> Galerie photos</h3>
+                            <div className="flex gap-2 mb-3">
+                                <Input value={lGalleryInput} onChange={e => setLGalleryInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && lGalleryInput.trim()) { setLGalleryImages(p => [...p, lGalleryInput.trim()]); setLGalleryInput(''); }}} placeholder="Collez l'URL d'une image" className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm flex-1" />
+                                <Button size="sm" className="bg-amber-600 shrink-0 h-9" onClick={() => { if (lGalleryInput.trim()) { setLGalleryImages(p => [...p, lGalleryInput.trim()]); setLGalleryInput(''); }}} disabled={!lGalleryInput.trim()}><Plus className="w-4 h-4" /></Button>
+                            </div>
+                            {lGalleryImages.length > 0 ? (
+                                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                    {lGalleryImages.map((img, i) => (
+                                        <div key={i} className="relative group rounded-lg overflow-hidden border border-white/10">
+                                            <img src={img} alt="" className="w-full h-20 object-cover" />
+                                            <button onClick={() => setLGalleryImages(p => p.filter((_, j) => j !== i))} className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-white"><X className="w-3 h-3" /></button>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : <p className="text-xs text-slate-500 text-center py-4">Ajoutez des photos de votre établissement (bâtiment, salles, événements...)</p>}
+                        </div>
+
+                        {/* Social links */}
+                        <div className="p-5 rounded-xl bg-white/[0.03] border border-white/10">
+                            <h3 className="font-bold mb-3 flex items-center gap-2"><Globe className="w-4 h-4 text-pink-400" /> Réseaux sociaux</h3>
+                            <div className="grid sm:grid-cols-2 gap-3">
+                                <div><Label className="text-slate-400 text-xs">📘 Facebook</Label><Input value={lSocialFb} onChange={e => setLSocialFb(e.target.value)} placeholder="https://facebook.com/votre-page" className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">📸 Instagram</Label><Input value={lSocialIg} onChange={e => setLSocialIg(e.target.value)} placeholder="https://instagram.com/votre-compte" className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">🐦 Twitter / X</Label><Input value={lSocialTw} onChange={e => setLSocialTw(e.target.value)} placeholder="https://x.com/votre-compte" className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">🎵 TikTok</Label><Input value={lSocialTt} onChange={e => setLSocialTt(e.target.value)} placeholder="https://tiktok.com/@votre-compte" className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">🎬 YouTube</Label><Input value={lSocialYt} onChange={e => setLSocialYt(e.target.value)} placeholder="https://youtube.com/@votre-chaine" className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                <div><Label className="text-slate-400 text-xs">💼 LinkedIn</Label><Input value={lSocialLi} onChange={e => setLSocialLi(e.target.value)} placeholder="https://linkedin.com/company/..." className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-5 rounded-xl bg-white/[0.03] border border-white/10">
+                            <h3 className="font-bold mb-3 flex items-center gap-2"><Edit className="w-4 h-4 text-slate-400" /> Pied de page</h3>
+                            <Label className="text-slate-400 text-xs">Texte personnalisé (optionnel — par défaut: © année + nom)</Label>
+                            <Input value={lFooterText} onChange={e => setLFooterText(e.target.value)} placeholder={`© ${new Date().getFullYear()} ${org.name}. Tous droits réservés.`} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" />
+                        </div>
+
+                        {/* Preview hint */}
+                        <div className="p-4 rounded-xl bg-indigo-600/5 border border-indigo-500/15 flex items-center gap-3">
+                            <Globe className="w-5 h-5 text-indigo-400 shrink-0" />
+                            <div className="flex-1">
+                                <p className="text-sm font-medium text-indigo-300">Aperçu en direct</p>
+                                <p className="text-[10px] text-slate-500">Cliquez sur &quot;Voir la page&quot; pour prévisualiser vos modifications après sauvegarde.</p>
+                            </div>
+                        </div>
+
+                        {/* Save */}
+                        <div className="flex justify-end">
+                            <Button onClick={saveLanding} disabled={lSaving} className="bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 px-8 font-bold rounded-xl shadow-lg shadow-cyan-600/25">
+                                {lSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                                Sauvegarder la page d&apos;accueil
+                            </Button>
+                        </div>
                     </div>}
 
                     {/* ═══ SETTINGS ═══ */}
