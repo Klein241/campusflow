@@ -375,11 +375,8 @@ export default function LoginPage() {
             logged_in_at: now.toISOString(),
             expires_at: new Date(now.getTime() + SESSION_TTL_MS).toISOString(),
         }));
-        if (userProfile.role === 'teacher') {
-            router.push(`/${orgSlug}/prof/dashboard`);
-        } else {
-            router.push(`/${orgSlug}/student/dashboard`);
-        }
+        // Unified SPA — all roles go to /campus
+        router.push(`/${orgSlug}/campus`);
     };
 
     if (loading) return <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center"><Loader2 className="w-8 h-8 text-teal-400 animate-spin" /></div>;

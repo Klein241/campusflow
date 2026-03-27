@@ -123,12 +123,17 @@ export default function SchoolLandingPage() {
                         {filieres.length > 0 && <a href="#programs" className="hover:text-white transition-colors">Formations</a>}
                         {gallery.length > 0 && <a href="#gallery" className="hover:text-white transition-colors">Galerie</a>}
                         <a href="#contact" className="hover:text-white transition-colors">Contact</a>
+                        <Link href={`/${orgSlug}/shop`} className="hover:text-white transition-colors flex items-center gap-1">
+                            <ShoppingBag className="w-3.5 h-3.5" /> Marketplace
+                        </Link>
                     </div>
-                    <Link href={`/${orgSlug}/login`}>
-                        <Button size="sm" className="text-white font-bold rounded-xl shadow-lg" style={{ background: `linear-gradient(135deg, ${brandColor}, ${brandColor}cc)` }}>
-                            Se connecter <ArrowRight className="w-4 h-4 ml-1" />
-                        </Button>
-                    </Link>
+                    <div className="flex items-center gap-2">
+                        <Link href={`/${orgSlug}/login`}>
+                            <Button size="sm" className="text-white font-bold rounded-xl shadow-lg" style={{ background: `linear-gradient(135deg, ${brandColor}, ${brandColor}cc)` }}>
+                                <GraduationCap className="w-4 h-4 mr-1" /> School Space <ArrowRight className="w-4 h-4 ml-1" />
+                            </Button>
+                        </Link>
+                    </div>
                 </div>
             </nav>
 
