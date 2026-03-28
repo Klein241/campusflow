@@ -4,7 +4,8 @@ import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     User, Building2, MapPin, Phone, FileText, ArrowRight, ArrowLeft,
-    GraduationCap, CheckCircle2, Upload, X, Loader2, ChevronDown
+    GraduationCap, CheckCircle2, Upload, X, Loader2, ChevronDown,
+    Lock, Eye, EyeOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -62,6 +63,8 @@ interface OnboardingData {
     phone: string;
     whatsapp: string;
     email: string;
+    password: string;
+    confirmPassword: string;
     otherPhone: string;
     otherPhoneLabel: string;
     // Step 6
@@ -74,7 +77,7 @@ const INITIAL_DATA: OnboardingData = {
     role: '',
     schoolName: '', schoolType: '', schoolTypeOther: '', motto: '',
     country: 'Cameroun', city: '', quarter: '', street: '',
-    phone: '', whatsapp: '', email: '', otherPhone: '', otherPhoneLabel: '',
+    phone: '', whatsapp: '', email: '', password: '', confirmPassword: '', otherPhone: '', otherPhoneLabel: '',
     logoFile: null, documents: [],
 };
 
@@ -103,6 +106,8 @@ export default function OnboardingPage() {
     const [data, setData] = useState<OnboardingData>(INITIAL_DATA);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [logoPreview, setLogoPreview] = useState<string | null>(null);
+    const [showPwd, setShowPwd] = useState(false);
+    const [showConfirmPwd, setShowConfirmPwd] = useState(false);
     const logoInputRef = useRef<HTMLInputElement>(null);
     const docsInputRef = useRef<HTMLInputElement>(null);
 
@@ -114,7 +119,7 @@ export default function OnboardingPage() {
             case 1: return data.role.length > 0;
             case 2: return data.schoolName.trim().length > 0 && data.schoolType.length > 0;
             case 3: return data.country.length > 0 && data.city.trim().length > 0;
-            case 4: return data.phone.trim().length > 0 && data.email.trim().includes('@');
+            case 4: return data.phone.trim().length > 0 && data.email.trim().includes('@') && data.password.length >= 6 && data.password === data.confirmPassword;
             case 5: return true; // Logo optionnel
             default: return false;
         }
@@ -142,7 +147,7 @@ export default function OnboardingPage() {
         setIsSubmitting(true);
         try {
             const slug = generateSlug(data.schoolName);
-            const password = data.phone.replace(/\D/g, '').slice(-8) + 'Cf!';
+            const password = data.password;
 
             // ═══ STEP 1: Create auth account ═══
             // Try signup first. If email is already registered, sign in instead.
@@ -495,6 +500,61 @@ export default function OnboardingPage() {
                                             placeholder="contact@votre-ecole.com"
                                             className="bg-white/5 border-white/10 text-white placeholder:text-slate-600 h-12 rounded-xl"
                                         />
+                                    </div>
+                                    <div className="col-span-full p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/10 space-y-3">
+                                        <p className="text-sm text-indigo-300 font-medium flex items-center gap-2"><Lock className="w-4 h-4" /> Mot de passe de connexion admin</p>
+                                        <p className="text-xs text-slate-500">Ce mot de passe vous permettra de vous connecter au backoffice de votre établissement.</p>
+                                        <div>
+                                            <Label className="text-slate-300 mb-1.5 block">Mot de passe * (6 caractères min.)</Label>
+                                            <div className="relative">
+                                                <Input
+                                                    type={showPwd ? 'text' : 'password'}
+                                                    value={data.password}
+                                                    onChange={e => update({ password: e.target.value })}
+                                                    placeholder="••••••••"
+                                                    className="bg-white/5 border-white/10 text-white placeholder:text-slate-600 h-12 rounded-xl pr-10"
+                                                />
+                                                <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-3 top-3 text-slate-500">
+                                                    {showPwd ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                                </button>
+                                            </div>
+                                            {data.password && data.password.length < 6 && (
+                                                <p className="text-xs text-amber-400 mt-1">⚠️ 6 caractères minimum</p>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <Label className="text-slate-300 mb-1.5 block">Confirmer le mot de passe *</Label>
+                                            <div className="relative">
+                                                <Input
+                                                    type={showConfirmPwd ? 'text' : 'password'}
+                                                    value={data.confirmPassword}
+                                                    onChange={e => update({ confirmPassword: e.target.value })}
+                                                    placeholder="••••••••"
+                                                    className="bg-white/5 border-white/10 text-white placeholder:text-slate-600 h-12 rounded-xl pr-10"
+                                                />
+                                                <button type="button" onClick={() => setShowConfirmPwd(!showConfirmPwd)} className="absolute right-3 top-3 text-slate-500">
+                                                    {showConfirmPwd ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                                </button>
+                                            </div>
+                                            {data.confirmPassword && data.password !== data.confirmPassword && (
+                                                <p className="text-xs text-red-400 mt-1">Les mots de passe ne correspondent pas</p>
+                                            )}
+                                            {data.confirmPassword && data.password === data.confirmPassword && data.password.length >= 6 && (
+                                                <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Mots de passe identiques ✓</p>
+                                            )}
+                                        </div>
+                                        {/* Password strength indicator */}
+                                        <div className="flex gap-1">
+                                            {[1, 2, 3, 4].map(i => (
+                                                <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${
+                                                    data.password.length === 0 ? 'bg-white/10' :
+                                                    data.password.length < 6 ? (i <= 1 ? 'bg-red-500' : 'bg-white/10') :
+                                                    data.password.length < 8 ? (i <= 2 ? 'bg-amber-500' : 'bg-white/10') :
+                                                    data.password.length < 12 ? (i <= 3 ? 'bg-emerald-500' : 'bg-white/10') :
+                                                    'bg-emerald-400'
+                                                }`} />
+                                            ))}
+                                        </div>
                                     </div>
                                     <div className="grid grid-cols-5 gap-2">
                                         <div className="col-span-2">

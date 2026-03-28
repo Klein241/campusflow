@@ -2,20 +2,21 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard } from 'lucide-react';
+import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus } from 'lucide-react';
+import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
-type Tab = 'general' | 'landing' | 'setup' | 'classes' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'settings';
+type Tab = 'general' | 'landing' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'settings';
 interface Cls { id?: string; name: string; cycle: string; filiere_id: string | null; level: number; capacity: number; }
 interface Sub { id?: string; name: string; code: string; coefficient: number; classroom_id: string; teacher_id: string | null; }
 
 const SIDES = [
     { id: 'general' as Tab, icon: Home, label: 'Général' }, { id: 'landing' as Tab, icon: LayoutDashboard, label: 'Page d\'accueil' }, { id: 'setup' as Tab, icon: Settings, label: 'Configuration' },
-    { id: 'classes' as Tab, icon: School, label: 'Classes' }, { id: 'subjects' as Tab, icon: BookOpen, label: 'Matières' },
+    { id: 'classes' as Tab, icon: School, label: 'Salles / Classes' }, { id: 'subjects' as Tab, icon: BookOpen, label: 'Matières' },
     { id: 'teachers' as Tab, icon: Users, label: 'Professeurs' }, { id: 'students' as Tab, icon: GraduationCap, label: 'Étudiants' },
     { id: 'timetable' as Tab, icon: Calendar, label: 'Emploi du temps' }, { id: 'evaluations' as Tab, icon: ClipboardList, label: 'Évaluations' },
     { id: 'grades' as Tab, icon: BarChart3, label: 'Notes' },
@@ -48,6 +49,21 @@ export default function AdminPage() {
     const [sPhone, setSPhone] = useState(''); const [sGuardian, setSGuardian] = useState(''); const [sGuardianPhone, setSGuardianPhone] = useState(''); const [sNat, setSNat] = useState('Camerounaise'); const [sRes, setSRes] = useState('');
     const [sShowCode, setSShowCode] = useState(''); const [showAddTeacher, setShowAddTeacher] = useState(false); const [showAddStudent, setShowAddStudent] = useState(false);
     const [sidebar, setSidebar] = useState(false);
+    // Edit states for classes/subjects inline
+    const [editingClsId, setEditingClsId] = useState<string | null>(null);
+    const [editClsName, setEditClsName] = useState('');
+    const [editingSubId, setEditingSubId] = useState<string | null>(null);
+    const [editSubName, setEditSubName] = useState('');
+    const [editSubCoef, setEditSubCoef] = useState('1');
+    // Direct add in tabs
+    const [directNewCls, setDirectNewCls] = useState('');
+    const [directNewSub, setDirectNewSub] = useState('');
+    const [directSubCls, setDirectSubCls] = useState('');
+    // Image upload refs
+    const heroImgRef = useRef<HTMLInputElement>(null);
+    const aboutImgRef = useRef<HTMLInputElement>(null);
+    const galleryImgRef = useRef<HTMLInputElement>(null);
+    const [uploadingImage, setUploadingImage] = useState(false);
     // Timetable
     const [ttSlots, setTtSlots] = useState<any[]>([]);
     const [ttDay, setTtDay] = useState(1); const [ttCls2, setTtCls2] = useState(''); const [ttSub2, setTtSub2] = useState('');
@@ -194,6 +210,179 @@ export default function AdminPage() {
     };
     const onTab = (t: Tab) => { setTab(t); setSidebar(false); if (t === 'timetable' && !ttLoaded) loadTT(); if (t === 'evaluations' && !evLoaded) loadEv(); if (t === 'payments' && !payLoaded) loadPay(); if (t === 'disciplines' && !dLoaded) loadDisc(); if (t === 'grades' && !grLoaded) loadGrades(); if (t === 'settings') loadSettings(); if (t === 'landing') loadLanding(); };
 
+    // ═══ CRUD CLASSES INLINE ═══
+    const addClassDirect = async () => {
+        if (!directNewCls.trim() || !org) return;
+        setSaving(true);
+        const { data, error } = await supabase.from('classrooms').insert({ organization_id: org.id, name: directNewCls.trim(), cycle: null, filiere_id: null, level: 1, capacity: 50 }).select().single();
+        if (error) { toast.error(error.message); } else { setCls(p => [...p, { id: data.id, name: data.name, cycle: '', filiere_id: null, level: 1, capacity: 50 }]); setDirectNewCls(''); toast.success('Salle ajoutée !'); }
+        setSaving(false);
+    };
+    const updateClass = async (id: string) => {
+        if (!editClsName.trim()) return;
+        const { error } = await supabase.from('classrooms').update({ name: editClsName.trim() }).eq('id', id);
+        if (error) toast.error(error.message); else { setCls(p => p.map(c => c.id === id ? { ...c, name: editClsName.trim() } : c)); toast.success('Salle mise à jour'); }
+        setEditingClsId(null);
+    };
+    const deleteClass = async (id: string) => {
+        if (!confirm('Supprimer cette salle/classe ? Les matières associées seront aussi impactées.')) return;
+        const { error } = await supabase.from('classrooms').delete().eq('id', id);
+        if (error) toast.error(error.message); else { setCls(p => p.filter(c => c.id !== id)); setSubs(p => p.filter(s => s.classroom_id !== id)); toast.success('Salle supprimée'); }
+    };
+    // ═══ CRUD SUBJECTS INLINE ═══
+    const addSubjectDirect = async () => {
+        if (!directNewSub.trim() || !directSubCls || !org) return;
+        setSaving(true);
+        const { data, error } = await supabase.from('subjects').insert({ organization_id: org.id, name: directNewSub.trim(), code: directNewSub.slice(0, 4).toUpperCase(), coefficient: 1, classroom_id: directSubCls, teacher_id: null }).select().single();
+        if (error) { toast.error(error.message); } else { setSubs(p => [...p, { id: data.id, name: data.name, code: data.code, coefficient: data.coefficient, classroom_id: data.classroom_id, teacher_id: null }]); setDirectNewSub(''); toast.success('Matière ajoutée !'); }
+        setSaving(false);
+    };
+    const updateSubject = async (id: string) => {
+        if (!editSubName.trim()) return;
+        const { error } = await supabase.from('subjects').update({ name: editSubName.trim(), coefficient: parseFloat(editSubCoef) || 1 }).eq('id', id);
+        if (error) toast.error(error.message); else { setSubs(p => p.map(s => s.id === id ? { ...s, name: editSubName.trim(), coefficient: parseFloat(editSubCoef) || 1 } : s)); toast.success('Matière mise à jour'); }
+        setEditingSubId(null);
+    };
+    const deleteSubject = async (id: string) => {
+        if (!confirm('Supprimer cette matière ?')) return;
+        const { error } = await supabase.from('subjects').delete().eq('id', id);
+        if (error) toast.error(error.message); else { setSubs(p => p.filter(s => s.id !== id)); toast.success('Matière supprimée'); }
+    };
+
+    // ═══ IMAGE UPLOAD TO SUPABASE STORAGE ═══
+    const uploadLandingImage = async (file: File, path: string): Promise<string | null> => {
+        setUploadingImage(true);
+        try {
+            const ext = file.name.split('.').pop();
+            const fullPath = `orgs/${org.id}/landing/${path}_${Date.now()}.${ext}`;
+            const { error } = await supabase.storage.from('organization-assets').upload(fullPath, file, { upsert: true });
+            if (error) throw error;
+            const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(fullPath);
+            return urlData.publicUrl;
+        } catch (e: any) { toast.error('Erreur upload: ' + e.message); return null; }
+        finally { setUploadingImage(false); }
+    };
+    const handleHeroUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]; if (!file) return;
+        const url = await uploadLandingImage(file, 'hero');
+        if (url) { setLHeroImage(url); toast.success('Image bannière uploadée !'); }
+    };
+    const handleAboutUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]; if (!file) return;
+        const url = await uploadLandingImage(file, 'about');
+        if (url) { setLAboutImage(url); toast.success('Image À propos uploadée !'); }
+    };
+    const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        for (const file of files) {
+            const url = await uploadLandingImage(file, `gallery_${lGalleryImages.length}`);
+            if (url) setLGalleryImages(p => [...p, url]);
+        }
+        if (files.length > 0) toast.success(`${files.length} image(s) uploadée(s) !`);
+    };
+    const handleSettingsLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]; if (!file) return;
+        setUploadingImage(true);
+        try {
+            const ext = file.name.split('.').pop();
+            const path = `orgs/${org.id}/logo.${ext}`;
+            await supabase.storage.from('organization-assets').upload(path, file, { upsert: true });
+            const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
+            setSLogoUrl(urlData.publicUrl);
+            // Also update the org immediately
+            await supabase.from('organizations').update({ logo_url: urlData.publicUrl }).eq('id', org.id);
+            setOrg({ ...org, logo_url: urlData.publicUrl });
+            toast.success('Logo uploadé !'); 
+        } catch (e: any) { toast.error(e.message); }
+        setUploadingImage(false);
+    };
+
+    // ═══ ADMIN PDF EXPORT ═══
+    const printAdminPdf = (title: string, bodyHtml: string) => {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) { toast.error('Activez les pop-ups pour imprimer'); return; }
+        printWindow.document.write(`<!DOCTYPE html><html><head><title>${title} — ${org.name}</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1a1a1a; padding: 20mm; font-size: 11pt; }
+.header { display: flex; align-items: center; gap: 16px; border-bottom: 3px solid #14b8a6; padding-bottom: 16px; margin-bottom: 20px; }
+.header img { width: 70px; height: 70px; object-fit: contain; border-radius: 8px; }
+.header-text h1 { font-size: 18pt; color: #0d9488; margin-bottom: 4px; }
+.header-text p { font-size: 9pt; color: #64748b; }
+.title { font-size: 16pt; font-weight: bold; color: #0f172a; margin: 20px 0 15px; text-align: center; text-transform: uppercase; letter-spacing: 1px; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+th { background: #0d9488; color: white; padding: 10px 8px; text-align: left; font-size: 10pt; }
+td { padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 10pt; }
+tr:nth-child(even) { background: #f8fafc; }
+.total-row { background: #0d9488 !important; color: white; font-weight: bold; }
+.total-row td { border: none; }
+.footer { margin-top: 30px; padding-top: 16px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 8pt; color: #94a3b8; }
+.stamp-area { margin-top: 40px; display: flex; justify-content: flex-end; }
+.stamp-area div { text-align: center; width: 40%; }
+.stamp-area .line { border-top: 1px solid #94a3b8; margin-top: 50px; padding-top: 4px; font-size: 9pt; color: #64748b; }
+@media print { body { padding: 15mm; } }
+</style></head><body>
+<div class="header">
+${org.logo_url ? `<img src="${org.logo_url}" alt="${org.name}" />` : ''}
+<div class="header-text">
+<h1>${org.name}</h1>
+<p>${org.city || ''}${org.city && org.country ? ', ' : ''}${org.country || ''}</p>
+${org.phone ? `<p>Tél: ${org.phone}</p>` : ''}
+${org.email ? `<p>Email: ${org.email}</p>` : ''}
+</div></div>
+${bodyHtml}
+<div class="stamp-area"><div><p style="font-size:9pt;color:#64748b">Le Directeur</p><div class="line">Cachet & Signature</div></div></div>
+<div class="footer"><p>Document généré le ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} — ${org.name} — CampusFlow</p></div>
+</body></html>`);
+        printWindow.document.close();
+        setTimeout(() => printWindow.print(), 500);
+    };
+
+    const exportTimetablePdf = () => {
+        let html = '<div class="title">EMPLOI DU TEMPS</div>';
+        DAYS.forEach((day, di) => {
+            const slots = ttSlots.filter((s: any) => s.day_of_week === di + 1);
+            if (slots.length === 0) return;
+            html += `<h3 style="margin:15px 0 5px;color:#0d9488;font-size:12pt">${day}</h3><table><thead><tr><th>Horaire</th><th>Matière</th><th>Salle</th></tr></thead><tbody>`;
+            slots.forEach((s: any) => {
+                html += `<tr><td>${s.start_time?.slice(0,5)} - ${s.end_time?.slice(0,5)}</td><td>${s.subjects?.name || '—'}</td><td>${s.room || '—'}</td></tr>`;
+            });
+            html += '</tbody></table>';
+        });
+        printAdminPdf('Emploi du temps', html);
+    };
+
+    const exportGradesPdf = () => {
+        if (!grSelEval) { toast.error('Sélectionnez une évaluation'); return; }
+        const stuList = students.filter((s: any) => s.classroom_id === grSelEval.classroom_id);
+        let html = `<div class="title">RELEVÉ DE NOTES</div><table style="margin-bottom:15px"><tr><td><strong>Évaluation:</strong> ${grSelEval.title}</td><td><strong>Type:</strong> ${grSelEval.type}</td></tr><tr><td><strong>Classe:</strong> ${grSelEval.classrooms?.name || '—'}</td><td><strong>Matière:</strong> ${grSelEval.subjects?.name || '—'}</td></tr><tr><td><strong>Note Max:</strong> /${grSelEval.max_score}</td><td><strong>Date:</strong> ${grSelEval.date || '—'}</td></tr></table>`;
+        html += '<table><thead><tr><th>N°</th><th>Nom & Prénom</th><th>Note</th><th>Appréciation</th></tr></thead><tbody>';
+        stuList.forEach((s: any, i: number) => {
+            const score = grGrades[s.id] || '—';
+            const numScore = parseFloat(score);
+            const appreciation = isNaN(numScore) ? '—' : numScore >= grSelEval.max_score * 0.8 ? 'Excellent' : numScore >= grSelEval.max_score * 0.7 ? 'Très bien' : numScore >= grSelEval.max_score * 0.6 ? 'Bien' : numScore >= grSelEval.max_score * 0.5 ? 'Passable' : 'Insuffisant';
+            html += `<tr><td>${i+1}</td><td>${s.first_name} ${s.last_name}</td><td style="font-weight:bold">${score}/${grSelEval.max_score}</td><td>${appreciation}</td></tr>`;
+        });
+        const vals = Object.values(grGrades).filter(v => v !== '').map(Number).filter(n => !isNaN(n));
+        if (vals.length > 0) {
+            const avg = (vals.reduce((a,b) => a+b, 0) / vals.length).toFixed(2);
+            html += `<tr class="total-row"><td colspan="2">MOYENNE DE CLASSE</td><td>${avg}/${grSelEval.max_score}</td><td>Min: ${Math.min(...vals).toFixed(1)} | Max: ${Math.max(...vals).toFixed(1)}</td></tr>`;
+        }
+        html += '</tbody></table>';
+        printAdminPdf(`Notes - ${grSelEval.title}`, html);
+    };
+
+    const exportPaymentsPdf = () => {
+        let html = '<div class="title">RAPPORT DES PAIEMENTS</div><table><thead><tr><th>N°</th><th>Étudiant</th><th>Matricule</th><th>Description</th><th>Mode</th><th>Date</th><th>Montant (XAF)</th></tr></thead><tbody>';
+        let total = 0;
+        pays.forEach((p: any, i: number) => {
+            total += p.amount || 0;
+            html += `<tr><td>${i+1}</td><td>${p.student_profiles?.first_name || ''} ${p.student_profiles?.last_name || ''}</td><td>${p.student_profiles?.matricule || '—'}</td><td>${p.description || 'Scolarité'}</td><td>${p.payment_method === 'momo' ? 'MTN MoMo' : p.payment_method === 'orange_money' ? 'Orange Money' : p.payment_method}</td><td>${new Date(p.paid_at).toLocaleDateString('fr-FR')}</td><td style="font-weight:bold">${new Intl.NumberFormat('fr-FR').format(p.amount)}</td></tr>`;
+        });
+        html += `<tr class="total-row"><td colspan="6">TOTAL</td><td>${new Intl.NumberFormat('fr-FR').format(total)} XAF</td></tr></tbody></table>`;
+        printAdminPdf('Rapport des paiements', html);
+    };
+
     // Module actions
     const addSlot = async () => { if (!ttCls2 || !ttSub2) { toast.error('Sélectionnez classe et matière'); return; } setSaving(true); const { error } = await supabase.from('timetable_slots').insert({ organization_id: org.id, classroom_id: ttCls2, subject_id: ttSub2, day_of_week: ttDay, start_time: ttStart, end_time: ttEnd, room: ttRoom || null }); if (error) toast.error(error.message); else { toast.success('Créneau ajouté !'); loadTT(); } setSaving(false); };
     const delSlot = async (id: string) => { await supabase.from('timetable_slots').delete().eq('id', id); setTtSlots(p => p.filter(s => s.id !== id)); toast.success('Supprimé'); };
@@ -258,11 +447,87 @@ export default function AdminPage() {
                         {step === 2 && <div className="space-y-4"><div className="p-5 rounded-xl bg-white/[0.03] border border-white/10 text-center"><UserPlus className="w-12 h-12 text-indigo-400 mx-auto mb-3" /><h3 className="font-bold text-lg mb-2">Invitez vos professeurs</h3><p className="text-sm text-slate-400 mb-4">Partagez ce lien:</p><code className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-emerald-300 text-sm">{origin}/{orgSlug}/prof</code><Button size="sm" variant="outline" className="ml-2 border-white/10" onClick={() => { navigator.clipboard.writeText(`${origin}/${orgSlug}/prof`); toast.success('Copié!'); }}>Copier</Button></div><div className="flex justify-between"><Button variant="ghost" onClick={() => setStep(1)}><ArrowLeft className="w-4 h-4 mr-2" />Retour</Button><Button onClick={finishSetup} disabled={saving} className="bg-gradient-to-r from-indigo-600 to-blue-600">{saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}<CheckCircle2 className="w-4 h-4 mr-2" />Terminer</Button></div></div>}
                     </div>}
 
-                    {/* ═══ CLASSES ═══ */}
-                    {tab === 'classes' && <div className="space-y-4"><div className="flex items-center justify-between"><p className="text-slate-400 text-sm">{cls.length} classe(s)</p><Button size="sm" className="bg-indigo-600" onClick={() => onTab('setup')}><Plus className="w-4 h-4 mr-1" />Ajouter</Button></div>{cls.map((c, i) => <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-white/[0.03] border border-white/10"><div className="flex items-center gap-3"><School className="w-5 h-5 text-indigo-400" /><div><p className="font-medium">{c.name}</p><p className="text-xs text-slate-500">{c.cycle || '—'} • {subs.filter(s => s.classroom_id === c.id).length} matières</p></div></div></div>)}</div>}
+                    {/* ═══ CLASSES / SALLES ═══ */}
+                    {tab === 'classes' && <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <p className="text-slate-400 text-sm">{cls.length} salle(s) / classe(s)</p>
+                        </div>
+                        {/* Ajout direct */}
+                        <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
+                            <h3 className="font-bold text-sm mb-3">➕ Ajouter une salle / classe</h3>
+                            <div className="flex gap-2">
+                                <Input value={directNewCls} onChange={e => setDirectNewCls(e.target.value)} onKeyDown={e => e.key === 'Enter' && addClassDirect()} placeholder="Ex: Salle A1, 6ème B..." className="bg-white/5 border-white/10 text-white h-10 rounded-lg" />
+                                <Button onClick={addClassDirect} disabled={!directNewCls.trim() || saving} className="bg-indigo-600 shrink-0"><Plus className="w-4 h-4 mr-1" />Ajouter</Button>
+                            </div>
+                            {isCL && <div className="mt-3"><p className="text-xs text-slate-500 mb-2">Ajout rapide :</p><div className="flex flex-wrap gap-2">{(org.type === 'college' ? COLLEGE : [...COLLEGE, ...LYCEE]).map(l => <Button key={l} size="sm" variant="outline" className="text-xs border-white/10" onClick={() => quickAdd(l)}><Plus className="w-3 h-3 mr-1" />{l}</Button>)}</div></div>}
+                        </div>
+                        {/* Liste */}
+                        {cls.map((c, i) => <div key={c.id || i} className="flex items-center justify-between p-4 rounded-xl bg-white/[0.03] border border-white/10">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <School className="w-5 h-5 text-indigo-400 shrink-0" />
+                                {editingClsId === c.id ? (
+                                    <div className="flex gap-2 flex-1">
+                                        <Input value={editClsName} onChange={e => setEditClsName(e.target.value)} onKeyDown={e => e.key === 'Enter' && updateClass(c.id!)} className="bg-white/5 border-white/10 text-white h-8 rounded-lg text-sm flex-1" autoFocus />
+                                        <Button size="sm" className="bg-emerald-600 h-8" onClick={() => updateClass(c.id!)}><Save className="w-3 h-3" /></Button>
+                                        <Button size="sm" variant="ghost" className="h-8" onClick={() => setEditingClsId(null)}><X className="w-3 h-3" /></Button>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <p className="font-medium">{c.name}</p>
+                                        <p className="text-xs text-slate-500">{c.cycle || '—'} • {subs.filter(s => s.classroom_id === c.id).length} matière(s){!c.id && ' • nouveau'}</p>
+                                    </div>
+                                )}
+                            </div>
+                            {c.id && editingClsId !== c.id && <div className="flex items-center gap-1">
+                                <button onClick={() => { setEditingClsId(c.id!); setEditClsName(c.name); }} className="text-indigo-400 hover:text-indigo-300 p-1"><Pencil className="w-4 h-4" /></button>
+                                <button onClick={() => deleteClass(c.id!)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-4 h-4" /></button>
+                            </div>}
+                        </div>)}
+                    </div>}
 
                     {/* ═══ SUBJECTS ═══ */}
-                    {tab === 'subjects' && <div className="space-y-4"><div className="flex items-center justify-between"><p className="text-slate-400 text-sm">{subs.length} matière(s)</p><Button size="sm" className="bg-emerald-600" onClick={() => { onTab('setup'); setStep(1); }}><Plus className="w-4 h-4 mr-1" />Ajouter</Button></div>{cls.filter(c => c.id).map(c => { const cs = subs.filter(s => s.classroom_id === c.id); if (!cs.length) return null; return <div key={c.id} className="p-4 rounded-xl bg-white/[0.03] border border-white/10"><h3 className="font-semibold text-indigo-300 mb-3">{c.name}</h3><div className="grid sm:grid-cols-2 gap-2">{cs.map((s, i) => <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-white/5"><span className="text-sm">{s.name}</span><span className="text-xs text-slate-500">Coef.{s.coefficient}</span></div>)}</div></div>; })}</div>}
+                    {tab === 'subjects' && <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <p className="text-slate-400 text-sm">{subs.length} matière(s)</p>
+                        </div>
+                        {/* Ajout direct */}
+                        <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
+                            <h3 className="font-bold text-sm mb-3">➕ Ajouter une matière</h3>
+                            <div className="grid sm:grid-cols-3 gap-2">
+                                <Sel v={directSubCls} onChange={setDirectSubCls} opts={cls.filter(c => c.id).map(c => ({ id: c.id!, label: c.name }))} ph="Classe..." />
+                                <Input value={directNewSub} onChange={e => setDirectNewSub(e.target.value)} onKeyDown={e => e.key === 'Enter' && addSubjectDirect()} placeholder="Nom de la matière" className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm" />
+                                <Button onClick={addSubjectDirect} disabled={!directNewSub.trim() || !directSubCls || saving} className="bg-emerald-600 h-9"><Plus className="w-4 h-4 mr-1" />Ajouter</Button>
+                            </div>
+                            {directSubCls && <Button size="sm" variant="outline" className="mt-2 text-xs border-white/10" onClick={() => { setSelCls(directSubCls); addDefs(); }}><Plus className="w-3 h-3 mr-1" />Matières par défaut</Button>}
+                        </div>
+                        {/* Liste par classe */}
+                        {cls.filter(c => c.id).map(c => {
+                            const cs = subs.filter(s => s.classroom_id === c.id);
+                            if (!cs.length) return null;
+                            return <div key={c.id} className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
+                                <h3 className="font-semibold text-indigo-300 mb-3">{c.name}</h3>
+                                <div className="space-y-2">{cs.map(s => (
+                                    <div key={s.id} className="flex items-center justify-between p-3 rounded-lg bg-white/5">
+                                        {editingSubId === s.id ? (
+                                            <div className="flex gap-2 flex-1">
+                                                <Input value={editSubName} onChange={e => setEditSubName(e.target.value)} onKeyDown={e => e.key === 'Enter' && updateSubject(s.id!)} className="bg-white/5 border-white/10 text-white h-8 rounded-lg text-sm flex-1" autoFocus />
+                                                <Input type="number" value={editSubCoef} onChange={e => setEditSubCoef(e.target.value)} className="bg-white/5 border-white/10 text-white h-8 rounded-lg text-sm w-16" placeholder="Coef" />
+                                                <Button size="sm" className="bg-emerald-600 h-8" onClick={() => updateSubject(s.id!)}><Save className="w-3 h-3" /></Button>
+                                                <Button size="sm" variant="ghost" className="h-8" onClick={() => setEditingSubId(null)}><X className="w-3 h-3" /></Button>
+                                            </div>
+                                        ) : (<>
+                                            <span className="text-sm">{s.name}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs text-slate-500">Coef.{s.coefficient}</span>
+                                                <button onClick={() => { setEditingSubId(s.id!); setEditSubName(s.name); setEditSubCoef(String(s.coefficient)); }} className="text-indigo-400 hover:text-indigo-300 p-1"><Pencil className="w-3.5 h-3.5" /></button>
+                                                <button onClick={() => deleteSubject(s.id!)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                                            </div>
+                                        </>)}
+                                    </div>
+                                ))}</div>
+                            </div>;
+                        })}
+                    </div>}
 
                     {/* ═══ TEACHERS ═══ */}
                     {tab === 'teachers' && <div className="space-y-4">
@@ -377,6 +642,7 @@ export default function AdminPage() {
 
                     {/* ═══ TIMETABLE ═══ */}
                     {tab === 'timetable' && <div className="space-y-4">
+                        <div className="flex justify-end"><Button size="sm" onClick={exportTimetablePdf} className="bg-gradient-to-r from-indigo-600 to-violet-600 text-xs rounded-xl" disabled={ttSlots.length === 0}><Printer className="w-3.5 h-3.5 mr-1" />Exporter PDF</Button></div>
                         <div className="p-5 rounded-xl bg-white/[0.03] border border-white/10">
                             <h3 className="font-bold mb-3">➕ Ajouter un créneau</h3>
                             <div className="grid sm:grid-cols-3 gap-3">
@@ -412,6 +678,7 @@ export default function AdminPage() {
 
                     {/* ═══ PAYMENTS ═══ */}
                     {tab === 'payments' && <div className="space-y-4">
+                        <div className="flex justify-end"><Button size="sm" onClick={exportPaymentsPdf} className="bg-gradient-to-r from-emerald-600 to-teal-600 text-xs rounded-xl" disabled={pays.length === 0}><Printer className="w-3.5 h-3.5 mr-1" />Exporter PDF</Button></div>
                         <div className="p-5 rounded-xl bg-white/[0.03] border border-white/10">
                             <h3 className="font-bold mb-3">💰 Enregistrer un paiement</h3>
                             <div className="grid sm:grid-cols-2 gap-3">
@@ -460,6 +727,7 @@ export default function AdminPage() {
                                 <div className="flex items-center justify-between p-3 rounded-xl bg-indigo-600/10 border border-indigo-500/20">
                                     <div><p className="font-bold text-sm">{grSelEval.title}</p><p className="text-[10px] text-slate-400">{grSelEval.subjects?.name} • {grSelEval.classrooms?.name} • /{grSelEval.max_score}</p></div>
                                     <div className="flex gap-2">
+                                        <Button size="sm" onClick={exportGradesPdf} className="bg-gradient-to-r from-amber-600 to-orange-600 h-8 text-xs"><Printer className="w-3 h-3 mr-1" />PDF</Button>
                                         <Button size="sm" className="bg-emerald-600 h-8" onClick={saveGradeEntries} disabled={saving}>{saving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />}Sauver</Button>
                                         <Button size="sm" variant="ghost" className="h-8" onClick={() => setGrSelEval(null)}><X className="w-4 h-4" /></Button>
                                     </div>
@@ -499,9 +767,16 @@ export default function AdminPage() {
                             <h3 className="font-bold text-cyan-300 mb-3 flex items-center gap-2"><Upload className="w-4 h-4" /> Hero / Bannière</h3>
                             <div className="grid sm:grid-cols-2 gap-4">
                                 <div>
-                                    <Label className="text-slate-400 text-xs">Image bannière (URL)</Label>
-                                    <Input value={lHeroImage} onChange={e => setLHeroImage(e.target.value)} placeholder="https://...banner.jpg" className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" />
-                                    {lHeroImage && <img src={lHeroImage} alt="" className="w-full h-28 rounded-lg object-cover mt-2 border border-white/10" onError={e => (e.currentTarget.style.display='none')} />}
+                                    <Label className="text-slate-400 text-xs">Image bannière</Label>
+                                    <div onClick={() => heroImgRef.current?.click()} className="mt-1 w-full p-4 border-2 border-dashed border-white/10 rounded-xl bg-white/[0.02] hover:border-cyan-500/30 transition-colors cursor-pointer text-center">
+                                        {lHeroImage ? (
+                                            <div className="flex flex-col items-center"><img src={lHeroImage} alt="" className="w-full h-28 rounded-lg object-cover mb-2 border border-white/10" /><p className="text-xs text-slate-400">Cliquer pour changer</p></div>
+                                        ) : (
+                                            <div className="flex flex-col items-center text-slate-500"><ImagePlus className="w-8 h-8 mb-2" /><p className="font-medium text-sm">Cliquer pour uploader</p><p className="text-xs mt-1">PNG, JPG (max 5 Mo)</p></div>
+                                        )}
+                                    </div>
+                                    <input ref={heroImgRef} type="file" accept="image/*" className="hidden" onChange={handleHeroUpload} />
+                                    {uploadingImage && <p className="text-xs text-cyan-400 mt-1 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Upload en cours...</p>}
                                 </div>
                                 <div className="space-y-3">
                                     <div>
@@ -525,9 +800,15 @@ export default function AdminPage() {
                                     <textarea value={lAboutText} onChange={e => setLAboutText(e.target.value)} placeholder="Décrivez votre établissement, son histoire, ses valeurs..." rows={5} className="w-full mt-1 p-3 rounded-lg bg-white/5 border border-white/10 text-white text-sm resize-none focus:outline-none focus:border-indigo-500/50 transition" />
                                 </div>
                                 <div>
-                                    <Label className="text-slate-400 text-xs">Image section À propos (URL)</Label>
-                                    <Input value={lAboutImage} onChange={e => setLAboutImage(e.target.value)} placeholder="https://...about.jpg" className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" />
-                                    {lAboutImage && <img src={lAboutImage} alt="" className="w-full h-36 rounded-lg object-cover mt-2 border border-white/10" onError={e => (e.currentTarget.style.display='none')} />}
+                                    <Label className="text-slate-400 text-xs">Image section À propos</Label>
+                                    <div onClick={() => aboutImgRef.current?.click()} className="mt-1 w-full p-4 border-2 border-dashed border-white/10 rounded-xl bg-white/[0.02] hover:border-indigo-500/30 transition-colors cursor-pointer text-center">
+                                        {lAboutImage ? (
+                                            <div className="flex flex-col items-center"><img src={lAboutImage} alt="" className="w-full h-36 rounded-lg object-cover mb-2 border border-white/10" /><p className="text-xs text-slate-400">Cliquer pour changer</p></div>
+                                        ) : (
+                                            <div className="flex flex-col items-center text-slate-500"><ImagePlus className="w-8 h-8 mb-2" /><p className="font-medium text-sm">Cliquer pour uploader</p></div>
+                                        )}
+                                    </div>
+                                    <input ref={aboutImgRef} type="file" accept="image/*" className="hidden" onChange={handleAboutUpload} />
                                 </div>
                             </div>
                         </div>
@@ -535,9 +816,12 @@ export default function AdminPage() {
                         {/* Gallery */}
                         <div className="p-5 rounded-xl bg-white/[0.03] border border-white/10">
                             <h3 className="font-bold mb-3 flex items-center gap-2"><Upload className="w-4 h-4 text-amber-400" /> Galerie photos</h3>
-                            <div className="flex gap-2 mb-3">
-                                <Input value={lGalleryInput} onChange={e => setLGalleryInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && lGalleryInput.trim()) { setLGalleryImages(p => [...p, lGalleryInput.trim()]); setLGalleryInput(''); }}} placeholder="Collez l'URL d'une image" className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm flex-1" />
-                                <Button size="sm" className="bg-amber-600 shrink-0 h-9" onClick={() => { if (lGalleryInput.trim()) { setLGalleryImages(p => [...p, lGalleryInput.trim()]); setLGalleryInput(''); }}} disabled={!lGalleryInput.trim()}><Plus className="w-4 h-4" /></Button>
+                            <div className="mb-3">
+                                <div onClick={() => galleryImgRef.current?.click()} className="w-full p-4 border-2 border-dashed border-white/10 rounded-xl bg-white/[0.02] hover:border-amber-500/30 transition-colors cursor-pointer text-center">
+                                    <div className="flex flex-col items-center text-slate-500"><ImagePlus className="w-8 h-8 mb-2" /><p className="font-medium text-sm">Cliquer pour uploader des photos</p><p className="text-xs mt-1">PNG, JPG — plusieurs fichiers possibles</p></div>
+                                </div>
+                                <input ref={galleryImgRef} type="file" accept="image/*" multiple className="hidden" onChange={handleGalleryUpload} />
+                                {uploadingImage && <p className="text-xs text-amber-400 mt-1 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Upload en cours...</p>}
                             </div>
                             {lGalleryImages.length > 0 ? (
                                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
@@ -663,9 +947,21 @@ export default function AdminPage() {
                             <h3 className="font-bold mb-3 flex items-center gap-2"><Palette className="w-4 h-4 text-pink-400" /> Apparence & Marque</h3>
                             <div className="grid sm:grid-cols-2 gap-4">
                                 <div>
-                                    <Label className="text-slate-400 text-xs">URL du logo</Label>
-                                    <Input value={sLogoUrl} onChange={e => setSLogoUrl(e.target.value)} placeholder="https://...logo.png" className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" />
-                                    {sLogoUrl && <img src={sLogoUrl} alt="Logo" className="w-12 h-12 rounded-lg object-contain bg-white/10 p-1 mt-2" onError={e => (e.currentTarget.style.display = 'none')} />}
+                                    <Label className="text-slate-400 text-xs">Logo de l&apos;établissement</Label>
+                                    <div className="mt-1 flex items-center gap-3">
+                                        {sLogoUrl ? (
+                                            <img src={sLogoUrl} alt="Logo" className="w-16 h-16 rounded-xl object-contain bg-white/10 p-1 border border-white/10" />
+                                        ) : (
+                                            <div className="w-16 h-16 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-500"><ImagePlus className="w-6 h-6" /></div>
+                                        )}
+                                        <div>
+                                            <input type="file" accept="image/*" className="hidden" id="settings-logo-upload" onChange={handleSettingsLogoUpload} />
+                                            <label htmlFor="settings-logo-upload" className="cursor-pointer px-3 py-1.5 rounded-lg bg-indigo-600/20 text-indigo-300 text-xs font-medium hover:bg-indigo-600/30 transition inline-flex items-center gap-1">
+                                                <Upload className="w-3 h-3" /> {sLogoUrl ? 'Changer' : 'Uploader'}
+                                            </label>
+                                            {uploadingImage && <p className="text-xs text-indigo-400 mt-1"><Loader2 className="w-3 h-3 animate-spin inline mr-1" />Upload...</p>}
+                                        </div>
+                                    </div>
                                 </div>
                                 <div>
                                     <Label className="text-slate-400 text-xs">URL du favicon</Label>

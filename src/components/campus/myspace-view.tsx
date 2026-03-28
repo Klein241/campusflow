@@ -162,74 +162,100 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
     const totalPaid = payments.reduce((s: number, p: any) => s + (p.amount || 0), 0);
     const today = new Date().getDay();
 
-    // ═══ PRINT PDF FUNCTION ═══
+    // ═══ TIMETABLE PDF ═══
+    const printTimetable = () => {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) { toast.error('Activez les pop-ups'); return; }
+
+        let rows = '';
+        DAYS.forEach((day, di) => {
+            const slots = timetableSlots.filter((s: any) => s.day_of_week === di + 1);
+            if (slots.length === 0) return;
+            rows += `<tr style="background:#f0fdfa"><td colspan="3" style="font-weight:bold;color:#0d9488;padding:10px">${day}</td></tr>`;
+            slots.forEach((s: any) => {
+                rows += `<tr><td>${s.start_time?.slice(0, 5)} - ${s.end_time?.slice(0, 5)}</td><td>${s.subjects?.name || '—'}</td><td>${s.room || '—'}</td></tr>`;
+            });
+        });
+
+        printWindow.document.write(`
+            <!DOCTYPE html><html><head><title>Emploi du temps — ${orgName}</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1a1a1a; padding: 20mm; font-size: 11pt; }
+                .header { display: flex; align-items: center; gap: 16px; border-bottom: 3px solid #14b8a6; padding-bottom: 16px; margin-bottom: 20px; }
+                .header img { width: 60px; height: 60px; object-fit: contain; border-radius: 8px; }
+                .header-text h1 { font-size: 18pt; color: #0d9488; margin-bottom: 4px; }
+                .header-text p { font-size: 9pt; color: #64748b; }
+                .title { font-size: 16pt; font-weight: bold; color: #0f172a; margin: 20px 0 15px; text-align: center; text-transform: uppercase; }
+                .student-info { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; padding: 12px; background: #f1f5f9; border-radius: 8px; font-size: 10pt; }
+                .student-info .label { color: #64748b; } .student-info .value { font-weight: 600; }
+                table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+                th { background: #0d9488; color: white; padding: 10px 8px; text-align: left; font-size: 10pt; }
+                td { padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 10pt; }
+                tr:nth-child(even) { background: #f8fafc; }
+                .footer { margin-top: 30px; padding-top: 16px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 8pt; color: #94a3b8; }
+                @media print { body { padding: 15mm; } }
+            </style></head><body>
+            <div class="header">
+                ${orgLogo ? `<img src="${orgLogo}" alt="${orgName}" />` : ''}
+                <div class="header-text"><h1>${orgName}</h1><p>${orgCity || ''}${orgCity && orgCountry ? ', ' : ''}${orgCountry || ''}</p>
+                ${orgPhone ? `<p>Tél: ${orgPhone}</p>` : ''}${orgEmail ? `<p>Email: ${orgEmail}</p>` : ''}</div>
+            </div>
+            <div class="title">EMPLOI DU TEMPS</div>
+            <div class="student-info">
+                <div><span class="label">Nom : </span><span class="value">${student?.first_name} ${student?.last_name}</span></div>
+                <div><span class="label">Classe : </span><span class="value">${classroom?.name || '—'}</span></div>
+            </div>
+            <table><thead><tr><th>Horaire</th><th>Matière</th><th>Salle</th></tr></thead><tbody>${rows}</tbody></table>
+            <div class="footer"><p>Document généré le ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} — ${orgName} — CampusFlow</p></div>
+            </body></html>`);
+        printWindow.document.close();
+        setTimeout(() => printWindow.print(), 500);
+    };
+
+    // ═══ PRINT PDF FUNCTION (bulletin + paiements) ═══
     const printDocument = (title: string) => {
         const printContent = printRef.current;
         if (!printContent) return;
-
         const printWindow = window.open('', '_blank');
         if (!printWindow) { toast.error('Activez les pop-ups pour imprimer'); return; }
-
-        printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>${title} — ${orgName}</title>
-                <style>
-                    * { margin: 0; padding: 0; box-sizing: border-box; }
-                    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1a1a1a; padding: 20mm; font-size: 11pt; }
-                    .header { display: flex; align-items: center; gap: 16px; border-bottom: 3px solid #14b8a6; padding-bottom: 16px; margin-bottom: 20px; }
-                    .header img { width: 60px; height: 60px; object-fit: contain; border-radius: 8px; }
-                    .header-text h1 { font-size: 18pt; color: #0d9488; margin-bottom: 4px; }
-                    .header-text p { font-size: 9pt; color: #64748b; }
-                    .title { font-size: 16pt; font-weight: bold; color: #0f172a; margin: 20px 0 10px; text-align: center; }
-                    .student-info { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; padding: 12px; background: #f1f5f9; border-radius: 8px; font-size: 10pt; }
-                    .student-info .label { color: #64748b; }
-                    .student-info .value { font-weight: 600; }
-                    table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-                    th { background: #0d9488; color: white; padding: 10px 8px; text-align: left; font-size: 10pt; }
-                    td { padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 10pt; }
-                    tr:nth-child(even) { background: #f8fafc; }
-                    .avg-cell { font-weight: bold; }
-                    .avg-good { color: #059669; }
-                    .avg-bad { color: #dc2626; }
-                    .total-row { background: #0d9488 !important; color: white; font-weight: bold; }
-                    .total-row td { border: none; }
-                    .footer { margin-top: 30px; padding-top: 16px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 8pt; color: #94a3b8; }
-                    .stamp-area { margin-top: 40px; display: flex; justify-content: space-between; }
-                    .stamp-area div { text-align: center; width: 45%; }
-                    .stamp-area .line { border-top: 1px solid #94a3b8; margin-top: 50px; padding-top: 4px; font-size: 9pt; color: #64748b; }
-                    @media print { body { padding: 15mm; } }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    ${orgLogo ? `<img src="${orgLogo}" alt="${orgName}" />` : ''}
-                    <div class="header-text">
-                        <h1>${orgName}</h1>
-                        <p>${orgCity || ''}${orgCity && orgCountry ? ', ' : ''}${orgCountry || ''}</p>
-                        ${orgPhone ? `<p>Tél: ${orgPhone}</p>` : ''}
-                        ${orgEmail ? `<p>Email: ${orgEmail}</p>` : ''}
-                    </div>
+        printWindow.document.write(`<!DOCTYPE html><html><head><title>${title} — ${orgName}</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1a1a1a; padding: 20mm; font-size: 11pt; }
+                .header { display: flex; align-items: center; gap: 16px; border-bottom: 3px solid #14b8a6; padding-bottom: 16px; margin-bottom: 20px; }
+                .header img { width: 60px; height: 60px; object-fit: contain; border-radius: 8px; }
+                .header-text h1 { font-size: 18pt; color: #0d9488; margin-bottom: 4px; }
+                .header-text p { font-size: 9pt; color: #64748b; }
+                .title { font-size: 16pt; font-weight: bold; color: #0f172a; margin: 20px 0 10px; text-align: center; }
+                .student-info { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; padding: 12px; background: #f1f5f9; border-radius: 8px; font-size: 10pt; }
+                .student-info .label { color: #64748b; } .student-info .value { font-weight: 600; }
+                table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+                th { background: #0d9488; color: white; padding: 10px 8px; text-align: left; font-size: 10pt; }
+                td { padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 10pt; }
+                tr:nth-child(even) { background: #f8fafc; }
+                .avg-cell { font-weight: bold; } .avg-good { color: #059669; } .avg-bad { color: #dc2626; }
+                .total-row { background: #0d9488 !important; color: white; font-weight: bold; }
+                .total-row td { border: none; }
+                .footer { margin-top: 30px; padding-top: 16px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 8pt; color: #94a3b8; }
+                .stamp-area { margin-top: 40px; display: flex; justify-content: space-between; }
+                .stamp-area div { text-align: center; width: 45%; }
+                .stamp-area .line { border-top: 1px solid #94a3b8; margin-top: 50px; padding-top: 4px; font-size: 9pt; color: #64748b; }
+                @media print { body { padding: 15mm; } }
+            </style></head><body>
+            <div class="header">
+                ${orgLogo ? `<img src="${orgLogo}" alt="${orgName}" />` : ''}
+                <div class="header-text"><h1>${orgName}</h1>
+                <p>${orgCity || ''}${orgCity && orgCountry ? ', ' : ''}${orgCountry || ''}</p>
+                ${orgPhone ? `<p>Tél: ${orgPhone}</p>` : ''}${orgEmail ? `<p>Email: ${orgEmail}</p>` : ''}
                 </div>
-                ${printContent.innerHTML}
-                <div class="stamp-area">
-                    <div>
-                        <p style="font-size:9pt;color:#64748b">L'étudiant(e)</p>
-                        <div class="line">Signature</div>
-                    </div>
-                    <div>
-                        <p style="font-size:9pt;color:#64748b">Le Directeur</p>
-                        <div class="line">Cachet & Signature</div>
-                    </div>
-                </div>
-                <div class="footer">
-                    <p>Document généré le ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} — ${orgName} — CampusFlow</p>
-                </div>
-            </body>
-            </html>`);
+            </div>
+            ${printContent.innerHTML}
+            <div class="stamp-area"><div><p style="font-size:9pt;color:#64748b">L'étudiant(e)</p><div class="line">Signature</div></div><div><p style="font-size:9pt;color:#64748b">Le Directeur</p><div class="line">Cachet & Signature</div></div></div>
+            <div class="footer"><p>Document généré le ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} — ${orgName} — CampusFlow</p></div>
+            </body></html>`);
         printWindow.document.close();
-        setTimeout(() => { printWindow.print(); }, 500);
+        setTimeout(() => printWindow.print(), 500);
     };
 
     // ═══ PIN SCREEN ═══
@@ -501,7 +527,16 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                 {activeTab === 'edt' && (
                     <motion.div key="edt" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                         className="space-y-4">
-                        <h3 className="font-bold text-sm text-slate-300">📅 Emploi du temps — {classroom?.name}</h3>
+                    <h3 className="font-bold text-sm text-slate-300">📅 Emploi du temps — {classroom?.name}</h3>
+                        <div className="flex items-center justify-between">
+                            <h3 className="font-bold text-sm text-slate-300">📅 Emploi du temps</h3>
+                            {timetableSlots.length > 0 && (
+                                <Button size="sm" onClick={printTimetable}
+                                    className="bg-gradient-to-r from-indigo-600 to-violet-600 text-xs rounded-xl shadow-lg shadow-indigo-600/20">
+                                    <Printer className="w-3.5 h-3.5 mr-1" /> Exporter PDF
+                                </Button>
+                            )}
+                        </div>
                         {DAYS.map((day, di) => {
                             const slots = timetableSlots.filter((s: any) => s.day_of_week === di + 1);
                             const isToday = (today === 0 ? 7 : today) === di + 1;
@@ -585,7 +620,7 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                         )}
 
                         {/* Hidden printable payment receipt */}
-                        <div ref={activeTab === 'paiements' ? printRef : undefined} className="hidden">
+                        <div ref={printRef} className="hidden">
                             <div className="title">REÇU DE PAIEMENT</div>
                             <div className="student-info">
                                 <div><span className="label">Nom : </span><span className="value">{student?.first_name} {student?.last_name}</span></div>

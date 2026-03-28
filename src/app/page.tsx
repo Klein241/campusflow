@@ -140,14 +140,16 @@ export default function LandingPage() {
                 Créer votre établissement
               </Button>
             </Link>
-            <Button
-              variant="outline"
-              size="lg"
-              className="text-lg px-8 py-6 border-white/10 text-slate-300 hover:bg-white/5 rounded-xl"
-            >
-              <Globe className="w-5 h-5 mr-2" />
-              Voir une démo
-            </Button>
+            <Link href="/demo">
+              <Button
+                variant="outline"
+                size="lg"
+                className="text-lg px-8 py-6 border-white/10 text-slate-300 hover:bg-white/5 rounded-xl"
+              >
+                <Globe className="w-5 h-5 mr-2" />
+                Voir une démo
+              </Button>
+            </Link>
           </motion.div>
 
           {/* Stats bar */}
