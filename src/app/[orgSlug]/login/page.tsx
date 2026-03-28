@@ -316,7 +316,6 @@ export default function LoginPage() {
 
         setSaving(true);
         try {
-            // Use server-side RPC to set PIN (never expose pin_code on client)
             const { data: success, error } = await supabase.rpc('set_pin', {
                 p_profile_id: userProfile!.id,
                 p_role: userProfile!.role,
@@ -339,7 +338,6 @@ export default function LoginPage() {
 
         setSaving(true);
         try {
-            // Use server-side RPC to verify PIN (never fetch pin_code to client)
             const { data: isValid, error } = await supabase.rpc('verify_pin', {
                 p_profile_id: userProfile!.id,
                 p_role: userProfile!.role,
