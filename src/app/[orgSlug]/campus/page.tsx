@@ -6,13 +6,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { GraduationCap, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { CampusBottomNav, type CampusTab } from '@/components/campus/campus-bottom-nav';
-import { ForumView } from '@/components/campus/forum-view';
+import { ActusView } from '@/components/campus/actus-view';
+import { ContactsView } from '@/components/campus/contacts-view';
+import { ChatDMView } from '@/components/campus/chat-dm-view';
 import { MySpaceView } from '@/components/campus/myspace-view';
 import { ProfileView } from '@/components/campus/profile-view';
 
 // ═══════════════════════════════════════════════════════
-// CAMPUS PAGE — SPA principale post-connexion (code 12 car.)
-// 3 onglets : Forum, My Space, Profil
+// CAMPUS PAGE — 5 onglets séparés
+// Actus | Contacts | Chat DM | My Space | Profil
 // ═══════════════════════════════════════════════════════
 
 interface SessionData {
@@ -49,36 +51,38 @@ export default function CampusPage() {
     const [org, setOrg] = useState<any>(null);
     const [session, setSession] = useState<SessionData | null>(null);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<CampusTab>('forum');
+    const [activeTab, setActiveTab] = useState<CampusTab>('actus');
+
+    // DM target from contacts
+    const [dmTargetId, setDmTargetId] = useState<string | null>(null);
+    const [dmTargetName, setDmTargetName] = useState<string | null>(null);
 
     useEffect(() => {
         (async () => {
-            // Check session
             const sess = getSession();
-            if (!sess) {
-                router.push(`/${orgSlug}/login`);
-                return;
-            }
-
-            // Load org
+            if (!sess) { router.push(`/${orgSlug}/login`); return; }
             const { data: o } = await supabase.from('organizations').select('*').eq('slug', orgSlug).single();
-            if (!o) {
-                setLoading(false);
-                return;
-            }
-
-            // Verify session belongs to this org
+            if (!o) { setLoading(false); return; }
             if (sess.organization_id !== o.id) {
                 localStorage.removeItem('campusflow_session');
                 router.push(`/${orgSlug}/login`);
                 return;
             }
-
             setOrg(o);
             setSession(sess);
             setLoading(false);
         })();
     }, [orgSlug, router]);
+
+    const handleStartDM = (targetId: string, targetName: string) => {
+        setDmTargetId(targetId);
+        setDmTargetName(targetName);
+        setActiveTab('chatdm');
+    };
+
+    const handleOpenGroupChat = (convId: string, convName: string) => {
+        setActiveTab('chatdm');
+    };
 
     if (loading) {
         return (
@@ -127,65 +131,52 @@ export default function CampusPage() {
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium ${
-                            session.role === 'teacher' 
-                                ? 'bg-indigo-500/15 text-indigo-400' 
-                                : 'bg-teal-500/15 text-teal-400'
-                        }`}>
-                            {session.role === 'teacher' ? '👨‍🏫 Prof' : '🎓 Étudiant'}
-                        </span>
-                    </div>
+                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium ${
+                        session.role === 'teacher' ? 'bg-indigo-500/15 text-indigo-400' : 'bg-teal-500/15 text-teal-400'
+                    }`}>
+                        {session.role === 'teacher' ? '👨‍🏫 Prof' : '🎓 Étudiant'}
+                    </span>
                 </header>
 
-                {/* Tab Content */}
+                {/* Tab Content — chaque onglet a son propre espace */}
                 <AnimatePresence mode="wait">
-                    {activeTab === 'forum' && (
-                        <motion.div key="forum" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
-                            <ForumView
-                                orgId={org.id}
-                                orgSlug={orgSlug}
-                                userId={session.id}
-                                userName={userName}
-                                userRole={session.role}
-                            />
+                    {activeTab === 'actus' && (
+                        <motion.div key="actus" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
+                            <ActusView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role} />
+                        </motion.div>
+                    )}
+
+                    {activeTab === 'contacts' && (
+                        <motion.div key="contacts" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
+                            <ContactsView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role}
+                                onStartDM={handleStartDM} />
+                        </motion.div>
+                    )}
+
+                    {activeTab === 'chatdm' && (
+                        <motion.div key="chatdm" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
+                            <ChatDMView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role}
+                                initialTargetUserId={dmTargetId} initialTargetName={dmTargetName}
+                                onClearTarget={() => { setDmTargetId(null); setDmTargetName(null); }} />
                         </motion.div>
                     )}
 
                     {activeTab === 'myspace' && (
                         <motion.div key="myspace" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
-                            <MySpaceView
-                                orgId={org.id}
-                                orgSlug={orgSlug}
-                                userId={session.id}
-                                userName={userName}
-                                userRole={session.role}
-                                orgName={org.name}
-                                orgLogo={org.logo_url}
-                                orgPhone={org.phone}
-                                orgEmail={org.email}
-                                orgCity={org.city}
-                                orgCountry={org.country}
-                            />
+                            <MySpaceView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role}
+                                orgName={org.name} orgLogo={org.logo_url} orgPhone={org.phone} orgEmail={org.email}
+                                orgCity={org.city} orgCountry={org.country} onStartDM={handleStartDM} />
                         </motion.div>
                     )}
 
                     {activeTab === 'profile' && (
                         <motion.div key="profile" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
-                            <ProfileView
-                                orgId={org.id}
-                                orgSlug={orgSlug}
-                                userId={session.id}
-                                userName={userName}
-                                userRole={session.role}
-                                orgName={org.name}
-                            />
+                            <ProfileView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role} orgName={org.name} />
                         </motion.div>
                     )}
                 </AnimatePresence>
             </div>
 
-            {/* Bottom Navigation */}
             <CampusBottomNav activeTab={activeTab} onTabChange={setActiveTab} />
         </main>
     );
