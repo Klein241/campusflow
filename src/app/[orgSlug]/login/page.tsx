@@ -145,22 +145,38 @@ export default function LoginPage() {
     // ═══ ADMIN LOGIN (email/password) ═══
     const handleAdminLogin = async () => {
         if (!email || !password) { toast.error('Email et mot de passe requis'); return; }
+        if (!org) { toast.error('Établissement non trouvé. Rechargez la page.'); return; }
         setSaving(true);
         try {
+            console.log('[Login] Attempting admin login for:', email, '| org:', orgSlug, '| owner_id:', org.owner_id);
             const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-            if (error) throw error;
+            if (error) {
+                console.error('[Login] Auth error:', error.status, error.message);
+                throw error;
+            }
             if (data.user) {
+                console.log('[Login] Auth success. user.id:', data.user.id, '| org.owner_id:', org.owner_id, '| match:', org.owner_id === data.user.id);
                 // Check if this user owns the org
-                if (org?.owner_id === data.user.id) {
+                if (org.owner_id === data.user.id) {
                     toast.success('Bienvenue, administrateur !');
                     router.push(`/${orgSlug}/admin`);
                 } else {
+                    console.warn('[Login] Owner mismatch. user.id:', data.user.id, '!== owner_id:', org.owner_id);
                     toast.error('Ce compte n\'est pas administrateur de cet établissement');
                     await supabase.auth.signOut();
                 }
             }
         } catch (e: any) {
-            toast.error(e.message === 'Invalid login credentials' ? 'Email ou mot de passe incorrect' : e.message);
+            const msg = e.message || 'Erreur inconnue';
+            if (msg === 'Invalid login credentials' || e.status === 400) {
+                toast.error('Email ou mot de passe incorrect');
+            } else if (msg.includes('rate limit') || e.status === 429) {
+                toast.error('Trop de tentatives. Veuillez patienter quelques minutes.');
+            } else if (msg.includes('Email not confirmed')) {
+                toast.error('Veuillez confirmer votre email avant de vous connecter.');
+            } else {
+                toast.error(msg);
+            }
         }
         setSaving(false);
     };

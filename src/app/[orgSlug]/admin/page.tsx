@@ -1,14 +1,56 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, Component, type ReactNode, type ErrorInfo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus, Building2 } from 'lucide-react';
-import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+
+// ═══ ERROR BOUNDARY (catches React render errors) ═══
+class AdminErrorBoundary extends Component<{ children: ReactNode; orgSlug: string }, { hasError: boolean; error: Error | null }> {
+    constructor(props: { children: ReactNode; orgSlug: string }) {
+        super(props);
+        this.state = { hasError: false, error: null };
+    }
+    static getDerivedStateFromError(error: Error) {
+        return { hasError: true, error };
+    }
+    componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+        console.error('[AdminPage] Render error:', error, errorInfo);
+    }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center text-white px-4">
+                    <div className="text-center max-w-md">
+                        <div className="w-16 h-16 rounded-2xl bg-red-600/20 flex items-center justify-center mx-auto mb-4">
+                            <span className="text-3xl">⚠️</span>
+                        </div>
+                        <h1 className="text-2xl font-black mb-2">Erreur de chargement</h1>
+                        <p className="text-slate-400 text-sm mb-4">Une erreur est survenue lors du chargement du backoffice.</p>
+                        <p className="text-xs text-red-400/70 mb-6 font-mono bg-white/5 p-3 rounded-lg break-all">{this.state.error?.message || 'Erreur inconnue'}</p>
+                        <div className="flex gap-3 justify-center">
+                            <button onClick={() => window.location.reload()} className="px-6 py-2.5 bg-indigo-600 rounded-xl text-sm font-medium hover:bg-indigo-500 transition">Recharger la page</button>
+                            <button onClick={() => window.location.href = `/${this.props.orgSlug}/login`} className="px-6 py-2.5 bg-white/10 rounded-xl text-sm font-medium hover:bg-white/15 transition">Se reconnecter</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+
+// ═══ REUSABLE SELECT COMPONENT (defined outside to avoid React 19 hydration issues) ═══
+const Sel = ({ v, onChange, opts, ph = '—' }: { v: string, onChange: (v: string) => void, opts: { id: string, label: string }[], ph?: string }) => (
+    <select value={v} onChange={e => onChange(e.target.value)} className="w-full h-9 rounded-lg bg-white/5 border border-white/10 text-white px-3 text-sm">
+        <option value="" className="bg-slate-900">{ph}</option>
+        {opts.map(o => <option key={o.id} value={o.id} className="bg-slate-900">{o.label}</option>)}
+    </select>
+);
 
 type Tab = 'general' | 'landing' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'settings';
 interface Cls { id?: string; name: string; cycle: string; filiere_id: string | null; level: number; capacity: number; }
@@ -28,7 +70,17 @@ const COLLEGE = ['6ème', '5ème', '4ème', '3ème'], LYCEE = ['Seconde', 'Premi
 const DEFS: Record<string, string[]> = { college: ['Mathématiques', 'Français', 'Anglais', 'SVT', 'Physique-Chimie', 'Histoire-Géo', 'Informatique', 'EPS'], lycee: ['Mathématiques', 'Français', 'Anglais', 'Physique', 'Chimie', 'SVT', 'Philosophie', 'Histoire-Géo', 'Informatique', 'EPS'], universite: ['Module 1', 'Module 2', 'Module 3', 'Projet tutoré', 'Stage'], centre_formation: ['Cours théorique', 'Travaux pratiques', 'Stage professionnel', 'Projet fin de formation'], institut: ['Cours fondamental', 'Spécialisation', 'Travaux pratiques', 'Stage'] };
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
+// Wrapper with error boundary
 export default function AdminPage() {
+    const { orgSlug } = useParams<{ orgSlug: string }>();
+    return (
+        <AdminErrorBoundary orgSlug={orgSlug}>
+            <AdminPageContent />
+        </AdminErrorBoundary>
+    );
+}
+
+function AdminPageContent() {
     const { orgSlug } = useParams<{ orgSlug: string }>();
     const router = useRouter();
     const [org, setOrg] = useState<any>(null);
@@ -109,40 +161,48 @@ export default function AdminPage() {
 
     useEffect(() => {
         (async () => {
-            // ── AUTH GUARD: verify the user is logged in and owns this org ──
-            const { data: { user: authUser } } = await supabase.auth.getUser();
-            if (!authUser) {
+            try {
+                // ── AUTH GUARD: verify the user is logged in and owns this org ──
+                const { data: authData, error: authError } = await supabase.auth.getUser();
+                const authUser = authData?.user ?? null;
+                if (authError || !authUser) {
+                    console.warn('[AdminPage] Auth check:', authError?.message || 'No user session');
+                    setAuthChecked(true);
+                    setLoading(false);
+                    return;
+                }
+
+                const { data: o, error: orgError } = await supabase.from('organizations').select('*').eq('slug', orgSlug).single();
+                if (orgError || !o) { setAuthChecked(true); setLoading(false); return; }
+
+                // Verify ownership
+                if (o.owner_id !== authUser.id) {
+                    setAuthChecked(true);
+                    setLoading(false);
+                    return;
+                }
+
+                setIsAuthorized(true);
+                setOrg(o);
+                const { data: c } = await supabase.from('classrooms').select('*').eq('organization_id', o.id).order('name');
+                setCls((c || []).map((x: any) => ({ id: x.id, name: x.name, cycle: x.cycle || '', filiere_id: x.filiere_id, level: x.level || 1, capacity: x.capacity || 50 })));
+                const { data: s } = await supabase.from('subjects').select('*').eq('organization_id', o.id).order('name');
+                setSubs((s || []).map((x: any) => ({ id: x.id, name: x.name, code: x.code || '', coefficient: x.coefficient || 1, classroom_id: x.classroom_id, teacher_id: x.teacher_id })));
+                const { data: t } = await supabase.from('teacher_profiles').select('id, organization_id, first_name, last_name, speciality, email, phone, nationality, marital_status, children_count, residence, access_code, pin_set, created_at').eq('organization_id', o.id);
+                setTeachers(t || []);
+                const { data: st } = await supabase.from('student_profiles').select('id, organization_id, first_name, last_name, sex, birth_date, classroom_id, phone, guardian_name, guardian_phone, nationality, residence, matricule, access_code, pin_set, created_at').eq('organization_id', o.id);
+                setStudents(st || []);
+                // Load rooms
+                const { data: rm } = await supabase.from('rooms').select('*').eq('organization_id', o.id).order('name');
+                setRooms((rm || []).map((x: any) => ({ id: x.id, name: x.name })));
+                if (!o.setup_completed && (c || []).length === 0) setTab('setup');
+            } catch (err: any) {
+                console.error('[AdminPage] Init error:', err);
+                toast.error('Erreur de chargement. Veuillez vous reconnecter.');
+            } finally {
                 setAuthChecked(true);
                 setLoading(false);
-                return;
             }
-
-            const { data: o } = await supabase.from('organizations').select('*').eq('slug', orgSlug).single();
-            if (!o) { setAuthChecked(true); setLoading(false); return; }
-
-            // Verify ownership
-            if (o.owner_id !== authUser.id) {
-                setAuthChecked(true);
-                setLoading(false);
-                return;
-            }
-
-            setIsAuthorized(true);
-            setOrg(o);
-            const { data: c } = await supabase.from('classrooms').select('*').eq('organization_id', o.id).order('name');
-            setCls((c || []).map((x: any) => ({ id: x.id, name: x.name, cycle: x.cycle || '', filiere_id: x.filiere_id, level: x.level || 1, capacity: x.capacity || 50 })));
-            const { data: s } = await supabase.from('subjects').select('*').eq('organization_id', o.id).order('name');
-            setSubs((s || []).map((x: any) => ({ id: x.id, name: x.name, code: x.code || '', coefficient: x.coefficient || 1, classroom_id: x.classroom_id, teacher_id: x.teacher_id })));
-            const { data: t } = await supabase.from('teacher_profiles').select('id, organization_id, first_name, last_name, speciality, email, phone, nationality, marital_status, children_count, residence, access_code, pin_set, created_at').eq('organization_id', o.id);
-            setTeachers(t || []);
-            const { data: st } = await supabase.from('student_profiles').select('id, organization_id, first_name, last_name, sex, birth_date, classroom_id, phone, guardian_name, guardian_phone, nationality, residence, matricule, access_code, pin_set, created_at').eq('organization_id', o.id);
-            setStudents(st || []);
-            // Load rooms
-            const { data: rm } = await supabase.from('rooms').select('*').eq('organization_id', o.id).order('name');
-            setRooms((rm || []).map((x: any) => ({ id: x.id, name: x.name })));
-            if (!o.setup_completed && (c || []).length === 0) setTab('setup');
-            setAuthChecked(true);
-            setLoading(false);
         })();
     }, [orgSlug]);
 
@@ -431,12 +491,7 @@ ${bodyHtml}
     const addPay = async () => { if (!payStu || !payAmt) { toast.error('Sélectionnez un étudiant et un montant'); return; } setSaving(true); const { error } = await supabase.from('school_payments').insert({ organization_id: org.id, student_id: payStu, amount: parseFloat(payAmt), payment_method: payMeth, description: payDesc || 'Paiement scolarité', currency: 'XAF' }); if (error) toast.error(error.message); else { toast.success('Paiement enregistré !'); setPayAmt(''); setPayDesc(''); loadPay(); } setSaving(false); };
     const addDisc = async () => { if (!dStu || !dReason) { toast.error('Remplissez les champs'); return; } setSaving(true); const { data: { user } } = await supabase.auth.getUser(); const { error } = await supabase.from('disciplines').insert({ organization_id: org.id, student_id: dStu, type: dType, reason: dReason, created_by: user?.id }); if (error) toast.error(error.message); else { toast.success('Sanction enregistrée'); setDReason(''); loadDisc(); } setSaving(false); };
 
-    const Sel = ({ v, onChange, opts, ph = '—' }: { v: string, onChange: (v: string) => void, opts: { id: string, label: string }[], ph?: string }) => (
-        <select value={v} onChange={e => onChange(e.target.value)} className="w-full h-9 rounded-lg bg-white/5 border border-white/10 text-white px-3 text-sm">
-            <option value="" className="bg-slate-900">{ph}</option>
-            {opts.map(o => <option key={o.id} value={o.id} className="bg-slate-900">{o.label}</option>)}
-        </select>
-    );
+    // Sel component is now defined outside AdminPage to prevent React 19 hydration issues
 
     return (
         <div className="min-h-screen bg-[#0B0E14] text-white flex">
