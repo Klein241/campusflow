@@ -85,6 +85,8 @@ function AdminPageContent() {
     const router = useRouter();
     const [org, setOrg] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [authChecked, setAuthChecked] = useState(false);
+    const [isAuthorized, setIsAuthorized] = useState(false);
     const [tab, setTab] = useState<Tab>('general');
     const [step, setStep] = useState(0);
     const [cls, setCls] = useState<Cls[]>([]);
@@ -161,8 +163,6 @@ function AdminPageContent() {
     const loadLanding = () => { if (!org) return; setLHeroImage(org.hero_image_url || ''); setLHeroTitle(org.hero_title || ''); setLHeroSubtitle(org.hero_subtitle || ''); setLAboutText(org.about_text || ''); setLAboutImage(org.about_image_url || ''); setLGalleryImages(org.gallery_images || []); setLSocialFb(org.social_facebook || ''); setLSocialIg(org.social_instagram || ''); setLSocialTw(org.social_twitter || ''); setLSocialTt(org.social_tiktok || ''); setLSocialYt(org.social_youtube || ''); setLSocialLi(org.social_linkedin || ''); setLFooterText(org.footer_text || ''); };
     const saveLanding = async () => { setLSaving(true); try { const updates: any = { hero_image_url: lHeroImage || null, hero_title: lHeroTitle || null, hero_subtitle: lHeroSubtitle || null, about_text: lAboutText || null, about_image_url: lAboutImage || null, gallery_images: lGalleryImages, social_facebook: lSocialFb || null, social_instagram: lSocialIg || null, social_twitter: lSocialTw || null, social_tiktok: lSocialTt || null, social_youtube: lSocialYt || null, social_linkedin: lSocialLi || null, footer_text: lFooterText || null }; const { error } = await supabase.from('organizations').update(updates).eq('id', org.id); if (error) throw error; setOrg({ ...org, ...updates }); toast.success('Page d\'accueil mise à jour ✅'); } catch (e: any) { toast.error(e.message); } setLSaving(false); };
 
-    const [authChecked, setAuthChecked] = useState(false);
-    const [isAuthorized, setIsAuthorized] = useState(false);
 
     useEffect(() => {
         let cancelled = false; // Prevent setState after unmount (React 19 #310 fix)
