@@ -4,9 +4,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     MessageSquare, Users, UserPlus, Plus, Loader2, Heart, Send,
-    Search, ArrowLeft, ChevronLeft, X, Image as ImageIcon,
-    Check, CheckCheck, Trash2, Settings, Paperclip, FileText,
-    TrendingUp, Clock, Share2, MessageCircle
+    Search, ChevronLeft, X, Image as ImageIcon,
+    Check, CheckCheck, TrendingUp, Share2, MessageCircle,
+    ShieldCheck, User, GraduationCap, BookOpen
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,11 +15,14 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 // ═══════════════════════════════════════════════════════
-// FORUM VIEW — Actus, Groupes, Chat DM
-// Inspiré du community-view de Maison de Prière
+// FORUM VIEW — 4 espaces séparés :
+// 1. Actus (publications avec image+nom+badge admin)
+// 2. Contacts (tous les membres de l'école)
+// 3. Groupes (rejoindre/créer des groupes)
+// 4. Chat DM (messages privés)
 // ═══════════════════════════════════════════════════════
 
-type ForumTab = 'actus' | 'groupes' | 'dm';
+type ForumTab = 'actus' | 'contacts' | 'groupes' | 'dm';
 
 interface ForumViewProps {
     orgId: string;
@@ -32,12 +35,12 @@ interface ForumViewProps {
 interface PostItem {
     id: string;
     user_id: string;
+    user_role: string;
     content: string;
-    category: string;
     photos: string[];
-    is_anonymous: boolean;
-    prayer_count: number;
-    prayed_by: string[];
+    is_admin_post: boolean;
+    like_count: number;
+    liked_by: string[];
     created_at: string;
     senderName?: string;
     senderRole?: string;
@@ -68,7 +71,9 @@ interface SchoolUser {
     id: string;
     name: string;
     role: string;
+    roleLabel: string;
     initials: string;
+    isAdmin?: boolean;
 }
 
 export function ForumView({ orgId, orgSlug, userId, userName, userRole }: ForumViewProps) {
@@ -81,17 +86,20 @@ export function ForumView({ orgId, orgSlug, userId, userName, userRole }: ForumV
     const [newPostContent, setNewPostContent] = useState('');
     const [publishing, setPublishing] = useState(false);
 
+    // ═══ CONTACTS STATE ═══
+    const [allUsers, setAllUsers] = useState<SchoolUser[]>([]);
+    const [contactSearch, setContactSearch] = useState('');
+    const [contactFilter, setContactFilter] = useState<'all' | 'teachers' | 'students' | 'admin'>('all');
+
     // ═══ MESSAGES STATE ═══
     const [convs, setConvs] = useState<ConvInfo[]>([]);
     const [activeConv, setActiveConv] = useState<ConvInfo | null>(null);
     const [messages, setMessages] = useState<MsgInfo[]>([]);
     const [participants, setParticipants] = useState<any[]>([]);
-    const [allUsers, setAllUsers] = useState<SchoolUser[]>([]);
     const [msgText, setMsgText] = useState('');
     const [sending, setSending] = useState(false);
     const [showNewConv, setShowNewConv] = useState(false);
     const [newConvName, setNewConvName] = useState('');
-    const [newConvType, setNewConvType] = useState<'direct' | 'group'>('direct');
     const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
     const [searchUser, setSearchUser] = useState('');
     const [loadingConvs, setLoadingConvs] = useState(true);
@@ -102,23 +110,31 @@ export function ForumView({ orgId, orgSlug, userId, userName, userRole }: ForumV
     useEffect(() => {
         (async () => {
             const [{ data: teachers }, { data: students }] = await Promise.all([
-                supabase.from('teacher_profiles').select('id, first_name, last_name').eq('organization_id', orgId).eq('is_active', true),
-                supabase.from('student_profiles').select('id, first_name, last_name, matricule').eq('organization_id', orgId).eq('is_active', true),
+                supabase.from('teacher_profiles').select('id, first_name, last_name').eq('organization_id', orgId),
+                supabase.from('student_profiles').select('id, first_name, last_name, matricule').eq('organization_id', orgId),
             ]);
+            // Also get the org owner for admin identification
+            const { data: orgData } = await supabase.from('organizations').select('owner_id').eq('id', orgId).single();
+            const ownerId = orgData?.owner_id;
+
             const users: SchoolUser[] = [
                 ...(teachers || []).map((t: any) => ({
                     id: t.id,
                     name: `${t.first_name} ${t.last_name}`,
-                    role: 'Professeur',
+                    role: 'teacher',
+                    roleLabel: 'Professeur',
                     initials: `${t.first_name?.[0] || ''}${t.last_name?.[0] || ''}`,
+                    isAdmin: false,
                 })),
                 ...(students || []).map((s: any) => ({
                     id: s.id,
                     name: `${s.first_name} ${s.last_name}`,
-                    role: s.matricule ? `Étudiant — ${s.matricule}` : 'Étudiant',
+                    role: 'student',
+                    roleLabel: s.matricule ? `Étudiant — ${s.matricule}` : 'Étudiant',
                     initials: `${s.first_name?.[0] || ''}${s.last_name?.[0] || ''}`,
+                    isAdmin: false,
                 })),
-            ].filter(u => u.id !== userId);
+            ];
             setAllUsers(users);
         })();
     }, [orgId, userId]);
@@ -132,15 +148,25 @@ export function ForumView({ orgId, orgSlug, userId, userName, userRole }: ForumV
     const loadPosts = async () => {
         setLoadingPosts(true);
         try {
-            // Load posts from tutoring_requests scoped to org
-            const { data } = await supabase
-                .from('tutoring_requests')
+            // Try school_posts first, fallback to tutoring_requests
+            let { data, error } = await supabase
+                .from('school_posts')
                 .select('*')
+                .eq('organization_id', orgId)
                 .order('created_at', { ascending: false })
                 .limit(50);
 
+            if (error) {
+                // Fallback to tutoring_requests if school_posts doesn't exist yet
+                const fallback = await supabase
+                    .from('tutoring_requests')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .limit(50);
+                data = fallback.data;
+            }
+
             if (data) {
-                // Enrich with sender names from teacher/student profiles
                 const enriched = await Promise.all(data.map(async (p: any) => {
                     let senderName = 'Membre';
                     let senderRole = '';
@@ -157,7 +183,19 @@ export function ForumView({ orgId, orgSlug, userId, userName, userRole }: ForumV
                             senderRole = 'Étudiant';
                         }
                     }
-                    return { ...p, senderName, senderRole } as PostItem;
+                    return {
+                        id: p.id,
+                        user_id: p.user_id,
+                        user_role: p.user_role || senderRole.toLowerCase(),
+                        content: p.content,
+                        photos: p.photos || [],
+                        is_admin_post: p.is_admin_post || false,
+                        like_count: p.like_count || p.prayer_count || 0,
+                        liked_by: p.liked_by || p.prayed_by || [],
+                        created_at: p.created_at,
+                        senderName,
+                        senderRole,
+                    } as PostItem;
                 }));
                 setPosts(enriched);
             }
@@ -172,14 +210,32 @@ export function ForumView({ orgId, orgSlug, userId, userName, userRole }: ForumV
         if (!newPostContent.trim()) return;
         setPublishing(true);
         try {
-            const { error } = await supabase.from('tutoring_requests').insert({
-                user_id: userId,
-                content: newPostContent.trim(),
-                category: 'post',
-                is_anonymous: false,
-                prayer_count: 0,
-                prayed_by: [],
-            });
+            // Try school_posts first
+            let error: any;
+            try {
+                const res = await supabase.from('school_posts').insert({
+                    organization_id: orgId,
+                    user_id: userId,
+                    user_role: userRole,
+                    content: newPostContent.trim(),
+                    photos: [],
+                    is_admin_post: false,
+                    like_count: 0,
+                    liked_by: [],
+                });
+                error = res.error;
+            } catch {
+                // Fallback
+                const res = await supabase.from('tutoring_requests').insert({
+                    user_id: userId,
+                    content: newPostContent.trim(),
+                    category: 'post',
+                    is_anonymous: false,
+                    prayer_count: 0,
+                    prayed_by: [],
+                });
+                error = res.error;
+            }
             if (error) throw error;
             toast.success('Publication partagée ! 🎉');
             setNewPostContent('');
@@ -193,16 +249,23 @@ export function ForumView({ orgId, orgSlug, userId, userName, userRole }: ForumV
 
     // ═══ LIKE POST ═══
     const likePost = async (post: PostItem) => {
-        const alreadyLiked = post.prayed_by?.includes(userId);
-        const newCount = alreadyLiked ? Math.max(0, post.prayer_count - 1) : post.prayer_count + 1;
-        const newBy = alreadyLiked ? post.prayed_by.filter(id => id !== userId) : [...(post.prayed_by || []), userId];
+        const alreadyLiked = post.liked_by?.includes(userId);
+        const newCount = alreadyLiked ? Math.max(0, post.like_count - 1) : post.like_count + 1;
+        const newBy = alreadyLiked ? post.liked_by.filter(id => id !== userId) : [...(post.liked_by || []), userId];
 
-        setPosts(prev => prev.map(p => p.id === post.id ? { ...p, prayer_count: newCount, prayed_by: newBy } : p));
+        setPosts(prev => prev.map(p => p.id === post.id ? { ...p, like_count: newCount, liked_by: newBy } : p));
 
-        await supabase.from('tutoring_requests').update({
-            prayer_count: newCount,
-            prayed_by: newBy,
-        }).eq('id', post.id);
+        try {
+            await supabase.from('school_posts').update({
+                like_count: newCount,
+                liked_by: newBy,
+            }).eq('id', post.id);
+        } catch {
+            await supabase.from('tutoring_requests').update({
+                prayer_count: newCount,
+                prayed_by: newBy,
+            }).eq('id', post.id);
+        }
     };
 
     // ═══ LOAD CONVERSATIONS ═══
@@ -315,17 +378,18 @@ export function ForumView({ orgId, orgSlug, userId, userName, userRole }: ForumV
     }, [msgText, activeConv, userId]);
 
     // ═══ CREATE CONVERSATION ═══
-    const createConversation = async () => {
-        if (selectedUsers.length === 0) { toast.error('Sélectionnez au moins un membre'); return; }
-        if (newConvType === 'group' && !newConvName.trim()) { toast.error('Nom du groupe requis'); return; }
+    const createConversation = async (type: 'direct' | 'group', targetUserId?: string) => {
+        const usersToAdd = targetUserId ? [targetUserId] : selectedUsers;
+        if (usersToAdd.length === 0) { toast.error('Sélectionnez au moins un membre'); return; }
+        if (type === 'group' && !newConvName.trim()) { toast.error('Nom du groupe requis'); return; }
         setSending(true);
         try {
-            const name = newConvType === 'direct'
-                ? allUsers.find(u => u.id === selectedUsers[0])?.name || 'Conversation'
+            const name = type === 'direct'
+                ? allUsers.find(u => u.id === usersToAdd[0])?.name || 'Conversation'
                 : newConvName.trim();
 
-            if (newConvType === 'direct') {
-                const otherId = selectedUsers[0];
+            if (type === 'direct') {
+                const otherId = usersToAdd[0];
                 const { data: otherParts } = await supabase.from('chat_participants').select('conversation_id').eq('user_id', otherId);
                 const { data: myParts } = await supabase.from('chat_participants').select('conversation_id').eq('user_id', userId);
                 if (otherParts && myParts) {
@@ -336,6 +400,7 @@ export function ForumView({ orgId, orgSlug, userId, userName, userRole }: ForumV
                                 .select('*').eq('id', mp.conversation_id).eq('type', 'direct').single();
                             if (convCheck) {
                                 setActiveConv(convCheck);
+                                setForumTab('dm');
                                 setShowNewConv(false); setSelectedUsers([]);
                                 setSending(false);
                                 toast.info('Conversation existante ouverte');
@@ -347,27 +412,33 @@ export function ForumView({ orgId, orgSlug, userId, userName, userRole }: ForumV
             }
 
             const { data: conv, error: convErr } = await supabase.from('chat_conversations').insert({
-                organization_id: orgId, type: newConvType, name, created_by: userId,
+                organization_id: orgId, type, name, created_by: userId,
             }).select().single();
             if (convErr) throw convErr;
 
-            const allParts = [userId, ...selectedUsers].map(uid => ({
+            const allParts = [userId, ...usersToAdd].map(uid => ({
                 conversation_id: conv.id, user_id: uid, role: uid === userId ? 'admin' : 'member',
             }));
             await supabase.from('chat_participants').insert(allParts);
             await supabase.from('chat_messages').insert({
                 conversation_id: conv.id, sender_id: userId,
-                content: newConvType === 'direct' ? 'Conversation démarrée' : `Groupe "${name}" créé`,
+                content: type === 'direct' ? 'Conversation démarrée' : `Groupe "${name}" créé`,
                 msg_type: 'system',
             });
 
             const newConvInfo: ConvInfo = { ...conv, lastMessage: 'Conversation créée', lastMessageAt: new Date().toISOString(), unreadCount: 0 };
             setConvs(prev => [newConvInfo, ...prev]);
             setActiveConv(newConvInfo);
+            if (type === 'direct') setForumTab('dm');
             setShowNewConv(false); setNewConvName(''); setSelectedUsers([]);
             toast.success('Conversation créée !');
         } catch (e: any) { toast.error(e.message); }
         setSending(false);
+    };
+
+    // ═══ START DM with a contact ═══
+    const startDmWith = (contactId: string) => {
+        createConversation('direct', contactId);
     };
 
     // ═══ HELPERS ═══
@@ -400,9 +471,18 @@ export function ForumView({ orgId, orgSlug, userId, userName, userRole }: ForumV
         return `il y a ${days}j`;
     };
 
-    const filteredUsers = allUsers.filter(u => !searchUser || u.name.toLowerCase().includes(searchUser.toLowerCase()));
+    const filteredContacts = allUsers.filter(u => {
+        if (u.id === userId) return false;
+        const matchSearch = !contactSearch || u.name.toLowerCase().includes(contactSearch.toLowerCase());
+        const matchFilter = contactFilter === 'all' ||
+            (contactFilter === 'teachers' && u.role === 'teacher') ||
+            (contactFilter === 'students' && u.role === 'student');
+        return matchSearch && matchFilter;
+    });
 
-    // ═══ IF VIEWING A CONVERSATION ═══
+    const filteredNewConvUsers = allUsers.filter(u => u.id !== userId && (!searchUser || u.name.toLowerCase().includes(searchUser.toLowerCase())));
+
+    // ═══ IF VIEWING A CONVERSATION (DM or Group chat) ═══
     if (activeConv) {
         return (
             <div className="flex flex-col h-[calc(100vh-140px)]">
@@ -487,20 +567,20 @@ export function ForumView({ orgId, orgSlug, userId, userName, userRole }: ForumV
         );
     }
 
-    // ═══ MAIN FORUM VIEW ═══
+    // ═══ MAIN FORUM VIEW WITH 4 SEPARATE TABS ═══
     return (
         <div className="space-y-4">
-            {/* Quick action buttons (Maison de Prière style) */}
+            {/* Quick action buttons */}
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
                 <button
-                    onClick={() => { setForumTab('dm'); setShowNewConv(true); setNewConvType('direct'); }}
+                    onClick={() => setForumTab('contacts')}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600/15 to-violet-600/15 border border-indigo-500/20 hover:border-indigo-500/40 transition-all whitespace-nowrap group"
                 >
                     <UserPlus className="w-4 h-4 text-indigo-400 group-hover:scale-110 transition-transform" />
                     <span className="text-xs font-medium text-indigo-300">Retrouver vos contacts</span>
                 </button>
                 <button
-                    onClick={() => { setForumTab('groupes'); setShowNewConv(true); setNewConvType('group'); }}
+                    onClick={() => setForumTab('groupes')}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-teal-600/15 to-emerald-600/15 border border-teal-500/20 hover:border-teal-500/40 transition-all whitespace-nowrap group"
                 >
                     <Users className="w-4 h-4 text-teal-400 group-hover:scale-110 transition-transform" />
@@ -515,10 +595,11 @@ export function ForumView({ orgId, orgSlug, userId, userName, userRole }: ForumV
                 </button>
             </div>
 
-            {/* Forum sub-tabs */}
+            {/* 4 Forum sub-tabs */}
             <div className="flex gap-1 p-1 rounded-2xl bg-white/[0.03] border border-white/5">
                 {[
-                    { id: 'actus' as ForumTab, label: 'Actus', icon: TrendingUp, count: posts.length },
+                    { id: 'actus' as ForumTab, label: 'Actus', icon: TrendingUp },
+                    { id: 'contacts' as ForumTab, label: 'Contacts', icon: UserPlus },
                     { id: 'groupes' as ForumTab, label: 'Groupes', icon: Users },
                     { id: 'dm' as ForumTab, label: 'Chat DM', icon: MessageSquare },
                 ].map(tab => (
@@ -570,7 +651,8 @@ export function ForumView({ orgId, orgSlug, userId, userName, userRole }: ForumV
 
             {/* ═══ TAB CONTENT ═══ */}
             <AnimatePresence mode="wait">
-                {/* ACTUS TAB */}
+
+                {/* ═══════ ACTUS TAB (publications avec image+nom+badge) ═══════ */}
                 {forumTab === 'actus' && (
                     <motion.div key="actus" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                         className="space-y-3">
@@ -581,35 +663,51 @@ export function ForumView({ orgId, orgSlug, userId, userName, userRole }: ForumV
                                 <TrendingUp className="w-14 h-14 mx-auto mb-3 text-slate-700" />
                                 <p className="text-sm text-slate-500">Pas encore de publications</p>
                                 <p className="text-xs text-slate-600 mt-1">Soyez le premier à partager une actu !</p>
+                                <Button size="sm" variant="ghost" className="text-amber-400 text-xs mt-3" onClick={() => setShowNewPost(true)}>
+                                    <Plus className="w-3 h-3 mr-1" /> Publier une actu
+                                </Button>
                             </div>
                         ) : posts.map((post, i) => (
                             <motion.div key={post.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
                                 className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:border-white/10 transition-all group">
                                 <div className="flex items-start gap-3">
                                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-600 to-indigo-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
-                                        {post.is_anonymous ? '?' : (post.senderName || 'M').split(' ').map(w => w[0]).join('').slice(0, 2)}
+                                        {(post.senderName || 'M').split(' ').map(w => w[0]).join('').slice(0, 2)}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-semibold text-sm">{post.is_anonymous ? 'Anonyme' : post.senderName}</span>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="font-semibold text-sm">{post.senderName}</span>
                                             {post.senderRole && (
-                                                <span className={cn("text-[10px] px-2 py-0.5 rounded-full",
+                                                <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium",
                                                     post.senderRole === 'Professeur' ? 'bg-indigo-500/15 text-indigo-400' : 'bg-teal-500/15 text-teal-400'
                                                 )}>{post.senderRole}</span>
+                                            )}
+                                            {post.is_admin_post && (
+                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 font-medium flex items-center gap-0.5">
+                                                    <ShieldCheck className="w-3 h-3" /> Administration
+                                                </span>
                                             )}
                                         </div>
                                         <p className="text-[10px] text-slate-500 mt-0.5">{timeAgo(post.created_at)}</p>
                                     </div>
                                 </div>
                                 <p className="mt-3 text-sm text-slate-200 leading-relaxed whitespace-pre-line">{post.content}</p>
+                                {/* Photos */}
+                                {post.photos && post.photos.length > 0 && (
+                                    <div className="mt-3 grid grid-cols-2 gap-2">
+                                        {post.photos.map((photo, pi) => (
+                                            <img key={pi} src={photo} alt="" className="w-full h-32 object-cover rounded-xl border border-white/10" />
+                                        ))}
+                                    </div>
+                                )}
                                 {/* Actions */}
                                 <div className="flex items-center gap-4 mt-3 pt-3 border-t border-white/5">
                                     <button onClick={() => likePost(post)}
                                         className={cn("flex items-center gap-1.5 text-xs transition-all",
-                                            post.prayed_by?.includes(userId) ? 'text-red-400' : 'text-slate-500 hover:text-red-400'
+                                            post.liked_by?.includes(userId) ? 'text-red-400' : 'text-slate-500 hover:text-red-400'
                                         )}>
-                                        <Heart className={cn("w-4 h-4", post.prayed_by?.includes(userId) && 'fill-current')} />
-                                        <span>{post.prayer_count || 0}</span>
+                                        <Heart className={cn("w-4 h-4", post.liked_by?.includes(userId) && 'fill-current')} />
+                                        <span>{post.like_count || 0}</span>
                                     </button>
                                     <button className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-teal-400 transition-colors">
                                         <Share2 className="w-4 h-4" />
@@ -621,29 +719,113 @@ export function ForumView({ orgId, orgSlug, userId, userName, userRole }: ForumV
                     </motion.div>
                 )}
 
-                {/* GROUPES & DM TAB */}
-                {(forumTab === 'groupes' || forumTab === 'dm') && (
-                    <motion.div key={forumTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                {/* ═══════ CONTACTS TAB (tous les membres) ═══════ */}
+                {forumTab === 'contacts' && (
+                    <motion.div key="contacts" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                         className="space-y-3">
-                        {/* New conversation form */}
+                        <div className="flex items-center justify-between">
+                            <h3 className="font-bold text-sm text-slate-300">👥 Annuaire de l&apos;école</h3>
+                            <span className="text-xs text-slate-500">{allUsers.filter(u => u.id !== userId).length} membre(s)</span>
+                        </div>
+
+                        {/* Search */}
+                        <div className="relative">
+                            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
+                            <Input value={contactSearch} onChange={e => setContactSearch(e.target.value)} placeholder="Rechercher un membre..."
+                                className="bg-white/5 border-white/10 text-white h-10 pl-10 rounded-xl text-sm" />
+                        </div>
+
+                        {/* Filter pills */}
+                        <div className="flex gap-2">
+                            {[
+                                { id: 'all' as const, label: 'Tous', icon: Users },
+                                { id: 'teachers' as const, label: 'Professeurs', icon: BookOpen },
+                                { id: 'students' as const, label: 'Étudiants', icon: GraduationCap },
+                            ].map(f => (
+                                <button key={f.id} onClick={() => setContactFilter(f.id)}
+                                    className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all",
+                                        contactFilter === f.id
+                                            ? 'bg-teal-600/20 text-teal-300 border border-teal-500/20'
+                                            : 'bg-white/5 text-slate-400 border border-white/5 hover:bg-white/10'
+                                    )}>
+                                    <f.icon className="w-3 h-3" />
+                                    {f.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Contact list */}
+                        <div className="space-y-2">
+                            {filteredContacts.length === 0 ? (
+                                <div className="text-center py-12 text-slate-500">
+                                    <Users className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                                    <p className="text-sm">Aucun contact trouvé</p>
+                                </div>
+                            ) : filteredContacts.map((u, i) => (
+                                <motion.div key={u.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.02 }}
+                                    className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:border-white/10 transition-all">
+                                    <div className={cn("w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shrink-0",
+                                        u.role === 'teacher'
+                                            ? 'bg-gradient-to-br from-indigo-600/30 to-purple-600/30 text-indigo-300'
+                                            : 'bg-gradient-to-br from-teal-600/30 to-emerald-600/30 text-teal-300'
+                                    )}>
+                                        {u.initials}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-medium text-sm truncate">{u.name}</p>
+                                            <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full",
+                                                u.role === 'teacher' ? 'bg-indigo-500/15 text-indigo-400' : 'bg-teal-500/15 text-teal-400'
+                                            )}>
+                                                {u.role === 'teacher' ? '👨‍🏫 Prof' : '🎓 Étudiant'}
+                                            </span>
+                                            {u.isAdmin && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400">
+                                                    <ShieldCheck className="w-2.5 h-2.5 inline mr-0.5" />Admin
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-[10px] text-slate-500">{u.roleLabel}</p>
+                                    </div>
+                                    {/* DM button */}
+                                    <button
+                                        onClick={() => startDmWith(u.id)}
+                                        disabled={sending}
+                                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-gradient-to-r from-teal-600/20 to-emerald-600/20 border border-teal-500/20 text-teal-300 text-xs font-medium hover:border-teal-500/40 transition-all"
+                                    >
+                                        <MessageSquare className="w-3 h-3" />
+                                        DM
+                                    </button>
+                                </motion.div>
+                            ))}
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* ═══════ GROUPES TAB ═══════ */}
+                {forumTab === 'groupes' && (
+                    <motion.div key="groupes" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                        className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <h3 className="font-bold text-sm text-slate-300">👥 Groupes de l&apos;école</h3>
+                            <Button size="sm" variant="ghost" className="text-teal-400 text-xs" onClick={() => { setShowNewConv(true); }}>
+                                <Plus className="w-3 h-3 mr-1" /> Créer un groupe
+                            </Button>
+                        </div>
+
+                        {/* New group creation form */}
                         <AnimatePresence>
                             {showNewConv && (
                                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
                                     className="overflow-hidden">
                                     <div className="p-4 rounded-2xl bg-gradient-to-br from-teal-500/5 to-indigo-500/5 border border-teal-500/20 space-y-3">
                                         <div className="flex items-center justify-between">
-                                            <h3 className="text-sm font-bold text-teal-300">
-                                                {newConvType === 'direct' ? '💬 Nouveau message' : '👥 Nouveau groupe'}
-                                            </h3>
-                                            <button onClick={() => { setShowNewConv(false); setSelectedUsers([]); }}>
-                                                <X className="w-4 h-4 text-slate-400" />
-                                            </button>
+                                            <h3 className="text-sm font-bold text-teal-300">👥 Nouveau groupe</h3>
+                                            <button onClick={() => { setShowNewConv(false); setSelectedUsers([]); }}><X className="w-4 h-4 text-slate-400" /></button>
                                         </div>
-                                        {newConvType === 'group' && (
-                                            <Input value={newConvName} onChange={e => setNewConvName(e.target.value)}
-                                                placeholder="Nom du groupe..."
-                                                className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-xs" />
-                                        )}
+                                        <Input value={newConvName} onChange={e => setNewConvName(e.target.value)}
+                                            placeholder="Nom du groupe..."
+                                            className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-xs" />
                                         <div className="relative">
                                             <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-500" />
                                             <Input value={searchUser} onChange={e => setSearchUser(e.target.value)} placeholder="Chercher un membre..."
@@ -663,52 +845,91 @@ export function ForumView({ orgId, orgSlug, userId, userName, userRole }: ForumV
                                             </div>
                                         )}
                                         <div className="max-h-40 overflow-y-auto space-y-0.5 scrollbar-thin">
-                                            {filteredUsers.map(u => (
+                                            {filteredNewConvUsers.map(u => (
                                                 <button key={u.id} onClick={() => {
-                                                    if (newConvType === 'direct') setSelectedUsers([u.id]);
-                                                    else setSelectedUsers(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : [...prev, u.id]);
+                                                    setSelectedUsers(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : [...prev, u.id]);
                                                 }} className={cn("w-full flex items-center gap-2 px-2 py-1.5 rounded-xl text-xs transition",
                                                     selectedUsers.includes(u.id) ? 'bg-teal-600/20 text-teal-300' : 'hover:bg-white/5 text-slate-400'
                                                 )}>
                                                     <div className="w-7 h-7 rounded-full bg-gradient-to-br from-teal-600 to-indigo-600 flex items-center justify-center text-[9px] font-bold text-white shrink-0">{u.initials}</div>
                                                     <div className="text-left min-w-0">
                                                         <span className="truncate block">{u.name}</span>
-                                                        <span className="text-[9px] text-slate-600 block">{u.role}</span>
+                                                        <span className="text-[9px] text-slate-600 block">{u.roleLabel}</span>
                                                     </div>
                                                     {selectedUsers.includes(u.id) && <Check className="w-3 h-3 text-teal-400 ml-auto shrink-0" />}
                                                 </button>
                                             ))}
                                         </div>
-                                        <Button onClick={createConversation} disabled={sending}
+                                        <Button onClick={() => createConversation('group')} disabled={sending}
                                             className="w-full bg-gradient-to-r from-teal-600 to-emerald-600 text-xs rounded-xl shadow-lg shadow-teal-600/20">
                                             {sending && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
-                                            Créer la conversation
+                                            Créer le groupe
                                         </Button>
                                     </div>
                                 </motion.div>
                             )}
                         </AnimatePresence>
 
-                        {/* Conversation list */}
+                        {/* Group list */}
                         {loadingConvs ? (
                             <div className="text-center py-12"><Loader2 className="w-6 h-6 animate-spin mx-auto text-teal-400" /></div>
                         ) : convs.length === 0 ? (
                             <div className="text-center py-16">
-                                {forumTab === 'groupes' ? <Users className="w-14 h-14 mx-auto mb-3 text-slate-700" /> : <MessageSquare className="w-14 h-14 mx-auto mb-3 text-slate-700" />}
-                                <p className="text-sm text-slate-500">{forumTab === 'groupes' ? 'Aucun groupe' : 'Aucune conversation'}</p>
-                                <Button size="sm" variant="ghost" className="text-teal-400 text-xs mt-3" onClick={() => setShowNewConv(true)}>
-                                    <Plus className="w-3 h-3 mr-1" /> {forumTab === 'groupes' ? 'Créer un groupe' : 'Nouvelle conversation'}
+                                <Users className="w-14 h-14 mx-auto mb-3 text-slate-700" />
+                                <p className="text-sm text-slate-500">Aucun groupe</p>
+                                <p className="text-xs text-slate-600 mt-1">Créez ou rejoignez un groupe !</p>
+                            </div>
+                        ) : convs.map(c => (
+                            <button key={c.id} onClick={() => setActiveConv(c)}
+                                className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:border-white/15 transition-all text-left group">
+                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-teal-600/30 to-emerald-600/30 text-teal-300 flex items-center justify-center text-sm font-bold shrink-0">
+                                    <Users className="w-5 h-5" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center justify-between">
+                                        <p className="font-medium text-sm truncate">{c.name || 'Groupe'}</p>
+                                        <span className="text-[10px] text-slate-500 shrink-0 ml-2">{c.lastMessageAt ? formatTime(c.lastMessageAt) : ''}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between mt-0.5">
+                                        <p className="text-xs text-slate-500 truncate">{c.lastMessage || '...'}</p>
+                                        {(c.unreadCount || 0) > 0 && (
+                                            <span className="w-5 h-5 rounded-full bg-teal-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0 ml-2 shadow-lg shadow-teal-600/30">{c.unreadCount}</span>
+                                        )}
+                                    </div>
+                                </div>
+                            </button>
+                        ))}
+                    </motion.div>
+                )}
+
+                {/* ═══════ CHAT DM TAB ═══════ */}
+                {forumTab === 'dm' && (
+                    <motion.div key="dm" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                        className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <h3 className="font-bold text-sm text-slate-300">💬 Messages privés</h3>
+                            <Button size="sm" variant="ghost" className="text-indigo-400 text-xs" onClick={() => setForumTab('contacts')}>
+                                <Plus className="w-3 h-3 mr-1" /> Nouveau message
+                            </Button>
+                        </div>
+
+                        {/* DM list */}
+                        {loadingConvs ? (
+                            <div className="text-center py-12"><Loader2 className="w-6 h-6 animate-spin mx-auto text-indigo-400" /></div>
+                        ) : convs.length === 0 ? (
+                            <div className="text-center py-16">
+                                <MessageSquare className="w-14 h-14 mx-auto mb-3 text-slate-700" />
+                                <p className="text-sm text-slate-500">Aucune conversation</p>
+                                <p className="text-xs text-slate-600 mt-1">Commencez à discuter en allant dans Contacts</p>
+                                <Button size="sm" variant="ghost" className="text-indigo-400 text-xs mt-3" onClick={() => setForumTab('contacts')}>
+                                    <UserPlus className="w-3 h-3 mr-1" /> Trouver un contact
                                 </Button>
                             </div>
                         ) : convs.map(c => (
                             <button key={c.id} onClick={() => setActiveConv(c)}
                                 className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:border-white/15 transition-all text-left group">
-                                <div className={cn("w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold shrink-0",
-                                    c.type === 'group'
-                                        ? 'bg-gradient-to-br from-teal-600/30 to-emerald-600/30 text-teal-300'
-                                        : 'bg-gradient-to-br from-indigo-600/30 to-purple-600/30 text-indigo-300'
-                                )}>
-                                    {c.type === 'group' ? <Users className="w-5 h-5" /> : <span className="text-lg">{(c.name || '?').charAt(0).toUpperCase()}</span>}
+                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-600/30 to-purple-600/30 text-indigo-300 flex items-center justify-center text-lg font-bold shrink-0">
+                                    {(c.name || '?').charAt(0).toUpperCase()}
                                 </div>
                                 <div className="min-w-0 flex-1">
                                     <div className="flex items-center justify-between">
@@ -718,7 +939,7 @@ export function ForumView({ orgId, orgSlug, userId, userName, userRole }: ForumV
                                     <div className="flex items-center justify-between mt-0.5">
                                         <p className="text-xs text-slate-500 truncate">{c.lastMessage || '...'}</p>
                                         {(c.unreadCount || 0) > 0 && (
-                                            <span className="w-5 h-5 rounded-full bg-teal-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0 ml-2 shadow-lg shadow-teal-600/30">{c.unreadCount}</span>
+                                            <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0 ml-2 shadow-lg shadow-indigo-600/30">{c.unreadCount}</span>
                                         )}
                                     </div>
                                 </div>

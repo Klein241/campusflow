@@ -168,8 +168,30 @@ CREATE TABLE IF NOT EXISTS public.classrooms (
 CREATE INDEX IF NOT EXISTS idx_classroom_org ON public.classrooms(organization_id);
 
 -- ============================================================
--- 5. SUBJECTS (matières)
+-- 4b. ROOMS (salles physiques — distinct from classrooms)
 -- ============================================================
+-- "Salle" = physical location (Salle 101, Amphi A, Lab)
+-- "Classe" = student group (Tle A, 6ème B, L1 Droit)
+CREATE TABLE IF NOT EXISTS public.rooms (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    name            TEXT NOT NULL,
+    capacity        INTEGER,
+    building        TEXT,
+    floor           TEXT,
+    equipment       TEXT,
+    is_active       BOOLEAN DEFAULT TRUE,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_rooms_org ON public.rooms(organization_id);
+
+-- ============================================================
+-- 5. SUBJECTS (matières — independent of classrooms)
+-- ============================================================
+-- NOTE: classroom_id is NULLABLE. Subjects exist independently.
+-- The association subject ↔ classroom ↔ teacher ↔ room
+-- is managed via timetable_slots.
 CREATE TABLE IF NOT EXISTS public.subjects (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,

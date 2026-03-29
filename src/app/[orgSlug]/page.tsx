@@ -143,7 +143,7 @@ export default function SchoolLandingPage() {
                     {/* Hero background image */}
                     {org.hero_image_url ? (
                         <div className="absolute inset-0">
-                            <img src={org.hero_image_url} alt="" className="w-full h-full object-cover" />
+                            <img src={org.hero_image_url} alt="" className="w-full h-full object-cover" loading="eager" fetchPriority="high" decoding="async" />
                             <div className="absolute inset-0 bg-gradient-to-b from-[#0B0E14]/80 via-[#0B0E14]/60 to-[#0B0E14]" />
                         </div>
                     ) : (
@@ -157,7 +157,7 @@ export default function SchoolLandingPage() {
                     <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 text-center py-20">
                         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5 }}>
                             {org.logo_url ? (
-                                <img src={org.logo_url} alt={org.name} className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl mx-auto mb-6 object-contain bg-white/10 backdrop-blur-sm p-2 border border-white/10 shadow-2xl" />
+                                <img src={org.logo_url} alt={org.name} className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl mx-auto mb-6 object-contain bg-white/10 backdrop-blur-sm p-2 border border-white/10 shadow-2xl" loading="eager" decoding="async" width={112} height={112} />
                             ) : (
                                 <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl mx-auto mb-6 flex items-center justify-center border border-white/10 shadow-2xl" style={{ background: `linear-gradient(135deg, ${brandColor}30, ${brandColor}10)` }}>
                                     <GraduationCap className="w-12 h-12 sm:w-14 sm:h-14" style={{ color: brandColor }} />
@@ -238,7 +238,7 @@ export default function SchoolLandingPage() {
                         </motion.div>
                         {org.about_image_url && (
                             <motion.div variants={fadeUp} custom={1}>
-                                <img src={org.about_image_url} alt="À propos" className="w-full h-64 sm:h-80 rounded-2xl object-cover border border-white/10 shadow-2xl" />
+                                <img src={org.about_image_url} alt="À propos" className="w-full h-64 sm:h-80 rounded-2xl object-cover border border-white/10 shadow-2xl" loading="lazy" decoding="async" />
                             </motion.div>
                         )}
                     </motion.div>
@@ -299,7 +299,7 @@ export default function SchoolLandingPage() {
                         {gallery.map((img: string, i: number) => (
                             <motion.div key={i} initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ delay: i * 0.05 }}
                                 className="relative group overflow-hidden rounded-2xl border border-white/10">
-                                <img src={img} alt={`Photo ${i + 1}`} className="w-full h-48 sm:h-56 object-cover group-hover:scale-105 transition-transform duration-500" />
+                                <img src={img} alt={`Photo ${i + 1}`} className="w-full h-48 sm:h-56 object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" decoding="async" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                             </motion.div>
                         ))}
