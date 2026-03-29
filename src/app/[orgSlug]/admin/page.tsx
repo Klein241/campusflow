@@ -145,6 +145,11 @@ function AdminPageContent() {
     const [sOrgName, setSOrgName] = useState(''); const [sOrgPhone, setSOrgPhone] = useState('');
     const [sOrgEmail, setSOrgEmail] = useState(''); const [sOrgWhatsapp, setSOrgWhatsapp] = useState('');
     const [sVerifying, setSVerifying] = useState(false); const [sSavingSettings, setSSavingSettings] = useState(false);
+    // Eval editing (moved here from mid-component to avoid React 19 #310)
+    const [editEvalId, setEditEvalId] = useState<string | null>(null);
+    const [editEvTitle, setEditEvTitle] = useState('');
+    const [editEvType, setEditEvType] = useState('');
+    const [editEvMax, setEditEvMax] = useState('');
     // Landing page config
     const [lHeroImage, setLHeroImage] = useState(''); const [lHeroTitle, setLHeroTitle] = useState(''); const [lHeroSubtitle, setLHeroSubtitle] = useState('');
     const [lAboutText, setLAboutText] = useState(''); const [lAboutImage, setLAboutImage] = useState('');
@@ -160,11 +165,15 @@ function AdminPageContent() {
     const [isAuthorized, setIsAuthorized] = useState(false);
 
     useEffect(() => {
-        (async () => {
+        let cancelled = false; // Prevent setState after unmount (React 19 #310 fix)
+
+        const initAdmin = async () => {
             try {
                 // ── AUTH GUARD: verify the user is logged in and owns this org ──
                 const { data: authData, error: authError } = await supabase.auth.getUser();
                 const authUser = authData?.user ?? null;
+                if (cancelled) return;
+
                 if (authError || !authUser) {
                     console.warn('[AdminPage] Auth check:', authError?.message || 'No user session');
                     setAuthChecked(true);
@@ -173,6 +182,7 @@ function AdminPageContent() {
                 }
 
                 const { data: o, error: orgError } = await supabase.from('organizations').select('*').eq('slug', orgSlug).single();
+                if (cancelled) return;
                 if (orgError || !o) { setAuthChecked(true); setLoading(false); return; }
 
                 // Verify ownership
@@ -182,28 +192,43 @@ function AdminPageContent() {
                     return;
                 }
 
+                if (cancelled) return;
                 setIsAuthorized(true);
                 setOrg(o);
                 const { data: c } = await supabase.from('classrooms').select('*').eq('organization_id', o.id).order('name');
+                if (cancelled) return;
                 setCls((c || []).map((x: any) => ({ id: x.id, name: x.name, cycle: x.cycle || '', filiere_id: x.filiere_id, level: x.level || 1, capacity: x.capacity || 50 })));
                 const { data: s } = await supabase.from('subjects').select('*').eq('organization_id', o.id).order('name');
+                if (cancelled) return;
                 setSubs((s || []).map((x: any) => ({ id: x.id, name: x.name, code: x.code || '', coefficient: x.coefficient || 1, classroom_id: x.classroom_id, teacher_id: x.teacher_id })));
                 const { data: t } = await supabase.from('teacher_profiles').select('id, organization_id, first_name, last_name, speciality, email, phone, nationality, marital_status, children_count, residence, access_code, pin_set, created_at').eq('organization_id', o.id);
+                if (cancelled) return;
                 setTeachers(t || []);
                 const { data: st } = await supabase.from('student_profiles').select('id, organization_id, first_name, last_name, sex, birth_date, classroom_id, phone, guardian_name, guardian_phone, nationality, residence, matricule, access_code, pin_set, created_at').eq('organization_id', o.id);
+                if (cancelled) return;
                 setStudents(st || []);
                 // Load rooms
                 const { data: rm } = await supabase.from('rooms').select('*').eq('organization_id', o.id).order('name');
+                if (cancelled) return;
                 setRooms((rm || []).map((x: any) => ({ id: x.id, name: x.name })));
                 if (!o.setup_completed && (c || []).length === 0) setTab('setup');
             } catch (err: any) {
+                if (cancelled) return;
                 console.error('[AdminPage] Init error:', err);
                 toast.error('Erreur de chargement. Veuillez vous reconnecter.');
             } finally {
-                setAuthChecked(true);
-                setLoading(false);
+                if (!cancelled) {
+                    setAuthChecked(true);
+                    setLoading(false);
+                }
             }
-        })();
+        };
+
+        initAdmin();
+
+        return () => {
+            cancelled = true; // Cleanup on unmount
+        };
     }, [orgSlug]);
 
     if (loading || !authChecked) return <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center"><Loader2 className="w-8 h-8 text-teal-400 animate-spin" /></div>;
@@ -340,10 +365,6 @@ function AdminPageContent() {
         const { error } = await supabase.from('evaluations').delete().eq('id', id);
         if (error) toast.error(error.message); else { setEvals(p => p.filter(e => e.id !== id)); toast.success('Évaluation supprimée'); }
     };
-    const [editEvalId, setEditEvalId] = useState<string | null>(null);
-    const [editEvTitle, setEditEvTitle] = useState('');
-    const [editEvType, setEditEvType] = useState('');
-    const [editEvMax, setEditEvMax] = useState('');
     const updateEval = async (id: string) => {
         const { error } = await supabase.from('evaluations').update({ title: editEvTitle, type: editEvType, max_score: parseFloat(editEvMax) || 20 }).eq('id', id);
         if (error) toast.error(error.message); else { setEvals(p => p.map(e => e.id === id ? { ...e, title: editEvTitle, type: editEvType, max_score: parseFloat(editEvMax) || 20 } : e)); toast.success('Évaluation mise à jour'); }
