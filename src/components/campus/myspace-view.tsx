@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { generateBulletinPDF, type BulletinData, computeSubjectAverage, computeOverallAverage } from '@/lib/bulletin-pdf';
 
 // ═══════════════════════════════════════════════════════
 // MY SPACE VIEW — PIN-protected, role-aware
@@ -45,9 +46,11 @@ interface MySpaceViewProps {
     orgCity?: string;
     orgCountry?: string;
     onStartDM?: (targetId: string, targetName: string) => void;
+    orgBulletinTemplate?: number;
+    orgCurrentTerm?: string;
 }
 
-export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgName, orgLogo, orgPhone, orgEmail, orgCity, orgCountry, onStartDM }: MySpaceViewProps) {
+export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgName, orgLogo, orgPhone, orgEmail, orgCity, orgCountry, onStartDM, orgBulletinTemplate, orgCurrentTerm }: MySpaceViewProps) {
     const isTeacher = userRole === 'teacher';
 
     const [pinVerified, setPinVerified] = useState(false);
@@ -267,6 +270,34 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
         pw.document.write(`<!DOCTYPE html><html><head><title>EDT — ${orgName}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;color:#1a1a1a;padding:20mm;font-size:11pt}table{width:100%;border-collapse:collapse;margin:12px 0}th{background:#0d9488;color:white;padding:10px 8px;text-align:left}td{padding:8px;border-bottom:1px solid #e2e8f0}@media print{body{padding:15mm}}</style></head><body><h1 style="color:#0d9488;margin-bottom:20px">${orgName} — Emploi du temps</h1><table><thead><tr><th>Horaire</th><th>Matière</th><th>Salle</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
         pw.document.close();
         setTimeout(() => pw.print(), 500);
+    };
+
+    // ═══ STUDENT: Export Bulletin PDF ═══
+    const exportBulletinPDF = () => {
+        if (!profile || !classroom) { toast.error('Données de profil manquantes'); return; }
+        const bulletinSubjects = gradesBySubject.map(gs => ({
+            name: gs.subject.name,
+            coefficient: gs.subject.coefficient || 1,
+            teacher_name: gs.subject.teacher_profiles ? `${gs.subject.teacher_profiles.first_name} ${gs.subject.teacher_profiles.last_name}` : undefined,
+            grades: gs.grades.map((g: any) => ({
+                title: g.evaluations?.title || 'Évaluation',
+                type: g.evaluations?.type || 'devoir',
+                score: g.score,
+                max_score: g.evaluations?.max_score || 20,
+                weight: g.evaluations?.weight || 1,
+                remark: g.teacher_remark,
+            })),
+            average: gs.average,
+        }));
+        const data: BulletinData = {
+            org: { name: orgName, logo_url: orgLogo, phone: orgPhone, email: orgEmail, city: orgCity, country: orgCountry, current_term: orgCurrentTerm },
+            student: { first_name: profile.first_name, last_name: profile.last_name, matricule: profile.matricule, sex: profile.sex, birth_date: profile.birth_date, classroom_name: classroom.name, filiere_name: filiere?.nom },
+            subjects: bulletinSubjects,
+            overallAverage: overallAvg,
+            term: orgCurrentTerm || 'Trimestre 1',
+            year: `${new Date().getFullYear() - 1}/${new Date().getFullYear()}`,
+        };
+        generateBulletinPDF(data, orgBulletinTemplate || 1);
     };
 
     // ═══ PIN SCREEN ═══
@@ -567,7 +598,13 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                 {/* ═══ STUDENT: BULLETIN ═══ */}
                 {activeTab === 'bulletin' && !isTeacher && (
                     <motion.div key="bulletin" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
-                        <h3 className="font-bold text-sm text-slate-300">📊 Bulletin de notes</h3>
+                        <div className="flex items-center justify-between">
+                            <h3 className="font-bold text-sm text-slate-300">📊 Bulletin de notes</h3>
+                            <Button size="sm" onClick={exportBulletinPDF} disabled={overallAvg === 0}
+                                className="bg-gradient-to-r from-violet-600 to-indigo-600 text-xs rounded-xl shadow-lg shadow-violet-600/20">
+                                <Printer className="w-3.5 h-3.5 mr-1" />Exporter PDF
+                            </Button>
+                        </div>
                         <Card className={cn("backdrop-blur-sm overflow-hidden text-center",
                             overallAvg >= 10 ? "bg-gradient-to-br from-emerald-500/10 to-teal-500/5 border-emerald-500/20" :
                             overallAvg > 0 ? "bg-gradient-to-br from-red-500/10 to-rose-500/5 border-red-500/20" : "bg-card/50 border-white/10")}>

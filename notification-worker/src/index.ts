@@ -57,6 +57,14 @@ type NotificationActionType =
     | 'friend_request_received'
     | 'friend_request_accepted'
     | 'new_book_published'
+    // ── School-specific types ──
+    | 'grade_published'
+    | 'evaluation_scheduled'
+    | 'payment_confirmed'
+    | 'discipline_sanction'
+    | 'timetable_change'
+    | 'admin_announcement'
+    | 'evaluation_reminder'
     | 'general';
 
 type Priority = 'high' | 'medium' | 'low';
@@ -94,6 +102,7 @@ const AGGREGATION_WINDOWS: Partial<Record<NotificationActionType, number>> = {
     group_new_message: 5 * 60,     // 5 min
     dm_new_message: 3 * 60,        // 3 min
     group_invitation: 60 * 60,     // 1h
+    // School types — no aggregation (each event is unique)
 };
 
 const DEFAULT_PREFERENCES: Record<NotificationActionType, { in_app: boolean; push: boolean }> = {
@@ -112,6 +121,14 @@ const DEFAULT_PREFERENCES: Record<NotificationActionType, { in_app: boolean; pus
     friend_request_received: { in_app: true, push: true },
     friend_request_accepted: { in_app: true, push: false },
     new_book_published: { in_app: true, push: true },
+    // ── School-specific defaults ──
+    grade_published: { in_app: true, push: true },
+    evaluation_scheduled: { in_app: true, push: true },
+    payment_confirmed: { in_app: true, push: true },
+    discipline_sanction: { in_app: true, push: true },
+    timetable_change: { in_app: true, push: true },
+    admin_announcement: { in_app: true, push: true },
+    evaluation_reminder: { in_app: true, push: true },
     general: { in_app: true, push: false },
 };
 
@@ -131,6 +148,14 @@ const PRIORITY_MAP: Record<NotificationActionType, Priority> = {
     friend_request_received: 'high',
     friend_request_accepted: 'high',
     new_book_published: 'medium',
+    // ── School priorities ──
+    grade_published: 'high',
+    evaluation_scheduled: 'high',
+    payment_confirmed: 'high',
+    discipline_sanction: 'high',
+    timetable_change: 'medium',
+    admin_announcement: 'high',
+    evaluation_reminder: 'medium',
     general: 'low',
 };
 
@@ -387,7 +412,53 @@ function buildNotificationMessage(
         case 'new_book_published':
             return {
                 title: '📚 Nouveau livre disponible',
-                message: `"${targetName}" vient d'être ajouté à la ressources`,
+                message: `"${targetName}" vient d'être ajouté aux ressources`,
+            };
+
+        // ══════════════════════════════════════════
+        // SCHOOL-SPECIFIC NOTIFICATION MESSAGES
+        // ══════════════════════════════════════════
+
+        case 'grade_published':
+            return {
+                title: '📊 Note publiée',
+                message: `${first} : ${short(targetName)} — ${short(preview)}`,
+            };
+
+        case 'evaluation_scheduled':
+            return {
+                title: '📝 Nouvelle évaluation',
+                message: `${short(targetName)} — ${short(preview)}`,
+            };
+
+        case 'evaluation_reminder':
+            return {
+                title: '⏰ Rappel — Évaluation demain',
+                message: `${short(targetName)} — ${short(preview)}`,
+            };
+
+        case 'payment_confirmed':
+            return {
+                title: '💳 Paiement enregistré',
+                message: short(preview) || `Paiement confirmé : ${short(targetName)}`,
+            };
+
+        case 'discipline_sanction':
+            return {
+                title: '⚠️ Sanction disciplinaire',
+                message: short(preview) || short(targetName),
+            };
+
+        case 'timetable_change':
+            return {
+                title: '📅 Emploi du temps modifié',
+                message: short(preview) || `Modification pour ${short(targetName)}`,
+            };
+
+        case 'admin_announcement':
+            return {
+                title: '📢 Annonce de l\'établissement',
+                message: short(preview, 100),
             };
 
         default:
@@ -497,6 +568,49 @@ function buildActionData(actionType: NotificationActionType, payload: NotifyPayl
                 ...base,
                 tab: 'library',
                 bookId: payload.target_id,
+            };
+
+        // ── School deep-links ──
+        case 'grade_published':
+        case 'evaluation_scheduled':
+        case 'evaluation_reminder':
+            return {
+                ...base,
+                tab: 'myspace',
+                subTab: 'bulletin',
+                orgSlug: payload.extra_data?.orgSlug,
+            };
+
+        case 'payment_confirmed':
+            return {
+                ...base,
+                tab: 'myspace',
+                subTab: 'paiement',
+                orgSlug: payload.extra_data?.orgSlug,
+            };
+
+        case 'discipline_sanction':
+            return {
+                ...base,
+                tab: 'myspace',
+                subTab: 'cursus',
+                orgSlug: payload.extra_data?.orgSlug,
+            };
+
+        case 'timetable_change':
+            return {
+                ...base,
+                tab: 'myspace',
+                subTab: 'horaires',
+                orgSlug: payload.extra_data?.orgSlug,
+            };
+
+        case 'admin_announcement':
+            return {
+                ...base,
+                tab: 'forum',
+                subTab: 'actus',
+                orgSlug: payload.extra_data?.orgSlug,
             };
 
         default:
@@ -945,10 +1059,20 @@ function mapActionTypeToLegacyType(actionType: NotificationActionType): string {
         case 'group_mention':
             return 'message';
         case 'group_access_approved':
+        case 'payment_confirmed':
             return 'success';
         case 'friend_request_received':
         case 'friend_request_accepted':
             return 'friend_request';
+        case 'grade_published':
+        case 'evaluation_scheduled':
+        case 'evaluation_reminder':
+            return 'school';
+        case 'discipline_sanction':
+            return 'warning';
+        case 'admin_announcement':
+        case 'timetable_change':
+            return 'announcement';
         case 'new_book_published':
             return 'info';
         default:
@@ -1306,10 +1430,11 @@ async function handlePushSend(request: Request, env: Env): Promise<Response> {
 function handleHealth(env: Env): Response {
     return json({
         status: 'ok',
-        service: 'notification-worker',
-        version: '2.0.0',
+        service: 'campusflow-notification-worker',
+        version: '3.0.0',
         vapid_configured: !!(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY),
         supabase_configured: !!env.SUPABASE_URL,
+        r2_configured: !!env.LIBRARY_BUCKET,
         features: [
             'aggregation',
             'kv-counters',
@@ -1318,13 +1443,29 @@ function handleHealth(env: Env): Response {
             'cursor-pagination',
             'user-preferences',
             'rate-limiting',
+            'r2-storage',
+            'school-notifications',
         ],
     });
 }
 
 // ══════════════════════════════════════════════════════════
-// R2 FILE STORAGE HANDLERS
+// R2 FILE STORAGE HANDLERS (Enhanced)
 // ══════════════════════════════════════════════════════════
+
+const ALLOWED_MIME_TYPES = [
+    'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml',
+    'application/pdf',
+    'video/mp4', 'video/webm',
+    'audio/mpeg', 'audio/ogg', 'audio/wav',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/octet-stream', // fallback for unknown types
+];
+
+const MAX_R2_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
 function checkAdminAuth(request: Request, env: Env): boolean {
     const auth = request.headers.get('Authorization') || '';
@@ -1345,19 +1486,37 @@ async function handleR2Upload(request: Request, env: Env): Promise<Response> {
         return json({ error: 'No file provided' }, 400);
     }
 
-    // Generate unique key
+    // Validate file size
+    if (file.size > MAX_R2_FILE_SIZE) {
+        return json({ error: 'Fichier trop grand (max 50 MB)' }, 413);
+    }
+
+    // Validate MIME type
+    const mimeBase = (file.type || 'application/octet-stream').split(';')[0].trim();
+    if (!ALLOWED_MIME_TYPES.includes(mimeBase)) {
+        return json({ error: `Type non autorisé: ${mimeBase}` }, 415);
+    }
+
+    // Sanitize path to prevent traversal
+    if (folder.includes('..') || folder.startsWith('/')) {
+        return json({ error: 'Invalid folder path' }, 400);
+    }
+
+    // Generate unique key with structured path
     const timestamp = Date.now();
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
     const key = `${folder}/${timestamp}_${safeName}`;
 
     // Upload to R2
     await env.LIBRARY_BUCKET.put(key, file.stream(), {
         httpMetadata: {
-            contentType: file.type || 'application/octet-stream',
+            contentType: mimeBase,
+            cacheControl: 'public, max-age=31536000', // 1 year CDN cache
         },
         customMetadata: {
             originalName: file.name,
             uploadedAt: new Date().toISOString(),
+            size: String(file.size),
         },
     });
 
@@ -1374,17 +1533,21 @@ async function handleR2Delete(request: Request, env: Env): Promise<Response> {
     }
 
     const { key } = await request.json() as { key: string };
-    if (!key) {
-        return json({ error: 'key required' }, 400);
+    if (!key || key.includes('..')) {
+        return json({ error: 'Invalid key' }, 400);
     }
 
     await env.LIBRARY_BUCKET.delete(key);
-    return json({ ok: true });
+    return json({ ok: true, deleted: key });
 }
 
 async function handleR2Serve(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const key = url.pathname.replace('/r2/', '');
+
+    if (!key || key.includes('..')) {
+        return json({ error: 'Invalid path' }, 400);
+    }
 
     const object = await env.LIBRARY_BUCKET.get(key);
     if (!object) {
@@ -1399,6 +1562,47 @@ async function handleR2Serve(request: Request, env: Env): Promise<Response> {
     });
 
     return new Response(object.body, { headers });
+}
+
+async function handleR2List(request: Request, env: Env): Promise<Response> {
+    if (!checkAdminAuth(request, env)) {
+        return json({ error: 'Unauthorized' }, 401);
+    }
+
+    const url = new URL(request.url);
+    const prefix = url.searchParams.get('prefix') || '';
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 100);
+
+    const listed = await env.LIBRARY_BUCKET.list({ prefix, limit });
+
+    const files = listed.objects.map(obj => ({
+        key: obj.key,
+        size: obj.size,
+        uploaded: obj.uploaded?.toISOString(),
+        contentType: obj.httpMetadata?.contentType,
+    }));
+
+    return json({ files, truncated: listed.truncated });
+}
+
+// ══════════════════════════════════════════════════════════
+// PUSH UNREGISTER HANDLER
+// ══════════════════════════════════════════════════════════
+
+async function handlePushUnregister(request: Request, env: Env): Promise<Response> {
+    const { userId, endpoint } = await request.json() as { userId: string; endpoint?: string };
+    if (!userId) return json({ error: 'userId required' }, 400);
+
+    // Remove from KV
+    await env.PUSH_TOKEN_CACHE.delete(`push:${userId}`);
+
+    // Remove from Supabase
+    const db = new SupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+    try {
+        await db.query('push_tokens', { method: 'DELETE', filters: `user_id=eq.${userId}` });
+    } catch (e) { /* non-critical */ }
+
+    return json({ success: true });
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1429,6 +1633,7 @@ export default {
 
             // ── Push Registration ──
             if (pathname === '/api/push/register' && method === 'POST') return handlePushRegister(request, env);
+            if (pathname === '/api/push/unregister' && method === 'POST') return handlePushUnregister(request, env);
             if (pathname === '/api/push/vapid-key' && method === 'GET') return handleVapidKey(env);
             if (pathname === '/api/push/send' && method === 'POST') return handlePushSend(request, env);
 
@@ -1438,6 +1643,7 @@ export default {
             // ── R2 File Storage ──
             if (pathname === '/api/r2/upload' && method === 'POST') return handleR2Upload(request, env);
             if (pathname === '/api/r2/delete' && method === 'POST') return handleR2Delete(request, env);
+            if (pathname === '/api/r2/list' && method === 'GET') return handleR2List(request, env);
             if (pathname.startsWith('/r2/') && method === 'GET') return handleR2Serve(request, env);
 
             return json({

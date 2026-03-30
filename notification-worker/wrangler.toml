@@ -1,9 +1,11 @@
 # ══════════════════════════════════════════════════════════
-# NOTIFICATION WORKER — CentreFormation Pro
-# Advanced notification gateway with aggregation, KV counters, Queue + Cron
+# CAMPUSFLOW — Unified Worker
+# Notification gateway + R2 storage + Push + Cron
+# v3.0.0 — School notifications + Enhanced R2
 # ══════════════════════════════════════════════════════════
 
-name = "centreformation-notifications"
+name = "campusflow-worker"
+account_id = "29af63e0139b75f78259902d4ee51e07"
 main = "src/index.ts"
 compatibility_date = "2025-06-01"
 
@@ -13,19 +15,19 @@ compatibility_date = "2025-06-01"
 
 [[kv_namespaces]]
 binding = "NOTIFICATION_CACHE"
-id = "551491adfbec4132a5f36f78566029b9"
+id = "993474323b2f4d3ca34a03b56df98713"
 
 [[kv_namespaces]]
 binding = "PUSH_TOKEN_CACHE"
-id = "8c358fd8df4d47b198d72391ac260606"
+id = "8a56cb5cc94642cebf2ffbbdb3a2326c"
 
 [[kv_namespaces]]
 binding = "UNREAD_COUNTERS"
-id = "9e3dd2e38323476ab636d9d634a0af69"
+id = "317732e686984fcaa7fce3ed7d61cc57"
 
 [[kv_namespaces]]
 binding = "USER_PREFERENCES"
-id = "76ba94ad9e004a2d8916b973c64690a0"
+id = "a69d6d564ebf4137802f80d4bbb72a87"
 
 # ── Queue (disabled — free tier uses direct push) ────────
 # To use queue-based push on Workers Paid ($5/mo), uncomment:
@@ -34,13 +36,15 @@ id = "76ba94ad9e004a2d8916b973c64690a0"
 # binding = "PUSH_QUEUE"
 
 # ── Cron Triggers ────────────────────────────────────────
-# Runs every hour to check for prayer requests without responses (48h+)
+# Runs every hour to check for:
+# - Prayer requests without responses (48h+)
+# - Evaluation reminders (J-1)
 [triggers]
 crons = ["0 * * * *"]
 
 # ── Environment Variables ────────────────────────────────
 [vars]
-VAPID_EMAIL = "mailto:admin@centreformation.app"
+VAPID_EMAIL = "mailto:kleintaptue1@gmail.com"
 # Rate limits
 RATE_LIMIT_PUSH_INTERVAL_MS = "10000"    # 10s between pushes per user
 RATE_LIMIT_HOURLY_MAX = "50"             # Max 50 notifs/hour per user
@@ -54,7 +58,7 @@ BROADCAST_RATE_LIMIT_MS = "100"          # 10 req/s for broadcasts
 # npx wrangler secret put ADMIN_KEY
 
 # ── R2 Bucket (10GB free) ────────────────────────────────
-# Create with: npx wrangler r2 bucket create centreformation-library
+# Create with: npx wrangler r2 bucket create campusflow-assets
 [[r2_buckets]]
 binding = "LIBRARY_BUCKET"
-bucket_name = "centreformation-library"
+bucket_name = "campusflow-assets"

@@ -9,12 +9,15 @@ import { CampusBottomNav, type CampusTab } from '@/components/campus/campus-bott
 import { ActusView } from '@/components/campus/actus-view';
 import { ContactsView } from '@/components/campus/contacts-view';
 import { ChatDMView } from '@/components/campus/chat-dm-view';
+import { GroupesView } from '@/components/campus/groupes-view';
 import { MySpaceView } from '@/components/campus/myspace-view';
 import { ProfileView } from '@/components/campus/profile-view';
+import { NotificationCenter, NotificationBell } from '@/components/campus/notification-center';
 
 // ═══════════════════════════════════════════════════════
 // CAMPUS PAGE — 5 onglets séparés
-// Actus | Contacts | Chat DM | My Space | Profil
+// Actus | Contacts | Chat DM/Groupes | My Space | Profil
+// + Centre de notifications unifié
 // ═══════════════════════════════════════════════════════
 
 interface SessionData {
@@ -57,6 +60,12 @@ export default function CampusPage() {
     const [dmTargetId, setDmTargetId] = useState<string | null>(null);
     const [dmTargetName, setDmTargetName] = useState<string | null>(null);
 
+    // Chat sub-tab: 'dm' | 'groupes'
+    const [chatSubTab, setChatSubTab] = useState<'dm' | 'groupes'>('dm');
+
+    // Notification center
+    const [notifOpen, setNotifOpen] = useState(false);
+
     useEffect(() => {
         (async () => {
             const sess = getSession();
@@ -77,11 +86,18 @@ export default function CampusPage() {
     const handleStartDM = (targetId: string, targetName: string) => {
         setDmTargetId(targetId);
         setDmTargetName(targetName);
+        setChatSubTab('dm');
         setActiveTab('chatdm');
     };
 
     const handleOpenGroupChat = (convId: string, convName: string) => {
+        setChatSubTab('groupes');
         setActiveTab('chatdm');
+    };
+
+    // Navigate from notification center
+    const handleNotifNavigate = (tab: string) => {
+        setActiveTab(tab as CampusTab);
     };
 
     if (loading) {
@@ -114,7 +130,7 @@ export default function CampusPage() {
             </div>
 
             <div className="relative z-10 max-w-2xl mx-auto w-full px-4">
-                {/* Header */}
+                {/* Header with notification bell */}
                 <header className="flex items-center justify-between pt-6 pb-4">
                     <div className="flex items-center gap-3">
                         {org.logo_url ? (
@@ -131,14 +147,18 @@ export default function CampusPage() {
                             </p>
                         </div>
                     </div>
-                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium ${
-                        session.role === 'teacher' ? 'bg-indigo-500/15 text-indigo-400' : 'bg-teal-500/15 text-teal-400'
-                    }`}>
-                        {session.role === 'teacher' ? '👨‍🏫 Prof' : '🎓 Étudiant'}
-                    </span>
+                    <div className="flex items-center gap-1">
+                        {/* Notification Bell */}
+                        <NotificationBell orgId={org.id} userId={session.id} onClick={() => setNotifOpen(true)} />
+                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium ${
+                            session.role === 'teacher' ? 'bg-indigo-500/15 text-indigo-400' : 'bg-teal-500/15 text-teal-400'
+                        }`}>
+                            {session.role === 'teacher' ? '👨‍🏫 Prof' : '🎓 Étudiant'}
+                        </span>
+                    </div>
                 </header>
 
-                {/* Tab Content — chaque onglet a son propre espace */}
+                {/* Tab Content */}
                 <AnimatePresence mode="wait">
                     {activeTab === 'actus' && (
                         <motion.div key="actus" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
@@ -155,9 +175,38 @@ export default function CampusPage() {
 
                     {activeTab === 'chatdm' && (
                         <motion.div key="chatdm" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
-                            <ChatDMView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role}
-                                initialTargetUserId={dmTargetId} initialTargetName={dmTargetName}
-                                onClearTarget={() => { setDmTargetId(null); setDmTargetName(null); }} />
+                            {/* Sub-tab selector: DM / Groupes */}
+                            <div className="flex items-center gap-1 mb-4 p-1 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                                <button
+                                    onClick={() => setChatSubTab('dm')}
+                                    className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+                                        chatSubTab === 'dm'
+                                            ? 'bg-gradient-to-r from-cyan-600/20 to-blue-600/20 text-cyan-300 shadow-sm'
+                                            : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                                    }`}
+                                >
+                                    💬 Messages DM
+                                </button>
+                                <button
+                                    onClick={() => setChatSubTab('groupes')}
+                                    className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+                                        chatSubTab === 'groupes'
+                                            ? 'bg-gradient-to-r from-teal-600/20 to-emerald-600/20 text-teal-300 shadow-sm'
+                                            : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                                    }`}
+                                >
+                                    👥 Groupes
+                                </button>
+                            </div>
+
+                            {chatSubTab === 'dm' ? (
+                                <ChatDMView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role}
+                                    initialTargetUserId={dmTargetId} initialTargetName={dmTargetName}
+                                    onClearTarget={() => { setDmTargetId(null); setDmTargetName(null); }} />
+                            ) : (
+                                <GroupesView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role}
+                                    onOpenGroupChat={handleOpenGroupChat} />
+                            )}
                         </motion.div>
                     )}
 
@@ -165,7 +214,8 @@ export default function CampusPage() {
                         <motion.div key="myspace" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
                             <MySpaceView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role}
                                 orgName={org.name} orgLogo={org.logo_url} orgPhone={org.phone} orgEmail={org.email}
-                                orgCity={org.city} orgCountry={org.country} onStartDM={handleStartDM} />
+                                orgCity={org.city} orgCountry={org.country} onStartDM={handleStartDM}
+                                orgBulletinTemplate={org.bulletin_template} orgCurrentTerm={org.current_term} />
                         </motion.div>
                     )}
 
@@ -178,6 +228,16 @@ export default function CampusPage() {
             </div>
 
             <CampusBottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+
+            {/* Notification Center (slide-out panel) */}
+            <NotificationCenter
+                orgId={org.id}
+                userId={session.id}
+                orgSlug={orgSlug}
+                isOpen={notifOpen}
+                onClose={() => setNotifOpen(false)}
+                onNavigate={handleNotifNavigate}
+            />
         </main>
     );
 }

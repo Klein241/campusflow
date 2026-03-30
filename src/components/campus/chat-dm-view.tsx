@@ -4,7 +4,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     MessageSquare, Users, UserPlus, Plus, Loader2, Send,
-    Search, ChevronLeft, X, Check, CheckCheck
+    Search, ChevronLeft, X, Check, CheckCheck,
+    Paperclip, Mic, MicOff, FileText, Image as ImageIcon,
+    File, Download, Play, Pause, StopCircle, Volume2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +17,7 @@ import { cn } from '@/lib/utils';
 // ═══════════════════════════════════════════════════════
 // CHAT DM VIEW — Espace dédié aux messages directs
 // Conversations privées one-to-one
+// Supports: texte, fichiers, images, vocaux
 // ═══════════════════════════════════════════════════════
 
 interface ChatDMViewProps {
@@ -56,6 +59,101 @@ interface SchoolUser {
     initials: string;
 }
 
+// ═══ FILE HELPERS ═══
+const FILE_ICONS: Record<string, string> = {
+    'application/pdf': '📄',
+    'application/msword': '📝',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '📝',
+    'text/plain': '📃',
+    'text/html': '🌐',
+    'application/vnd.ms-excel': '📊',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '📊',
+    'application/vnd.ms-powerpoint': '📊',
+    'application/zip': '📦',
+    'application/x-rar-compressed': '📦',
+};
+
+function getFileIcon(mimeType: string): string {
+    if (mimeType.startsWith('image/')) return '🖼️';
+    if (mimeType.startsWith('audio/')) return '🎵';
+    if (mimeType.startsWith('video/')) return '🎬';
+    return FILE_ICONS[mimeType] || '📎';
+}
+
+function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isImageType(type: string): boolean {
+    return type.startsWith('image/');
+}
+
+// ═══ VOICE PLAYER COMPONENT ═══
+function VoicePlayer({ url }: { url: string }) {
+    const [playing, setPlaying] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    useEffect(() => {
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        audio.addEventListener('ended', () => { setPlaying(false); setProgress(0); });
+        audio.addEventListener('timeupdate', () => {
+            if (audio.duration) setProgress((audio.currentTime / audio.duration) * 100);
+        });
+        return () => { audio.pause(); audio.remove(); };
+    }, [url]);
+
+    const toggle = () => {
+        if (!audioRef.current) return;
+        if (playing) { audioRef.current.pause(); } else { audioRef.current.play(); }
+        setPlaying(!playing);
+    };
+
+    return (
+        <div className="flex items-center gap-2 min-w-[140px]">
+            <button onClick={toggle} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0 hover:bg-white/20 transition">
+                {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
+            </button>
+            <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-teal-400 to-emerald-400 rounded-full transition-all" style={{ width: `${progress}%` }} />
+            </div>
+            <Volume2 className="w-3 h-3 text-slate-500 shrink-0" />
+        </div>
+    );
+}
+
+// ═══ FILE MESSAGE RENDER ═══
+function FileMessage({ url, fileName, fileType, fileSize, isMe }: {
+    url: string; fileName: string; fileType: string; fileSize?: number; isMe: boolean;
+}) {
+    if (isImageType(fileType)) {
+        return (
+            <div className="space-y-1">
+                <img src={url} alt={fileName} className="max-w-[240px] rounded-xl border border-white/10 cursor-pointer hover:opacity-90 transition"
+                    onClick={() => window.open(url, '_blank')} />
+                <p className="text-[10px] text-slate-500">{fileName}</p>
+            </div>
+        );
+    }
+
+    return (
+        <a href={url} target="_blank" rel="noreferrer"
+            className={cn("flex items-center gap-2 px-3 py-2 rounded-xl border transition hover:border-white/20",
+                isMe ? "bg-white/10 border-white/10" : "bg-white/5 border-white/10"
+            )}>
+            <span className="text-xl">{getFileIcon(fileType)}</span>
+            <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium truncate">{fileName}</p>
+                <p className="text-[10px] text-slate-500">{fileSize ? formatFileSize(fileSize) : fileType.split('/')[1]?.toUpperCase()}</p>
+            </div>
+            <Download className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+        </a>
+    );
+}
+
 export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initialTargetUserId, initialTargetName, onClearTarget }: ChatDMViewProps) {
     const [convs, setConvs] = useState<ConvInfo[]>([]);
     const [activeConv, setActiveConv] = useState<ConvInfo | null>(null);
@@ -68,6 +166,17 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
     const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
     const [searchUser, setSearchUser] = useState('');
     const [loadingConvs, setLoadingConvs] = useState(true);
+
+    // File upload state
+    const [uploading, setUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Voice recording state
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordingTime, setRecordingTime] = useState(0);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
+    const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     const msgEndRef = useRef<HTMLDivElement>(null);
 
@@ -101,7 +210,6 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
     }, [initialTargetUserId, initialTargetName]);
 
     const handleStartDMFromContact = async (targetId: string, targetName: string) => {
-        // Check if conversation already exists
         const { data: myParts } = await supabase.from('chat_participants').select('conversation_id').eq('user_id', userId);
         const { data: otherParts } = await supabase.from('chat_participants').select('conversation_id').eq('user_id', targetId);
 
@@ -119,7 +227,6 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
             }
         }
 
-        // Create new conversation
         const { data: conv, error } = await supabase.from('chat_conversations').insert({
             organization_id: orgId, type: 'direct', name: targetName, created_by: userId,
         }).select().single();
@@ -213,7 +320,7 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
         return () => { if (channel) supabase.removeChannel(channel); };
     }, [activeConv?.id, userId]);
 
-    // Send message
+    // ═══ SEND TEXT MESSAGE ═══
     const sendMessage = useCallback(async () => {
         if (!msgText.trim() || !activeConv) return;
         setSending(true);
@@ -245,6 +352,140 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
         setSending(false);
     }, [msgText, activeConv, userId]);
 
+    // ═══ UPLOAD & SEND FILE ═══
+    const handleFileUpload = async (files: FileList | null) => {
+        if (!files || !activeConv) return;
+
+        setUploading(true);
+        for (const file of Array.from(files)) {
+            if (file.size > 25 * 1024 * 1024) {
+                toast.error(`${file.name}: Trop volumineux (max 25 Mo)`);
+                continue;
+            }
+
+            try {
+                const ext = file.name.split('.').pop() || 'bin';
+                const path = `chat-files/${activeConv.id}/${Date.now()}_${file.name}`;
+
+                const { error: uploadError } = await supabase.storage
+                    .from('chat-media')
+                    .upload(path, file, { contentType: file.type, upsert: false });
+
+                if (uploadError) throw uploadError;
+
+                const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(path);
+                const fileUrl = urlData.publicUrl;
+
+                const msgType = file.type.startsWith('image/') ? 'image'
+                    : file.type.startsWith('audio/') ? 'voice'
+                        : 'file';
+
+                const content = msgType === 'image' ? `📷 ${file.name}`
+                    : msgType === 'voice' ? '🎤 Message vocal'
+                        : `📎 ${file.name} (${formatFileSize(file.size)})`;
+
+                const { error: insertError } = await supabase.from('chat_messages').insert({
+                    conversation_id: activeConv.id,
+                    sender_id: userId,
+                    content: content,
+                    msg_type: msgType,
+                    media_url: fileUrl,
+                });
+
+                if (insertError) throw insertError;
+
+                setConvs(prev => prev.map(c =>
+                    c.id === activeConv.id ? { ...c, lastMessage: content, lastMessageAt: new Date().toISOString() } : c
+                ).sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime()));
+
+                toast.success(`${file.name} envoyé ✅`);
+            } catch (e: any) {
+                toast.error(`Erreur: ${e.message || file.name}`);
+            }
+        }
+        setUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    // ═══ VOICE RECORDING ═══
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream, {
+                mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
+            });
+            mediaRecorderRef.current = mediaRecorder;
+            audioChunksRef.current = [];
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) audioChunksRef.current.push(e.data);
+            };
+
+            mediaRecorder.start(100);
+            setIsRecording(true);
+            setRecordingTime(0);
+            recordingIntervalRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
+        } catch {
+            toast.error("Impossible d'accéder au microphone");
+        }
+    };
+
+    const stopRecording = async () => {
+        if (!mediaRecorderRef.current || !isRecording || !activeConv) return;
+
+        return new Promise<void>((resolve) => {
+            mediaRecorderRef.current!.onstop = async () => {
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+
+                if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current);
+                setIsRecording(false);
+                setRecordingTime(0);
+
+                // Upload
+                setUploading(true);
+                try {
+                    const path = `voice-messages/${userId}/${Date.now()}.webm`;
+                    const { error: uploadError } = await supabase.storage
+                        .from('chat-media')
+                        .upload(path, audioBlob, { contentType: 'audio/webm', upsert: false });
+                    if (uploadError) throw uploadError;
+
+                    const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(path);
+
+                    const { error: insertError } = await supabase.from('chat_messages').insert({
+                        conversation_id: activeConv.id,
+                        sender_id: userId,
+                        content: '🎤 Message vocal',
+                        msg_type: 'voice',
+                        media_url: urlData.publicUrl,
+                    });
+                    if (insertError) throw insertError;
+                    toast.success('Message vocal envoyé 🎤');
+                } catch (e: any) {
+                    toast.error(e.message || 'Erreur envoi vocal');
+                }
+                setUploading(false);
+
+                mediaRecorderRef.current?.stream.getTracks().forEach(t => t.stop());
+                resolve();
+            };
+            mediaRecorderRef.current!.stop();
+        });
+    };
+
+    const cancelRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+            mediaRecorderRef.current.stop();
+            mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+        }
+        if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current);
+        setIsRecording(false);
+        setRecordingTime(0);
+        audioChunksRef.current = [];
+    };
+
+    const formatRecTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+
     // Create new DM
     const createDM = async () => {
         if (selectedUsers.length === 0) { toast.error('Sélectionnez un contact'); return; }
@@ -256,10 +497,7 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
     };
 
     // Helpers
-    const getSenderName = (id: string) => {
-        if (id === userId) return 'Vous';
-        return allUsers.find(u => u.id === id)?.name || 'Membre';
-    };
+    const getSenderName = (id: string) => id === userId ? 'Vous' : allUsers.find(u => u.id === id)?.name || 'Membre';
     const getSenderInitials = (id: string) => {
         if (id === userId) return userName.split(' ').map(w => w[0]).join('').slice(0, 2);
         return allUsers.find(u => u.id === id)?.initials || '?';
@@ -276,6 +514,34 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
     };
 
     const filteredUsers = allUsers.filter(u => !searchUser || u.name.toLowerCase().includes(searchUser.toLowerCase()));
+
+    // ═══ RENDER: MESSAGE CONTENT ═══
+    const renderMsgContent = (m: MsgInfo, isMe: boolean) => {
+        // Voice message
+        if (m.msg_type === 'voice' && m.media_url) {
+            return <VoicePlayer url={m.media_url} />;
+        }
+
+        // Image
+        if (m.msg_type === 'image' && m.media_url) {
+            return (
+                <FileMessage url={m.media_url} fileName={m.content.replace('📷 ', '')}
+                    fileType="image/jpeg" isMe={isMe} />
+            );
+        }
+
+        // File
+        if (m.msg_type === 'file' && m.media_url) {
+            const match = m.content.match(/📎 (.+?) \((.+?)\)/);
+            return (
+                <FileMessage url={m.media_url} fileName={match?.[1] || 'Fichier'}
+                    fileType="application/octet-stream" fileSize={undefined} isMe={isMe} />
+            );
+        }
+
+        // Text (default)
+        return <span className="whitespace-pre-wrap break-words">{m.content}</span>;
+    };
 
     // ═══ ACTIVE CONVERSATION VIEW ═══
     if (activeConv) {
@@ -296,8 +562,8 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1.5 scrollbar-thin">
-                    {messages.map((m, idx) => {
+                <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 space-y-1.5 scrollbar-thin">
+                    {messages.map((m) => {
                         const isMe = m.sender_id === userId;
                         const isSystem = m.msg_type === 'system';
 
@@ -320,7 +586,7 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
                                         isMe ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-br-md shadow-lg shadow-teal-600/10'
                                             : 'bg-white/[0.06] text-white rounded-bl-md'
                                     )}>
-                                        {m.content}
+                                        {renderMsgContent(m, isMe)}
                                     </div>
                                     <div className={`flex items-center gap-1 mt-0.5 ${isMe ? 'justify-end mr-1' : 'ml-1'}`}>
                                         <span className="text-[10px] text-slate-600">{formatTime(m.created_at)}</span>
@@ -333,20 +599,71 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
                     <div ref={msgEndRef} />
                 </div>
 
-                {/* Input */}
+                {/* Hidden file input */}
+                <input ref={fileInputRef} type="file" multiple className="hidden"
+                    accept="image/*,application/pdf,.doc,.docx,.txt,.html,.xls,.xlsx,.ppt,.pptx,.zip,.rar,audio/*,video/*"
+                    onChange={e => handleFileUpload(e.target.files)} />
+
+                {/* Input bar */}
                 <div className="p-3 border-t border-white/5 bg-[#0F1219]/50">
+                    {/* Recording indicator */}
+                    {isRecording && (
+                        <div className="flex items-center gap-3 mb-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20">
+                            <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                            <span className="text-sm text-red-400 font-mono">{formatRecTime(recordingTime)}</span>
+                            <span className="text-xs text-red-400/70 flex-1">Enregistrement en cours...</span>
+                            <button onClick={cancelRecording} className="text-slate-400 hover:text-red-400 p-1 transition">
+                                <X className="w-4 h-4" />
+                            </button>
+                            <button onClick={stopRecording}
+                                className="px-3 py-1 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-400 transition flex items-center gap-1">
+                                <StopCircle className="w-3 h-3" /> Envoyer
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Upload progress */}
+                    {uploading && (
+                        <div className="flex items-center gap-2 mb-2 text-xs text-cyan-400">
+                            <Loader2 className="w-3 h-3 animate-spin" /> Envoi en cours...
+                        </div>
+                    )}
+
                     <div className="flex gap-2 items-center">
+                        {/* Attachment button */}
+                        <button onClick={() => fileInputRef.current?.click()}
+                            disabled={isRecording || uploading}
+                            className="p-2 hover:bg-white/5 rounded-full transition text-slate-400 hover:text-cyan-400 disabled:opacity-30">
+                            <Paperclip className="w-5 h-5" />
+                        </button>
+
+                        {/* Text input */}
                         <Input
                             value={msgText}
                             onChange={e => setMsgText(e.target.value)}
                             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                             placeholder="Écrire un message..."
+                            disabled={isRecording}
                             className="bg-white/5 border-white/10 text-white h-10 rounded-full text-sm flex-1"
                         />
-                        <Button onClick={sendMessage} disabled={sending || !msgText.trim()}
-                            className="bg-gradient-to-r from-teal-600 to-emerald-600 rounded-full w-10 h-10 p-0 shrink-0 shadow-lg shadow-teal-600/20">
-                            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                        </Button>
+
+                        {/* Voice or Send */}
+                        {msgText.trim() ? (
+                            <Button onClick={sendMessage} disabled={sending || uploading}
+                                className="bg-gradient-to-r from-teal-600 to-emerald-600 rounded-full w-10 h-10 p-0 shrink-0 shadow-lg shadow-teal-600/20">
+                                {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                            </Button>
+                        ) : (
+                            <button onClick={isRecording ? stopRecording : startRecording}
+                                disabled={uploading}
+                                className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition",
+                                    isRecording
+                                        ? "bg-red-500 text-white shadow-lg shadow-red-500/30 animate-pulse"
+                                        : "bg-white/5 text-slate-400 hover:text-teal-400 hover:bg-white/10"
+                                )}>
+                                {isRecording ? <StopCircle className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
@@ -362,7 +679,7 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
                     <h2 className="text-lg font-black bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
                         💬 Chat DM
                     </h2>
-                    <p className="text-[10px] text-slate-500">Messages directs</p>
+                    <p className="text-[10px] text-slate-500">Messages directs • fichiers • vocaux</p>
                 </div>
                 <Button size="sm" onClick={() => setShowNewConv(!showNewConv)}
                     className="bg-gradient-to-r from-cyan-600 to-blue-600 text-xs rounded-xl shadow-lg shadow-cyan-600/20">

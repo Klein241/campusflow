@@ -32,6 +32,14 @@ export type NotificationActionType =
     | 'friend_request_received'
     | 'friend_request_accepted'
     | 'new_book_published'
+    // ── School notification types ──
+    | 'grade_published'
+    | 'evaluation_scheduled'
+    | 'payment_confirmed'
+    | 'discipline_sanction'
+    | 'timetable_change'
+    | 'admin_announcement'
+    | 'evaluation_reminder'
     | 'general';
 
 export interface NotificationActionData {
@@ -45,6 +53,9 @@ export interface NotificationActionData {
     scrollToComments?: boolean;
     scrollToMessage?: string;
     bookId?: string;
+    // School deep-link data
+    subTab?: string;
+    orgSlug?: string;
 }
 
 interface NotifyWorkerPayload {
@@ -790,4 +801,121 @@ export async function notifyGroupMembers({
     } catch (e) {
         console.error('[Notification] Group notify error:', e);
     }
+}
+
+// ══════════════════════════════════════════════════════════
+// SCHOOL-SPECIFIC NOTIFICATION HELPERS
+// ══════════════════════════════════════════════════════════
+
+/**
+ * Notify a student that a new grade has been published.
+ */
+export async function notifyGradePublished({
+    teacherName,
+    teacherId,
+    studentId,
+    subjectName,
+    gradeValue,
+    orgSlug,
+}: {
+    teacherName: string;
+    teacherId: string;
+    studentId: string;
+    subjectName: string;
+    gradeValue: string;
+    orgSlug: string;
+}) {
+    await sendToWorker({
+        action_type: 'grade_published',
+        actor_id: teacherId,
+        actor_name: teacherName,
+        recipient_id: studentId,
+        target_name: subjectName,
+        message_preview: `Note: ${gradeValue}/20`,
+        extra_data: { orgSlug },
+    });
+}
+
+/**
+ * Notify students that an evaluation is scheduled.
+ */
+export async function notifyEvaluationScheduled({
+    teacherName,
+    teacherId,
+    studentIds,
+    subjectName,
+    evalDate,
+    orgSlug,
+}: {
+    teacherName: string;
+    teacherId: string;
+    studentIds: string[];
+    subjectName: string;
+    evalDate: string;
+    orgSlug: string;
+}) {
+    await sendToWorker({
+        action_type: 'evaluation_scheduled',
+        actor_id: teacherId,
+        actor_name: teacherName,
+        recipient_ids: studentIds,
+        target_name: subjectName,
+        message_preview: `Le ${evalDate}`,
+        extra_data: { orgSlug },
+    });
+}
+
+/**
+ * Notify student/parent of a payment confirmation.
+ */
+export async function notifyPaymentConfirmed({
+    adminName,
+    adminId,
+    studentId,
+    amount,
+    label,
+    orgSlug,
+}: {
+    adminName: string;
+    adminId: string;
+    studentId: string;
+    amount: string;
+    label: string;
+    orgSlug: string;
+}) {
+    await sendToWorker({
+        action_type: 'payment_confirmed',
+        actor_id: adminId,
+        actor_name: adminName,
+        recipient_id: studentId,
+        target_name: label,
+        message_preview: `${amount} FCFA reçu — ${label}`,
+        extra_data: { orgSlug },
+    });
+}
+
+/**
+ * Broadcast a school-wide admin announcement.
+ */
+export async function notifyAdminAnnouncement({
+    adminName,
+    adminId,
+    recipientIds,
+    message,
+    orgSlug,
+}: {
+    adminName: string;
+    adminId: string;
+    recipientIds: string[];
+    message: string;
+    orgSlug: string;
+}) {
+    await sendToWorker({
+        action_type: 'admin_announcement',
+        actor_id: adminId,
+        actor_name: adminName,
+        recipient_ids: recipientIds,
+        message_preview: message,
+        extra_data: { orgSlug },
+    });
 }

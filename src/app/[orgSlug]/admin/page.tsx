@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useRef, Component, type ReactNode, type ErrorInfo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus, Building2 } from 'lucide-react';
+import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus, Building2, FileText, Receipt } from 'lucide-react';
+import { BULLETIN_TEMPLATES } from '@/lib/bulletin-pdf';
+import { RECEIPT_TEMPLATES, generateReceiptPDF, generateReceiptNumber, type ReceiptData } from '@/lib/receipt-pdf';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -52,7 +54,7 @@ const Sel = ({ v, onChange, opts, ph = '—' }: { v: string, onChange: (v: strin
     </select>
 );
 
-type Tab = 'general' | 'landing' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'settings';
+type Tab = 'general' | 'landing' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'modeles' | 'settings';
 interface Cls { id?: string; name: string; cycle: string; filiere_id: string | null; level: number; capacity: number; }
 interface Sub { id?: string; name: string; code: string; coefficient: number; classroom_id: string; teacher_id: string | null; }
 interface Room { id?: string; name: string; }
@@ -64,6 +66,7 @@ const SIDES = [
     { id: 'timetable' as Tab, icon: Calendar, label: 'Emploi du temps' }, { id: 'evaluations' as Tab, icon: ClipboardList, label: 'Évaluations' },
     { id: 'grades' as Tab, icon: BarChart3, label: 'Notes' },
     { id: 'payments' as Tab, icon: CreditCard, label: 'Paiements' }, { id: 'disciplines' as Tab, icon: ShieldCheck, label: 'Discipline' },
+    { id: 'modeles' as Tab, icon: FileText, label: 'Modèles PDF' },
     { id: 'settings' as Tab, icon: Palette, label: 'Paramètres' },
 ];
 const COLLEGE = ['6ème', '5ème', '4ème', '3ème'], LYCEE = ['Seconde', 'Première', 'Terminale'], SECS = ['A', 'B', 'C'];
@@ -140,6 +143,11 @@ function AdminPageContent() {
     // Filters / search
     const [teacherSearch, setTeacherSearch] = useState(''); const [studentSearch, setStudentSearch] = useState(''); const [studentClsFilter, setStudentClsFilter] = useState('');
     // Settings / Domain
+    // Template selection state
+    const [selBulletinTemplate, setSelBulletinTemplate] = useState(1);
+    const [selReceiptTemplate, setSelReceiptTemplate] = useState(1);
+    const [currentTerm, setCurrentTerm] = useState('Trimestre 1');
+    const [savingTemplates, setSavingTemplates] = useState(false);
     const [sCustomDomain, setSCustomDomain] = useState(''); const [sDomainVerified, setSDomainVerified] = useState(false);
     const [sDomainSsl, setSDomainSsl] = useState('pending'); const [sBrandColor, setSBrandColor] = useState('#4f46e5');
     const [sLogoUrl, setSLogoUrl] = useState(''); const [sFaviconUrl, setSFaviconUrl] = useState('');
@@ -159,6 +167,9 @@ function AdminPageContent() {
     const [lSocialFb, setLSocialFb] = useState(''); const [lSocialIg, setLSocialIg] = useState(''); const [lSocialTw, setLSocialTw] = useState('');
     const [lSocialTt, setLSocialTt] = useState(''); const [lSocialYt, setLSocialYt] = useState(''); const [lSocialLi, setLSocialLi] = useState('');
     const [lFooterText, setLFooterText] = useState(''); const [lSaving, setLSaving] = useState(false);
+    const loadTemplateSettings = () => { if (!org) return; setSelBulletinTemplate(org.bulletin_template || 1); setSelReceiptTemplate(org.receipt_template || 1); setCurrentTerm(org.current_term || 'Trimestre 1'); };
+    const saveTemplateSettings = async () => { setSavingTemplates(true); try { const updates = { bulletin_template: selBulletinTemplate, receipt_template: selReceiptTemplate, current_term: currentTerm }; const { error } = await supabase.from('organizations').update(updates).eq('id', org.id); if (error) throw error; setOrg({ ...org, ...updates }); toast.success('Modèles sauvegardés ✅'); } catch (e: any) { toast.error(e.message); } setSavingTemplates(false); };
+    const printPaymentReceipt = (p: any) => { const stu = students.find((s: any) => s.id === p.student_id); const receiptData: ReceiptData = { org: { name: org.name, logo_url: org.logo_url, phone: org.phone, email: org.email, city: org.city, country: org.country }, student: { first_name: stu?.first_name || p.student_profiles?.first_name || '', last_name: stu?.last_name || p.student_profiles?.last_name || '', matricule: stu?.matricule || p.student_profiles?.matricule, classroom_name: cls.find(c => c.id === stu?.classroom_id)?.name || '' }, payment: { id: p.id, amount: p.amount, currency: p.currency || 'XAF', method: p.payment_method, description: p.description || 'Paiement scolarité', paid_at: p.paid_at }, receiptNumber: generateReceiptNumber() }; generateReceiptPDF(receiptData, org.receipt_template || 1); };
     const loadSettings = () => { if (!org) return; setSCustomDomain(org.custom_domain || ''); setSDomainVerified(org.domain_verified || false); setSDomainSsl(org.domain_ssl_status || 'pending'); setSBrandColor(org.brand_color || '#4f46e5'); setSLogoUrl(org.logo_url || ''); setSFaviconUrl(org.favicon_url || ''); setSMetaTitle(org.meta_title || ''); setSMetaDesc(org.meta_description || ''); setSOrgName(org.name || ''); setSOrgPhone(org.phone || ''); setSOrgEmail(org.email || ''); setSOrgWhatsapp(org.whatsapp || ''); };
     const loadLanding = () => { if (!org) return; setLHeroImage(org.hero_image_url || ''); setLHeroTitle(org.hero_title || ''); setLHeroSubtitle(org.hero_subtitle || ''); setLAboutText(org.about_text || ''); setLAboutImage(org.about_image_url || ''); setLGalleryImages(org.gallery_images || []); setLSocialFb(org.social_facebook || ''); setLSocialIg(org.social_instagram || ''); setLSocialTw(org.social_twitter || ''); setLSocialTt(org.social_tiktok || ''); setLSocialYt(org.social_youtube || ''); setLSocialLi(org.social_linkedin || ''); setLFooterText(org.footer_text || ''); };
     const saveLanding = async () => { setLSaving(true); try { const updates: any = { hero_image_url: lHeroImage || null, hero_title: lHeroTitle || null, hero_subtitle: lHeroSubtitle || null, about_text: lAboutText || null, about_image_url: lAboutImage || null, gallery_images: lGalleryImages, social_facebook: lSocialFb || null, social_instagram: lSocialIg || null, social_twitter: lSocialTw || null, social_tiktok: lSocialTt || null, social_youtube: lSocialYt || null, social_linkedin: lSocialLi || null, footer_text: lFooterText || null }; const { error } = await supabase.from('organizations').update(updates).eq('id', org.id); if (error) throw error; setOrg({ ...org, ...updates }); toast.success('Page d\'accueil mise à jour ✅'); } catch (e: any) { toast.error(e.message); } setLSaving(false); };
@@ -299,7 +310,7 @@ function AdminPageContent() {
         setOrg({ ...org, custom_domain: null, domain_verified: false, domain_ssl_status: 'pending' });
         toast.success('Domaine retiré');
     };
-    const onTab = (t: Tab) => { setTab(t); setSidebar(false); if (t === 'timetable' && !ttLoaded) loadTT(); if (t === 'evaluations' && !evLoaded) loadEv(); if (t === 'payments' && !payLoaded) loadPay(); if (t === 'disciplines' && !dLoaded) loadDisc(); if (t === 'grades' && !grLoaded) loadGrades(); if (t === 'settings') loadSettings(); if (t === 'landing') loadLanding(); };
+    const onTab = (t: Tab) => { setTab(t); setSidebar(false); if (t === 'timetable' && !ttLoaded) loadTT(); if (t === 'evaluations' && !evLoaded) loadEv(); if (t === 'payments' && !payLoaded) loadPay(); if (t === 'disciplines' && !dLoaded) loadDisc(); if (t === 'grades' && !grLoaded) loadGrades(); if (t === 'settings') loadSettings(); if (t === 'landing') loadLanding(); if (t === 'modeles') loadTemplateSettings(); };
 
     // ═══ CRUD CLASSES INLINE ═══
     const addClassDirect = async () => {
@@ -515,7 +526,7 @@ ${bodyHtml}
     // Sel component is now defined outside AdminPage to prevent React 19 hydration issues
 
     return (
-        <div className="min-h-screen bg-[#0B0E14] text-white flex">
+        <div className="min-h-screen bg-[#0B0E14] text-white flex overflow-x-hidden">
             {/* Ambient background */}
             <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
                 <div className="absolute top-[-25%] right-[-15%] w-[50%] h-[50%] bg-teal-600/4 blur-[150px] rounded-full" />
@@ -538,18 +549,18 @@ ${bodyHtml}
             </aside>
             {sidebar && <div className="fixed inset-0 bg-black/50 z-30 lg:hidden" onClick={() => setSidebar(false)} />}
 
-            <main className="flex-1 min-h-screen relative z-10">
+            <main className="flex-1 min-w-0 min-h-screen relative z-10 overflow-x-hidden">
                 <header className="sticky top-0 z-20 bg-[#0B0E14]/80 backdrop-blur-xl border-b border-white/5 px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-3"><button onClick={() => setSidebar(true)} className="lg:hidden p-2 hover:bg-white/5 rounded-xl"><Settings className="w-5 h-5" /></button><h1 className="text-lg font-black text-gradient-primary">{SIDES.find(i => i.id === tab)?.label}</h1></div>
                     <span className="text-xs text-slate-500">{students.length} étudiants • {teachers.length} profs</span>
                 </header>
 
-                <div className="p-4 sm:p-6 max-w-5xl">
+                <div className="p-3 sm:p-4 md:p-6 max-w-5xl w-full">
                     {/* ═══ GENERAL ═══ */}
                     {tab === 'general' && <div className="space-y-6">
                         <div className="p-6 rounded-2xl bg-card/50 backdrop-blur-sm border border-white/10"><h2 className="text-xl font-black mb-4 text-gradient-primary">Informations</h2><div className="grid sm:grid-cols-2 gap-3 text-sm">{[['Nom', org.name], ['Type', org.type], ['Ville', `${org.city}, ${org.country}`], ['Tél', org.phone], ['Email', org.email], ['WhatsApp', org.whatsapp || '—']].map(([k, v], i) => <div key={i}><span className="text-slate-500">{k}:</span> <span className="ml-2">{v}</span></div>)}</div></div>
-                        <div className="p-6 rounded-2xl bg-teal-500/5 backdrop-blur-sm border border-teal-500/10"><h3 className="font-bold text-teal-300 mb-3 flex items-center gap-2"><Link2 className="w-5 h-5" />Liens</h3><div className="space-y-2 text-sm">{[['Page publique', `${origin}/${orgSlug}`, 'text-teal-300'], ['Inscription prof', `${origin}/${orgSlug}/prof`, 'text-emerald-300'], ['Inscription étudiant', `${origin}/${orgSlug}/student`, 'text-indigo-300']].map(([l, u, c], i) => <div key={i} className="flex items-center gap-2"><span className="text-slate-400">{l}:</span><code className={`px-2 py-1 rounded-lg bg-white/5 ${c}`}>{u}</code></div>)}</div></div>
-                        <div className="grid sm:grid-cols-4 gap-4">{[{ l: 'Classes', v: cls.length, c: 'from-teal-600 to-emerald-600', shadow: 'shadow-teal-600/20' }, { l: 'Matières', v: subs.length, c: 'from-indigo-600 to-blue-600', shadow: 'shadow-indigo-600/20' }, { l: 'Profs', v: teachers.length, c: 'from-amber-600 to-orange-600', shadow: 'shadow-amber-600/20' }, { l: 'Étudiants', v: students.length, c: 'from-purple-600 to-pink-600', shadow: 'shadow-purple-600/20' }].map((s, i) => <div key={i} className={`p-4 rounded-xl bg-gradient-to-br ${s.c} text-center shadow-lg ${s.shadow}`}><div className="text-3xl font-black">{s.v}</div><div className="text-sm text-white/80">{s.l}</div></div>)}</div>
+                        <div className="p-4 sm:p-6 rounded-2xl bg-teal-500/5 backdrop-blur-sm border border-teal-500/10"><h3 className="font-bold text-teal-300 mb-3 flex items-center gap-2"><Link2 className="w-5 h-5" />Liens</h3><div className="space-y-2 text-sm">{[['Page publique', `${origin}/${orgSlug}`, 'text-teal-300'], ['Inscription prof', `${origin}/${orgSlug}/prof`, 'text-emerald-300'], ['Inscription étudiant', `${origin}/${orgSlug}/student`, 'text-indigo-300']].map(([l, u, c], i) => <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2"><span className="text-slate-400 shrink-0">{l}:</span><code className={`px-2 py-1 rounded-lg bg-white/5 ${c} text-xs break-all`}>{u}</code></div>)}</div></div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">{[{ l: 'Classes', v: cls.length, c: 'from-teal-600 to-emerald-600', shadow: 'shadow-teal-600/20' }, { l: 'Matières', v: subs.length, c: 'from-indigo-600 to-blue-600', shadow: 'shadow-indigo-600/20' }, { l: 'Profs', v: teachers.length, c: 'from-amber-600 to-orange-600', shadow: 'shadow-amber-600/20' }, { l: 'Étudiants', v: students.length, c: 'from-purple-600 to-pink-600', shadow: 'shadow-purple-600/20' }].map((s, i) => <div key={i} className={`p-4 rounded-xl bg-gradient-to-br ${s.c} text-center shadow-lg ${s.shadow}`}><div className="text-3xl font-black">{s.v}</div><div className="text-sm text-white/80">{s.l}</div></div>)}</div>
                     </div>}
 
                     {/* ═══ SETUP ═══ */}
@@ -871,7 +882,7 @@ ${bodyHtml}
                             </div>
                             <Button onClick={addPay} disabled={saving || !payStu || !payAmt} className="mt-3 bg-emerald-600" size="sm">{saving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}<CreditCard className="w-4 h-4 mr-1" />Enregistrer</Button>
                         </div>
-                        {pays.length > 0 ? <div className="space-y-2">{pays.map((p: any) => <div key={p.id} className="flex items-center justify-between p-4 rounded-xl bg-white/[0.03] border border-white/10"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-emerald-600/20 flex items-center justify-center text-emerald-400 text-xs font-bold">{p.student_profiles?.first_name?.[0]}{p.student_profiles?.last_name?.[0]}</div><div><p className="text-sm font-medium">{p.student_profiles?.first_name} {p.student_profiles?.last_name}</p><p className="text-xs text-slate-500">{p.description} • {p.payment_method} • {new Date(p.paid_at).toLocaleDateString('fr-FR')}</p></div></div><span className="text-sm font-bold text-emerald-400">{new Intl.NumberFormat('fr-FR').format(p.amount)} XAF</span></div>)}</div> : <div className="text-center py-8 text-slate-500"><CreditCard className="w-10 h-10 mx-auto mb-2 opacity-30" /><p className="text-sm">Aucun paiement</p></div>}
+                        {pays.length > 0 ? <div className="space-y-2">{pays.map((p: any) => <div key={p.id} className="flex items-center justify-between p-4 rounded-xl bg-white/[0.03] border border-white/10"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-emerald-600/20 flex items-center justify-center text-emerald-400 text-xs font-bold">{p.student_profiles?.first_name?.[0]}{p.student_profiles?.last_name?.[0]}</div><div><p className="text-sm font-medium">{p.student_profiles?.first_name} {p.student_profiles?.last_name}</p><p className="text-xs text-slate-500">{p.description} • {p.payment_method} • {new Date(p.paid_at).toLocaleDateString('fr-FR')}</p></div></div><div className="flex items-center gap-2"><button onClick={() => printPaymentReceipt(p)} className="text-xs px-2 py-1 rounded bg-indigo-600/10 text-indigo-300 hover:bg-indigo-600/20 flex items-center gap-1 transition"><Printer className="w-3 h-3" />Reçu</button><span className="text-sm font-bold text-emerald-400">{new Intl.NumberFormat('fr-FR').format(p.amount)} XAF</span></div></div>)}</div> : <div className="text-center py-8 text-slate-500"><CreditCard className="w-10 h-10 mx-auto mb-2 opacity-30" /><p className="text-sm">Aucun paiement</p></div>}
                     </div>}
 
                     {/* ═══ DISCIPLINE ═══ */}
@@ -934,6 +945,84 @@ ${bodyHtml}
                                 })()}
                             </div>
                         )}
+                    </div>}
+
+                    {/* ═══ MODÈLES PDF ═══ */}
+                    {tab === 'modeles' && <div className="space-y-6">
+                        <h2 className="font-bold text-lg flex items-center gap-2"><FileText className="w-5 h-5 text-violet-400" /> Modèles de documents PDF</h2>
+                        <p className="text-xs text-slate-500 -mt-3">Choisissez le style des bulletins et reçus générés pour votre établissement. Les étudiants et professeurs verront le modèle sélectionné.</p>
+
+                        {/* Current Term */}
+                        <div className="p-5 rounded-xl bg-violet-600/5 border border-violet-500/20">
+                            <h3 className="font-bold text-violet-300 mb-3 flex items-center gap-2"><Calendar className="w-4 h-4" /> Période académique active</h3>
+                            <div className="grid sm:grid-cols-2 gap-3">
+                                <div>
+                                    <Label className="text-slate-400 text-xs">Trimestre / Semestre actif</Label>
+                                    <Sel v={currentTerm} onChange={setCurrentTerm} opts={[
+                                        { id: 'Trimestre 1', label: 'Trimestre 1' }, { id: 'Trimestre 2', label: 'Trimestre 2' }, { id: 'Trimestre 3', label: 'Trimestre 3' },
+                                        { id: 'Semestre 1', label: 'Semestre 1' }, { id: 'Semestre 2', label: 'Semestre 2' },
+                                        { id: 'Année complète', label: 'Année complète' },
+                                    ]} />
+                                </div>
+                                <div className="flex items-end">
+                                    <p className="text-xs text-slate-500">Cette période sera affichée sur les bulletins et reçus générés.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Bulletin templates */}
+                        <div className="space-y-3">
+                            <h3 className="font-bold text-sm text-slate-300 flex items-center gap-2">📊 Modèle de bulletin de notes</h3>
+                            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {BULLETIN_TEMPLATES.map(t => (
+                                    <button key={t.id} onClick={() => setSelBulletinTemplate(t.id)}
+                                        className={`p-4 rounded-xl border-2 text-left transition-all ${selBulletinTemplate === t.id
+                                            ? 'border-violet-500 bg-violet-600/10 shadow-lg shadow-violet-600/10'
+                                            : 'border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]'}`}>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-2xl">{t.icon}</span>
+                                            <div>
+                                                <p className="font-bold text-sm">{t.name}</p>
+                                                <p className="text-[9px] text-slate-500">{t.suited}</p>
+                                            </div>
+                                            {selBulletinTemplate === t.id && <CheckCircle2 className="w-5 h-5 text-violet-400 ml-auto" />}
+                                        </div>
+                                        <p className="text-xs text-slate-400 leading-relaxed">{t.description}</p>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Receipt templates */}
+                        <div className="space-y-3">
+                            <h3 className="font-bold text-sm text-slate-300 flex items-center gap-2">🧾 Modèle de reçu de paiement</h3>
+                            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {RECEIPT_TEMPLATES.map(t => (
+                                    <button key={t.id} onClick={() => setSelReceiptTemplate(t.id)}
+                                        className={`p-4 rounded-xl border-2 text-left transition-all ${selReceiptTemplate === t.id
+                                            ? 'border-emerald-500 bg-emerald-600/10 shadow-lg shadow-emerald-600/10'
+                                            : 'border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]'}`}>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-2xl">{t.icon}</span>
+                                            <div>
+                                                <p className="font-bold text-sm">{t.name}</p>
+                                                <p className="text-[9px] text-slate-500">{t.suited}</p>
+                                            </div>
+                                            {selReceiptTemplate === t.id && <CheckCircle2 className="w-5 h-5 text-emerald-400 ml-auto" />}
+                                        </div>
+                                        <p className="text-xs text-slate-400 leading-relaxed">{t.description}</p>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Save button */}
+                        <div className="flex justify-end">
+                            <Button onClick={saveTemplateSettings} disabled={savingTemplates} className="bg-gradient-to-r from-violet-600 to-indigo-600 px-8 font-bold rounded-xl shadow-lg shadow-violet-600/25">
+                                {savingTemplates ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                                Sauvegarder les modèles
+                            </Button>
+                        </div>
                     </div>}
 
                     {/* ═══ LANDING PAGE CONFIG ═══ */}
@@ -1098,10 +1187,10 @@ ${bodyHtml}
                                         <h4 className="font-medium text-sm mb-2 text-slate-300">📋 Configuration DNS requise</h4>
                                         <p className="text-xs text-slate-500 mb-3">Ajoutez ces enregistrements DNS chez votre registrar (Namecheap, GoDaddy, OVH, etc.) :</p>
                                         <div className="space-y-2">
-                                            <div className="grid grid-cols-[60px_1fr_1fr] gap-2 text-[10px] text-slate-400 font-mono">
+                                            <div className="hidden sm:grid grid-cols-[60px_1fr_1fr] gap-2 text-[10px] text-slate-400 font-mono">
                                                 <span className="font-bold text-slate-300">Type</span><span className="font-bold text-slate-300">Nom / Host</span><span className="font-bold text-slate-300">Valeur / Target</span>
                                             </div>
-                                            <div className="grid grid-cols-[60px_1fr_1fr] gap-2 text-xs font-mono p-2 rounded-lg bg-white/5">
+                                            <div className="flex flex-col sm:grid sm:grid-cols-[60px_1fr_1fr] gap-1 sm:gap-2 text-xs font-mono p-2 rounded-lg bg-white/5">
                                                 <span className="text-amber-400 font-bold">CNAME</span>
                                                 <span className="text-white">{sCustomDomain.split('.')[0] || 'www'}</span>
                                                 <div className="flex items-center gap-1">
@@ -1109,7 +1198,7 @@ ${bodyHtml}
                                                     <button onClick={() => { navigator.clipboard.writeText('campusflow.netlify.app'); toast.success('Copié !'); }} className="text-slate-500 hover:text-white"><Copy className="w-3 h-3" /></button>
                                                 </div>
                                             </div>
-                                            <div className="grid grid-cols-[60px_1fr_1fr] gap-2 text-xs font-mono p-2 rounded-lg bg-white/5">
+                                            <div className="flex flex-col sm:grid sm:grid-cols-[60px_1fr_1fr] gap-1 sm:gap-2 text-xs font-mono p-2 rounded-lg bg-white/5">
                                                 <span className="text-amber-400 font-bold">A</span>
                                                 <span className="text-white">@</span>
                                                 <div className="flex items-center gap-1">

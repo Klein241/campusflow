@@ -1,9 +1,9 @@
-// Service Worker — Maison de Prière
+// Service Worker — CampusFlow
 // Handles: Push Notifications, Offline caching, Library book caching
-// Backend: Cloudflare Worker (maisondepriere-api)
+// Backend: Cloudflare Worker (campusflow-notification-worker)
 
-const CACHE_NAME = 'mdp-cache-v3';
-const BOOK_CACHE = 'mdp-books-v1';
+const CACHE_NAME = 'campusflow-cache-v4';
+const BOOK_CACHE = 'campusflow-books-v1';
 
 // App shell files to precache
 const APP_SHELL = [
@@ -31,6 +31,12 @@ self.addEventListener('push', (event) => {
         } else if (data.data?.orderId) {
             actions.push({ action: 'view', title: '📦 Voir' });
         }
+        // School-specific actions
+        if (data.data?.tab === 'myspace' && data.data?.subTab === 'bulletin') {
+            actions.push({ action: 'view_grades', title: '📊 Voir les notes' });
+        } else if (data.data?.tab === 'myspace' && data.data?.subTab === 'paiement') {
+            actions.push({ action: 'view_payment', title: '💳 Voir le reçu' });
+        }
         actions.push({ action: 'open', title: 'Ouvrir' });
 
         const options = {
@@ -40,13 +46,13 @@ self.addEventListener('push', (event) => {
             vibrate: [100, 50, 100],
             data: data.data || { url: '/' },
             actions,
-            tag: data.tag || `mdp-${Date.now()}`,
+            tag: data.tag || `campusflow-${Date.now()}`,
             renotify: true,
-            requireInteraction: !!(data.data?.conversationId || data.data?.orderId),
+            requireInteraction: !!(data.data?.conversationId || data.data?.orderId || data.data?.subTab === 'bulletin'),
         };
 
         event.waitUntil(
-            self.registration.showNotification(data.title || 'Maison de Prière', options)
+            self.registration.showNotification(data.title || 'CampusFlow', options)
         );
     } catch (e) {
         console.error('Push parse error:', e);
@@ -63,8 +69,15 @@ self.addEventListener('notificationclick', (event) => {
     const data = event.notification.data || {};
     let url = data.url || '/';
 
-    // Deep-link: if we have conversationId, go to chat
-    if (data.conversationId) {
+    // CampusFlow school deep-links (/{orgSlug}/campus?tab=X)
+    const orgSlug = data.orgSlug;
+    if (orgSlug && data.tab) {
+        const tabParam = data.tab;
+        const subTabParam = data.subTab ? `&subTab=${data.subTab}` : '';
+        url = `/${orgSlug}/campus?tab=${tabParam}${subTabParam}`;
+    }
+    // Legacy deep-links
+    else if (data.conversationId) {
         url = `/?nav=conversation&id=${data.conversationId}`;
     } else if (data.groupId) {
         url = `/?nav=group&id=${data.groupId}`;
@@ -99,7 +112,7 @@ self.addEventListener('message', (event) => {
 
     // Show notification
     if (event.data.type === 'SHOW_NOTIFICATION') {
-        self.registration.showNotification(event.data.title || 'Maison de Prière', {
+        self.registration.showNotification(event.data.title || 'CampusFlow', {
             body: event.data.body || '',
             icon: '/icon-192.png',
             badge: '/icon-192.png',
@@ -178,7 +191,7 @@ self.addEventListener('activate', (event) => {
         caches.keys().then(keys =>
             Promise.all(
                 keys
-                    .filter(k => k !== CACHE_NAME && k !== BOOK_CACHE)
+                    .filter(k => k !== CACHE_NAME && k !== BOOK_CACHE && !k.startsWith('mdp-'))
                     .map(k => caches.delete(k))
             )
         ).then(() => self.clients.claim())

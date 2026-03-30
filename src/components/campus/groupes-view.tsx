@@ -10,10 +10,12 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { GroupChatView } from './group-chat-view';
 
 // ═══════════════════════════════════════════════════════
 // GROUPES VIEW — Espace dédié aux groupes de l'école
 // Rejoindre des groupes, voir tous les groupes
+// Ouvrir un chat de groupe enrichi (texte, fichiers, vocaux)
 // ═══════════════════════════════════════════════════════
 
 interface GroupesViewProps {
@@ -56,6 +58,10 @@ export function GroupesView({ orgId, orgSlug, userId, userName, userRole, onOpen
     const [searchUser, setSearchUser] = useState('');
     const [joining, setJoining] = useState<string | null>(null);
 
+    // Active group chat (inline)
+    const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+    const [activeGroupName, setActiveGroupName] = useState<string>('');
+
     // Load all school users
     useEffect(() => {
         (async () => {
@@ -85,14 +91,12 @@ export function GroupesView({ orgId, orgSlug, userId, userName, userRole, onOpen
     const loadGroups = async () => {
         setLoading(true);
         try {
-            // Get ALL groups in this org
             const { data: allGroups } = await supabase.from('chat_conversations')
                 .select('*')
                 .eq('organization_id', orgId)
                 .eq('type', 'group')
                 .order('created_at', { ascending: false });
 
-            // Get user's memberships
             const { data: myParts } = await supabase.from('chat_participants')
                 .select('conversation_id').eq('user_id', userId);
             const myConvIds = new Set((myParts || []).map((p: any) => p.conversation_id));
@@ -135,7 +139,6 @@ export function GroupesView({ orgId, orgSlug, userId, userName, userRole, onOpen
             });
             if (error) throw error;
 
-            // Send system message
             await supabase.from('chat_messages').insert({
                 conversation_id: groupId, sender_id: userId,
                 content: `${userName} a rejoint le groupe`, msg_type: 'system',
@@ -179,6 +182,14 @@ export function GroupesView({ orgId, orgSlug, userId, userName, userRole, onOpen
         setCreating(false);
     };
 
+    // Open group chat
+    const handleOpenGroup = (groupId: string, groupName: string) => {
+        setActiveGroupId(groupId);
+        setActiveGroupName(groupName);
+        // Also notify parent if callback exists
+        onOpenGroupChat?.(groupId, groupName);
+    };
+
     const filteredGroups = groups.filter(g => !search || g.name.toLowerCase().includes(search.toLowerCase()));
     const filteredUsers = allUsers.filter(u => !searchUser || u.name.toLowerCase().includes(searchUser.toLowerCase()));
 
@@ -191,6 +202,21 @@ export function GroupesView({ orgId, orgSlug, userId, userName, userRole, onOpen
         return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
     };
 
+    // ═══ ACTIVE GROUP CHAT ═══
+    if (activeGroupId) {
+        return (
+            <GroupChatView
+                groupId={activeGroupId}
+                groupName={activeGroupName}
+                userId={userId}
+                userName={userName}
+                orgId={orgId}
+                onBack={() => { setActiveGroupId(null); setActiveGroupName(''); loadGroups(); }}
+            />
+        );
+    }
+
+    // ═══ GROUPS LIST ═══
     return (
         <div className="space-y-4">
             {/* Header */}
@@ -199,7 +225,7 @@ export function GroupesView({ orgId, orgSlug, userId, userName, userRole, onOpen
                     <h2 className="text-lg font-black bg-gradient-to-r from-teal-400 to-emerald-400 bg-clip-text text-transparent">
                         👥 Groupes
                     </h2>
-                    <p className="text-[10px] text-slate-500">Rejoignez des groupes de l'école</p>
+                    <p className="text-[10px] text-slate-500">Rejoignez des groupes • fichiers • vocaux</p>
                 </div>
                 <Button size="sm" onClick={() => setShowCreate(!showCreate)}
                     className="bg-gradient-to-r from-teal-600 to-emerald-600 text-xs rounded-xl shadow-lg shadow-teal-600/20">
@@ -306,7 +332,7 @@ export function GroupesView({ orgId, orgSlug, userId, userName, userRole, onOpen
                     </div>
 
                     {group.isMember ? (
-                        <button onClick={() => onOpenGroupChat?.(group.id, group.name)}
+                        <button onClick={() => handleOpenGroup(group.id, group.name)}
                             className="px-3 py-1.5 rounded-xl bg-teal-600/15 text-teal-400 text-xs font-medium hover:bg-teal-600/25 transition">
                             Ouvrir
                         </button>
