@@ -133,9 +133,11 @@ export default function LoginPage() {
         handleRecovery();
 
         // 3. Listen for PASSWORD_RECOVERY event (works with both flows)
+        // ⚠️ setTimeout defers setState to next tick — prevents React #310
+        // "Cannot update a component while rendering a different component"
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
             if (event === 'PASSWORD_RECOVERY') {
-                setMode('reset_password');
+                setTimeout(() => setMode('reset_password'), 0);
             }
         });
 

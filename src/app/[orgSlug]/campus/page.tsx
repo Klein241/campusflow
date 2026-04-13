@@ -7,6 +7,7 @@ import { GraduationCap, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { CampusBottomNav, type CampusTab } from '@/components/campus/campus-bottom-nav';
 import { ActusView } from '@/components/campus/actus-view';
+import { FormsView } from '@/components/campus/forms-view';
 import { ContactsView } from '@/components/campus/contacts-view';
 import { ChatDMView } from '@/components/campus/chat-dm-view';
 import { GroupesView } from '@/components/campus/groupes-view';
@@ -216,6 +217,18 @@ export default function CampusPage() {
                                 orgName={org.name} orgLogo={org.logo_url} orgPhone={org.phone} orgEmail={org.email}
                                 orgCity={org.city} orgCountry={org.country} onStartDM={handleStartDM}
                                 orgBulletinTemplate={org.bulletin_template} orgCurrentTerm={org.current_term} />
+                        </motion.div>
+                    )}
+
+                    {activeTab === 'forms' && (
+                        <motion.div key="forms" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
+                            <FormsView
+                                orgId={org.id}
+                                orgSlug={orgSlug}
+                                userId={session.id}
+                                userRole={session.role}
+                                userName={userName}
+                            />
                         </motion.div>
                     )}
 

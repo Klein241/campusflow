@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Newspaper, Users, MessageSquare, Lock, User } from 'lucide-react';
+import { Newspaper, Users, MessageSquare, Lock, User, ClipboardList } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ═══════════════════════════════════════════════════════
@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 // Chaque onglet a son propre espace dédié
 // ═══════════════════════════════════════════════════════
 
-export type CampusTab = 'actus' | 'contacts' | 'chatdm' | 'myspace' | 'profile';
+export type CampusTab = 'actus' | 'contacts' | 'chatdm' | 'myspace' | 'forms' | 'profile';
 
 interface CampusBottomNavProps {
     activeTab: CampusTab;
@@ -46,6 +46,13 @@ const navItems: { id: CampusTab; icon: any; label: string; gradient: string; act
         label: 'My Space',
         gradient: 'from-teal-500 to-emerald-500',
         activeGlow: 'shadow-teal-500/30',
+    },
+    {
+        id: 'forms',
+        icon: ClipboardList,
+        label: 'Forms',
+        gradient: 'from-indigo-500 to-violet-500',
+        activeGlow: 'shadow-indigo-500/30',
     },
     {
         id: 'profile',
