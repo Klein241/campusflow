@@ -115,8 +115,15 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
         if (!newPostContent.trim()) return;
         setPublishing(true);
         try {
+            // Resolve Supabase auth user id (the FK expects auth.users.id)
+            let authUserId = userId;
+            const { data: authSession } = await supabase.auth.getSession();
+            if (authSession?.session?.user?.id) {
+                authUserId = authSession.session.user.id;
+            }
+
             const { error } = await supabase.from('tutoring_requests').insert({
-                user_id: userId,
+                user_id: authUserId,
                 content: newPostContent.trim(),
                 category: 'post',
                 is_anonymous: false,

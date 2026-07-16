@@ -213,9 +213,9 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
             try {
                 const path = `chat-files/${groupId}/${Date.now()}_${file.name}`;
                 const { error: uploadError } = await supabase.storage
-                    .from('chat-media').upload(path, file, { contentType: file.type, upsert: false });
+                    .from('organization-assets').upload(path, file, { contentType: file.type, upsert: false });
                 if (uploadError) throw uploadError;
-                const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(path);
+                const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
                 const msgType = file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'voice' : 'file';
                 const content = msgType === 'image' ? `📷 ${file.name}` : msgType === 'voice' ? '🎤 Message vocal' : `📎 ${file.name} (${formatFileSize(file.size)})`;
                 await supabase.from('chat_messages').insert({
@@ -252,9 +252,9 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
                 setUploading(true);
                 try {
                     const path = `voice-messages/${userId}/${Date.now()}.webm`;
-                    const { error: uploadError } = await supabase.storage.from('chat-media').upload(path, blob, { contentType: 'audio/webm', upsert: false });
+                    const { error: uploadError } = await supabase.storage.from('organization-assets').upload(path, blob, { contentType: 'audio/webm', upsert: false });
                     if (uploadError) throw uploadError;
-                    const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(path);
+                    const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
                     await supabase.from('chat_messages').insert({
                         conversation_id: groupId, sender_id: userId, content: '🎤 Message vocal', msg_type: 'voice', media_url: urlData.publicUrl,
                     });

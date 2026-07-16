@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useOrgSlug } from '@/hooks/use-org-slug';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     GraduationCap, Users, BookOpen, Calendar, MapPin, Phone, Mail,
     Globe, ArrowRight, Sparkles, ShoppingBag, MessageSquare, ExternalLink,
-    Clock, ChevronRight, Star, Heart, Facebook, Instagram, Twitter, Youtube, Linkedin
+    Clock, ChevronRight, Star, Heart, Facebook, Instagram, Twitter, Youtube, Linkedin, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
@@ -45,6 +45,7 @@ export default function SchoolLandingPage() {
     const [filieres, setFilieres] = useState<any[]>([]);
     const [teacherCount, setTeacherCount] = useState(0);
     const [studentCount, setStudentCount] = useState(0);
+    const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
     useEffect(() => {
         async function load() {
@@ -295,17 +296,41 @@ export default function SchoolLandingPage() {
                     <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }}>
                         <motion.h2 variants={fadeUp} custom={0} className="text-3xl font-black mb-8">Galerie photos</motion.h2>
                     </motion.div>
-                    <div className={`grid gap-3 ${gallery.length === 1 ? 'grid-cols-1' : gallery.length === 2 ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'}`}>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3">
                         {gallery.map((img: string, i: number) => (
                             <motion.div key={i} initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ delay: i * 0.05 }}
-                                className="relative group overflow-hidden rounded-2xl border border-white/10">
-                                <img src={img} alt={`Photo ${i + 1}`} className="w-full h-48 sm:h-56 object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" decoding="async" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                className="relative group overflow-hidden rounded-2xl border border-white/10 cursor-pointer"
+                                style={{ aspectRatio: '9/16' }}
+                                onClick={() => setSelectedImage(img)}>
+                                <img src={img} alt={`Photo ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" decoding="async" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                             </motion.div>
                         ))}
                     </div>
                 </section>
             )}
+
+            {/* ═════ GALLERY LIGHTBOX ═════ */}
+            <AnimatePresence>
+                {selectedImage && (
+                    <motion.div
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4"
+                        onClick={() => setSelectedImage(null)}>
+                        <button
+                            className="absolute top-6 right-6 z-[110] p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                            onClick={(e) => { e.stopPropagation(); setSelectedImage(null); }}>
+                            <X className="w-6 h-6 text-white" />
+                        </button>
+                        <motion.img
+                            initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}
+                            transition={{ type: 'spring', damping: 25 }}
+                            src={selectedImage} alt="Photo agrandie"
+                            className="max-w-full max-h-[90vh] object-contain rounded-2xl shadow-2xl"
+                            onClick={(e) => e.stopPropagation()} />
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* ═════ QUICK LINKS ═════ */}
             <section className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-12">

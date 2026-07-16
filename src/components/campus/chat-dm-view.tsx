@@ -368,12 +368,12 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
                 const path = `chat-files/${activeConv.id}/${Date.now()}_${file.name}`;
 
                 const { error: uploadError } = await supabase.storage
-                    .from('chat-media')
+                    .from('organization-assets')
                     .upload(path, file, { contentType: file.type, upsert: false });
 
                 if (uploadError) throw uploadError;
 
-                const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(path);
+                const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
                 const fileUrl = urlData.publicUrl;
 
                 const msgType = file.type.startsWith('image/') ? 'image'
@@ -446,11 +446,11 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
                 try {
                     const path = `voice-messages/${userId}/${Date.now()}.webm`;
                     const { error: uploadError } = await supabase.storage
-                        .from('chat-media')
+                        .from('organization-assets')
                         .upload(path, audioBlob, { contentType: 'audio/webm', upsert: false });
                     if (uploadError) throw uploadError;
 
-                    const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(path);
+                    const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
 
                     const { error: insertError } = await supabase.from('chat_messages').insert({
                         conversation_id: activeConv.id,

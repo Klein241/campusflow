@@ -7,7 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     BookOpen, Calendar, Users, GraduationCap, ClipboardList, Trophy,
     Home, MessageSquare, Loader2, Clock, CheckCircle2,
-    Save, X, BarChart3, FileText, PenSquare, LogOut, User, AlertCircle
+    Save, X, BarChart3, FileText, PenSquare, LogOut, User, AlertCircle,
+    Layers, Plus, ChevronDown, ChevronUp, Trash2, Eye, EyeOff, Lock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -23,7 +24,7 @@ import { cn } from '@/lib/utils';
 // CAMPUSFLOW — DASHBOARD PROFESSEUR (holographic-ring design)
 // ═══════════════════════════════════════════════════════
 
-type Tab = 'dashboard' | 'timetable' | 'classes' | 'grades' | 'profile';
+type Tab = 'dashboard' | 'timetable' | 'cursus' | 'grades' | 'profile';
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
 // ═══ BOTTOM NAV ═══
@@ -31,7 +32,7 @@ function BottomNav({ activeTab, onTabChange }: { activeTab: Tab; onTabChange: (t
     const navItems: { id: Tab; icon: any; label: string; color?: string }[] = [
         { id: 'dashboard', icon: Home, label: 'Accueil' },
         { id: 'timetable', icon: Calendar, label: 'Horaires', color: 'teal' },
-        { id: 'classes', icon: Users, label: 'Classes', color: 'indigo' },
+        { id: 'cursus', icon: Layers, label: 'Cursus', color: 'indigo' },
         { id: 'grades', icon: ClipboardList, label: 'Notes', color: 'amber' },
         { id: 'profile', icon: User, label: 'Profil' },
     ];
@@ -97,6 +98,20 @@ export default function TeacherDashboard() {
     const [showDeletedModal, setShowDeletedModal] = useState(false);
     const [showDeactivatedModal, setShowDeactivatedModal] = useState(false);
 
+    // Cursus state
+    const [chapters, setChapters] = useState<any[]>([]);
+    const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
+    const [showNewSubject, setShowNewSubject] = useState(false);
+    const [newSubName, setNewSubName] = useState('');
+    const [newSubCoef, setNewSubCoef] = useState('1');
+    const [newSubClass, setNewSubClass] = useState('');
+    const [savingSub, setSavingSub] = useState(false);
+    const [showNewChapter, setShowNewChapter] = useState<string | null>(null);
+    const [newChTitle, setNewChTitle] = useState('');
+    const [newChDesc, setNewChDesc] = useState('');
+    const [savingChapter, setSavingChapter] = useState(false);
+    const [allClasses, setAllClasses] = useState<any[]>([]);
+
     // New eval form
     const [newEvTitle, setNewEvTitle] = useState('');
     const [newEvType, setNewEvType] = useState('devoir');
@@ -144,7 +159,17 @@ export default function TeacherDashboard() {
                     .select('*, classrooms:classroom_id(name), subjects:subject_id(name)')
                     .in('subject_id', subjectIds).order('created_at', { ascending: false });
                 setEvaluations(evs || []);
+
+                // Load chapters for cursus
+                const { data: chaps } = await supabase.from('chapters')
+                    .select('*').in('subject_id', subjectIds).order('position');
+                setChapters(chaps || []);
             }
+
+            // Load all classes for subject creation
+            const { data: allCls } = await supabase.from('classrooms').select('*').eq('organization_id', o.id).eq('is_active', true);
+            setAllClasses(allCls || []);
+
             setLoading(false);
         })();
     }, [orgSlug]);
@@ -195,6 +220,63 @@ export default function TeacherDashboard() {
     };
 
     const signOut = () => { localStorage.removeItem('campusflow_session'); router.push(`/${orgSlug}/login`); };
+
+    // ═══ CURSUS: CREATE SUBJECT ═══
+    const createSubject = async () => {
+        if (!newSubName.trim() || !newSubClass) { toast.error('Nom et classe requis'); return; }
+        setSavingSub(true);
+        const { data: sub, error } = await supabase.from('subjects').insert({
+            name: newSubName.trim(),
+            coefficient: parseFloat(newSubCoef) || 1,
+            classroom_id: newSubClass,
+            organization_id: org.id,
+            teacher_id: teacher.id,
+        }).select('*, classrooms:classroom_id(id,name)').single();
+        if (error) { toast.error(error.message); setSavingSub(false); return; }
+        setMySubjects([...mySubjects, sub]);
+        toast.success(`Matière "${sub.name}" créée !`);
+        setNewSubName(''); setNewSubCoef('1'); setNewSubClass(''); setShowNewSubject(false);
+        setSavingSub(false);
+    };
+
+    // ═══ CURSUS: CREATE CHAPTER ═══
+    const createChapter = async (subjectId: string) => {
+        if (!newChTitle.trim()) { toast.error('Titre requis'); return; }
+        setSavingChapter(true);
+        const subChapters = chapters.filter(c => c.subject_id === subjectId);
+        const { data: ch, error } = await supabase.from('chapters').insert({
+            subject_id: subjectId,
+            organization_id: org.id,
+            teacher_id: teacher.id,
+            title: newChTitle.trim(),
+            description: newChDesc.trim(),
+            position: subChapters.length + 1,
+            status: 'draft',
+        }).select().single();
+        if (error) { toast.error(error.message); setSavingChapter(false); return; }
+        setChapters([...chapters, ch]);
+        toast.success(`Chapitre "${ch.title}" ajouté !`);
+        setNewChTitle(''); setNewChDesc(''); setShowNewChapter(null);
+        setSavingChapter(false);
+    };
+
+    // ═══ CURSUS: TOGGLE CHAPTER STATUS ═══
+    const toggleChapterStatus = async (chapterId: string, currentStatus: string) => {
+        const nextStatus = currentStatus === 'draft' ? 'published' : currentStatus === 'published' ? 'completed' : 'draft';
+        const { error } = await supabase.from('chapters').update({ status: nextStatus, updated_at: new Date().toISOString() }).eq('id', chapterId);
+        if (error) { toast.error(error.message); return; }
+        setChapters(chapters.map(c => c.id === chapterId ? { ...c, status: nextStatus } : c));
+        const labels: Record<string, string> = { draft: 'Brouillon', published: 'Dispensé', completed: 'Terminé' };
+        toast.success(`Statut → ${labels[nextStatus]}`);
+    };
+
+    // ═══ CURSUS: DELETE CHAPTER ═══
+    const deleteChapter = async (chapterId: string) => {
+        const { error } = await supabase.from('chapters').delete().eq('id', chapterId);
+        if (error) { toast.error(error.message); return; }
+        setChapters(chapters.filter(c => c.id !== chapterId));
+        toast.success('Chapitre supprimé');
+    };
     const today = new Date().getDay();
     const todaySlots = mySlots.filter((s: any) => s.day_of_week === (today === 0 ? 7 : today));
 
@@ -416,43 +498,167 @@ export default function TeacherDashboard() {
                         </motion.div>
                     )}
 
-                    {/* ═══ CLASSES ═══ */}
-                    {tab === 'classes' && (
-                        <motion.div key="classes" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-4 pt-4">
-                            <h2 className="font-black text-lg text-gradient-primary">🏫 Mes classes & matières</h2>
-                            {myClasses.length === 0 ? (
-                                <div className="text-center py-12 text-slate-500"><Users className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm">Aucune classe assignée</p></div>
-                            ) : myClasses.map((cls: any) => {
-                                const clsSubjects = mySubjects.filter((s: any) => s.classroom_id === cls.id);
-                                const clsStudents = students.filter((s: any) => s.classroom_id === cls.id);
+                    {/* ═══ CURSUS ═══ */}
+                    {tab === 'cursus' && (
+                        <motion.div key="cursus" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-4 pt-4">
+                            <div className="flex items-center justify-between">
+                                <h2 className="font-black text-lg text-gradient-primary">📚 Mon Cursus</h2>
+                                <Button size="sm" className="bg-linear-to-r from-indigo-600 to-purple-600 border-none font-bold rounded-xl" onClick={() => setShowNewSubject(!showNewSubject)}>
+                                    <Plus className="w-4 h-4 mr-1" /> Matière
+                                </Button>
+                            </div>
+
+                            {/* Stats */}
+                            <div className="grid grid-cols-3 gap-3">
+                                {[
+                                    { l: 'Matières', v: mySubjects.length, color: 'emerald' },
+                                    { l: 'Chapitres', v: chapters.length, color: 'indigo' },
+                                    { l: 'Dispensés', v: chapters.filter(c => c.status === 'published' || c.status === 'completed').length, color: 'teal' },
+                                ].map((s, i) => {
+                                    const cls: Record<string, string> = { emerald: 'border-emerald-500/20', indigo: 'border-indigo-500/20', teal: 'border-teal-500/20' };
+                                    const txt: Record<string, string> = { emerald: 'text-emerald-400', indigo: 'text-indigo-400', teal: 'text-teal-400' };
+                                    return (
+                                        <Card key={i} className={cn("bg-card/50 backdrop-blur-sm shadow-sm", cls[s.color])}>
+                                            <CardContent className="flex flex-col items-center justify-center p-3">
+                                                <span className="text-xs text-muted-foreground">{s.l}</span>
+                                                <span className={cn("text-lg font-black", txt[s.color])}>{s.v}</span>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
+                            </div>
+
+                            {/* New Subject Form */}
+                            {showNewSubject && (
+                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
+                                    <Card className="bg-linear-to-br from-indigo-500/10 to-purple-500/5 border-indigo-500/20 backdrop-blur-sm overflow-hidden">
+                                        <CardContent className="p-4 space-y-3">
+                                            <h3 className="font-bold text-sm text-indigo-400">➕ Créer une matière</h3>
+                                            <div className="grid sm:grid-cols-3 gap-3">
+                                                <div><Label className="text-slate-400 text-xs">Nom de la matière</Label><Input value={newSubName} onChange={e => setNewSubName(e.target.value)} placeholder="Programmation Web" className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-sm" /></div>
+                                                <div><Label className="text-slate-400 text-xs">Coefficient</Label><Input type="number" value={newSubCoef} onChange={e => setNewSubCoef(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-sm" /></div>
+                                                <div><Label className="text-slate-400 text-xs">Classe</Label>
+                                                    <select value={newSubClass} onChange={e => setNewSubClass(e.target.value)} className="w-full h-9 rounded-xl bg-white/5 border border-white/10 text-white px-3 text-sm">
+                                                        <option value="" className="bg-slate-900">Choisir...</option>
+                                                        {allClasses.map((c: any) => <option key={c.id} value={c.id} className="bg-slate-900">{c.name}</option>)}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Button size="sm" className="bg-linear-to-r from-indigo-600 to-purple-600 font-bold rounded-xl" onClick={createSubject} disabled={savingSub}>
+                                                    {savingSub ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Plus className="w-3 h-3 mr-1" />}Créer
+                                                </Button>
+                                                <Button size="sm" variant="ghost" onClick={() => setShowNewSubject(false)}>Annuler</Button>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </motion.div>
+                            )}
+
+                            {/* Subject List with Chapters */}
+                            {mySubjects.length === 0 ? (
+                                <div className="text-center py-12 text-slate-500">
+                                    <Layers className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                                    <p className="text-sm">Aucune matière</p>
+                                    <p className="text-xs text-slate-600 mt-1">Créez votre première matière pour commencer</p>
+                                </div>
+                            ) : mySubjects.map((sub: any) => {
+                                const subChapters = chapters.filter(c => c.subject_id === sub.id).sort((a, b) => a.position - b.position);
+                                const isExpanded = expandedSubject === sub.id;
+                                const publishedCount = subChapters.filter(c => c.status !== 'draft').length;
+                                const clsStudents = students.filter((s: any) => s.classroom_id === sub.classroom_id);
+
                                 return (
-                                    <motion.div key={cls.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                                        <Card className="bg-linear-to-br from-indigo-500/10 to-purple-500/5 border-indigo-500/20 backdrop-blur-sm overflow-hidden">
-                                            <CardContent className="p-4">
-                                                <div className="flex items-center gap-3 mb-3">
-                                                    <div className="bg-indigo-500/20 p-2.5 rounded-xl"><Users className="h-5 w-5 text-indigo-400" /></div>
-                                                    <div>
-                                                        <h3 className="font-bold text-sm">{cls.name}</h3>
-                                                        <p className="text-[10px] text-slate-400">{clsStudents.length} étudiants • {clsSubjects.length} matière(s)</p>
+                                    <motion.div key={sub.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                                        <Card className={cn("backdrop-blur-sm overflow-hidden transition-all", isExpanded ? "bg-linear-to-br from-indigo-500/10 to-purple-500/5 border-indigo-500/20" : "bg-card/50 border-white/10 hover:border-indigo-500/20")}>
+                                            <CardContent className="p-0">
+                                                {/* Subject Header */}
+                                                <div className="p-4 cursor-pointer flex items-center justify-between" onClick={() => setExpandedSubject(isExpanded ? null : sub.id)}>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="bg-indigo-500/20 p-2.5 rounded-xl"><BookOpen className="h-5 w-5 text-indigo-400" /></div>
+                                                        <div>
+                                                            <h3 className="font-bold text-sm">{sub.name}</h3>
+                                                            <p className="text-[10px] text-slate-400">{sub.classrooms?.name || 'Classe'} • Coef. {sub.coefficient} • {subChapters.length} chapitre(s) • {publishedCount} dispensé(s)</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        {subChapters.length > 0 && (
+                                                            <div className="w-16 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                                                <div className="h-full bg-linear-to-r from-emerald-500 to-teal-400 rounded-full transition-all" style={{ width: `${subChapters.length > 0 ? (publishedCount / subChapters.length) * 100 : 0}%` }} />
+                                                            </div>
+                                                        )}
+                                                        {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
                                                     </div>
                                                 </div>
-                                                <div className="flex flex-wrap gap-2 mb-3">
-                                                    {clsSubjects.map((s: any) => (
-                                                        <Badge key={s.id} className="bg-emerald-500/20 text-emerald-400 border-none text-[10px]">📘 {s.name} (coef. {s.coefficient})</Badge>
-                                                    ))}
-                                                </div>
-                                                <div className="space-y-1">
-                                                    {clsStudents.slice(0, 10).map((s: any) => (
-                                                        <div key={s.id} className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-white/5 text-sm transition-colors">
-                                                            <Avatar className="h-7 w-7">
-                                                                <AvatarFallback className="bg-blue-500/20 text-blue-400 text-[10px] font-bold">{s.first_name?.[0]}{s.last_name?.[0]}</AvatarFallback>
-                                                            </Avatar>
-                                                            <span>{s.first_name} {s.last_name}</span>
-                                                            <span className="text-[10px] text-slate-500 ml-auto">{s.matricule || '—'}</span>
+
+                                                {/* Expanded Content: Chapters */}
+                                                {isExpanded && (
+                                                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="border-t border-white/5 px-4 pb-4">
+                                                        {/* Chapters List */}
+                                                        <div className="space-y-2 mt-3">
+                                                            {subChapters.map((ch, ci) => {
+                                                                const statusConfig: Record<string, { bg: string; text: string; icon: any; label: string }> = {
+                                                                    draft: { bg: 'bg-slate-500/20', text: 'text-slate-400', icon: EyeOff, label: 'Brouillon' },
+                                                                    published: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: Eye, label: 'Dispensé' },
+                                                                    completed: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: CheckCircle2, label: 'Terminé' },
+                                                                };
+                                                                const sc = statusConfig[ch.status] || statusConfig.draft;
+
+                                                                return (
+                                                                    <motion.div key={ch.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ci * 0.05 }}
+                                                                        className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-all group">
+                                                                        <span className="text-xs font-mono text-slate-600 w-6 text-center">{ch.position}</span>
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <p className="text-sm font-medium truncate">{ch.title}</p>
+                                                                            {ch.description && <p className="text-[10px] text-slate-500 truncate">{ch.description}</p>}
+                                                                        </div>
+                                                                        <button onClick={() => toggleChapterStatus(ch.id, ch.status)} className={cn("flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all hover:scale-105", sc.bg, sc.text)}>
+                                                                            <sc.icon className="w-3 h-3" />{sc.label}
+                                                                        </button>
+                                                                        <button onClick={() => deleteChapter(ch.id)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition-all">
+                                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    </motion.div>
+                                                                );
+                                                            })}
+
+                                                            {subChapters.length === 0 && (
+                                                                <p className="text-xs text-slate-600 text-center py-4">Aucun chapitre — ajoutez le premier !</p>
+                                                            )}
                                                         </div>
-                                                    ))}
-                                                    {clsStudents.length > 10 && <p className="text-xs text-slate-500 text-center">+{clsStudents.length - 10} autres</p>}
-                                                </div>
+
+                                                        {/* Add Chapter Form */}
+                                                        {showNewChapter === sub.id ? (
+                                                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-3 p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                                                                <Input value={newChTitle} onChange={e => setNewChTitle(e.target.value)} placeholder="Titre du chapitre" className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-sm" />
+                                                                <Input value={newChDesc} onChange={e => setNewChDesc(e.target.value)} placeholder="Description courte (optionnel)" className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-sm" />
+                                                                <div className="flex gap-2">
+                                                                    <Button size="sm" className="bg-linear-to-r from-emerald-600 to-green-600 font-bold rounded-xl h-8" onClick={() => createChapter(sub.id)} disabled={savingChapter}>
+                                                                        {savingChapter ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Plus className="w-3 h-3 mr-1" />}Ajouter
+                                                                    </Button>
+                                                                    <Button size="sm" variant="ghost" className="h-8" onClick={() => { setShowNewChapter(null); setNewChTitle(''); setNewChDesc(''); }}>Annuler</Button>
+                                                                </div>
+                                                            </motion.div>
+                                                        ) : (
+                                                            <button onClick={() => setShowNewChapter(sub.id)} className="mt-3 w-full py-2.5 rounded-xl border border-dashed border-white/10 hover:border-indigo-500/30 text-xs text-slate-500 hover:text-indigo-400 transition-all flex items-center justify-center gap-1">
+                                                                <Plus className="w-3.5 h-3.5" /> Ajouter un chapitre
+                                                            </button>
+                                                        )}
+
+                                                        {/* Students in this class */}
+                                                        {clsStudents.length > 0 && (
+                                                            <div className="mt-3 pt-3 border-t border-white/5">
+                                                                <p className="text-[10px] text-slate-500 mb-2">👥 {clsStudents.length} étudiant(s) dans {sub.classrooms?.name}</p>
+                                                                <div className="flex flex-wrap gap-1">
+                                                                    {clsStudents.slice(0, 8).map((s: any) => (
+                                                                        <Badge key={s.id} className="bg-white/5 text-slate-400 border-none text-[9px]">{s.first_name} {s.last_name?.[0]}.</Badge>
+                                                                    ))}
+                                                                    {clsStudents.length > 8 && <Badge className="bg-white/5 text-slate-400 border-none text-[9px]">+{clsStudents.length - 8}</Badge>}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </motion.div>
+                                                )}
                                             </CardContent>
                                         </Card>
                                     </motion.div>
