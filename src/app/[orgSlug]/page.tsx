@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useOrgSlug } from '@/hooks/use-org-slug';
 import { motion } from 'framer-motion';
 import {
     GraduationCap, Users, BookOpen, Calendar, MapPin, Phone, Mail,
@@ -38,7 +38,7 @@ const typeLabels: Record<string, string> = {
 };
 
 export default function SchoolLandingPage() {
-    const { orgSlug } = useParams<{ orgSlug: string }>();
+    const orgSlug = useOrgSlug();
     const [org, setOrg] = useState<Org | null>(null);
     const [loading, setLoading] = useState(true);
     const [classrooms, setClassrooms] = useState<any[]>([]);

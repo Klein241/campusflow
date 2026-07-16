@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useOrgSlug } from '@/hooks/use-org-slug';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Search, Heart, ShoppingBag, Star, MessageCircle,
@@ -54,7 +55,7 @@ function ProductPlaceholder({ category }: { category: string }) {
 const fmt = (n: number, c = 'XAF') => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: c, maximumFractionDigits: 0 }).format(n);
 
 export default function ShopPage() {
-    const { orgSlug } = useParams<{ orgSlug: string }>();
+    const orgSlug = useOrgSlug();
     const router = useRouter();
     const [org, setOrg] = useState<any>(null);
     const [session, setSession] = useState<any>(null);

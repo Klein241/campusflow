@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useOrgSlug } from '@/hooks/use-org-slug';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     BookOpen, Star, Download, Heart, Search, ArrowLeft, Upload,
@@ -83,7 +84,7 @@ function DocCover({ title, category }: { title: string; category: string }) {
 }
 
 export default function LibraryPage() {
-    const { orgSlug } = useParams<{ orgSlug: string }>();
+    const orgSlug = useOrgSlug();
     const router = useRouter();
     const [org, setOrg] = useState<any>(null);
     const [user, setUser] = useState<any>(null);

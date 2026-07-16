@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useOrgSlug } from '@/hooks/use-org-slug';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Home, Calendar, BookOpen, CreditCard, GraduationCap, Loader2,
@@ -93,7 +94,7 @@ function BottomNav({ activeTab, onTabChange }: { activeTab: Tab; onTabChange: (t
 }
 
 export default function StudentDashboard() {
-    const { orgSlug } = useParams<{ orgSlug: string }>();
+    const orgSlug = useOrgSlug();
     const router = useRouter();
     const [org, setOrg] = useState<any>(null);
     const [student, setStudent] = useState<any>(null);

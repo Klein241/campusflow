@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useOrgSlug } from '@/hooks/use-org-slug';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     BookOpen, Calendar, Users, GraduationCap, ClipboardList, Trophy,
@@ -77,7 +78,7 @@ function BottomNav({ activeTab, onTabChange }: { activeTab: Tab; onTabChange: (t
 }
 
 export default function TeacherDashboard() {
-    const { orgSlug } = useParams<{ orgSlug: string }>();
+    const orgSlug = useOrgSlug();
     const router = useRouter();
     const [org, setOrg] = useState<any>(null);
     const [teacher, setTeacher] = useState<any>(null);

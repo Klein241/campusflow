@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useOrgSlug } from '@/hooks/use-org-slug';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GraduationCap, Loader2, Eye, EyeOff, KeyRound, ShieldCheck, ArrowLeft, Lock, UserCircle, Mail, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -52,7 +53,7 @@ interface UserProfile {
 }
 
 export default function LoginPage() {
-    const { orgSlug } = useParams<{ orgSlug: string }>();
+    const orgSlug = useOrgSlug();
     const router = useRouter();
     const [org, setOrg] = useState<any>(null);
     const [loading, setLoading] = useState(true);

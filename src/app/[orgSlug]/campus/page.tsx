@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useOrgSlug } from '@/hooks/use-org-slug';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GraduationCap, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -50,7 +51,7 @@ function getSession(): SessionData | null {
 }
 
 export default function CampusPage() {
-    const { orgSlug } = useParams<{ orgSlug: string }>();
+    const orgSlug = useOrgSlug();
     const router = useRouter();
     const [org, setOrg] = useState<any>(null);
     const [session, setSession] = useState<SessionData | null>(null);

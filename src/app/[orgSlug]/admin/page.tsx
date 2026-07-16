@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState, useRef, Component, type ReactNode, type ErrorInfo } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useOrgSlug } from '@/hooks/use-org-slug';
 import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus, Building2, FileText, Receipt } from 'lucide-react';
 import { BULLETIN_TEMPLATES } from '@/lib/bulletin-pdf';
 import { RECEIPT_TEMPLATES, generateReceiptPDF, generateReceiptNumber, type ReceiptData } from '@/lib/receipt-pdf';
@@ -75,7 +76,7 @@ const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
 // Wrapper with error boundary
 export default function AdminPage() {
-    const { orgSlug } = useParams<{ orgSlug: string }>();
+    const orgSlug = useOrgSlug();
     return (
         <AdminErrorBoundary orgSlug={orgSlug}>
             <AdminPageContent />
@@ -84,7 +85,7 @@ export default function AdminPage() {
 }
 
 function AdminPageContent() {
-    const { orgSlug } = useParams<{ orgSlug: string }>();
+    const orgSlug = useOrgSlug();
     const router = useRouter();
     const [org, setOrg] = useState<any>(null);
     const [loading, setLoading] = useState(true);

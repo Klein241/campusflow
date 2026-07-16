@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useOrgSlug } from '@/hooks/use-org-slug';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     MessageSquare, Send, Plus, ArrowLeft, Loader2, Users,
@@ -61,7 +62,7 @@ function getSession(): { id: string; first_name: string; last_name: string; role
 }
 
 export default function MessagesPage() {
-    const { orgSlug } = useParams<{ orgSlug: string }>();
+    const orgSlug = useOrgSlug();
     const router = useRouter();
     const [org, setOrg] = useState<any>(null);
     const [currentUser, setCurrentUser] = useState<{ id: string; name: string; role: string } | null>(null);

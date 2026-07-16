@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import { useOrgSlug } from '@/hooks/use-org-slug';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     GraduationCap, Loader2, CheckCircle2, Star,
@@ -187,7 +188,8 @@ function FormFieldRenderer({
 // PUBLIC FORM PAGE
 // ════════════════════════════════════════════════
 export default function PublicFormPage() {
-    const { orgSlug, slug } = useParams<{ orgSlug: string; slug: string }>();
+    const orgSlug = useOrgSlug();
+    const { slug } = useParams<{ slug: string }>();
     const [form, setForm] = useState<(CampusForm & { form_fields: FormField[] }) | null>(null);
     const [org, setOrg] = useState<any>(null);
     const [loading, setLoading] = useState(true);
