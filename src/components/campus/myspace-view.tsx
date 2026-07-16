@@ -87,6 +87,7 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
 
     // Teacher cursus state
     const [chapters, setChapters] = useState<any[]>([]);
+    const [lessons, setLessons] = useState<any[]>([]);
     const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
     const [showNewSubject, setShowNewSubject] = useState(false);
     const [newSubName, setNewSubName] = useState('');
@@ -101,6 +102,19 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
     const [editContent, setEditContent] = useState('');
     const [uploadingChapterFile, setUploadingChapterFile] = useState(false);
     const [allClasses, setAllClasses] = useState<any[]>([]);
+    // Lesson state
+    const [showNewLesson, setShowNewLesson] = useState<string | null>(null);
+    const [newLessonTitle, setNewLessonTitle] = useState('');
+    const [newLessonDesc, setNewLessonDesc] = useState('');
+    const [savingLesson, setSavingLesson] = useState(false);
+    const [editingLesson, setEditingLesson] = useState<string | null>(null);
+    const [editLessonContent, setEditLessonContent] = useState('');
+    const [uploadingLessonFile, setUploadingLessonFile] = useState(false);
+    // Student cursus state
+    const [studentChapters, setStudentChapters] = useState<any[]>([]);
+    const [studentLessons, setStudentLessons] = useState<any[]>([]);
+    const [expandedStudentSub, setExpandedStudentSub] = useState<string | null>(null);
+    const [expandedStudentCh, setExpandedStudentCh] = useState<string | null>(null);
 
     const printRef = useRef<HTMLDivElement>(null);
 
@@ -178,6 +192,12 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                     // Load chapters
                     const { data: chaps } = await supabase.from('chapters').select('*').in('subject_id', subjectIds).order('position');
                     setChapters(chaps || []);
+                    // Load lessons
+                    const chapterIds = (chaps || []).map((c: any) => c.id);
+                    if (chapterIds.length > 0) {
+                        const { data: lsns } = await supabase.from('lessons').select('*').in('chapter_id', chapterIds).order('position');
+                        setLessons(lsns || []);
+                    }
                 }
             } else {
                 // Student data
@@ -201,6 +221,17 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                         .select('*, evaluations:evaluation_id(title, max_score, type, subject_id, subjects:subject_id(name))')
                         .eq('student_id', userId);
                     setGrades(grs || []);
+                    // Load chapters + lessons for student cursus
+                    const subjectIds = (subs || []).map((s: any) => s.id);
+                    if (subjectIds.length > 0) {
+                        const { data: chaps } = await supabase.from('chapters').select('*').in('subject_id', subjectIds).order('position');
+                        setStudentChapters(chaps || []);
+                        const chapterIds = (chaps || []).map((c: any) => c.id);
+                        if (chapterIds.length > 0) {
+                            const { data: lsns } = await supabase.from('lessons').select('*').in('chapter_id', chapterIds).order('position');
+                            setStudentLessons(lsns || []);
+                        }
+                    }
                 }
                 const { data: pays } = await supabase.from('school_payments').select('*')
                     .eq('student_id', userId).order('paid_at', { ascending: false });
@@ -634,7 +665,8 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                                                                         {editingChapter === ch.id && (
                                                                             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-1 ml-7 p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/10 space-y-3">
                                                                                 <h4 className="text-xs font-bold text-indigo-400">✏️ Contenu du chapitre</h4>
-                                                                                <textarea value={editContent} onChange={e => setEditContent(e.target.value)} placeholder="Rédigez le contenu du cours..." className="w-full min-h-[100px] p-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm resize-y placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/30" />
+                                                                                <textarea value={editContent} onChange={e => setEditContent(e.target.value)} placeholder="Rédigez le contenu du cours ici...
+Vous pouvez écrire autant que nécessaire." className="w-full min-h-[300px] p-4 rounded-xl bg-white/5 border border-white/10 text-white text-sm leading-relaxed resize-y placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/30" />
                                                                                 <Button size="sm" className="bg-linear-to-r from-indigo-600 to-purple-600 font-bold rounded-xl h-8" onClick={async () => {
                                                                                     const { error } = await supabase.from('chapters').update({ content: editContent }).eq('id', ch.id);
                                                                                     if (!error) { setChapters(chapters.map(c => c.id === ch.id ? { ...c, content: editContent } : c)); toast.success('Contenu sauvegardé ✅'); }
@@ -679,6 +711,96 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                                                                                             setUploadingChapterFile(false); e.target.value = '';
                                                                                         }} disabled={uploadingChapterFile} />
                                                                                     </label>
+                                                                                </div>
+                                                                                {/* ═══ LESSONS ═══ */}
+                                                                                <div className="border-t border-white/5 pt-3 mt-2">
+                                                                                    <p className="text-[10px] text-indigo-400 font-bold mb-2">📖 Leçons du chapitre</p>
+                                                                                    {lessons.filter(l => l.chapter_id === ch.id).sort((a, b) => a.position - b.position).map((lesson: any, li: number) => {
+                                                                                        const lImages = (lesson.resources || []).filter((r: any) => r.type === 'image');
+                                                                                        const lFiles = (lesson.resources || []).filter((r: any) => r.type === 'resource');
+                                                                                        return (
+                                                                                            <div key={lesson.id} className="mb-2">
+                                                                                                <div className="flex items-center gap-2 p-2 rounded-lg bg-white/[0.03] border border-white/5 hover:border-indigo-500/20 transition-all group/lesson cursor-pointer"
+                                                                                                    onClick={() => { if (editingLesson === lesson.id) { setEditingLesson(null); } else { setEditingLesson(lesson.id); setEditLessonContent(lesson.content || ''); } }}>
+                                                                                                    <span className="text-[10px] font-mono text-slate-600 w-4">{lesson.position}</span>
+                                                                                                    <div className="flex-1 min-w-0">
+                                                                                                        <p className="text-xs font-medium truncate">{lesson.title}</p>
+                                                                                                        {lesson.description && <p className="text-[9px] text-slate-500 truncate">{lesson.description}</p>}
+                                                                                                    </div>
+                                                                                                    <button onClick={(e) => { e.stopPropagation(); supabase.from('lessons').delete().eq('id', lesson.id).then(({ error }) => { if (!error) { setLessons(lessons.filter(l => l.id !== lesson.id)); toast.success('Leçon supprimée'); } }); }}
+                                                                                                        className="opacity-0 group-hover/lesson:opacity-100 p-1 rounded hover:bg-red-500/20 text-red-400"><Trash2 className="w-2.5 h-2.5" /></button>
+                                                                                                </div>
+                                                                                                {editingLesson === lesson.id && (
+                                                                                                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-1 ml-5 p-2.5 rounded-lg bg-purple-500/5 border border-purple-500/10 space-y-2">
+                                                                                                        <textarea value={editLessonContent} onChange={e => setEditLessonContent(e.target.value)} placeholder="Contenu de la leçon...
+Écrivez le contenu complet ici." className="w-full min-h-[250px] p-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm leading-relaxed resize-y placeholder:text-slate-600 focus:outline-none focus:border-purple-500/30" />
+                                                                                                        <Button size="sm" className="bg-linear-to-r from-purple-600 to-indigo-600 font-bold rounded-lg h-7 text-[10px]" onClick={async () => {
+                                                                                                            const { error } = await supabase.from('lessons').update({ content: editLessonContent }).eq('id', lesson.id);
+                                                                                                            if (!error) { setLessons(lessons.map(l => l.id === lesson.id ? { ...l, content: editLessonContent } : l)); toast.success('Leçon sauvegardée ✅'); }
+                                                                                                        }}><Save className="w-2.5 h-2.5 mr-1" />Sauvegarder</Button>
+                                                                                                        <div className="flex flex-wrap gap-2">
+                                                                                                            {lImages.map((r: any, ri: number) => (
+                                                                                                                <div key={ri} className="relative group/limg w-12 h-12 rounded overflow-hidden border border-white/10">
+                                                                                                                    <img src={r.url} alt={r.name} className="w-full h-full object-cover" />
+                                                                                                                    <button onClick={async () => { const upd = (lesson.resources || []).filter((x: any) => x.url !== r.url); await supabase.from('lessons').update({ resources: upd }).eq('id', lesson.id); setLessons(lessons.map(l => l.id === lesson.id ? { ...l, resources: upd } : l)); }}
+                                                                                                                        className="absolute top-0 right-0 p-0.5 rounded-full bg-red-600/80 opacity-0 group-hover/limg:opacity-100"><X className="w-2 h-2 text-white" /></button>
+                                                                                                                </div>
+                                                                                                            ))}
+                                                                                                        </div>
+                                                                                                        {lFiles.map((r: any, ri: number) => (
+                                                                                                            <div key={ri} className="flex items-center gap-2 p-1.5 rounded bg-white/[0.03] border border-white/5 group/lres">
+                                                                                                                <FileText className="w-3 h-3 text-purple-400 shrink-0" />
+                                                                                                                <a href={r.url} target="_blank" rel="noopener" className="text-[10px] text-slate-300 truncate flex-1">{r.name}</a>
+                                                                                                                <button onClick={async () => { const upd = (lesson.resources || []).filter((x: any) => x.url !== r.url); await supabase.from('lessons').update({ resources: upd }).eq('id', lesson.id); setLessons(lessons.map(l => l.id === lesson.id ? { ...l, resources: upd } : l)); }}
+                                                                                                                    className="opacity-0 group-hover/lres:opacity-100 p-0.5 rounded hover:bg-red-500/20 text-red-400"><X className="w-2.5 h-2.5" /></button>
+                                                                                                            </div>
+                                                                                                        ))}
+                                                                                                        <div className="flex gap-2">
+                                                                                                            <label className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/5 border border-dashed border-white/10 text-[10px] text-slate-400 cursor-pointer">
+                                                                                                                {uploadingLessonFile ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Plus className="w-2.5 h-2.5" />} Image
+                                                                                                                <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                                                                                                                    const f = e.target.files?.[0]; if (!f) return; setUploadingLessonFile(true);
+                                                                                                                    try { const compressed = await compressImage(f, { maxWidth: 1200, quality: 0.7 }); const path = `lessons/${lesson.id}/images/${Date.now()}_${f.name}`; await supabase.storage.from('organization-assets').upload(path, compressed, { contentType: compressed.type }); const { data: u } = supabase.storage.from('organization-assets').getPublicUrl(path); const res = [...(lesson.resources || []), { name: f.name, url: u.publicUrl, type: 'image' }]; await supabase.from('lessons').update({ resources: res }).eq('id', lesson.id); setLessons(lessons.map(l => l.id === lesson.id ? { ...l, resources: res } : l)); toast.success('Image ajoutée !'); } catch (err: any) { toast.error(err.message); }
+                                                                                                                    setUploadingLessonFile(false); e.target.value = '';
+                                                                                                                }} disabled={uploadingLessonFile} />
+                                                                                                            </label>
+                                                                                                            <label className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/5 border border-dashed border-white/10 text-[10px] text-slate-400 cursor-pointer">
+                                                                                                                {uploadingLessonFile ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Plus className="w-2.5 h-2.5" />} Fichier
+                                                                                                                <input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip" className="hidden" onChange={async (e) => {
+                                                                                                                    const f = e.target.files?.[0]; if (!f) return; setUploadingLessonFile(true);
+                                                                                                                    try { const path = `lessons/${lesson.id}/resources/${Date.now()}_${f.name}`; await supabase.storage.from('organization-assets').upload(path, f, { contentType: f.type }); const { data: u } = supabase.storage.from('organization-assets').getPublicUrl(path); const res = [...(lesson.resources || []), { name: f.name, url: u.publicUrl, type: 'resource' }]; await supabase.from('lessons').update({ resources: res }).eq('id', lesson.id); setLessons(lessons.map(l => l.id === lesson.id ? { ...l, resources: res } : l)); toast.success('Fichier ajouté !'); } catch (err: any) { toast.error(err.message); }
+                                                                                                                    setUploadingLessonFile(false); e.target.value = '';
+                                                                                                                }} disabled={uploadingLessonFile} />
+                                                                                                            </label>
+                                                                                                        </div>
+                                                                                                    </motion.div>
+                                                                                                )}
+                                                                                            </div>
+                                                                                        );
+                                                                                    })}
+                                                                                    {showNewLesson === ch.id ? (
+                                                                                        <div className="p-2 rounded-lg bg-white/5 border border-white/10 space-y-2 mt-1">
+                                                                                            <Input value={newLessonTitle} onChange={e => setNewLessonTitle(e.target.value)} placeholder="Titre de la leçon" className="bg-white/5 border-white/10 text-white h-8 rounded-lg text-xs" />
+                                                                                            <Input value={newLessonDesc} onChange={e => setNewLessonDesc(e.target.value)} placeholder="Description (optionnel)" className="bg-white/5 border-white/10 text-white h-8 rounded-lg text-xs" />
+                                                                                            <div className="flex gap-2">
+                                                                                                <Button size="sm" className="bg-linear-to-r from-purple-600 to-pink-600 font-bold rounded-lg h-7 text-[10px]" disabled={savingLesson || !newLessonTitle.trim()}
+                                                                                                    onClick={async () => {
+                                                                                                        setSavingLesson(true);
+                                                                                                        const pos = lessons.filter(l => l.chapter_id === ch.id).length + 1;
+                                                                                                        const { data: lesson, error } = await supabase.from('lessons').insert({ chapter_id: ch.id, organization_id: orgId, title: newLessonTitle.trim(), description: newLessonDesc.trim(), position: pos, status: 'draft' }).select().single();
+                                                                                                        if (error) { toast.error(error.message); } else { setLessons([...lessons, lesson]); toast.success(`Leçon "${lesson.title}" ajoutée !`); setNewLessonTitle(''); setNewLessonDesc(''); setShowNewLesson(null); }
+                                                                                                        setSavingLesson(false);
+                                                                                                    }}>
+                                                                                                    {savingLesson ? <Loader2 className="w-2.5 h-2.5 animate-spin mr-1" /> : <Plus className="w-2.5 h-2.5 mr-1" />}Créer
+                                                                                                </Button>
+                                                                                                <Button size="sm" variant="ghost" className="h-7 text-[10px]" onClick={() => { setShowNewLesson(null); setNewLessonTitle(''); setNewLessonDesc(''); }}>Annuler</Button>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <button onClick={() => setShowNewLesson(ch.id)} className="mt-1 w-full py-1.5 rounded-lg border border-dashed border-purple-500/20 hover:border-purple-500/30 text-[10px] text-slate-500 hover:text-purple-400 transition-all flex items-center justify-center gap-1">
+                                                                                            <Plus className="w-2.5 h-2.5" /> Ajouter une leçon
+                                                                                        </button>
+                                                                                    )}
                                                                                 </div>
                                                                             </motion.div>
                                                                         )}
@@ -751,25 +873,102 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                                         </motion.div>
                                     ))}
                                 </div>
-                                <h3 className="font-bold text-sm text-slate-300">📚 Matières ({subjects.length})</h3>
+                                <h3 className="font-bold text-sm text-slate-300">📚 Matières & Programme ({subjects.length})</h3>
                                 <div className="space-y-2">
-                                    {subjects.map((sub: any, i: number) => (
-                                        <motion.div key={sub.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}>
-                                            <Card className="bg-white/[0.03] border-white/[0.06] hover:border-white/10 transition-all">
-                                                <CardContent className="p-3 flex items-center justify-between">
-                                                    <div>
-                                                        <p className="text-sm font-medium">{sub.name}</p>
-                                                        <p className="text-[10px] text-slate-500">Coef. {sub.coefficient || 1}{sub.teacher_profiles ? ` • ${sub.teacher_profiles.first_name} ${sub.teacher_profiles.last_name}` : ''}</p>
-                                                    </div>
-                                                    <span className={cn("text-sm font-bold",
-                                                        gradesBySubject.find(gs => gs.subject.id === sub.id)?.count
-                                                            ? (gradesBySubject.find(gs => gs.subject.id === sub.id)!.average >= 10 ? 'text-emerald-400' : 'text-red-400') : 'text-slate-600')}>
-                                                        {gradesBySubject.find(gs => gs.subject.id === sub.id)?.count ? gradesBySubject.find(gs => gs.subject.id === sub.id)!.average.toFixed(1) + '/20' : '—'}
-                                                    </span>
-                                                </CardContent>
-                                            </Card>
-                                        </motion.div>
-                                    ))}
+                                    {subjects.map((sub: any, i: number) => {
+                                        const subChapters = studentChapters.filter(c => c.subject_id === sub.id && c.status !== 'draft').sort((a, b) => a.position - b.position);
+                                        const isExpSub = expandedStudentSub === sub.id;
+                                        return (
+                                            <motion.div key={sub.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}>
+                                                <Card className={cn("backdrop-blur-sm overflow-hidden transition-all", isExpSub ? "bg-linear-to-br from-indigo-500/10 to-violet-500/5 border-indigo-500/20" : "bg-white/[0.03] border-white/[0.06] hover:border-white/10")}>
+                                                    <CardContent className="p-0">
+                                                        <div className="p-3 flex items-center justify-between cursor-pointer" onClick={() => setExpandedStudentSub(isExpSub ? null : sub.id)}>
+                                                            <div className="flex items-center gap-2.5">
+                                                                <div className="bg-indigo-500/20 p-1.5 rounded-lg"><BookOpen className="h-3.5 w-3.5 text-indigo-400" /></div>
+                                                                <div>
+                                                                    <p className="text-sm font-medium">{sub.name}</p>
+                                                                    <p className="text-[10px] text-slate-500">Coef. {sub.coefficient || 1}{sub.teacher_profiles ? ` • ${sub.teacher_profiles.first_name} ${sub.teacher_profiles.last_name}` : ''} • {subChapters.length} ch.</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={cn("text-sm font-bold", gradesBySubject.find(gs => gs.subject.id === sub.id)?.count ? (gradesBySubject.find(gs => gs.subject.id === sub.id)!.average >= 10 ? 'text-emerald-400' : 'text-red-400') : 'text-slate-600')}>
+                                                                    {gradesBySubject.find(gs => gs.subject.id === sub.id)?.count ? gradesBySubject.find(gs => gs.subject.id === sub.id)!.average.toFixed(1) + '/20' : '—'}
+                                                                </span>
+                                                                {isExpSub ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+                                                            </div>
+                                                        </div>
+                                                        {isExpSub && subChapters.length > 0 && (
+                                                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="border-t border-white/5 px-3 pb-3 space-y-2">
+                                                                {subChapters.map((ch, ci) => {
+                                                                    const chLessons = studentLessons.filter(l => l.chapter_id === ch.id).sort((a, b) => a.position - b.position);
+                                                                    const hasLessons = chLessons.length > 0;
+                                                                    const chImages = (ch.resources || []).filter((r: any) => r.type === 'image');
+                                                                    const chFiles = (ch.resources || []).filter((r: any) => r.type === 'resource');
+                                                                    const hasContent = ch.content || chImages.length > 0 || chFiles.length > 0 || hasLessons;
+                                                                    const isExpCh = expandedStudentCh === ch.id;
+                                                                    return (
+                                                                        <div key={ch.id} className="mt-2">
+                                                                            <motion.div initial={{ opacity: 0, x: -5 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ci * 0.05 }}
+                                                                                className={cn("flex items-center gap-2 p-2.5 rounded-xl transition-all", hasContent ? "cursor-pointer hover:bg-white/[0.03]" : "", isExpCh ? "bg-teal-500/5 border border-teal-500/10" : "bg-white/[0.02] border border-white/5")}
+                                                                                onClick={() => hasContent && setExpandedStudentCh(isExpCh ? null : ch.id)}>
+                                                                                <span className="text-xs font-mono text-slate-600 w-5 text-center">{ch.position}</span>
+                                                                                {ch.status === 'completed' ? <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 shrink-0" /> : <Eye className="w-3.5 h-3.5 text-teal-400 shrink-0" />}
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    <p className="text-xs font-medium truncate">{ch.title}</p>
+                                                                                    {ch.description && <p className="text-[9px] text-slate-500 truncate">{ch.description}</p>}
+                                                                                </div>
+                                                                                {hasLessons && <Badge className="bg-purple-500/20 text-purple-400 border-none text-[8px]">{chLessons.length} leçon(s)</Badge>}
+                                                                                {hasContent && (isExpCh ? <ChevronUp className="w-3 h-3 text-slate-500" /> : <ChevronDown className="w-3 h-3 text-slate-500" />)}
+                                                                            </motion.div>
+                                                                            {isExpCh && hasContent && (
+                                                                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-1 ml-7 space-y-3">
+                                                                                    {/* Chapter content (only if no lessons) */}
+                                                                                    {!hasLessons && ch.content && <div className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed p-3 rounded-xl bg-white/[0.02] border border-white/5">{ch.content}</div>}
+                                                                                    {!hasLessons && chImages.length > 0 && (
+                                                                                        <div><p className="text-[10px] text-slate-400 mb-1">🖼️ Supports</p><div className="grid grid-cols-2 gap-2">{chImages.map((r: any, ri: number) => <img key={ri} src={r.url} alt={r.name} className="w-full rounded-lg border border-white/10 object-cover" />)}</div></div>
+                                                                                    )}
+                                                                                    {!hasLessons && chFiles.length > 0 && (
+                                                                                        <div><p className="text-[10px] text-slate-400 mb-1">📎 Ressources</p>{chFiles.map((r: any, ri: number) => (
+                                                                                            <a key={ri} href={r.url} target="_blank" rel="noopener" className="flex items-center gap-2 p-2 rounded-lg bg-white/[0.03] border border-white/5 hover:border-teal-500/20 transition-all mb-1">
+                                                                                                <FileText className="w-3 h-3 text-teal-400 shrink-0" /><span className="text-xs text-slate-300 truncate">{r.name}</span><Download className="w-3 h-3 text-slate-600 ml-auto" />
+                                                                                            </a>
+                                                                                        ))}</div>
+                                                                                    )}
+                                                                                    {/* Lessons */}
+                                                                                    {hasLessons && chLessons.map((lesson: any, li: number) => {
+                                                                                        const lImages = (lesson.resources || []).filter((r: any) => r.type === 'image');
+                                                                                        const lFiles = (lesson.resources || []).filter((r: any) => r.type === 'resource');
+                                                                                        return (
+                                                                                            <Card key={lesson.id} className="bg-purple-500/5 border-purple-500/10 overflow-hidden">
+                                                                                                <CardContent className="p-3 space-y-2">
+                                                                                                    <div className="flex items-center gap-2">
+                                                                                                        <span className="text-[10px] font-mono text-slate-600">{lesson.position}</span>
+                                                                                                        <p className="text-xs font-bold text-purple-300">{lesson.title}</p>
+                                                                                                    </div>
+                                                                                                    {lesson.content && <div className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">{lesson.content}</div>}
+                                                                                                    {lImages.length > 0 && <div className="grid grid-cols-2 gap-2">{lImages.map((r: any, ri: number) => <img key={ri} src={r.url} alt={r.name} className="w-full rounded-lg border border-white/10 object-cover" />)}</div>}
+                                                                                                    {lFiles.length > 0 && lFiles.map((r: any, ri: number) => (
+                                                                                                        <a key={ri} href={r.url} target="_blank" rel="noopener" className="flex items-center gap-2 p-2 rounded-lg bg-white/[0.03] border border-white/5 hover:border-purple-500/20 transition-all">
+                                                                                                            <FileText className="w-3 h-3 text-purple-400 shrink-0" /><span className="text-[10px] text-slate-300 truncate">{r.name}</span><Download className="w-3 h-3 text-slate-600 ml-auto" />
+                                                                                                        </a>
+                                                                                                    ))}
+                                                                                                </CardContent>
+                                                                                            </Card>
+                                                                                        );
+                                                                                    })}
+                                                                                </motion.div>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                                {subChapters.length === 0 && <p className="text-xs text-slate-600 text-center py-3 mt-2">Programme pas encore disponible</p>}
+                                                            </motion.div>
+                                                        )}
+                                                    </CardContent>
+                                                </Card>
+                                            </motion.div>
+                                        );
+                                    })}
                                 </div>
                             </>
                         )}

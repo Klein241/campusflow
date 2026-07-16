@@ -56,7 +56,7 @@ const Sel = ({ v, onChange, opts, ph = '—' }: { v: string, onChange: (v: strin
     </select>
 );
 
-type Tab = 'general' | 'landing' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'modeles' | 'settings';
+type Tab = 'general' | 'landing' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'modeles' | 'cursus' | 'settings';
 interface Cls { id?: string; name: string; cycle: string; filiere_id: string | null; level: number; capacity: number; }
 interface Sub { id?: string; name: string; code: string; coefficient: number; classroom_id: string; teacher_id: string | null; }
 interface Room { id?: string; name: string; }
@@ -69,6 +69,7 @@ const SIDES = [
     { id: 'grades' as Tab, icon: BarChart3, label: 'Notes' },
     { id: 'payments' as Tab, icon: CreditCard, label: 'Paiements' }, { id: 'disciplines' as Tab, icon: ShieldCheck, label: 'Discipline' },
     { id: 'modeles' as Tab, icon: FileText, label: 'Modèles PDF' },
+    { id: 'cursus' as Tab, icon: BookMarked, label: 'Cursus' },
     { id: 'settings' as Tab, icon: Palette, label: 'Paramètres' },
 ];
 const COLLEGE = ['6ème', '5ème', '4ème', '3ème'], LYCEE = ['Seconde', 'Première', 'Terminale'], SECS = ['A', 'B', 'C'];
@@ -163,6 +164,16 @@ function AdminPageContent() {
     const [editEvType, setEditEvType] = useState('');
     const [editEvMax, setEditEvMax] = useState('');
     // Landing page config
+    // Cursus admin state
+    const [adminChapters, setAdminChapters] = useState<any[]>([]);
+    const [adminLessons, setAdminLessons] = useState<any[]>([]);
+    const [cursusLoaded, setCursusLoaded] = useState(false);
+    const [expandedAdminSub, setExpandedAdminSub] = useState<string | null>(null);
+    const [expandedAdminCh, setExpandedAdminCh] = useState<string | null>(null);
+    const [editAdminChId, setEditAdminChId] = useState<string | null>(null);
+    const [editAdminChContent, setEditAdminChContent] = useState('');
+    const [editAdminLessonId, setEditAdminLessonId] = useState<string | null>(null);
+    const [editAdminLessonContent, setEditAdminLessonContent] = useState('');
     const [lHeroImage, setLHeroImage] = useState(''); const [lHeroTitle, setLHeroTitle] = useState(''); const [lHeroSubtitle, setLHeroSubtitle] = useState('');
     const [lAboutText, setLAboutText] = useState(''); const [lAboutImage, setLAboutImage] = useState('');
     const [lGalleryImages, setLGalleryImages] = useState<string[]>([]); const [lGalleryInput, setLGalleryInput] = useState('');
@@ -312,7 +323,8 @@ function AdminPageContent() {
         setOrg({ ...org, custom_domain: null, domain_verified: false, domain_ssl_status: 'pending' });
         toast.success('Domaine retiré');
     };
-    const onTab = (t: Tab) => { setTab(t); setSidebar(false); if (t === 'timetable' && !ttLoaded) loadTT(); if (t === 'evaluations' && !evLoaded) loadEv(); if (t === 'payments' && !payLoaded) loadPay(); if (t === 'disciplines' && !dLoaded) loadDisc(); if (t === 'grades' && !grLoaded) loadGrades(); if (t === 'settings') loadSettings(); if (t === 'landing') loadLanding(); if (t === 'modeles') loadTemplateSettings(); };
+    const loadCursus = async () => { const subIds = subs.map((s: any) => s.id); if (subIds.length === 0) { setCursusLoaded(true); return; } const { data: chaps } = await supabase.from('chapters').select('*').in('subject_id', subIds).order('position'); setAdminChapters(chaps || []); const chIds = (chaps || []).map((c: any) => c.id); if (chIds.length > 0) { const { data: lsns } = await supabase.from('lessons').select('*').in('chapter_id', chIds).order('position'); setAdminLessons(lsns || []); } setCursusLoaded(true); };
+    const onTab = (t: Tab) => { setTab(t); setSidebar(false); if (t === 'timetable' && !ttLoaded) loadTT(); if (t === 'evaluations' && !evLoaded) loadEv(); if (t === 'payments' && !payLoaded) loadPay(); if (t === 'disciplines' && !dLoaded) loadDisc(); if (t === 'grades' && !grLoaded) loadGrades(); if (t === 'settings') loadSettings(); if (t === 'landing') loadLanding(); if (t === 'modeles') loadTemplateSettings(); if (t === 'cursus' && !cursusLoaded) loadCursus(); };
 
     // ═══ CRUD CLASSES INLINE ═══
     const addClassDirect = async () => {
@@ -1293,6 +1305,114 @@ ${bodyHtml}
                                 Sauvegarder tous les paramètres
                             </Button>
                         </div>
+                    </div>}
+
+                    {/* ═══ CURSUS ═══ */}
+                    {tab === 'cursus' && <div className="space-y-4">
+                        {!cursusLoaded ? (
+                            <div className="text-center py-12"><Loader2 className="w-8 h-8 animate-spin mx-auto text-indigo-400" /><p className="text-sm text-slate-500 mt-3">Chargement du cursus...</p></div>
+                        ) : subs.length === 0 ? (
+                            <div className="text-center py-16 text-slate-500"><BookMarked className="w-16 h-16 mx-auto mb-4 opacity-20" /><p>Aucune matière configurée</p></div>
+                        ) : subs.map((sub: any) => {
+                            const subChapters = adminChapters.filter(c => c.subject_id === sub.id).sort((a: any, b: any) => a.position - b.position);
+                            const isExpSub = expandedAdminSub === sub.id;
+                            const clsName = cls.find(c => c.id === sub.classroom_id)?.name || '';
+                            const teacherName = teachers.find(t => t.id === sub.teacher_id);
+                            return (
+                                <div key={sub.id} className={`rounded-xl border transition-all ${isExpSub ? 'bg-indigo-500/5 border-indigo-500/20' : 'bg-white/[0.02] border-white/5 hover:border-white/10'}`}>
+                                    <div className="p-4 flex items-center justify-between cursor-pointer" onClick={() => setExpandedAdminSub(isExpSub ? null : sub.id)}>
+                                        <div className="flex items-center gap-3">
+                                            <div className="bg-indigo-500/20 p-2 rounded-lg"><BookOpen className="w-4 h-4 text-indigo-400" /></div>
+                                            <div>
+                                                <p className="text-sm font-bold">{sub.name}</p>
+                                                <p className="text-xs text-slate-500">{clsName} • Coef. {sub.coefficient || 1}{teacherName ? ` • ${teacherName.first_name} ${teacherName.last_name}` : ''} • {subChapters.length} ch.</p>
+                                            </div>
+                                        </div>
+                                        <span className="text-slate-500">{isExpSub ? '▲' : '▼'}</span>
+                                    </div>
+                                    {isExpSub && (
+                                        <div className="border-t border-white/5 px-4 pb-4">
+                                            {subChapters.length === 0 ? <p className="text-xs text-slate-600 py-4 text-center">Aucun chapitre</p> : subChapters.map((ch: any) => {
+                                                const chLessons = adminLessons.filter(l => l.chapter_id === ch.id).sort((a: any, b: any) => a.position - b.position);
+                                                const chImages = (ch.resources || []).filter((r: any) => r.type === 'image');
+                                                const chFiles = (ch.resources || []).filter((r: any) => r.type === 'resource');
+                                                const isExpCh = expandedAdminCh === ch.id;
+                                                return (
+                                                    <div key={ch.id} className="mt-2">
+                                                        <div className={`p-3 rounded-lg flex items-center gap-3 cursor-pointer transition-all ${isExpCh ? 'bg-teal-500/5 border border-teal-500/10' : 'bg-white/[0.02] border border-white/5 hover:bg-white/[0.03]'}`}
+                                                            onClick={() => setExpandedAdminCh(isExpCh ? null : ch.id)}>
+                                                            <span className="text-xs font-mono text-slate-600 w-5">{ch.position}</span>
+                                                            <div className="flex-1">
+                                                                <p className="text-sm font-medium">{ch.title}</p>
+                                                                {ch.description && <p className="text-[10px] text-slate-500">{ch.description}</p>}
+                                                            </div>
+                                                            <span className={`text-[10px] px-2 py-0.5 rounded ${ch.status === 'draft' ? 'bg-slate-500/20 text-slate-400' : ch.status === 'published' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>{ch.status === 'draft' ? 'Brouillon' : ch.status === 'published' ? 'Dispensé' : 'Terminé'}</span>
+                                                            {chLessons.length > 0 && <span className="text-[10px] px-2 py-0.5 rounded bg-purple-500/20 text-purple-400">{chLessons.length} leçon(s)</span>}
+                                                            <span className="text-slate-500 text-xs">{isExpCh ? '▲' : '▼'}</span>
+                                                        </div>
+                                                        {isExpCh && (
+                                                            <div className="ml-8 mt-2 space-y-3">
+                                                                {/* Chapter content */}
+                                                                {editAdminChId === ch.id ? (
+                                                                    <div className="space-y-2">
+                                                                        <textarea value={editAdminChContent} onChange={e => setEditAdminChContent(e.target.value)} className="w-full min-h-[250px] p-4 rounded-xl bg-white/5 border border-white/10 text-white text-sm leading-relaxed resize-y" placeholder="Contenu du chapitre..." />
+                                                                        <div className="flex gap-2">
+                                                                            <Button size="sm" className="bg-gradient-to-r from-indigo-600 to-purple-600" onClick={async () => {
+                                                                                await supabase.from('chapters').update({ content: editAdminChContent }).eq('id', ch.id);
+                                                                                setAdminChapters(adminChapters.map(c => c.id === ch.id ? { ...c, content: editAdminChContent } : c));
+                                                                                setEditAdminChId(null); toast.success('Sauvegardé ✅');
+                                                                            }}><Save className="w-3 h-3 mr-1" />Sauvegarder</Button>
+                                                                            <Button size="sm" variant="ghost" onClick={() => setEditAdminChId(null)}>Annuler</Button>
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div>
+                                                                        {ch.content ? <div className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed p-3 rounded-lg bg-white/[0.02] border border-white/5 mb-2">{ch.content}</div> : <p className="text-xs text-slate-600 italic mb-2">Pas de contenu texte</p>}
+                                                                        <button onClick={() => { setEditAdminChId(ch.id); setEditAdminChContent(ch.content || ''); }} className="text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1"><Edit className="w-3 h-3" />Modifier le contenu</button>
+                                                                    </div>
+                                                                )}
+                                                                {chImages.length > 0 && <div><p className="text-[10px] text-slate-400 mb-1">🖼️ Images</p><div className="grid grid-cols-3 gap-2">{chImages.map((r: any, ri: number) => <img key={ri} src={r.url} alt={r.name} className="w-full rounded-lg border border-white/10 object-cover h-24" />)}</div></div>}
+                                                                {chFiles.length > 0 && <div><p className="text-[10px] text-slate-400 mb-1">📎 Ressources</p>{chFiles.map((r: any, ri: number) => <a key={ri} href={r.url} target="_blank" rel="noopener" className="flex items-center gap-2 p-2 rounded-lg bg-white/[0.03] border border-white/5 mb-1 text-xs text-slate-300 hover:text-indigo-400"><FileText className="w-3 h-3 text-indigo-400" />{r.name}<Download className="w-3 h-3 ml-auto text-slate-600" /></a>)}</div>}
+                                                                {/* Lessons */}
+                                                                {chLessons.length > 0 && <div><p className="text-[10px] text-purple-400 font-bold mb-2">📖 Leçons</p>{chLessons.map((lesson: any) => {
+                                                                    const lImages = (lesson.resources || []).filter((r: any) => r.type === 'image');
+                                                                    const lFiles = (lesson.resources || []).filter((r: any) => r.type === 'resource');
+                                                                    return (
+                                                                        <div key={lesson.id} className="ml-4 mb-3 p-3 rounded-lg bg-purple-500/5 border border-purple-500/10">
+                                                                            <p className="text-xs font-bold text-purple-300 mb-1">{lesson.position}. {lesson.title}</p>
+                                                                            {editAdminLessonId === lesson.id ? (
+                                                                                <div className="space-y-2 mt-2">
+                                                                                    <textarea value={editAdminLessonContent} onChange={e => setEditAdminLessonContent(e.target.value)} className="w-full min-h-[200px] p-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm leading-relaxed resize-y" />
+                                                                                    <div className="flex gap-2">
+                                                                                        <Button size="sm" className="bg-gradient-to-r from-purple-600 to-indigo-600" onClick={async () => {
+                                                                                            await supabase.from('lessons').update({ content: editAdminLessonContent }).eq('id', lesson.id);
+                                                                                            setAdminLessons(adminLessons.map(l => l.id === lesson.id ? { ...l, content: editAdminLessonContent } : l));
+                                                                                            setEditAdminLessonId(null); toast.success('Leçon sauvegardée ✅');
+                                                                                        }}><Save className="w-3 h-3 mr-1" />Sauvegarder</Button>
+                                                                                        <Button size="sm" variant="ghost" onClick={() => setEditAdminLessonId(null)}>Annuler</Button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <>
+                                                                                    {lesson.content ? <div className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed mb-2">{lesson.content}</div> : <p className="text-[10px] text-slate-600 italic mb-1">Pas de contenu</p>}
+                                                                                    <button onClick={() => { setEditAdminLessonId(lesson.id); setEditAdminLessonContent(lesson.content || ''); }} className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1"><Edit className="w-3 h-3" />Modifier</button>
+                                                                                </>
+                                                                            )}
+                                                                            {lImages.length > 0 && <div className="grid grid-cols-3 gap-2 mt-2">{lImages.map((r: any, ri: number) => <img key={ri} src={r.url} alt={r.name} className="w-full rounded-lg border border-white/10 object-cover h-20" />)}</div>}
+                                                                            {lFiles.length > 0 && lFiles.map((r: any, ri: number) => <a key={ri} href={r.url} target="_blank" rel="noopener" className="flex items-center gap-2 p-1.5 rounded bg-white/[0.03] border border-white/5 mt-1 text-[10px] text-slate-300 hover:text-purple-400"><FileText className="w-3 h-3 text-purple-400" />{r.name}<Download className="w-3 h-3 ml-auto text-slate-600" /></a>)}
+                                                                        </div>
+                                                                    );
+                                                                })}</div>}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>}
                 </div>
             </main>
