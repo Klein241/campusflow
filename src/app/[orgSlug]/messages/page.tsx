@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
+import { compressImage } from '@/lib/compress';
 import { toast } from 'sonner';
 
 // ═══════════════════════════════════════════════════════
@@ -249,9 +250,13 @@ export default function MessagesPage() {
         try {
             let mediaUrl = null;
             if (mediaFile) {
+                let fileToUpload = mediaFile;
+                if (mediaFile.type.startsWith('image/')) {
+                    fileToUpload = await compressImage(mediaFile, { maxWidth: 1200, quality: 0.6 });
+                }
                 const ext = mediaFile.name.split('.').pop();
                 const path = `orgs/${org.id}/chat/${activeConv.id}/${Date.now()}.${ext}`;
-                await supabase.storage.from('organization-assets').upload(path, mediaFile);
+                await supabase.storage.from('organization-assets').upload(path, fileToUpload);
                 const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
                 mediaUrl = urlData.publicUrl;
                 setMediaFile(null);

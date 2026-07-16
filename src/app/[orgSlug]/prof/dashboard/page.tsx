@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
+import { compressImage } from '@/lib/compress';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -111,6 +112,9 @@ export default function TeacherDashboard() {
     const [newChDesc, setNewChDesc] = useState('');
     const [savingChapter, setSavingChapter] = useState(false);
     const [allClasses, setAllClasses] = useState<any[]>([]);
+    const [editingChapter, setEditingChapter] = useState<string | null>(null);
+    const [editContent, setEditContent] = useState('');
+    const [uploadingChapterFile, setUploadingChapterFile] = useState(false);
 
     // New eval form
     const [newEvTitle, setNewEvTitle] = useState('');
@@ -278,6 +282,49 @@ export default function TeacherDashboard() {
         toast.success('Chapitre supprimé');
     };
 
+    // ═══ CURSUS: SAVE CHAPTER CONTENT ═══
+    const saveChapterContent = async (chapterId: string) => {
+        const { error } = await supabase.from('chapters').update({ content: editContent, updated_at: new Date().toISOString() }).eq('id', chapterId);
+        if (error) { toast.error(error.message); return; }
+        setChapters(chapters.map(c => c.id === chapterId ? { ...c, content: editContent } : c));
+        toast.success('Contenu sauvegardé ✅');
+    };
+
+    // ═══ CURSUS: UPLOAD IMAGE/RESOURCE TO CHAPTER ═══
+    const uploadChapterFile = async (chapterId: string, file: File, type: 'image' | 'resource') => {
+        setUploadingChapterFile(true);
+        try {
+            let fileToUpload = file;
+            if (file.type.startsWith('image/')) {
+                fileToUpload = await compressImage(file, { maxWidth: 1200, quality: 0.7 });
+            }
+            const ext = file.name.split('.').pop();
+            const path = `chapters/${chapterId}/${type}s/${Date.now()}_${file.name}`;
+            const { error: upErr } = await supabase.storage.from('organization-assets').upload(path, fileToUpload, { contentType: fileToUpload.type, upsert: false });
+            if (upErr) throw upErr;
+            const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
+            const ch = chapters.find(c => c.id === chapterId);
+            const currentResources = ch?.resources || [];
+            const newResource = { name: file.name, url: urlData.publicUrl, type, size: fileToUpload.size, uploaded_at: new Date().toISOString() };
+            const updatedResources = [...currentResources, newResource];
+            const { error: dbErr } = await supabase.from('chapters').update({ resources: updatedResources }).eq('id', chapterId);
+            if (dbErr) throw dbErr;
+            setChapters(chapters.map(c => c.id === chapterId ? { ...c, resources: updatedResources } : c));
+            toast.success(type === 'image' ? 'Image ajoutée !' : 'Ressource ajoutée !');
+        } catch (err: any) { toast.error(err.message); }
+        setUploadingChapterFile(false);
+    };
+
+    // ═══ CURSUS: DELETE CHAPTER RESOURCE ═══
+    const deleteChapterResource = async (chapterId: string, resourceUrl: string) => {
+        const ch = chapters.find(c => c.id === chapterId);
+        const updatedResources = (ch?.resources || []).filter((r: any) => r.url !== resourceUrl);
+        const { error } = await supabase.from('chapters').update({ resources: updatedResources }).eq('id', chapterId);
+        if (error) { toast.error(error.message); return; }
+        setChapters(chapters.map(c => c.id === chapterId ? { ...c, resources: updatedResources } : c));
+        toast.success('Ressource supprimée');
+    };
+
     // ═══ PROFILE: UPLOAD PHOTO ═══
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
     const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -287,9 +334,10 @@ export default function TeacherDashboard() {
         if (file.size > 5 * 1024 * 1024) { toast.error('Image trop lourde (max 5 Mo)'); return; }
         setUploadingPhoto(true);
         try {
+            const compressed = await compressImage(file, { maxWidth: 500, quality: 0.7 });
             const ext = file.name.split('.').pop();
             const path = `profile-photos/teachers/${teacher.id}_${Date.now()}.${ext}`;
-            const { error: upErr } = await supabase.storage.from('organization-assets').upload(path, file, { contentType: file.type, upsert: true });
+            const { error: upErr } = await supabase.storage.from('organization-assets').upload(path, compressed, { contentType: compressed.type, upsert: true });
             if (upErr) throw upErr;
             const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
             const { error: dbErr } = await supabase.from('teacher_profiles').update({ photo_url: urlData.publicUrl }).eq('id', teacher.id);
@@ -627,20 +675,81 @@ export default function TeacherDashboard() {
                                                                 const sc = statusConfig[ch.status] || statusConfig.draft;
 
                                                                 return (
-                                                                    <motion.div key={ch.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ci * 0.05 }}
-                                                                        className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-all group">
-                                                                        <span className="text-xs font-mono text-slate-600 w-6 text-center">{ch.position}</span>
-                                                                        <div className="flex-1 min-w-0">
-                                                                            <p className="text-sm font-medium truncate">{ch.title}</p>
-                                                                            {ch.description && <p className="text-[10px] text-slate-500 truncate">{ch.description}</p>}
-                                                                        </div>
-                                                                        <button onClick={() => toggleChapterStatus(ch.id, ch.status)} className={cn("flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all hover:scale-105", sc.bg, sc.text)}>
-                                                                            <sc.icon className="w-3 h-3" />{sc.label}
-                                                                        </button>
-                                                                        <button onClick={() => deleteChapter(ch.id)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition-all">
-                                                                            <Trash2 className="w-3.5 h-3.5" />
-                                                                        </button>
-                                                                    </motion.div>
+                                                                    <div key={ch.id}>
+                                                                        <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ci * 0.05 }}
+                                                                            className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-all group cursor-pointer"
+                                                                            onClick={() => { if (editingChapter === ch.id) { setEditingChapter(null); } else { setEditingChapter(ch.id); setEditContent(ch.content || ''); } }}>
+                                                                            <span className="text-xs font-mono text-slate-600 w-6 text-center">{ch.position}</span>
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <p className="text-sm font-medium truncate">{ch.title}</p>
+                                                                                {ch.description && <p className="text-[10px] text-slate-500 truncate">{ch.description}</p>}
+                                                                            </div>
+                                                                            <button onClick={(e) => { e.stopPropagation(); toggleChapterStatus(ch.id, ch.status); }} className={cn("flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all hover:scale-105", sc.bg, sc.text)}>
+                                                                                <sc.icon className="w-3 h-3" />{sc.label}
+                                                                            </button>
+                                                                            <button onClick={(e) => { e.stopPropagation(); deleteChapter(ch.id); }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition-all">
+                                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                                            </button>
+                                                                        </motion.div>
+
+                                                                        {/* Chapter Content Editor */}
+                                                                        {editingChapter === ch.id && (
+                                                                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                                                                                className="mt-1 ml-8 p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/10 space-y-3">
+                                                                                <h4 className="text-xs font-bold text-indigo-400">✏️ Contenu du chapitre</h4>
+
+                                                                                {/* Text content */}
+                                                                                <textarea
+                                                                                    value={editContent}
+                                                                                    onChange={e => setEditContent(e.target.value)}
+                                                                                    placeholder="Rédigez le contenu du cours ici... (notions, explications, exercices)"
+                                                                                    className="w-full min-h-[120px] p-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm resize-y placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/30"
+                                                                                />
+                                                                                <Button size="sm" className="bg-linear-to-r from-indigo-600 to-purple-600 font-bold rounded-xl h-8" onClick={() => saveChapterContent(ch.id)}>
+                                                                                    <Save className="w-3 h-3 mr-1" /> Sauvegarder le texte
+                                                                                </Button>
+
+                                                                                {/* Images */}
+                                                                                <div>
+                                                                                    <p className="text-[10px] text-slate-400 mb-2">🖼️ Images du cours</p>
+                                                                                    <div className="flex flex-wrap gap-2 mb-2">
+                                                                                        {(ch.resources || []).filter((r: any) => r.type === 'image').map((r: any, ri: number) => (
+                                                                                            <div key={ri} className="relative group/img w-20 h-20 rounded-lg overflow-hidden border border-white/10">
+                                                                                                <img src={r.url} alt={r.name} className="w-full h-full object-cover" />
+                                                                                                <button onClick={() => deleteChapterResource(ch.id, r.url)} className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-red-600/80 opacity-0 group-hover/img:opacity-100 transition-opacity">
+                                                                                                    <X className="w-3 h-3 text-white" />
+                                                                                                </button>
+                                                                                            </div>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                    <label className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/5 border border-dashed border-white/10 hover:border-indigo-500/30 text-xs text-slate-400 cursor-pointer transition-all">
+                                                                                        {uploadingChapterFile ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />} Ajouter image
+                                                                                        <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadChapterFile(ch.id, f, 'image'); e.target.value = ''; }} disabled={uploadingChapterFile} />
+                                                                                    </label>
+                                                                                </div>
+
+                                                                                {/* Resources */}
+                                                                                <div>
+                                                                                    <p className="text-[10px] text-slate-400 mb-2">📎 Ressources (PDF, documents)</p>
+                                                                                    <div className="space-y-1 mb-2">
+                                                                                        {(ch.resources || []).filter((r: any) => r.type === 'resource').map((r: any, ri: number) => (
+                                                                                            <div key={ri} className="flex items-center gap-2 p-2 rounded-lg bg-white/[0.03] border border-white/5 group/res">
+                                                                                                <FileText className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                                                                                                <a href={r.url} target="_blank" rel="noopener" className="text-xs text-slate-300 hover:text-indigo-400 truncate flex-1">{r.name}</a>
+                                                                                                <button onClick={() => deleteChapterResource(ch.id, r.url)} className="opacity-0 group-hover/res:opacity-100 p-1 rounded hover:bg-red-500/20 text-red-400 transition-all">
+                                                                                                    <X className="w-3 h-3" />
+                                                                                                </button>
+                                                                                            </div>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                    <label className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/5 border border-dashed border-white/10 hover:border-indigo-500/30 text-xs text-slate-400 cursor-pointer transition-all">
+                                                                                        {uploadingChapterFile ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />} Ajouter fichier
+                                                                                        <input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadChapterFile(ch.id, f, 'resource'); e.target.value = ''; }} disabled={uploadingChapterFile} />
+                                                                                    </label>
+                                                                                </div>
+                                                                            </motion.div>
+                                                                        )}
+                                                                    </div>
                                                                 );
                                                             })}
 

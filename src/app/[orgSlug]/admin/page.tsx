@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
+import { compressImage } from '@/lib/compress';
 import { toast } from 'sonner';
 
 // ═══ ERROR BOUNDARY (catches React render errors) ═══
@@ -387,9 +388,10 @@ function AdminPageContent() {
     const uploadLandingImage = async (file: File, path: string): Promise<string | null> => {
         setUploadingImage(true);
         try {
+            const compressed = await compressImage(file, { maxWidth: 1400, quality: 0.7 });
             const ext = file.name.split('.').pop();
             const fullPath = `orgs/${org.id}/landing/${path}_${Date.now()}.${ext}`;
-            const { error } = await supabase.storage.from('organization-assets').upload(fullPath, file, { upsert: true });
+            const { error } = await supabase.storage.from('organization-assets').upload(fullPath, compressed, { upsert: true });
             if (error) throw error;
             const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(fullPath);
             return urlData.publicUrl;
@@ -418,9 +420,10 @@ function AdminPageContent() {
         const file = e.target.files?.[0]; if (!file) return;
         setUploadingImage(true);
         try {
+            const compressed = await compressImage(file, { maxWidth: 800, quality: 0.7 });
             const ext = file.name.split('.').pop();
             const path = `orgs/${org.id}/logo.${ext}`;
-            await supabase.storage.from('organization-assets').upload(path, file, { upsert: true });
+            await supabase.storage.from('organization-assets').upload(path, compressed, { upsert: true });
             const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
             setSLogoUrl(urlData.publicUrl);
             // Also update the org immediately

@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
+import { compressImage } from '@/lib/compress';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -211,9 +212,13 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
         for (const file of Array.from(files)) {
             if (file.size > 25 * 1024 * 1024) { toast.error(`${file.name}: Max 25 Mo`); continue; }
             try {
+                let fileToUpload = file;
+                if (file.type.startsWith('image/')) {
+                    fileToUpload = await compressImage(file, { maxWidth: 1200, quality: 0.6 });
+                }
                 const path = `chat-files/${groupId}/${Date.now()}_${file.name}`;
                 const { error: uploadError } = await supabase.storage
-                    .from('organization-assets').upload(path, file, { contentType: file.type, upsert: false });
+                    .from('organization-assets').upload(path, fileToUpload, { contentType: fileToUpload.type, upsert: false });
                 if (uploadError) throw uploadError;
                 const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
                 const msgType = file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'voice' : 'file';

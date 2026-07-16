@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { supabase } from '@/lib/supabase';
+import { compressImage } from '@/lib/compress';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -643,25 +644,66 @@ export default function StudentDashboard() {
                                                         ) : subChapters.map((ch, ci) => {
                                                             const isLocked = ch.status === 'draft';
                                                             const isCompleted = ch.status === 'completed';
+                                                            const chImages = (ch.resources || []).filter((r: any) => r.type === 'image');
+                                                            const chFiles = (ch.resources || []).filter((r: any) => r.type === 'resource');
+                                                            const hasContent = !isLocked && (ch.content || chImages.length > 0 || chFiles.length > 0);
                                                             return (
-                                                                <motion.div key={ch.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ci * 0.05 }}
-                                                                    className={cn("flex items-center gap-3 p-3 rounded-xl border transition-all",
-                                                                        isLocked ? "bg-white/[0.02] border-white/5 opacity-50" :
-                                                                        isCompleted ? "bg-blue-500/5 border-blue-500/10" :
-                                                                        "bg-teal-500/5 border-teal-500/10"
-                                                                    )}>
-                                                                    <span className="text-xs font-mono text-slate-600 w-6 text-center">{ch.position}</span>
-                                                                    {isLocked ? <Lock className="w-4 h-4 text-slate-600 shrink-0" /> :
-                                                                     isCompleted ? <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0" /> :
-                                                                     <Eye className="w-4 h-4 text-teal-400 shrink-0" />}
-                                                                    <div className="flex-1 min-w-0">
-                                                                        <p className={cn("text-sm font-medium truncate", isLocked && "text-slate-600")}>{ch.title}</p>
-                                                                        {!isLocked && ch.description && <p className="text-[10px] text-slate-500 truncate">{ch.description}</p>}
-                                                                        {isLocked && <p className="text-[10px] text-slate-700">🔒 Pas encore dispensé</p>}
-                                                                    </div>
-                                                                    {isCompleted && <Badge className="bg-blue-500/20 text-blue-400 border-none text-[9px]">Terminé</Badge>}
-                                                                    {!isLocked && !isCompleted && <Badge className="bg-teal-500/20 text-teal-400 border-none text-[9px]">En cours</Badge>}
-                                                                </motion.div>
+                                                                <div key={ch.id}>
+                                                                    <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ci * 0.05 }}
+                                                                        className={cn("flex items-center gap-3 p-3 rounded-xl border transition-all",
+                                                                            isLocked ? "bg-white/[0.02] border-white/5 opacity-50" :
+                                                                            isCompleted ? "bg-blue-500/5 border-blue-500/10 cursor-pointer" :
+                                                                            "bg-teal-500/5 border-teal-500/10 cursor-pointer"
+                                                                        )}
+                                                                        onClick={() => !isLocked && setExpandedSubject(expandedSubject === `ch_${ch.id}` ? sub.id : `ch_${ch.id}`)}>
+                                                                        <span className="text-xs font-mono text-slate-600 w-6 text-center">{ch.position}</span>
+                                                                        {isLocked ? <Lock className="w-4 h-4 text-slate-600 shrink-0" /> :
+                                                                         isCompleted ? <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0" /> :
+                                                                         <Eye className="w-4 h-4 text-teal-400 shrink-0" />}
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <p className={cn("text-sm font-medium truncate", isLocked && "text-slate-600")}>{ch.title}</p>
+                                                                            {!isLocked && ch.description && <p className="text-[10px] text-slate-500 truncate">{ch.description}</p>}
+                                                                            {isLocked && <p className="text-[10px] text-slate-700">🔒 Pas encore dispensé</p>}
+                                                                        </div>
+                                                                        {isCompleted && <Badge className="bg-blue-500/20 text-blue-400 border-none text-[9px]">Terminé</Badge>}
+                                                                        {!isLocked && !isCompleted && <Badge className="bg-teal-500/20 text-teal-400 border-none text-[9px]">En cours</Badge>}
+                                                                    </motion.div>
+
+                                                                    {/* Chapter Content (read-only for students) */}
+                                                                    {!isLocked && expandedSubject === `ch_${ch.id}` && hasContent && (
+                                                                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                                                                            className="mt-1 ml-8 p-4 rounded-xl bg-teal-500/5 border border-teal-500/10 space-y-3">
+                                                                            {ch.content && (
+                                                                                <div className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{ch.content}</div>
+                                                                            )}
+                                                                            {chImages.length > 0 && (
+                                                                                <div>
+                                                                                    <p className="text-[10px] text-slate-400 mb-2">🖼️ Supports visuels</p>
+                                                                                    <div className="grid grid-cols-2 gap-2">
+                                                                                        {chImages.map((r: any, ri: number) => (
+                                                                                            <img key={ri} src={r.url} alt={r.name} className="w-full rounded-lg border border-white/10 object-cover" />
+                                                                                        ))}
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+                                                                            {chFiles.length > 0 && (
+                                                                                <div>
+                                                                                    <p className="text-[10px] text-slate-400 mb-2">📎 Ressources à télécharger</p>
+                                                                                    <div className="space-y-1">
+                                                                                        {chFiles.map((r: any, ri: number) => (
+                                                                                            <a key={ri} href={r.url} target="_blank" rel="noopener"
+                                                                                                className="flex items-center gap-2 p-2 rounded-lg bg-white/[0.03] border border-white/5 hover:border-teal-500/20 transition-all">
+                                                                                                <FileText className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                                                                                                <span className="text-xs text-slate-300 truncate">{r.name}</span>
+                                                                                                <ChevronRight className="w-3 h-3 text-slate-600 ml-auto" />
+                                                                                            </a>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+                                                                        </motion.div>
+                                                                    )}
+                                                                </div>
                                                             );
                                                         })}
                                                     </motion.div>
@@ -695,9 +737,10 @@ export default function StudentDashboard() {
                                             if (file.size > 5 * 1024 * 1024) { toast.error('Max 5 Mo'); return; }
                                             setUploadingPhoto(true);
                                             try {
+                                                const compressed = await compressImage(file, { maxWidth: 500, quality: 0.7 });
                                                 const ext = file.name.split('.').pop();
                                                 const path = `profile-photos/students/${student.id}_${Date.now()}.${ext}`;
-                                                const { error: upErr } = await supabase.storage.from('organization-assets').upload(path, file, { contentType: file.type, upsert: true });
+                                                const { error: upErr } = await supabase.storage.from('organization-assets').upload(path, compressed, { contentType: compressed.type, upsert: true });
                                                 if (upErr) throw upErr;
                                                 const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
                                                 const { error: dbErr } = await supabase.from('student_profiles').update({ photo_url: urlData.publicUrl }).eq('id', student.id);
