@@ -1,6 +1,6 @@
 [build]
   command = "npm run build"
-  publish = ".next"
+  publish = "out"
 
 [build.environment]
   NODE_VERSION = "20"
@@ -12,10 +12,78 @@
   # NEXT_PUBLIC_ADMIN_KEY — Set this in Netlify Dashboard > Site Settings > Environment Variables
   # DO NOT commit secrets to version control
 
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
+# ═══ SPA REDIRECTS for dynamic [orgSlug] routes ═══
+# These rewrite any /:orgSlug/* path to the static _/ placeholder pages.
+# The client-side JS reads the actual URL to determine the real orgSlug.
+# Order matters: most specific first.
 
-# Headers sécurité
+[[redirects]]
+  from = "/:orgSlug/campus/*"
+  to = "/_/campus/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/:orgSlug/login/*"
+  to = "/_/login/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/:orgSlug/admin/*"
+  to = "/_/admin/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/:orgSlug/library/*"
+  to = "/_/library/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/:orgSlug/shop/*"
+  to = "/_/shop/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/:orgSlug/messages/*"
+  to = "/_/messages/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/:orgSlug/student/dashboard/*"
+  to = "/_/student/dashboard/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/:orgSlug/student/*"
+  to = "/_/student/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/:orgSlug/prof/dashboard/*"
+  to = "/_/prof/dashboard/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/:orgSlug/prof/*"
+  to = "/_/prof/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/:orgSlug/f/:slug/*"
+  to = "/_/f/_/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/:orgSlug/"
+  to = "/_/index.html"
+  status = 200
+
+# Fallback SPA for any unmatched route
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# ═══ Security headers ═══
 [[headers]]
   for = "/*"
   [headers.values]
