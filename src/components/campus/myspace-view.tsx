@@ -8,7 +8,7 @@ import {
     CheckCircle2, AlertCircle, ChevronRight, Printer, ArrowLeft,
     Star, Trophy, ShieldCheck, Download, Users, MessageSquare,
     User, PenSquare, Save, X, ClipboardList, LockKeyhole, Unlock,
-    ChevronDown, GraduationCap
+    ChevronDown, ChevronUp, GraduationCap, Plus, Trash2, Eye, EyeOff, Layers
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -17,6 +17,7 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
+import { compressImage } from '@/lib/compress';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { generateBulletinPDF, type BulletinData, computeSubjectAverage, computeOverallAverage } from '@/lib/bulletin-pdf';
@@ -85,10 +86,21 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
     const [selectedClass, setSelectedClass] = useState<string | null>(null);
 
     // Teacher cursus state
-    const [cursusSubject, setCursusSubject] = useState<string | null>(null);
-    const [cursusProgram, setCursusProgram] = useState<any[]>([]);
-    const [newChapter, setNewChapter] = useState('');
-    const [savingCursus, setSavingCursus] = useState(false);
+    const [chapters, setChapters] = useState<any[]>([]);
+    const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
+    const [showNewSubject, setShowNewSubject] = useState(false);
+    const [newSubName, setNewSubName] = useState('');
+    const [newSubCoef, setNewSubCoef] = useState('1');
+    const [newSubClass, setNewSubClass] = useState('');
+    const [savingSub, setSavingSub] = useState(false);
+    const [showNewChapter, setShowNewChapter] = useState<string | null>(null);
+    const [newChTitle, setNewChTitle] = useState('');
+    const [newChDesc, setNewChDesc] = useState('');
+    const [savingChapter, setSavingChapter] = useState(false);
+    const [editingChapter, setEditingChapter] = useState<string | null>(null);
+    const [editContent, setEditContent] = useState('');
+    const [uploadingChapterFile, setUploadingChapterFile] = useState(false);
+    const [allClasses, setAllClasses] = useState<any[]>([]);
 
     const printRef = useRef<HTMLDivElement>(null);
 
@@ -149,6 +161,10 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                     if (!selectedClass && classIds.length > 0) setSelectedClass(classIds[0]);
                 }
 
+                // Load all classes for subject creation
+                const { data: allCls } = await supabase.from('classrooms').select('id, name').eq('organization_id', orgId).order('name');
+                setAllClasses(allCls || []);
+
                 const subjectIds = (subs || []).map((s: any) => s.id);
                 if (subjectIds.length > 0) {
                     const { data: slots } = await supabase.from('timetable_slots')
@@ -159,6 +175,9 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                         .select('*, classrooms:classroom_id(name), subjects:subject_id(name)')
                         .in('subject_id', subjectIds).order('created_at', { ascending: false });
                     setEvaluations(evs || []);
+                    // Load chapters
+                    const { data: chaps } = await supabase.from('chapters').select('*').in('subject_id', subjectIds).order('position');
+                    setChapters(chaps || []);
                 }
             } else {
                 // Student data
@@ -514,27 +533,189 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                 {activeTab === 'cursus' && (
                     <motion.div key="cursus" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
                         {isTeacher ? (
-                            /* Teacher cursus: subject program management */
+                            /* Teacher cursus: full CRUD */
                             <>
-                                <h3 className="font-bold text-sm text-slate-300">📚 Programme des matières</h3>
-                                <p className="text-xs text-slate-500">Gérez le programme de chaque matière que vous dispensez. Les élèves verront la progression.</p>
-                                {mySubjects.map((sub: any) => (
-                                    <Card key={sub.id} className="bg-white/[0.03] border-white/[0.06] hover:border-white/10 transition-all">
-                                        <CardContent className="p-4">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div>
-                                                    <p className="text-sm font-bold">{sub.name}</p>
-                                                    <p className="text-[10px] text-slate-500">{sub.classrooms?.name} • Coef. {sub.coefficient || 1}</p>
+                                <div className="flex items-center justify-between">
+                                    <h3 className="font-bold text-sm text-slate-300">📚 Mon Cursus</h3>
+                                    <Button size="sm" className="bg-linear-to-r from-indigo-600 to-purple-600 border-none font-bold rounded-xl text-xs" onClick={() => setShowNewSubject(!showNewSubject)}>
+                                        <Plus className="w-3 h-3 mr-1" /> Matière
+                                    </Button>
+                                </div>
+
+                                {/* New Subject Form */}
+                                {showNewSubject && (
+                                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
+                                        <Card className="bg-linear-to-br from-indigo-500/10 to-purple-500/5 border-indigo-500/20 backdrop-blur-sm overflow-hidden">
+                                            <CardContent className="p-4 space-y-3">
+                                                <h4 className="text-xs font-bold text-indigo-400">➕ Nouvelle matière</h4>
+                                                <Input value={newSubName} onChange={e => setNewSubName(e.target.value)} placeholder="Nom de la matière" className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-sm" />
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div>
+                                                        <Label className="text-[10px] text-slate-400">Coefficient</Label>
+                                                        <Input type="number" value={newSubCoef} onChange={e => setNewSubCoef(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-sm" />
+                                                    </div>
+                                                    <div>
+                                                        <Label className="text-[10px] text-slate-400">Classe</Label>
+                                                        <select value={newSubClass} onChange={e => setNewSubClass(e.target.value)} className="w-full h-9 rounded-xl bg-white/5 border border-white/10 text-white px-3 text-sm">
+                                                            <option value="" className="bg-slate-900">Choisir...</option>
+                                                            {allClasses.map((c: any) => <option key={c.id} value={c.id} className="bg-slate-900">{c.name}</option>)}
+                                                        </select>
+                                                    </div>
                                                 </div>
-                                                <Badge className="bg-emerald-500/20 text-emerald-400 border-none text-[10px]">📘 Programme</Badge>
-                                            </div>
-                                            <p className="text-xs text-slate-400 italic">Programme de la matière visible par les élèves. Les chapitres non dispensés sont verrouillés.</p>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                                {mySubjects.length === 0 && (
-                                    <div className="text-center py-12 text-slate-500"><BookOpen className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm">Aucune matière assignée</p></div>
+                                                <div className="flex gap-2">
+                                                    <Button size="sm" className="bg-linear-to-r from-indigo-600 to-purple-600 font-bold rounded-xl" disabled={savingSub || !newSubName.trim() || !newSubClass}
+                                                        onClick={async () => {
+                                                            setSavingSub(true);
+                                                            const { data: sub, error } = await supabase.from('subjects').insert({ name: newSubName.trim(), coefficient: parseFloat(newSubCoef) || 1, classroom_id: newSubClass, organization_id: orgId, teacher_id: userId }).select('*, classrooms:classroom_id(id,name)').single();
+                                                            if (error) { toast.error(error.message); } else { setMySubjects([...mySubjects, sub]); toast.success(`Matière "${sub.name}" créée !`); setNewSubName(''); setNewSubCoef('1'); setNewSubClass(''); setShowNewSubject(false); }
+                                                            setSavingSub(false);
+                                                        }}>
+                                                        {savingSub ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Plus className="w-3 h-3 mr-1" />}Créer
+                                                    </Button>
+                                                    <Button size="sm" variant="ghost" onClick={() => setShowNewSubject(false)}>Annuler</Button>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    </motion.div>
                                 )}
+
+                                {/* Subject List with Chapters */}
+                                {mySubjects.length === 0 ? (
+                                    <div className="text-center py-12 text-slate-500"><Layers className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm">Aucune matière</p><p className="text-xs text-slate-600 mt-1">Créez votre première matière</p></div>
+                                ) : mySubjects.map((sub: any) => {
+                                    const subChapters = chapters.filter(c => c.subject_id === sub.id).sort((a, b) => a.position - b.position);
+                                    const isExpanded = expandedSubject === sub.id;
+                                    const publishedCount = subChapters.filter(c => c.status !== 'draft').length;
+                                    return (
+                                        <Card key={sub.id} className={cn("backdrop-blur-sm overflow-hidden transition-all", isExpanded ? "bg-linear-to-br from-indigo-500/10 to-purple-500/5 border-indigo-500/20" : "bg-card/50 border-white/10 hover:border-indigo-500/20")}>
+                                            <CardContent className="p-0">
+                                                <div className="p-4 cursor-pointer flex items-center justify-between" onClick={() => setExpandedSubject(isExpanded ? null : sub.id)}>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="bg-indigo-500/20 p-2 rounded-xl"><BookOpen className="h-4 w-4 text-indigo-400" /></div>
+                                                        <div>
+                                                            <p className="text-sm font-bold">{sub.name}</p>
+                                                            <p className="text-[10px] text-slate-400">{sub.classrooms?.name} • Coef. {sub.coefficient} • {subChapters.length} ch. • {publishedCount} dispensé(s)</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        {subChapters.length > 0 && <div className="w-12 h-1.5 bg-white/10 rounded-full overflow-hidden"><div className="h-full bg-linear-to-r from-emerald-500 to-teal-400 rounded-full transition-all" style={{ width: `${(publishedCount / subChapters.length) * 100}%` }} /></div>}
+                                                        {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                                                    </div>
+                                                </div>
+                                                {isExpanded && (
+                                                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="border-t border-white/5 px-4 pb-4">
+                                                        <div className="space-y-2 mt-3">
+                                                            {subChapters.map((ch, ci) => {
+                                                                const statusConfig: Record<string, { bg: string; text: string; icon: any; label: string }> = {
+                                                                    draft: { bg: 'bg-slate-500/20', text: 'text-slate-400', icon: EyeOff, label: 'Brouillon' },
+                                                                    published: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: Eye, label: 'Dispensé' },
+                                                                    completed: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: CheckCircle2, label: 'Terminé' },
+                                                                };
+                                                                const sc = statusConfig[ch.status] || statusConfig.draft;
+                                                                return (
+                                                                    <div key={ch.id}>
+                                                                        <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ci * 0.05 }}
+                                                                            className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-all group cursor-pointer"
+                                                                            onClick={() => { if (editingChapter === ch.id) { setEditingChapter(null); } else { setEditingChapter(ch.id); setEditContent(ch.content || ''); } }}>
+                                                                            <span className="text-xs font-mono text-slate-600 w-5 text-center">{ch.position}</span>
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <p className="text-sm font-medium truncate">{ch.title}</p>
+                                                                                {ch.description && <p className="text-[10px] text-slate-500 truncate">{ch.description}</p>}
+                                                                            </div>
+                                                                            <button onClick={(e) => { e.stopPropagation(); const next = ch.status === 'draft' ? 'published' : ch.status === 'published' ? 'completed' : 'draft'; supabase.from('chapters').update({ status: next }).eq('id', ch.id).then(({ error }) => { if (!error) { setChapters(chapters.map(c => c.id === ch.id ? { ...c, status: next } : c)); toast.success(`→ ${next === 'draft' ? 'Brouillon' : next === 'published' ? 'Dispensé' : 'Terminé'}`); } }); }}
+                                                                                className={cn("flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-all hover:scale-105", sc.bg, sc.text)}>
+                                                                                <sc.icon className="w-3 h-3" />{sc.label}
+                                                                            </button>
+                                                                            <button onClick={(e) => { e.stopPropagation(); supabase.from('chapters').delete().eq('id', ch.id).then(({ error }) => { if (!error) { setChapters(chapters.filter(c => c.id !== ch.id)); toast.success('Supprimé'); } }); }}
+                                                                                className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-red-500/20 text-red-400 transition-all">
+                                                                                <Trash2 className="w-3 h-3" />
+                                                                            </button>
+                                                                        </motion.div>
+                                                                        {editingChapter === ch.id && (
+                                                                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-1 ml-7 p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/10 space-y-3">
+                                                                                <h4 className="text-xs font-bold text-indigo-400">✏️ Contenu du chapitre</h4>
+                                                                                <textarea value={editContent} onChange={e => setEditContent(e.target.value)} placeholder="Rédigez le contenu du cours..." className="w-full min-h-[100px] p-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm resize-y placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/30" />
+                                                                                <Button size="sm" className="bg-linear-to-r from-indigo-600 to-purple-600 font-bold rounded-xl h-8" onClick={async () => {
+                                                                                    const { error } = await supabase.from('chapters').update({ content: editContent }).eq('id', ch.id);
+                                                                                    if (!error) { setChapters(chapters.map(c => c.id === ch.id ? { ...c, content: editContent } : c)); toast.success('Contenu sauvegardé ✅'); }
+                                                                                }}><Save className="w-3 h-3 mr-1" /> Sauvegarder</Button>
+                                                                                <div>
+                                                                                    <p className="text-[10px] text-slate-400 mb-2">🖼️ Images</p>
+                                                                                    <div className="flex flex-wrap gap-2 mb-2">
+                                                                                        {(ch.resources || []).filter((r: any) => r.type === 'image').map((r: any, ri: number) => (
+                                                                                            <div key={ri} className="relative group/img w-16 h-16 rounded-lg overflow-hidden border border-white/10">
+                                                                                                <img src={r.url} alt={r.name} className="w-full h-full object-cover" />
+                                                                                                <button onClick={async () => { const upd = (ch.resources || []).filter((x: any) => x.url !== r.url); await supabase.from('chapters').update({ resources: upd }).eq('id', ch.id); setChapters(chapters.map(c => c.id === ch.id ? { ...c, resources: upd } : c)); toast.success('Supprimée'); }}
+                                                                                                    className="absolute top-0 right-0 p-0.5 rounded-full bg-red-600/80 opacity-0 group-hover/img:opacity-100 transition-opacity"><X className="w-3 h-3 text-white" /></button>
+                                                                                            </div>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                    <label className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 border border-dashed border-white/10 text-xs text-slate-400 cursor-pointer">
+                                                                                        {uploadingChapterFile ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />} Image
+                                                                                        <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                                                                                            const f = e.target.files?.[0]; if (!f) return; setUploadingChapterFile(true);
+                                                                                            try { const compressed = await compressImage(f, { maxWidth: 1200, quality: 0.7 }); const path = `chapters/${ch.id}/images/${Date.now()}_${f.name}`; await supabase.storage.from('organization-assets').upload(path, compressed, { contentType: compressed.type }); const { data: u } = supabase.storage.from('organization-assets').getPublicUrl(path); const res = [...(ch.resources || []), { name: f.name, url: u.publicUrl, type: 'image' }]; await supabase.from('chapters').update({ resources: res }).eq('id', ch.id); setChapters(chapters.map(c => c.id === ch.id ? { ...c, resources: res } : c)); toast.success('Image ajoutée !'); } catch (err: any) { toast.error(err.message); }
+                                                                                            setUploadingChapterFile(false); e.target.value = '';
+                                                                                        }} disabled={uploadingChapterFile} />
+                                                                                    </label>
+                                                                                </div>
+                                                                                <div>
+                                                                                    <p className="text-[10px] text-slate-400 mb-2">📎 Ressources</p>
+                                                                                    <div className="space-y-1 mb-2">
+                                                                                        {(ch.resources || []).filter((r: any) => r.type === 'resource').map((r: any, ri: number) => (
+                                                                                            <div key={ri} className="flex items-center gap-2 p-2 rounded-lg bg-white/[0.03] border border-white/5 group/res">
+                                                                                                <FileText className="w-3 h-3 text-indigo-400 shrink-0" />
+                                                                                                <a href={r.url} target="_blank" rel="noopener" className="text-xs text-slate-300 hover:text-indigo-400 truncate flex-1">{r.name}</a>
+                                                                                                <button onClick={async () => { const upd = (ch.resources || []).filter((x: any) => x.url !== r.url); await supabase.from('chapters').update({ resources: upd }).eq('id', ch.id); setChapters(chapters.map(c => c.id === ch.id ? { ...c, resources: upd } : c)); toast.success('Supprimée'); }}
+                                                                                                    className="opacity-0 group-hover/res:opacity-100 p-1 rounded hover:bg-red-500/20 text-red-400"><X className="w-3 h-3" /></button>
+                                                                                            </div>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                    <label className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 border border-dashed border-white/10 text-xs text-slate-400 cursor-pointer">
+                                                                                        {uploadingChapterFile ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />} Fichier
+                                                                                        <input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip" className="hidden" onChange={async (e) => {
+                                                                                            const f = e.target.files?.[0]; if (!f) return; setUploadingChapterFile(true);
+                                                                                            try { const path = `chapters/${ch.id}/resources/${Date.now()}_${f.name}`; await supabase.storage.from('organization-assets').upload(path, f, { contentType: f.type }); const { data: u } = supabase.storage.from('organization-assets').getPublicUrl(path); const res = [...(ch.resources || []), { name: f.name, url: u.publicUrl, type: 'resource' }]; await supabase.from('chapters').update({ resources: res }).eq('id', ch.id); setChapters(chapters.map(c => c.id === ch.id ? { ...c, resources: res } : c)); toast.success('Fichier ajouté !'); } catch (err: any) { toast.error(err.message); }
+                                                                                            setUploadingChapterFile(false); e.target.value = '';
+                                                                                        }} disabled={uploadingChapterFile} />
+                                                                                    </label>
+                                                                                </div>
+                                                                            </motion.div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                            {subChapters.length === 0 && <p className="text-xs text-slate-600 text-center py-3">Aucun chapitre — ajoutez le premier !</p>}
+                                                        </div>
+                                                        {showNewChapter === sub.id ? (
+                                                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-3 p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                                                                <Input value={newChTitle} onChange={e => setNewChTitle(e.target.value)} placeholder="Titre du chapitre" className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-sm" />
+                                                                <Input value={newChDesc} onChange={e => setNewChDesc(e.target.value)} placeholder="Description courte (optionnel)" className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-sm" />
+                                                                <div className="flex gap-2">
+                                                                    <Button size="sm" className="bg-linear-to-r from-emerald-600 to-green-600 font-bold rounded-xl h-8" disabled={savingChapter || !newChTitle.trim()}
+                                                                        onClick={async () => {
+                                                                            setSavingChapter(true);
+                                                                            const pos = subChapters.length + 1;
+                                                                            const { data: ch, error } = await supabase.from('chapters').insert({ subject_id: sub.id, organization_id: orgId, teacher_id: userId, title: newChTitle.trim(), description: newChDesc.trim(), position: pos, status: 'draft' }).select().single();
+                                                                            if (error) { toast.error(error.message); } else { setChapters([...chapters, ch]); toast.success(`Chapitre "${ch.title}" ajouté !`); setNewChTitle(''); setNewChDesc(''); setShowNewChapter(null); }
+                                                                            setSavingChapter(false);
+                                                                        }}>
+                                                                        {savingChapter ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Plus className="w-3 h-3 mr-1" />}Ajouter
+                                                                    </Button>
+                                                                    <Button size="sm" variant="ghost" className="h-8" onClick={() => { setShowNewChapter(null); setNewChTitle(''); setNewChDesc(''); }}>Annuler</Button>
+                                                                </div>
+                                                            </motion.div>
+                                                        ) : (
+                                                            <button onClick={() => setShowNewChapter(sub.id)} className="mt-3 w-full py-2 rounded-xl border border-dashed border-white/10 hover:border-indigo-500/30 text-xs text-slate-500 hover:text-indigo-400 transition-all flex items-center justify-center gap-1">
+                                                                <Plus className="w-3 h-3" /> Ajouter un chapitre
+                                                            </button>
+                                                        )}
+                                                    </motion.div>
+                                                )}
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
                             </>
                         ) : (
                             /* Student cursus: view progress */
