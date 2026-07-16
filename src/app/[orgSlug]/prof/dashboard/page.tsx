@@ -8,7 +8,7 @@ import {
     BookOpen, Calendar, Users, GraduationCap, ClipboardList, Trophy,
     Home, MessageSquare, Loader2, Clock, CheckCircle2,
     Save, X, BarChart3, FileText, PenSquare, LogOut, User, AlertCircle,
-    Layers, Plus, ChevronDown, ChevronUp, Trash2, Eye, EyeOff, Lock
+    Layers, Plus, ChevronDown, ChevronUp, Trash2, Eye, EyeOff, Lock, Camera
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -276,6 +276,28 @@ export default function TeacherDashboard() {
         if (error) { toast.error(error.message); return; }
         setChapters(chapters.filter(c => c.id !== chapterId));
         toast.success('Chapitre supprimé');
+    };
+
+    // ═══ PROFILE: UPLOAD PHOTO ═══
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) { toast.error('Fichier image requis'); return; }
+        if (file.size > 5 * 1024 * 1024) { toast.error('Image trop lourde (max 5 Mo)'); return; }
+        setUploadingPhoto(true);
+        try {
+            const ext = file.name.split('.').pop();
+            const path = `profile-photos/teachers/${teacher.id}_${Date.now()}.${ext}`;
+            const { error: upErr } = await supabase.storage.from('organization-assets').upload(path, file, { contentType: file.type, upsert: true });
+            if (upErr) throw upErr;
+            const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
+            const { error: dbErr } = await supabase.from('teacher_profiles').update({ photo_url: urlData.publicUrl }).eq('id', teacher.id);
+            if (dbErr) throw dbErr;
+            setTeacher({ ...teacher, photo_url: urlData.publicUrl });
+            toast.success('Photo mise à jour !');
+        } catch (err: any) { toast.error(err.message || 'Erreur upload'); }
+        setUploadingPhoto(false);
     };
     const today = new Date().getDay();
     const todaySlots = mySlots.filter((s: any) => s.day_of_week === (today === 0 ? 7 : today));
@@ -810,6 +832,10 @@ export default function TeacherDashboard() {
                                         <AvatarImage src={teacher.photo_url} />
                                         <AvatarFallback className="text-3xl bg-emerald-500/10 text-emerald-400">{teacher.first_name?.[0]}{teacher.last_name?.[0]}</AvatarFallback>
                                     </Avatar>
+                                    <label className="absolute bottom-0 right-0 p-1.5 rounded-full bg-emerald-500 hover:bg-emerald-400 cursor-pointer shadow-lg transition-colors">
+                                        {uploadingPhoto ? <Loader2 className="w-4 h-4 text-white animate-spin" /> : <Camera className="w-4 h-4 text-white" />}
+                                        <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={uploadingPhoto} />
+                                    </label>
                                     <Badge className="absolute -bottom-2 -left-2 px-3 py-1 bg-linear-to-r from-emerald-500 to-green-600 border-none text-white shadow-lg text-[10px]">
                                         🎓 Professeur
                                     </Badge>

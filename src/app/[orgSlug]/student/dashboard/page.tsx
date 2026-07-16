@@ -9,7 +9,8 @@ import {
     Clock, Trophy, TrendingUp, BarChart3, MessageSquare, LogOut,
     FileText, Target, Star, CircleDollarSign, CheckCircle2, AlertCircle,
     ShoppingBag, BookMarked, Settings, ChevronRight, ArrowLeft,
-    Users, Flame, Award, User
+    Users, Flame, Award, User, Layers, Lock, Eye, EyeOff, Camera,
+    ChevronDown, ChevronUp
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -24,7 +25,7 @@ import { cn } from '@/lib/utils';
 // CAMPUSFLOW — DASHBOARD ÉTUDIANT (holographic-ring design)
 // ═══════════════════════════════════════════════════════
 
-type Tab = 'dashboard' | 'timetable' | 'grades' | 'payments' | 'profile';
+type Tab = 'dashboard' | 'timetable' | 'cursus' | 'grades' | 'payments' | 'profile';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n);
@@ -34,6 +35,7 @@ function BottomNav({ activeTab, onTabChange }: { activeTab: Tab; onTabChange: (t
     const navItems: { id: Tab; icon: any; label: string; color?: string }[] = [
         { id: 'dashboard', icon: Home, label: 'Accueil' },
         { id: 'timetable', icon: Calendar, label: 'Horaires', color: 'indigo' },
+        { id: 'cursus', icon: Layers, label: 'Cursus', color: 'teal' },
         { id: 'grades', icon: BarChart3, label: 'Notes', color: 'emerald' },
         { id: 'payments', icon: CreditCard, label: 'Paiements', color: 'amber' },
         { id: 'profile', icon: User, label: 'Profil' },
@@ -111,6 +113,9 @@ export default function StudentDashboard() {
     const [disciplines, setDisciplines] = useState<any[]>([]);
     const [showDeletedModal, setShowDeletedModal] = useState(false);
     const [showDeactivatedModal, setShowDeactivatedModal] = useState(false);
+    const [chapters, setChapters] = useState<any[]>([]);
+    const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
     useEffect(() => {
         (async () => {
@@ -163,6 +168,13 @@ export default function StudentDashboard() {
                     .select('*, evaluations:evaluation_id(title, max_score, type, subject_id, subjects:subject_id(name))')
                     .eq('student_id', s.id);
                 setGrades(grs || []);
+
+                // Load chapters for cursus
+                const subjectIds = (subs || []).map((sub: any) => sub.id);
+                if (subjectIds.length > 0) {
+                    const { data: chaps } = await supabase.from('chapters').select('*').in('subject_id', subjectIds).order('position');
+                    setChapters(chaps || []);
+                }
             }
 
             const { data: pays } = await supabase.from('school_payments').select('*')
@@ -589,6 +601,79 @@ export default function StudentDashboard() {
                         </motion.div>
                     )}
 
+                    {/* ═══ CURSUS ═══ */}
+                    {tab === 'cursus' && (
+                        <motion.div key="cursus" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-4 pt-4">
+                            <h2 className="font-black text-lg text-gradient-primary">📚 Mon parcours</h2>
+
+                            {subjects.length === 0 ? (
+                                <div className="text-center py-12 text-slate-500"><Layers className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm">Aucune matière dans votre classe</p></div>
+                            ) : subjects.map((sub: any) => {
+                                const subChapters = chapters.filter(c => c.subject_id === sub.id).sort((a, b) => a.position - b.position);
+                                const isExpanded = expandedSubject === sub.id;
+                                const publishedCount = subChapters.filter(c => c.status === 'published' || c.status === 'completed').length;
+
+                                return (
+                                    <motion.div key={sub.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                                        <Card className={cn("backdrop-blur-sm overflow-hidden transition-all cursor-pointer", isExpanded ? "bg-linear-to-br from-teal-500/10 to-indigo-500/5 border-teal-500/20" : "bg-card/50 border-white/10 hover:border-teal-500/20")}
+                                            onClick={() => setExpandedSubject(isExpanded ? null : sub.id)}>
+                                            <CardContent className="p-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="bg-teal-500/20 p-2.5 rounded-xl"><BookOpen className="h-5 w-5 text-teal-400" /></div>
+                                                        <div>
+                                                            <h3 className="font-bold text-sm">{sub.name}</h3>
+                                                            <p className="text-[10px] text-slate-400">Coef. {sub.coefficient} • {sub.teacher_profiles ? `Prof. ${sub.teacher_profiles.first_name} ${sub.teacher_profiles.last_name}` : ''} • {publishedCount}/{subChapters.length} chapitres</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        {subChapters.length > 0 && (
+                                                            <div className="w-14 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                                                <div className="h-full bg-linear-to-r from-teal-500 to-emerald-400 rounded-full transition-all" style={{ width: `${subChapters.length > 0 ? (publishedCount / subChapters.length) * 100 : 0}%` }} />
+                                                            </div>
+                                                        )}
+                                                        {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                                                    </div>
+                                                </div>
+
+                                                {isExpanded && (
+                                                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 space-y-2 border-t border-white/5 pt-3" onClick={e => e.stopPropagation()}>
+                                                        {subChapters.length === 0 ? (
+                                                            <p className="text-xs text-slate-600 text-center py-3">Programme pas encore disponible</p>
+                                                        ) : subChapters.map((ch, ci) => {
+                                                            const isLocked = ch.status === 'draft';
+                                                            const isCompleted = ch.status === 'completed';
+                                                            return (
+                                                                <motion.div key={ch.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ci * 0.05 }}
+                                                                    className={cn("flex items-center gap-3 p-3 rounded-xl border transition-all",
+                                                                        isLocked ? "bg-white/[0.02] border-white/5 opacity-50" :
+                                                                        isCompleted ? "bg-blue-500/5 border-blue-500/10" :
+                                                                        "bg-teal-500/5 border-teal-500/10"
+                                                                    )}>
+                                                                    <span className="text-xs font-mono text-slate-600 w-6 text-center">{ch.position}</span>
+                                                                    {isLocked ? <Lock className="w-4 h-4 text-slate-600 shrink-0" /> :
+                                                                     isCompleted ? <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0" /> :
+                                                                     <Eye className="w-4 h-4 text-teal-400 shrink-0" />}
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <p className={cn("text-sm font-medium truncate", isLocked && "text-slate-600")}>{ch.title}</p>
+                                                                        {!isLocked && ch.description && <p className="text-[10px] text-slate-500 truncate">{ch.description}</p>}
+                                                                        {isLocked && <p className="text-[10px] text-slate-700">🔒 Pas encore dispensé</p>}
+                                                                    </div>
+                                                                    {isCompleted && <Badge className="bg-blue-500/20 text-blue-400 border-none text-[9px]">Terminé</Badge>}
+                                                                    {!isLocked && !isCompleted && <Badge className="bg-teal-500/20 text-teal-400 border-none text-[9px]">En cours</Badge>}
+                                                                </motion.div>
+                                                            );
+                                                        })}
+                                                    </motion.div>
+                                                )}
+                                            </CardContent>
+                                        </Card>
+                                    </motion.div>
+                                );
+                            })}
+                        </motion.div>
+                    )}
+
                     {/* ═══ PROFILE ═══ */}
                     {tab === 'profile' && (
                         <motion.div key="profile" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-5 pt-4">
@@ -601,6 +686,28 @@ export default function StudentDashboard() {
                                             {student.first_name?.[0]}{student.last_name?.[0]}
                                         </AvatarFallback>
                                     </Avatar>
+                                    <label className="absolute bottom-0 right-0 p-1.5 rounded-full bg-teal-500 hover:bg-teal-400 cursor-pointer shadow-lg transition-colors">
+                                        {uploadingPhoto ? <Loader2 className="w-4 h-4 text-white animate-spin" /> : <Camera className="w-4 h-4 text-white" />}
+                                        <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) return;
+                                            if (!file.type.startsWith('image/')) { toast.error('Fichier image requis'); return; }
+                                            if (file.size > 5 * 1024 * 1024) { toast.error('Max 5 Mo'); return; }
+                                            setUploadingPhoto(true);
+                                            try {
+                                                const ext = file.name.split('.').pop();
+                                                const path = `profile-photos/students/${student.id}_${Date.now()}.${ext}`;
+                                                const { error: upErr } = await supabase.storage.from('organization-assets').upload(path, file, { contentType: file.type, upsert: true });
+                                                if (upErr) throw upErr;
+                                                const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
+                                                const { error: dbErr } = await supabase.from('student_profiles').update({ photo_url: urlData.publicUrl }).eq('id', student.id);
+                                                if (dbErr) throw dbErr;
+                                                setStudent({ ...student, photo_url: urlData.publicUrl });
+                                                toast.success('Photo mise à jour !');
+                                            } catch (err: any) { toast.error(err.message || 'Erreur upload'); }
+                                            setUploadingPhoto(false);
+                                        }} disabled={uploadingPhoto} />
+                                    </label>
                                     {overallAvg > 0 && (
                                         <Badge className="absolute -bottom-2 -left-2 px-3 py-1 bg-linear-to-r from-yellow-500 to-amber-600 border-none text-white shadow-lg text-[10px]">
                                             {overallAvg >= 16 ? '🏆 Excellent' : overallAvg >= 14 ? '⭐ Très bien' : overallAvg >= 12 ? '👍 Bien' : overallAvg >= 10 ? '💪 Passable' : '📚 En progrès'}
