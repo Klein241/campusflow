@@ -8,7 +8,7 @@ import {
     CheckCircle2, AlertCircle, ChevronRight, Printer, ArrowLeft,
     Star, Trophy, ShieldCheck, Download, Users, MessageSquare,
     User, PenSquare, Save, X, ClipboardList, LockKeyhole, Unlock,
-    ChevronDown, ChevronUp, GraduationCap, Plus, Trash2, Eye, EyeOff, Layers
+    ChevronDown, ChevronUp, GraduationCap, Plus, Trash2, Eye, EyeOff, Layers, Timer, Play
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/lib/supabase';
 import { compressImage } from '@/lib/compress';
 import { toast } from 'sonner';
@@ -115,7 +116,29 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
     const [studentLessons, setStudentLessons] = useState<any[]>([]);
     const [expandedStudentSub, setExpandedStudentSub] = useState<string | null>(null);
     const [expandedStudentCh, setExpandedStudentCh] = useState<string | null>(null);
-
+    
+    // Exercises & Sky Points
+    const [exercises, setExercises] = useState<any[]>([]);
+    const [showNewExercise, setShowNewExercise] = useState<{ type: 'chapter' | 'lesson', id: string } | null>(null);
+    const [exForm, setExForm] = useState({ title: '', type: 'qcm', duration_minutes: 10, max_score: 20, questions: [] as any[] });
+    const [savingEx, setSavingEx] = useState(false);
+    
+    const [activeExercise, setActiveExercise] = useState<any>(null);
+    const [exAnswers, setExAnswers] = useState<Record<number, any>>({});
+    const [exTimeLeft, setExTimeLeft] = useState(0);
+    const [exSubmitting, setExSubmitting] = useState(false);
+    const [exResult, setExResult] = useState<any>(null);
+    
+    useEffect(() => {
+        let timer: any;
+        if (activeExercise && exTimeLeft > 0 && !exSubmitting && !exResult) {
+            timer = setInterval(() => setExTimeLeft(t => t - 1), 1000);
+        } else if (exTimeLeft === 0 && activeExercise && !exSubmitting && !exResult) {
+            submitExercise();
+        }
+        return () => clearInterval(timer);
+    }, [activeExercise, exTimeLeft, exSubmitting, exResult]);
+    
     const printRef = useRef<HTMLDivElement>(null);
 
     // ═══ PIN ═══
@@ -237,6 +260,11 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                     .eq('student_id', userId).order('paid_at', { ascending: false });
                 setPayments(pays || []);
             }
+            
+            // Load exercises for both
+            const { data: exs } = await supabase.from('exercises').select('*').eq('organization_id', orgId);
+            setExercises(exs || []);
+            
             setLoading(false);
         })();
     }, [pinVerified, userId, userRole]);
@@ -348,6 +376,70 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
             year: `${new Date().getFullYear() - 1}/${new Date().getFullYear()}`,
         };
         generateBulletinPDF(data, orgBulletinTemplate || 1);
+    };
+
+    // ═══ EXERCISES LOGIC ═══
+    const createExercise = async () => {
+        if (!showNewExercise || !exForm.title) return;
+        setSavingEx(true);
+        const payload = {
+            organization_id: orgId,
+            title: exForm.title,
+            type: exForm.type,
+            duration_minutes: exForm.duration_minutes,
+            max_score: exForm.max_score,
+            questions: exForm.questions,
+            ...(showNewExercise.type === 'chapter' ? { chapter_id: showNewExercise.id } : { lesson_id: showNewExercise.id })
+        };
+        const { data, error } = await supabase.from('exercises').insert(payload).select().single();
+        if (error) toast.error(error.message);
+        else {
+            setExercises([...exercises, data]);
+            toast.success('Exercice ajouté !');
+            setShowNewExercise(null);
+            setExForm({ title: '', type: 'qcm', duration_minutes: 10, max_score: 20, questions: [] });
+        }
+        setSavingEx(false);
+    };
+
+    const submitExercise = async () => {
+        if (!activeExercise || exSubmitting) return;
+        setExSubmitting(true);
+        
+        let score = 0;
+        const qCount = activeExercise.questions.length || 1;
+        const ptsPerQ = activeExercise.max_score / qCount;
+        
+        if (activeExercise.type === 'qcm' || activeExercise.type === 'quiz') {
+            activeExercise.questions.forEach((q: any, i: number) => {
+                if (activeExercise.type === 'qcm' && exAnswers[i] === q.answer) score += ptsPerQ;
+                if (activeExercise.type === 'quiz' && exAnswers[i]?.trim().toLowerCase() === q.answer?.trim().toLowerCase()) score += ptsPerQ;
+            });
+        }
+        score = Math.min(score, activeExercise.max_score);
+        
+        const { error } = await supabase.from('exercise_submissions').insert({
+            exercise_id: activeExercise.id,
+            student_id: userId,
+            answers: exAnswers,
+            score: score,
+            graded: activeExercise.type === 'qcm' || activeExercise.type === 'quiz'
+        });
+        
+        if (!error && (activeExercise.type === 'qcm' || activeExercise.type === 'quiz')) {
+            const earnedSky = Math.round(score);
+            if (earnedSky > 0) {
+                await supabase.from('sky_transactions').insert({
+                    student_id: userId, amount: earnedSky, reason: `Exercice: ${activeExercise.title}`, reference_id: activeExercise.id
+                });
+                await supabase.rpc('increment_sky_points', { user_id: userId, amount: earnedSky });
+                setProfile((prev: any) => ({ ...prev, sky_points: (prev?.sky_points || 0) + earnedSky }));
+                toast.success(`+${earnedSky} Sky Points !`);
+            }
+        }
+        
+        setExResult({ score });
+        setExSubmitting(false);
     };
 
     // ═══ PIN SCREEN ═══
@@ -653,10 +745,25 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                                                                                 <p className="text-sm font-medium truncate">{ch.title}</p>
                                                                                 {ch.description && <p className="text-[10px] text-slate-500 truncate">{ch.description}</p>}
                                                                             </div>
-                                                                            <button onClick={(e) => { e.stopPropagation(); const next = ch.status === 'draft' ? 'published' : ch.status === 'published' ? 'completed' : 'draft'; supabase.from('chapters').update({ status: next }).eq('id', ch.id).then(({ error }) => { if (!error) { setChapters(chapters.map(c => c.id === ch.id ? { ...c, status: next } : c)); toast.success(`→ ${next === 'draft' ? 'Brouillon' : next === 'published' ? 'Dispensé' : 'Terminé'}`); } }); }}
-                                                                                className={cn("flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-all hover:scale-105", sc.bg, sc.text)}>
-                                                                                <sc.icon className="w-3 h-3" />{sc.label}
-                                                                            </button>
+                                                                            
+                                                                            {ch.status === 'draft' && (
+                                                                                <button onClick={(e) => { e.stopPropagation(); supabase.from('chapters').update({ status: 'published' }).eq('id', ch.id).then(({ error }) => { if (!error) { setChapters(chapters.map(c => c.id === ch.id ? { ...c, status: 'published' } : c)); toast.success('Chapitre publié !'); } }); }}
+                                                                                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-all">
+                                                                                    Publier
+                                                                                </button>
+                                                                            )}
+                                                                            {ch.status === 'published' && (
+                                                                                <button onClick={(e) => { e.stopPropagation(); supabase.from('chapters').update({ status: 'completed' }).eq('id', ch.id).then(({ error }) => { if (!error) { setChapters(chapters.map(c => c.id === ch.id ? { ...c, status: 'completed' } : c)); toast.success('Chapitre terminé !'); } }); }}
+                                                                                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-all">
+                                                                                    Marquer terminé
+                                                                                </button>
+                                                                            )}
+                                                                            {ch.status === 'completed' && (
+                                                                                <span className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-slate-500/20 text-slate-400">
+                                                                                    <CheckCircle2 className="w-3 h-3" /> Terminé
+                                                                                </span>
+                                                                            )}
+                                                                            
                                                                             <button onClick={(e) => { e.stopPropagation(); supabase.from('chapters').delete().eq('id', ch.id).then(({ error }) => { if (!error) { setChapters(chapters.filter(c => c.id !== ch.id)); toast.success('Supprimé'); } }); }}
                                                                                 className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-red-500/20 text-red-400 transition-all">
                                                                                 <Trash2 className="w-3 h-3" />
@@ -711,6 +818,21 @@ Vous pouvez écrire autant que nécessaire." className="w-full min-h-[300px] p-4
                                                                                             setUploadingChapterFile(false); e.target.value = '';
                                                                                         }} disabled={uploadingChapterFile} />
                                                                                     </label>
+                                                                                </div>
+                                                                                {/* EXERCISES (Chapter level) */}
+                                                                                <div className="border-t border-white/5 pt-3 mt-2">
+                                                                                    <div className="flex items-center justify-between mb-2">
+                                                                                        <p className="text-[10px] text-orange-400 font-bold">📝 Exercices</p>
+                                                                                        <button onClick={() => setShowNewExercise({ type: 'chapter', id: ch.id })} className="text-[10px] text-orange-400 hover:text-orange-300 flex items-center gap-1 bg-orange-500/10 px-2 py-0.5 rounded">
+                                                                                            <Plus className="w-3 h-3" /> Ajouter
+                                                                                        </button>
+                                                                                    </div>
+                                                                                    {exercises.filter(ex => ex.chapter_id === ch.id).map(ex => (
+                                                                                        <div key={ex.id} className="text-xs p-2 rounded bg-orange-500/5 border border-orange-500/10 mb-1 flex items-center justify-between">
+                                                                                            <span>{ex.title} ({ex.type.toUpperCase()})</span>
+                                                                                            <span className="text-[10px] text-slate-500">{ex.duration_minutes} min • /{ex.max_score}</span>
+                                                                                        </div>
+                                                                                    ))}
                                                                                 </div>
                                                                                 {/* ═══ LESSONS ═══ */}
                                                                                 <div className="border-t border-white/5 pt-3 mt-2">
@@ -772,6 +894,20 @@ Vous pouvez écrire autant que nécessaire." className="w-full min-h-[300px] p-4
                                                                                                                     setUploadingLessonFile(false); e.target.value = '';
                                                                                                                 }} disabled={uploadingLessonFile} />
                                                                                                             </label>
+                                                                                                        </div>
+                                                                                                        <div className="border-t border-white/5 pt-2 mt-2">
+                                                                                                            <div className="flex items-center justify-between mb-1">
+                                                                                                                <p className="text-[10px] text-orange-400 font-bold">📝 Exercices de leçon</p>
+                                                                                                                <button onClick={() => setShowNewExercise({ type: 'lesson', id: lesson.id })} className="text-[9px] text-orange-400 flex items-center gap-1">
+                                                                                                                    <Plus className="w-2.5 h-2.5" /> Ajouter
+                                                                                                                </button>
+                                                                                                            </div>
+                                                                                                            {exercises.filter(ex => ex.lesson_id === lesson.id).map(ex => (
+                                                                                                                <div key={ex.id} className="text-[10px] p-1.5 rounded bg-orange-500/5 border border-orange-500/10 mb-1 flex items-center justify-between">
+                                                                                                                    <span>{ex.title}</span>
+                                                                                                                    <span className="text-slate-500">/{ex.max_score}</span>
+                                                                                                                </div>
+                                                                                                            ))}
                                                                                                         </div>
                                                                                                     </motion.div>
                                                                                                 )}
@@ -843,7 +979,7 @@ Vous pouvez écrire autant que nécessaire." className="w-full min-h-[300px] p-4
                             /* Student cursus: view progress */
                             <>
                                 <Card className="bg-gradient-to-br from-indigo-500/10 to-violet-500/5 border-indigo-500/20 backdrop-blur-sm overflow-hidden">
-                                    <CardContent className="p-5">
+                                    <CardContent className="p-5 flex items-center justify-between">
                                         <div className="flex items-center gap-3">
                                             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
                                                 <Award className="w-6 h-6 text-white" />
@@ -851,6 +987,14 @@ Vous pouvez écrire autant que nécessaire." className="w-full min-h-[300px] p-4
                                             <div>
                                                 <h2 className="text-lg font-black">{classroom?.name || '—'}</h2>
                                                 {filiere && (<Badge className="mt-1 bg-gradient-to-r from-indigo-600 to-violet-600 border-none text-white text-[10px]">{filiere.nom} • {filiere.duree_mois} mois</Badge>)}
+                                            </div>
+                                        </div>
+                                        {/* Sky Points Display */}
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Sky Points</span>
+                                            <div className="flex items-center gap-2 bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.15)]">
+                                                <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                                                <span className="font-black text-amber-400 text-lg">{fmt(profile?.sky_points || 0)}</span>
                                             </div>
                                         </div>
                                     </CardContent>
@@ -934,6 +1078,21 @@ Vous pouvez écrire autant que nécessaire." className="w-full min-h-[300px] p-4
                                                                                             </a>
                                                                                         ))}</div>
                                                                                     )}
+                                                                                    {/* Chapter Exercises */}
+                                                                                    {exercises.filter(ex => ex.chapter_id === ch.id).length > 0 && (
+                                                                                        <div className="mt-4 border-t border-white/5 pt-3">
+                                                                                            <p className="text-[10px] text-orange-400 font-bold mb-2">📝 Exercices du chapitre</p>
+                                                                                            {exercises.filter(ex => ex.chapter_id === ch.id).map(ex => (
+                                                                                                <div key={ex.id} className="flex items-center justify-between p-2.5 rounded-lg bg-orange-500/5 border border-orange-500/10 mb-2">
+                                                                                                    <div>
+                                                                                                        <p className="text-xs font-bold text-orange-300">{ex.title}</p>
+                                                                                                        <p className="text-[10px] text-slate-400">{ex.duration_minutes} min • {ex.questions?.length || 0} questions</p>
+                                                                                                    </div>
+                                                                                                    <Button size="sm" onClick={() => { setActiveExercise(ex); setExAnswers({}); setExTimeLeft(ex.duration_minutes * 60); setExResult(null); }} className="bg-orange-600 hover:bg-orange-700 text-[10px] h-7 rounded-lg">Commencer</Button>
+                                                                                                </div>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    )}
                                                                                     {/* Lessons */}
                                                                                     {hasLessons && chLessons.map((lesson: any, li: number) => {
                                                                                         const lImages = (lesson.resources || []).filter((r: any) => r.type === 'image');
@@ -952,14 +1111,111 @@ Vous pouvez écrire autant que nécessaire." className="w-full min-h-[300px] p-4
                                                                                                             <FileText className="w-3 h-3 text-purple-400 shrink-0" /><span className="text-[10px] text-slate-300 truncate">{r.name}</span><Download className="w-3 h-3 text-slate-600 ml-auto" />
                                                                                                         </a>
                                                                                                     ))}
+                                                                                                    {/* Lesson Exercises */}
+                                                                                                    {exercises.filter(ex => ex.lesson_id === lesson.id).length > 0 && (
+                                                                                                        <div className="mt-3 border-t border-purple-500/10 pt-2">
+                                                                                                            {exercises.filter(ex => ex.lesson_id === lesson.id).map(ex => (
+                                                                                                                <div key={ex.id} className="flex items-center justify-between p-2 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                                                                                                                    <span className="text-xs font-bold text-orange-300">{ex.title}</span>
+<Button size="sm" onClick={() => { setActiveExercise(ex); setExAnswers({}); setExTimeLeft(ex.duration_minutes * 60); setExResult(null); }} className="bg-orange-600 hover:bg-orange-700 text-[9px] h-6 px-2 rounded">Commencer</Button>
+                                                                                                                </div>
+                                                                                                            ))}
+                                                                                                            <Button size="sm" variant="ghost" className="h-6 w-full text-[10px] text-orange-400 hover:text-orange-300 border border-orange-500/20" onClick={() => { setShowNewExercise(lesson.id); setExForm({ title: '', type: 'qcm', duration_minutes: 10, max_score: 20, questions: [] }); }}>
+                                                                                                                <Plus className="w-3 h-3 mr-1" /> Ajouter exercice
+                                                                                                            </Button>
+                                                                                                        </div>
+                                                                                                    )}
                                                                                                 </CardContent>
                                                                                             </Card>
                                                                                         );
                                                                                     })}
+                                                                                    
+                                                                                    {/* Teacher Exercise Form Modal */}
+                                                                                    <AnimatePresence>
+                                                                                        {showNewExercise && (
+                                                                                            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                                                                                                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="w-full max-w-lg bg-slate-900 rounded-2xl border border-white/10 shadow-2xl flex flex-col max-h-[90vh]">
+                                                                                                    <div className="p-4 border-b border-white/10 flex justify-between items-center bg-orange-500/10 rounded-t-2xl">
+                                                                                                        <h3 className="font-bold text-orange-400 flex items-center gap-2"><PenSquare className="w-4 h-4" /> Créer un exercice</h3>
+                                                                                                        <button onClick={() => setShowNewExercise(null)} className="p-1 rounded-lg hover:bg-white/10 text-slate-400"><X className="w-4 h-4" /></button>
+                                                                                                    </div>
+                                                                                                    <div className="p-4 overflow-y-auto space-y-4">
+                                                                                                        <div className="grid grid-cols-2 gap-3">
+                                                                                                            <div className="col-span-2">
+                                                                                                                <Label className="text-xs text-slate-400">Titre de l'exercice</Label>
+                                                                                                                <Input value={exForm.title} onChange={e => setExForm({ ...exForm, title: e.target.value })} className="bg-white/5 border-white/10 mt-1" />
+                                                                                                            </div>
+                                                                                                            <div>
+                                                                                                                <Label className="text-xs text-slate-400">Type</Label>
+                                                                                                                <select value={exForm.type} onChange={e => setExForm({ ...exForm, type: e.target.value, questions: [] })} className="w-full mt-1 bg-slate-800 border-white/10 rounded-md h-10 px-3 text-sm text-white">
+                                                                                                                    <option value="qcm">QCM</option>
+                                                                                                                    <option value="quiz">Quiz (Réponse courte)</option>
+                                                                                                                    <option value="qa">Question / Réponse</option>
+                                                                                                                    <option value="open">Question Ouverte</option>
+                                                                                                                </select>
+                                                                                                            </div>
+                                                                                                            <div className="grid grid-cols-2 gap-2">
+                                                                                                                <div>
+                                                                                                                    <Label className="text-xs text-slate-400">Durée (min)</Label>
+                                                                                                                    <Input type="number" value={exForm.duration_minutes} onChange={e => setExForm({ ...exForm, duration_minutes: parseInt(e.target.value) || 10 })} className="bg-white/5 border-white/10 mt-1" />
+                                                                                                                </div>
+                                                                                                                <div>
+                                                                                                                    <Label className="text-xs text-slate-400">Note Max</Label>
+                                                                                                                    <Input type="number" value={exForm.max_score} onChange={e => setExForm({ ...exForm, max_score: parseFloat(e.target.value) || 20 })} className="bg-white/5 border-white/10 mt-1" />
+                                                                                                                </div>
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                        <div className="border-t border-white/10 pt-4">
+                                                                                                            <div className="flex items-center justify-between mb-2">
+                                                                                                                <Label className="text-sm font-bold text-slate-300">Questions</Label>
+                                                                                                                <Button size="sm" variant="outline" className="h-7 text-xs border-white/10" onClick={() => {
+                                                                                                                    const emptyQ = exForm.type === 'qcm' ? { q: '', options: ['', ''], answer: 0 } : { q: '', answer: '' };
+                                                                                                                    setExForm({ ...exForm, questions: [...exForm.questions, emptyQ] });
+                                                                                                                }}><Plus className="w-3 h-3 mr-1" /> Ajouter question</Button>
+                                                                                                            </div>
+                                                                                                            <div className="space-y-3">
+                                                                                                                {exForm.questions.map((q, i) => (
+                                                                                                                    <div key={i} className="p-3 bg-white/5 rounded-xl border border-white/10">
+                                                                                                                        <div className="flex justify-between items-start mb-2">
+                                                                                                                            <span className="text-xs font-bold text-orange-400">Question {i + 1}</span>
+                                                                                                                            <button onClick={() => setExForm({ ...exForm, questions: exForm.questions.filter((_, idx) => idx !== i) })} className="text-red-400"><Trash2 className="w-3 h-3" /></button>
+                                                                                                                        </div>
+                                                                                                                        <Input placeholder="Votre question..." value={q.q} onChange={e => { const nq = [...exForm.questions]; nq[i].q = e.target.value; setExForm({ ...exForm, questions: nq }); }} className="bg-slate-900 border-white/10 mb-2 h-8 text-xs" />
+                                                                                                                        {exForm.type === 'qcm' && (
+                                                                                                                            <div className="space-y-2 pl-4 border-l-2 border-white/10">
+                                                                                                                                {q.options.map((opt: string, oi: number) => (
+                                                                                                                                    <div key={oi} className="flex items-center gap-2">
+                                                                                                                                        <input type="radio" checked={q.answer === oi} onChange={() => { const nq = [...exForm.questions]; nq[i].answer = oi; setExForm({ ...exForm, questions: nq }); }} name={`q-${i}`} />
+                                                                                                                                        <Input placeholder={`Option ${oi + 1}`} value={opt} onChange={e => { const nq = [...exForm.questions]; nq[i].options[oi] = e.target.value; setExForm({ ...exForm, questions: nq }); }} className="bg-slate-900 border-white/10 h-7 text-xs flex-1" />
+                                                                                                                                        <button onClick={() => { const nq = [...exForm.questions]; nq[i].options = nq[i].options.filter((_:any, oidx:number) => oidx !== oi); setExForm({ ...exForm, questions: nq }); }} className="text-red-400"><X className="w-3 h-3" /></button>
+                                                                                                                                    </div>
+                                                                                                                                ))}
+                                                                                                                                <button onClick={() => { const nq = [...exForm.questions]; nq[i].options.push(''); setExForm({ ...exForm, questions: nq }); }} className="text-[10px] text-slate-400 hover:text-white">+ Ajouter option</button>
+                                                                                                                            </div>
+                                                                                                                        )}
+                                                                                                                        {(exForm.type === 'quiz' || exForm.type === 'qa') && (
+                                                                                                                            <Input placeholder="Réponse attendue" value={q.answer} onChange={e => { const nq = [...exForm.questions]; nq[i].answer = e.target.value; setExForm({ ...exForm, questions: nq }); }} className="bg-slate-900 border-emerald-500/30 text-emerald-400 h-8 text-xs" />
+                                                                                                                        )}
+                                                                                                                    </div>
+                                                                                                                ))}
+                                                                                                                {exForm.questions.length === 0 && <p className="text-xs text-slate-500 text-center py-4">Aucune question ajoutée.</p>}
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                    <div className="p-4 border-t border-white/10 bg-white/5 flex gap-2 justify-end rounded-b-2xl">
+                                                                                                        <Button variant="ghost" onClick={() => setShowNewExercise(null)}>Annuler</Button>
+                                                                                                        <Button onClick={createExercise} disabled={savingEx || !exForm.title || exForm.questions.length === 0} className="bg-orange-600 hover:bg-orange-700 text-white">
+                                                                                                            {savingEx ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />} Enregistrer
+                                                                                                        </Button>
+                                                                                                    </div>
+                                                                                                </motion.div>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </AnimatePresence>
                                                                                 </motion.div>
                                                                             )}
                                                                         </div>
-                                                                    );
+                                                                    )
                                                                 })}
                                                                 {subChapters.length === 0 && <p className="text-xs text-slate-600 text-center py-3 mt-2">Programme pas encore disponible</p>}
                                                             </motion.div>
@@ -1095,6 +1351,86 @@ Vous pouvez écrire autant que nécessaire." className="w-full min-h-[300px] p-4
                         )}
                     </motion.div>
                 )}
+                
+                {/* ═══ STUDENT EXERCISE MODAL ═══ */}
+                <AnimatePresence>
+                    {activeExercise && !isTeacher && (
+                        <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col">
+                            <div className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-slate-900/50">
+                                <div>
+                                    <h2 className="font-bold text-lg text-white">{activeExercise.title}</h2>
+                                    <p className="text-xs text-slate-400">/{activeExercise.max_score} points</p>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    {!exResult && (
+                                        <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/10">
+                                            <Timer className={cn("w-4 h-4", exTimeLeft < 60 ? "text-red-400 animate-pulse" : "text-slate-400")} />
+                                            <span className={cn("font-mono font-bold", exTimeLeft < 60 ? "text-red-400" : "text-white")}>
+                                                {Math.floor(exTimeLeft / 60).toString().padStart(2, '0')}:{(exTimeLeft % 60).toString().padStart(2, '0')}
+                                            </span>
+                                        </div>
+                                    )}
+                                    {exResult ? (
+                                        <Button variant="outline" onClick={() => setActiveExercise(null)}>Fermer</Button>
+                                    ) : (
+                                        <Button onClick={submitExercise} disabled={exSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                                            {exSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />} Terminer
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-6">
+                                <div className="max-w-3xl mx-auto space-y-6">
+                                    {exResult && (
+                                        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-br from-indigo-900/40 to-purple-900/20 border border-indigo-500/30 rounded-2xl p-8 text-center shadow-2xl">
+                                            <Trophy className="w-16 h-16 text-amber-400 mx-auto mb-4" />
+                                            <h2 className="text-3xl font-black text-white mb-2">Exercice terminé !</h2>
+                                            {activeExercise.type === 'qcm' || activeExercise.type === 'quiz' ? (
+                                                <>
+                                                    <p className="text-slate-300 mb-6">Votre score est de :</p>
+                                                    <div className="inline-flex items-end gap-2 text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">
+                                                        {exResult.score} <span className="text-2xl text-slate-500">/ {activeExercise.max_score}</span>
+                                                    </div>
+                                                    {exResult.score > 0 && (
+                                                        <div className="mt-6 flex items-center justify-center gap-2 text-amber-400 font-bold bg-amber-500/10 px-4 py-2 rounded-full w-max mx-auto">
+                                                            <Star className="w-5 h-5 fill-amber-400" /> +{Math.round(exResult.score)} Sky Points
+                                                        </div>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <p className="text-slate-300">Vos réponses ont été soumises et seront corrigées par votre professeur.</p>
+                                            )}
+                                        </motion.div>
+                                    )}
+                                    
+                                    {!exResult && activeExercise.questions?.map((q: any, i: number) => (
+                                        <Card key={i} className="bg-slate-900/50 border-white/10">
+                                            <CardContent className="p-6">
+                                                <h3 className="font-bold text-lg mb-4 text-white"><span className="text-indigo-400 mr-2">{i + 1}.</span> {q.q}</h3>
+                                                {activeExercise.type === 'qcm' && (
+                                                    <div className="space-y-3">
+                                                        {q.options?.map((opt: string, oi: number) => (
+                                                            <label key={oi} className={cn("flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all", exAnswers[i] === oi ? "bg-indigo-500/20 border-indigo-500/50" : "bg-white/5 border-white/10 hover:bg-white/10")}>
+                                                                <input type="radio" name={`q-${i}`} checked={exAnswers[i] === oi} onChange={() => setExAnswers(prev => ({ ...prev, [i]: oi }))} className="w-4 h-4 text-indigo-500 bg-slate-900 border-white/20 focus:ring-indigo-500" />
+                                                                <span className="text-sm">{opt}</span>
+                                                            </label>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                {activeExercise.type === 'quiz' && (
+                                                    <Input placeholder="Votre réponse courte..." value={exAnswers[i] || ''} onChange={e => setExAnswers(prev => ({ ...prev, [i]: e.target.value }))} className="bg-white/5 border-white/10 h-12 text-base" />
+                                                )}
+                                                {(activeExercise.type === 'open' || activeExercise.type === 'qa') && (
+                                                    <Textarea placeholder="Rédigez votre réponse détaillée..." value={exAnswers[i] || ''} onChange={e => setExAnswers(prev => ({ ...prev, [i]: e.target.value }))} className="bg-white/5 border-white/10 min-h-[150px] resize-y text-base p-4" />
+                                                )}
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </AnimatePresence>
             </AnimatePresence>
         </div>
     );

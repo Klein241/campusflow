@@ -13,6 +13,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { supabase } from '@/lib/supabase';
+import { compressImage } from '@/lib/compress';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -47,6 +48,10 @@ export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgNam
     const [grades, setGrades] = useState<any[]>([]);
     const [subjects, setSubjects] = useState<any[]>([]);
     const [payments, setPayments] = useState<any[]>([]);
+
+    // Photo upload
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const [showPhotoModal, setShowPhotoModal] = useState(false);
 
     useEffect(() => {
         (async () => {
@@ -115,6 +120,28 @@ export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgNam
         router.push(`/${orgSlug}/login`);
     };
 
+    const uploadProfilePhoto = async (file: File) => {
+        setUploadingPhoto(true);
+        try {
+            const compressed = await compressImage(file, { maxWidth: 512, quality: 0.8 });
+            const table = userRole === 'teacher' ? 'teacher_profiles' : 'student_profiles';
+            const path = `profiles/${userId}/${Date.now()}_photo.jpg`;
+            const { error: upErr } = await supabase.storage.from('organization-assets').upload(path, compressed, { contentType: compressed.type, upsert: true });
+            if (upErr) throw upErr;
+            const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
+            const photoUrl = urlData.publicUrl;
+            const { error: dbErr } = await supabase.from(table).update({ photo_url: photoUrl }).eq('id', userId);
+            if (dbErr) throw dbErr;
+            setProfile({ ...profile, photo_url: photoUrl });
+            setShowPhotoModal(false);
+            toast.success('Photo de profil mise à jour ! 📸');
+        } catch (e: any) { toast.error(e.message || 'Erreur upload'); }
+        setUploadingPhoto(false);
+    };
+
+    // Force photo modal if no photo
+    const needsPhoto = profile && !profile.photo_url;
+
     if (loading) {
         return (
             <div className="flex items-center justify-center py-20">
@@ -125,6 +152,35 @@ export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgNam
 
     return (
         <div className="space-y-5">
+            {/* ═══ MANDATORY PHOTO MODAL ═══ */}
+            {(needsPhoto || showPhotoModal) && (
+                <div className={cn("fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4", needsPhoto ? '' : '')}>
+                    <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                        className="bg-[#1a1d27] rounded-2xl border border-white/10 max-w-sm w-full p-6 space-y-4 text-center">
+                        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-amber-500/20 to-orange-500/20 flex items-center justify-center mx-auto">
+                            <Camera className="w-10 h-10 text-amber-400" />
+                        </div>
+                        <h3 className="text-lg font-black text-white">{needsPhoto ? 'Photo de profil obligatoire' : 'Changer ma photo'}</h3>
+                        <p className="text-sm text-slate-400">{needsPhoto ? 'Veuillez ajouter votre photo de profil pour continuer.' : 'Choisissez une nouvelle photo.'}</p>
+                        <label className="block w-full py-4 rounded-xl border-2 border-dashed border-amber-500/30 cursor-pointer hover:border-amber-400/50 transition-colors">
+                            {uploadingPhoto ? (
+                                <Loader2 className="w-8 h-8 animate-spin mx-auto text-amber-400" />
+                            ) : (
+                                <>
+                                    <Camera className="w-8 h-8 mx-auto text-amber-400 mb-2" />
+                                    <span className="text-sm text-amber-300 font-medium">📷 Choisir une photo</span>
+                                </>
+                            )}
+                            <input type="file" accept="image/*" className="hidden" disabled={uploadingPhoto}
+                                onChange={e => { const f = e.target.files?.[0]; if (f) uploadProfilePhoto(f); }} />
+                        </label>
+                        {!needsPhoto && (
+                            <button onClick={() => setShowPhotoModal(false)} className="text-xs text-slate-500 hover:text-slate-400">Annuler</button>
+                        )}
+                    </motion.div>
+                </div>
+            )}
+
             {/* ═══ PROFILE HEADER ═══ */}
             <div className="flex flex-col items-center mb-2">
                 <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="relative mb-4">
@@ -134,12 +190,17 @@ export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgNam
                             {profile?.first_name?.[0]}{profile?.last_name?.[0]}
                         </AvatarFallback>
                     </Avatar>
+                    {/* Camera button to change photo */}
+                    <button onClick={() => setShowPhotoModal(true)}
+                        className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/30 hover:scale-110 transition-transform border-2 border-[#0B0E14]">
+                        <Camera className="w-3.5 h-3.5 text-white" />
+                    </button>
                     {overallAvg > 0 && (
                         <Badge className="absolute -bottom-2 -left-2 px-3 py-1 bg-gradient-to-r from-yellow-500 to-amber-600 border-none text-white shadow-lg text-[10px]">
                             {overallAvg >= 16 ? '🏆 Excellent' : overallAvg >= 14 ? '⭐ Très bien' : overallAvg >= 12 ? '👍 Bien' : overallAvg >= 10 ? '💪 Passable' : '📚 En progrès'}
                         </Badge>
                     )}
-                    <Badge className="absolute -bottom-2 -right-2 px-2 py-0.5 border-none text-white text-[9px]"
+                    <Badge className="absolute -top-2 -right-2 px-2 py-0.5 border-none text-white text-[9px]"
                         style={{ background: userRole === 'teacher' ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'linear-gradient(135deg,#14b8a6,#10b981)' }}>
                         {userRole === 'teacher' ? '👨‍🏫 Prof' : '🎓 Étudiant'}
                     </Badge>
@@ -149,6 +210,16 @@ export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgNam
                 </h2>
                 <p className="text-sm text-slate-400 mt-1">{classroom?.name || '—'}</p>
                 <p className="text-xs text-slate-500 mt-1 bg-white/5 px-3 py-1 rounded-full">{orgName}</p>
+                {/* Sky Points for students */}
+                {userRole === 'student' && profile?.sky_points !== undefined && (
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
+                        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border border-yellow-500/20">
+                            <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+                            <span className="text-lg font-black text-yellow-400">{profile.sky_points || 0}</span>
+                            <span className="text-xs text-yellow-400/70">Sky Points</span>
+                        </div>
+                    </motion.div>
+                )}
             </div>
 
             {/* ═══ STATS ═══ */}
