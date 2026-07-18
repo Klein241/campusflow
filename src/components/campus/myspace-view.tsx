@@ -628,9 +628,13 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                         {myStudents.filter((s: any) => s.classroom_id === selectedClass).map((s: any, i: number) => (
                             <motion.div key={s.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.02 }}
                                 className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:border-white/10 transition-all">
-                                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-teal-600 to-emerald-600 flex items-center justify-center text-sm font-bold text-white shrink-0">
-                                    {s.first_name?.[0]}{s.last_name?.[0]}
-                                </div>
+                                {s.photo_url ? (
+                                    <img src={s.photo_url} alt={s.first_name} className="w-11 h-11 rounded-full object-cover shrink-0 border-2 border-teal-500/30" />
+                                ) : (
+                                    <div className="w-11 h-11 rounded-full bg-gradient-to-br from-teal-600 to-emerald-600 flex items-center justify-center text-sm font-bold text-white shrink-0">
+                                        {s.first_name?.[0]}{s.last_name?.[0]}
+                                    </div>
+                                )}
                                 <div className="flex-1 min-w-0">
                                     <p className="font-medium text-sm truncate">{s.first_name} {s.last_name}</p>
                                     <p className="text-[10px] text-slate-500">{s.matricule || '—'} • {s.classrooms?.name || ''}</p>
@@ -1120,7 +1124,7 @@ Vous pouvez écrire autant que nécessaire." className="w-full min-h-[300px] p-4
 <Button size="sm" onClick={() => { setActiveExercise(ex); setExAnswers({}); setExTimeLeft(ex.duration_minutes * 60); setExResult(null); }} className="bg-orange-600 hover:bg-orange-700 text-[9px] h-6 px-2 rounded">Commencer</Button>
                                                                                                                 </div>
                                                                                                             ))}
-                                                                                                            <Button size="sm" variant="ghost" className="h-6 w-full text-[10px] text-orange-400 hover:text-orange-300 border border-orange-500/20" onClick={() => { setShowNewExercise(lesson.id); setExForm({ title: '', type: 'qcm', duration_minutes: 10, max_score: 20, questions: [] }); }}>
+                                                                                                            <Button size="sm" variant="ghost" className="h-6 w-full text-[10px] text-orange-400 hover:text-orange-300 border border-orange-500/20" onClick={() => { setShowNewExercise({ type: 'lesson', id: lesson.id }); setExForm({ title: '', type: 'qcm', duration_minutes: 10, max_score: 20, questions: [] }); }}>
                                                                                                                 <Plus className="w-3 h-3 mr-1" /> Ajouter exercice
                                                                                                             </Button>
                                                                                                         </div>
