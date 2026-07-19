@@ -230,8 +230,11 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                     const { data: cls } = await supabase.from('classrooms').select('*, filieres:filiere_id(*)').eq('id', s.classroom_id).single();
                     setClassroom(cls);
                     if (cls?.filieres) setFiliere(cls.filieres);
-                    const { data: subs } = await supabase.from('subjects').select('*, teacher_profiles:teacher_id(first_name, last_name)')
-                        .eq('classroom_id', s.classroom_id).order('name');
+                    const { data: subs } = await supabase.from('subjects')
+                        .select('*, teacher_profiles:teacher_id(first_name, last_name)')
+                        .eq('classroom_id', s.classroom_id)
+                        .eq('organization_id', orgId)
+                        .order('name');
                     setSubjects(subs || []);
                     const { data: slots } = await supabase.from('timetable_slots')
                         .select('*, subjects:subject_id(name), classrooms:classroom_id(name)')
@@ -247,11 +250,17 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                     // Load chapters + lessons for student cursus
                     const subjectIds = (subs || []).map((s: any) => s.id);
                     if (subjectIds.length > 0) {
-                        const { data: chaps } = await supabase.from('chapters').select('*').in('subject_id', subjectIds).order('position');
+                        const { data: chaps } = await supabase.from('chapters')
+                            .select('*, resources:chapter_resources(*)')
+                            .in('subject_id', subjectIds)
+                            .order('position');
                         setStudentChapters(chaps || []);
                         const chapterIds = (chaps || []).map((c: any) => c.id);
                         if (chapterIds.length > 0) {
-                            const { data: lsns } = await supabase.from('lessons').select('*').in('chapter_id', chapterIds).order('position');
+                            const { data: lsns } = await supabase.from('lessons')
+                                .select('*, resources:lesson_resources(*)')
+                                .in('chapter_id', chapterIds)
+                                .order('position');
                             setStudentLessons(lsns || []);
                         }
                     }
@@ -1024,7 +1033,8 @@ Vous pouvez écrire autant que nécessaire." className="w-full min-h-[300px] p-4
                                 <h3 className="font-bold text-sm text-slate-300">📚 Matières & Programme ({subjects.length})</h3>
                                 <div className="space-y-2">
                                     {subjects.map((sub: any, i: number) => {
-                                        const subChapters = studentChapters.filter(c => c.subject_id === sub.id && c.status !== 'draft').sort((a, b) => a.position - b.position);
+                                        // Show published + completed chapters (not draft). If null status, show anyway.
+                                        const subChapters = studentChapters.filter(c => c.subject_id === sub.id && (c.status === 'published' || c.status === 'completed' || !c.status)).sort((a, b) => a.position - b.position);
                                         const isExpSub = expandedStudentSub === sub.id;
                                         return (
                                             <motion.div key={sub.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}>
@@ -1045,8 +1055,11 @@ Vous pouvez écrire autant que nécessaire." className="w-full min-h-[300px] p-4
                                                                 {isExpSub ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
                                                             </div>
                                                         </div>
-                                                        {isExpSub && subChapters.length > 0 && (
+                                                        {isExpSub && (
                                                             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="border-t border-white/5 px-3 pb-3 space-y-2">
+                                                                {subChapters.length === 0 && (
+                                                                    <p className="text-xs text-slate-500 text-center py-4">📚 Aucun chapitre publié pour l&apos;instant</p>
+                                                                )}
                                                                 {subChapters.map((ch, ci) => {
                                                                     const chLessons = studentLessons.filter(l => l.chapter_id === ch.id).sort((a, b) => a.position - b.position);
                                                                     const hasLessons = chLessons.length > 0;
