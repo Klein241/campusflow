@@ -82,18 +82,30 @@ export function TeacherCursus({ orgId, userId, allClasses, onStartDM }: TeacherC
                 setLessons(lsns || []);
             }
 
-            const { data: exs } = await supabase.from('exercises').select('*')
-                .or(subjectIds.length > 0 ? `subject_id.in.(${subjectIds.join(',')})` : 'id.eq.00000000-0000-0000-0000-000000000000');
-            setExercises(exs || []);
+            // Load exercises by chapter AND by subject (guard empty arrays)
+            let allExs: any[] = [];
+            if (chapterIds.length > 0 && subjectIds.length > 0) {
+                const { data: exsByChap } = await supabase.from('exercises').select('*')
+                    .or(`chapter_id.in.(${chapterIds.join(',')}),subject_id.in.(${subjectIds.join(',')})`);
+                allExs = exsByChap || [];
+            } else if (subjectIds.length > 0) {
+                const { data: exsBySub } = await supabase.from('exercises').select('*')
+                    .in('subject_id', subjectIds);
+                allExs = exsBySub || [];
+            }
+            setExercises(allExs);
 
-            const exIds = (exs || []).map((e: any) => e.id);
+            const exIds = allExs.map((e: any) => e.id);
             if (exIds.length > 0) {
-                const { data: s2 } = await supabase.from('exercise_submissions').select('*, student_profiles:student_id(first_name, last_name)').in('exercise_id', exIds);
+                const { data: s2 } = await supabase.from('exercise_submissions')
+                    .select('*, student_profiles:student_id(first_name, last_name)')
+                    .in('exercise_id', exIds);
                 setSubmissions(s2 || []);
             }
 
             // Disputes
-            const { data: disp } = await supabase.from('grade_disputes').select('*').eq('organization_id', orgId).order('created_at', { ascending: false });
+            const { data: disp } = await supabase.from('grade_disputes')
+                .select('*').eq('organization_id', orgId).order('created_at', { ascending: false });
             setDisputes(disp || []);
         }
         setLoading(false);
