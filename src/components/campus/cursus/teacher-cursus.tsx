@@ -119,6 +119,7 @@ export function TeacherCursus({ orgId, userId, allClasses, onStartDM }: TeacherC
         const pos = chapters.filter(c => c.subject_id === subjectId).length;
         const { data, error } = await supabase.from('chapters').insert({
             organization_id: orgId,
+            teacher_id: userId,
             subject_id: subjectId, title: chForm.title.trim(), description: chForm.description,
             content: chForm.content, status: 'published', position: pos
         }).select().single();

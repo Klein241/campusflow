@@ -130,8 +130,10 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
         if (!chForm.title) return;
         setSavingCh(true);
         const pos = chapters.filter(c => c.subject_id === subjectId).length;
+        const parentSubject = subjects.find(s => s.id === subjectId);
         const { data, error } = await supabase.from('chapters').insert({
             organization_id: orgId,
+            teacher_id: parentSubject?.teacher_id || null,
             subject_id: subjectId, title: chForm.title.trim(), content: chForm.content,
             status: 'published', position: pos
         }).select().single();
