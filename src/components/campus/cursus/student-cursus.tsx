@@ -90,11 +90,20 @@ export function StudentCursus({ orgId, userId, classroomId, skyPoints, onSkyUpda
                 setLessons(lsns || []);
             }
 
-            // Exercises (by chapter or subject)
-            const { data: exs } = await supabase.from('exercises')
-                .select('*')
-                .or(`chapter_id.in.(${chapterIds.join(',')}),subject_id.in.(${subjectIds.join(',')})`);
-            setExercises(exs || []);
+            // Exercises (by chapter or subject) — guard empty arrays
+            let exs: any[] = [];
+            if (chapterIds.length > 0) {
+                const { data: exData } = await supabase.from('exercises')
+                    .select('*')
+                    .or(`chapter_id.in.(${chapterIds.join(',')}),subject_id.in.(${subjectIds.join(',')})`);
+                exs = exData || [];
+            } else if (subjectIds.length > 0) {
+                const { data: exData } = await supabase.from('exercises')
+                    .select('*')
+                    .in('subject_id', subjectIds);
+                exs = exData || [];
+            }
+            setExercises(exs);
 
             // My submissions
             const { data: subs2 } = await supabase.from('exercise_submissions')

@@ -118,6 +118,7 @@ export function TeacherCursus({ orgId, userId, allClasses, onStartDM }: TeacherC
         setSavingCh(true);
         const pos = chapters.filter(c => c.subject_id === subjectId).length;
         const { data, error } = await supabase.from('chapters').insert({
+            organization_id: orgId,
             subject_id: subjectId, title: chForm.title.trim(), description: chForm.description,
             content: chForm.content, status: 'published', position: pos
         }).select().single();
@@ -152,6 +153,7 @@ export function TeacherCursus({ orgId, userId, allClasses, onStartDM }: TeacherC
         setSavingLesson(true);
         const pos = lessons.filter(l => l.chapter_id === chapterId).length;
         const { data, error } = await supabase.from('lessons').insert({
+            organization_id: orgId,
             chapter_id: chapterId, title: lessonForm.title.trim(), content: lessonForm.content,
             status: 'published', position: pos, estimated_minutes: parseInt(lessonForm.estimated_minutes) || 15
         }).select().single();

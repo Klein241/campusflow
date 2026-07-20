@@ -216,23 +216,6 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                         .select('*, evaluations:evaluation_id(title, max_score, type, subject_id, subjects:subject_id(name))')
                         .eq('student_id', userId);
                     setGrades(grs || []);
-                    // Load chapters + lessons for student cursus
-                    const subjectIds = (subs || []).map((s: any) => s.id);
-                    if (subjectIds.length > 0) {
-                        const { data: chaps } = await supabase.from('chapters')
-                            .select('*, resources:chapter_resources(*)')
-                            .in('subject_id', subjectIds)
-                            .order('position');
-                        setStudentChapters(chaps || []);
-                        const chapterIds = (chaps || []).map((c: any) => c.id);
-                        if (chapterIds.length > 0) {
-                            const { data: lsns } = await supabase.from('lessons')
-                                .select('*, resources:lesson_resources(*)')
-                                .in('chapter_id', chapterIds)
-                                .order('position');
-                            setStudentLessons(lsns || []);
-                        }
-                    }
                 }
                 const { data: pays } = await supabase.from('school_payments').select('*')
                     .eq('student_id', userId).order('paid_at', { ascending: false });
