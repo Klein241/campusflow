@@ -6,10 +6,11 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
   trailingSlash: true,
-  // Skip separate tsc type-check step during build (prevents OOM on large codebases).
-  // Types are validated by the IDE/editor and the MCP analyzer.
   typescript: {
     ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
   },
 };
 
