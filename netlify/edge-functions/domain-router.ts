@@ -18,10 +18,11 @@
 // NOTE: No template literals used — Deno eszip bundler requires plain string concatenation.
 
 const PLATFORM_DOMAINS = [
-    "campusflow.netlify.app",
-    "campusfl.netlify.app",
-    "campusflow.app",
+    "netlify.app",      // catches ALL *.netlify.app subdomains (campusflw, campusflow, previews...)
+    "netlify.live",     // Netlify deploy previews
+    "campusflow.app",   // production domain
 ];
+
 
 // Sub-paths that exist inside an org context
 const ORG_SUB_PATHS = [
@@ -44,10 +45,13 @@ export default async function handler(request, context) {
     if (
         hostname === "localhost" ||
         hostname === "127.0.0.1" ||
-        PLATFORM_DOMAINS.some(function(d) { return hostname.endsWith(d); })
+        PLATFORM_DOMAINS.some(function(d) {
+            return hostname === d || hostname.endsWith("." + d) || hostname.endsWith(d);
+        })
     ) {
         return context.next();
     }
+
 
     // Custom domain detected
     const pathname = url.pathname;

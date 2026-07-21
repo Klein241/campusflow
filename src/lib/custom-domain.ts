@@ -4,18 +4,23 @@
 // CUSTOM DOMAIN UTILITIES
 // ═══════════════════════════════════════════════════════════════
 
-export const PLATFORM_DOMAINS = [
+/** Suffixes that identify the CampusFlow platform — NOT school custom domains */
+const PLATFORM_SUFFIXES = [
+    'netlify.app',    // catches campusflw.netlify.app, campusflow.netlify.app, any preview URL
+    'netlify.live',   // Netlify preview links
+    'campusflow.app', // production domain (if/when set)
     'localhost',
     '127.0.0.1',
-    'campusflow.netlify.app',
-    'campusfl.netlify.app',
-    'campusflow.app',
 ];
 
 /** Returns true if running on a school's custom domain (not the platform) */
 export function isCustomDomain(hostname?: string): boolean {
     const h = hostname ?? (typeof window !== 'undefined' ? window.location.hostname : '');
-    return !PLATFORM_DOMAINS.some(d => h.includes(d));
+    if (!h) return false;
+    // Not a custom domain if hostname IS or ENDS WITH any platform suffix
+    return !PLATFORM_SUFFIXES.some(suffix =>
+        h === suffix || h.endsWith('.' + suffix) || h.endsWith(suffix)
+    );
 }
 
 const CACHE_KEY = 'campusflow_custom_domain_v2';
