@@ -12,6 +12,13 @@
   # NEXT_PUBLIC_ADMIN_KEY — Set this in Netlify Dashboard > Site Settings > Environment Variables
   # DO NOT commit secrets to version control
 
+# ═══ Edge Functions ═══
+# domain-router: detects custom domains and rewrites paths to /_/ prefix
+# so that the /:orgSlug/* redirect rules below can match them.
+[[edge_functions]]
+  path = "/*"
+  function = "domain-router"
+
 # ═══ SPA REDIRECTS for dynamic [orgSlug] routes ═══
 # These rewrite any /:orgSlug/* path to the static _/ placeholder pages.
 # The client-side JS reads the actual URL to determine the real orgSlug.

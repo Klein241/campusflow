@@ -1,37 +1,86 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
+import {
+    isCustomDomain,
+    getCachedDomainSlug,
+    DOMAIN_RESOLVED_EVENT,
+    type DomainResolvedDetail,
+} from '@/lib/custom-domain';
 
 /**
- * Returns the real orgSlug from the URL pathname.
+ * useOrgSlug — Returns the real orgSlug for the current page.
  *
- * Problem: In static export mode, `generateStaticParams` returns `[{ orgSlug: '_' }]`.
- * Next.js bakes `_` into the generated HTML. When Netlify rewrites
- * `/the-greatsoft-academy/admin` → `/_/admin/index.html`, `useParams()` still
- * returns `{ orgSlug: '_' }` instead of the real slug from the URL.
+ * Two modes:
  *
- * Solution: Parse `window.location.pathname` to extract the first path segment,
- * which is always the real orgSlug.
+ * 1. PLATFORM DOMAIN (campusflow.netlify.app):
+ *    URL structure: /the-great-academy/campus/
+ *    → Extract first path segment from window.location.pathname
+ *
+ * 2. CUSTOM DOMAIN (ecole.example.com):
+ *    URL structure: /campus/  (no orgSlug in path)
+ *    → Resolved asynchronously via CustomDomainResolver (Supabase lookup)
+ *    → Cached in localStorage for 24h
+ *    → Delivered via `campusflow:domain-resolved` custom event
+ *
+ * Falls back to `_` (the static placeholder slug) during initial hydration.
  */
 export function useOrgSlug(): string {
     const params = useParams<{ orgSlug: string }>();
 
+    // For custom domains: holds the resolved slug once available
+    const [resolvedSlug, setResolvedSlug] = useState<string | null>(() => {
+        // Synchronous init: try localStorage cache immediately
+        if (typeof window !== 'undefined' && isCustomDomain()) {
+            return getCachedDomainSlug();
+        }
+        return null;
+    });
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (!isCustomDomain()) return;
+
+        // Already have it from cache
+        if (resolvedSlug) return;
+
+        // Listen for async resolution from CustomDomainResolver
+        const handler = (e: Event) => {
+            const { slug, found } = (e as CustomEvent<DomainResolvedDetail>).detail;
+            if (found && slug) {
+                setResolvedSlug(slug);
+            }
+        };
+
+        window.addEventListener(DOMAIN_RESOLVED_EVENT, handler);
+
+        // Also check cache again (may have been populated between renders)
+        const cached = getCachedDomainSlug();
+        if (cached) setResolvedSlug(cached);
+
+        return () => window.removeEventListener(DOMAIN_RESOLVED_EVENT, handler);
+    }, [resolvedSlug]);
+
     const slug = useMemo(() => {
-        // On the server (SSR/SSG) or during initial hydration, window may not exist
         if (typeof window === 'undefined') {
             return params.orgSlug || '_';
         }
 
-        // Extract the first non-empty path segment from the actual URL
-        // e.g. "/the-greatsoft-academy/admin/" → "the-greatsoft-academy"
+        // ─── Custom domain ───────────────────────────────────────────────
+        if (isCustomDomain()) {
+            // Return resolved slug or '_' placeholder while resolving
+            return resolvedSlug || '_';
+        }
+
+        // ─── Platform domain ─────────────────────────────────────────────
+        // URL: /the-great-academy/campus/ → orgSlug = "the-great-academy"
         const segments = window.location.pathname.split('/').filter(Boolean);
         const urlSlug = segments[0] || '_';
 
-        // If the URL slug is '_', fall back to useParams (dev mode / direct access)
-        // Otherwise, always prefer the real URL slug
+        // If URL shows '_' (the placeholder), fall back to useParams
         return urlSlug === '_' ? (params.orgSlug || '_') : urlSlug;
-    }, [params.orgSlug]);
+    }, [params.orgSlug, resolvedSlug]);
 
     return slug;
 }

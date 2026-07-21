@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Outfit } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import { CustomDomainResolver } from "@/components/custom-domain-resolver";
 import "./globals.css";
 
 const inter = Inter({
@@ -58,6 +59,7 @@ export default function RootLayout({
         <meta name="color-scheme" content="dark" />
       </head>
       <body className={`${inter.variable} ${outfit.variable} antialiased bg-[#0B0E14] text-white`}>
+        <CustomDomainResolver />
         {children}
         <Toaster position="top-center" richColors />
       </body>
