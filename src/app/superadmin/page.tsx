@@ -4,11 +4,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     LayoutDashboard, Building2, Users, Globe, Megaphone,
-    LogOut, Search, CheckCircle2, XCircle, Eye, EyeOff,
-    ShieldCheck, Loader2, TrendingUp, Activity, RefreshCw,
+    LogOut, Search, CheckCircle2, Eye, EyeOff, Trash2,
+    ShieldCheck, Loader2, TrendingUp, RefreshCw,
     ChevronRight, AlertTriangle, Ban, RotateCcw, ExternalLink,
-    Mail, Calendar, School, UserCheck, Server, Settings,
-    BarChart3, Zap, Lock
+    Mail, Lock, School, UserCheck, Activity,
+    BarChart3, Zap, Clock, CheckSquare
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -16,10 +16,11 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-// ═══════════════════════════════════════════════════════════════
-// SUPERADMIN PANEL — Platform-level administration
-// Secured by platform_admins table in Supabase
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
+// CAMPUSFLOW — SUPERADMIN PANEL
+// Platform-level administration dashboard
+// Protected by platform_admins table (Supabase Auth + RLS)
+// ═══════════════════════════════════════════════════════════════════════
 
 type Tab = 'overview' | 'orgs' | 'users' | 'domains' | 'announcements';
 
@@ -58,64 +59,96 @@ interface UserItem {
     created_at: string;
 }
 
-const SIDEBAR = [
-    { id: 'overview',      label: 'Vue d\'ensemble', icon: LayoutDashboard },
-    { id: 'orgs',          label: 'Organisations',   icon: Building2 },
-    { id: 'users',         label: 'Utilisateurs',    icon: Users },
-    { id: 'domains',       label: 'Domaines',        icon: Globe },
-    { id: 'announcements', label: 'Annonces',        icon: Megaphone },
-] as const;
+interface ActivityItem {
+    type: 'org' | 'student' | 'teacher';
+    label: string;
+    meta: string;
+    created_at: string;
+}
+
+const SIDEBAR: { id: Tab; label: string; icon: any; }[] = [
+    { id: 'overview',       label: 'Vue d\'ensemble',  icon: LayoutDashboard },
+    { id: 'orgs',           label: 'Organisations',    icon: Building2 },
+    { id: 'users',          label: 'Utilisateurs',     icon: Users },
+    { id: 'domains',        label: 'Domaines custom',  icon: Globe },
+    { id: 'announcements',  label: 'Annonces globales',icon: Megaphone },
+];
 
 function timeAgo(iso: string) {
     const d = new Date(iso);
     const diff = (Date.now() - d.getTime()) / 1000;
-    if (diff < 60) return 'À l\'instant';
-    if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+    if (diff < 60)    return 'À l\'instant';
+    if (diff < 3600)  return `${Math.floor(diff / 60)}m`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)}j`;
     return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-// ─── KPI Card ─────────────────────────────────────────────────
-function KpiCard({ label, value, icon: Icon, color, sub }: {
-    label: string; value: number | string; icon: any; color: string; sub?: string;
+// ─── KPI Card ──────────────────────────────────────────────────────
+function KpiCard({ label, value, icon: Icon, gradient, sub }: {
+    label: string; value: number | string; icon: any;
+    gradient: string; sub?: string;
 }) {
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-            className="relative p-5 rounded-2xl bg-white/[0.04] border border-white/8 overflow-hidden group hover:border-white/15 transition-all">
-            <div className={cn('absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-20 -translate-y-1/2 translate-x-1/2', color)} />
-            <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center mb-3', color.replace('bg-', 'bg-').replace('/20', '/15'))}>
+            className="relative p-5 rounded-2xl bg-white/[0.04] border border-white/8 overflow-hidden group hover:border-white/20 transition-all duration-300 cursor-default">
+            <div className={cn('absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300', gradient)} style={{ opacity: 0.04 }} />
+            <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center mb-3 bg-gradient-to-br', gradient)}>
                 <Icon className="w-5 h-5 text-white" />
             </div>
-            <p className="text-2xl font-black text-white">{typeof value === 'number' ? value.toLocaleString() : value}</p>
+            <p className="text-2xl font-black text-white">{typeof value === 'number' ? value.toLocaleString('fr-FR') : value}</p>
             <p className="text-xs text-slate-400 mt-0.5">{label}</p>
-            {sub && <p className="text-[10px] text-slate-600 mt-1">{sub}</p>}
+            {sub && <p className="text-[10px] text-emerald-500 mt-1 font-medium">{sub}</p>}
         </motion.div>
     );
 }
 
-// ─── Main Component ───────────────────────────────────────────
-export default function SuperAdminPage() {
-    const [authStep, setAuthStep] = useState<'loading' | 'login' | 'dashboard'>('loading');
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [showPw, setShowPw] = useState(false);
-    const [loginLoading, setLoginLoading] = useState(false);
-    const [loginError, setLoginError] = useState('');
+// ─── Badge ─────────────────────────────────────────────────────────
+function Badge({ active, label, activeClass, inactiveClass }: {
+    active: boolean; label: [string, string];
+    activeClass: string; inactiveClass: string;
+}) {
+    return (
+        <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-semibold', active ? activeClass : inactiveClass)}>
+            {active ? label[0] : label[1]}
+        </span>
+    );
+}
 
-    const [tab, setTab] = useState<Tab>('overview');
-    const [stats, setStats] = useState<Stats | null>(null);
-    const [orgs, setOrgs] = useState<OrgItem[]>([]);
-    const [users, setUsers] = useState<UserItem[]>([]);
+// ══════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ══════════════════════════════════════════════════════════════════
+export default function SuperAdminPage() {
+    // ── Auth state ────────────────────────────────────────────────
+    const [authStep, setAuthStep] = useState<'loading' | 'login' | 'dashboard'>('loading');
+    const [email, setEmail]       = useState('');
+    const [password, setPassword] = useState('');
+    const [showPw, setShowPw]     = useState(false);
+    const [loginLoading, setLoginLoading] = useState(false);
+    const [loginError, setLoginError]     = useState('');
+
+    // ── Navigation ────────────────────────────────────────────────
+    const [tab, setTab]       = useState<Tab>('overview');
     const [search, setSearch] = useState('');
+
+    // ── Data ──────────────────────────────────────────────────────
+    const [stats, setStats]         = useState<Stats | null>(null);
+    const [orgs, setOrgs]           = useState<OrgItem[]>([]);
+    const [users, setUsers]         = useState<UserItem[]>([]);
+    const [activity, setActivity]   = useState<ActivityItem[]>([]);
     const [dataLoading, setDataLoading] = useState(false);
 
-    // Announcement form
-    const [annTitle, setAnnTitle] = useState('');
-    const [annBody, setAnnBody] = useState('');
-    const [annTarget, setAnnTarget] = useState('all');
+    // ── Announcement form ─────────────────────────────────────────
+    const [annTitle, setAnnTitle]   = useState('');
+    const [annBody, setAnnBody]     = useState('');
+    const [annTarget, setAnnTarget] = useState<'all' | string>('all');
     const [sendingAnn, setSendingAnn] = useState(false);
 
-    // ── Auth check on mount ───────────────────────────────────
+    // ── Confirm delete dialog ─────────────────────────────────────
+    const [deleteConfirm, setDeleteConfirm] = useState<OrgItem | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
+    // ─── Mount: check auth ───────────────────────────────────────
     useEffect(() => {
         (async () => {
             const { data: { session } } = await supabase.auth.getSession();
@@ -124,10 +157,10 @@ export default function SuperAdminPage() {
             const { data: isAdmin } = await supabase.rpc('is_platform_admin');
             if (isAdmin) {
                 setAuthStep('dashboard');
-                loadData();
-                // Update last_login
-                await supabase.from('platform_admins').update({ last_login: new Date().toISOString() })
+                await supabase.from('platform_admins')
+                    .update({ last_login: new Date().toISOString() })
                     .eq('user_id', session.user.id);
+                loadAllData();
             } else {
                 await supabase.auth.signOut();
                 setAuthStep('login');
@@ -136,13 +169,18 @@ export default function SuperAdminPage() {
         })();
     }, []);
 
-    // ── Login ─────────────────────────────────────────────────
+    // ─── Login ───────────────────────────────────────────────────
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoginError('');
         setLoginLoading(true);
+
         const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) { setLoginError(error.message); setLoginLoading(false); return; }
+        if (error) {
+            setLoginError(error.message);
+            setLoginLoading(false);
+            return;
+        }
 
         const { data: isAdmin } = await supabase.rpc('is_platform_admin');
         if (!isAdmin) {
@@ -151,61 +189,81 @@ export default function SuperAdminPage() {
             setLoginLoading(false);
             return;
         }
+
         setAuthStep('dashboard');
         setLoginLoading(false);
-        loadData();
+        loadAllData();
     };
 
-    // ── Load all data ──────────────────────────────────────────
-    const loadData = useCallback(async () => {
+    // ─── Load all data ───────────────────────────────────────────
+    const loadAllData = useCallback(async () => {
         setDataLoading(true);
         try {
-            const [{ data: statsData }, { data: orgsData }, { data: usersData }] = await Promise.all([
+            const [statsRes, orgsRes, usersRes, activityRes] = await Promise.all([
                 supabase.rpc('superadmin_get_stats'),
                 supabase.rpc('superadmin_get_orgs'),
-                supabase.rpc('superadmin_get_users', { p_limit: 200, p_offset: 0 }),
+                supabase.rpc('superadmin_get_users', { p_limit: 300, p_offset: 0 }),
+                supabase.rpc('superadmin_get_recent_activity'),
             ]);
-            if (statsData) setStats(statsData as Stats);
-            if (orgsData) setOrgs(orgsData as OrgItem[]);
-            if (usersData) setUsers(usersData as UserItem[]);
+            if (statsRes.data)    setStats(statsRes.data as Stats);
+            if (orgsRes.data)     setOrgs(orgsRes.data as OrgItem[]);
+            if (usersRes.data)    setUsers(usersRes.data as UserItem[]);
+            if (activityRes.data) setActivity(activityRes.data as ActivityItem[]);
         } catch (e: any) {
-            toast.error('Erreur chargement: ' + e.message);
+            toast.error('Erreur chargement: ' + (e.message ?? 'inconnue'));
         }
         setDataLoading(false);
     }, []);
 
-    // ── Actions ───────────────────────────────────────────────
+    // ─── Actions ─────────────────────────────────────────────────
     const toggleOrg = async (org: OrgItem) => {
-        const newState = !org.is_active;
-        await supabase.rpc('superadmin_toggle_org', { p_org_id: org.id, p_active: newState });
-        setOrgs(prev => prev.map(o => o.id === org.id ? { ...o, is_active: newState } : o));
-        toast.success(newState ? `✅ ${org.name} réactivée` : `🚫 ${org.name} suspendue`);
+        const next = !org.is_active;
+        const { error } = await supabase.rpc('superadmin_toggle_org', { p_org_id: org.id, p_active: next });
+        if (error) { toast.error(error.message); return; }
+        setOrgs(prev => prev.map(o => o.id === org.id ? { ...o, is_active: next } : o));
+        toast.success(next ? `✅ ${org.name} réactivée` : `🚫 ${org.name} suspendue`);
     };
 
     const verifyDomain = async (org: OrgItem) => {
-        const newState = !org.domain_verified;
-        await supabase.rpc('superadmin_verify_domain', { p_org_id: org.id, p_verified: newState });
-        setOrgs(prev => prev.map(o => o.id === org.id ? { ...o, domain_verified: newState } : o));
-        toast.success(newState ? `🌐 Domaine vérifié` : `❌ Vérification retirée`);
+        const next = !org.domain_verified;
+        const { error } = await supabase.rpc('superadmin_verify_domain', { p_org_id: org.id, p_verified: next });
+        if (error) { toast.error(error.message); return; }
+        setOrgs(prev => prev.map(o => o.id === org.id ? { ...o, domain_verified: next } : o));
+        toast.success(next ? `🌐 Domaine "${org.custom_domain}" vérifié ✅` : `❌ Vérification retirée`);
+    };
+
+    const handleDeleteOrg = async () => {
+        if (!deleteConfirm) return;
+        setDeleting(true);
+        const { error } = await supabase.rpc('superadmin_delete_org', { p_org_id: deleteConfirm.id });
+        if (error) { toast.error(error.message); setDeleting(false); return; }
+        setOrgs(prev => prev.filter(o => o.id !== deleteConfirm.id));
+        toast.success(`🗑️ Organisation "${deleteConfirm.name}" supprimée`);
+        setDeleteConfirm(null);
+        setDeleting(false);
+        loadAllData(); // refresh stats
     };
 
     const sendAnnouncement = async () => {
-        if (!annTitle.trim() || !annBody.trim()) { toast.error('Titre et message requis'); return; }
+        if (!annTitle.trim() || !annBody.trim()) {
+            toast.error('Titre et message requis');
+            return;
+        }
         setSendingAnn(true);
-        try {
-            // Insert into a global_announcements table (or org actus with category admin_actus)
-            // For each org or targeted org, insert an admin post
-            const targetOrgs = annTarget === 'all' ? orgs : orgs.filter(o => o.id === annTarget);
-            for (const org of targetOrgs) {
-                await supabase.from('tutoring_requests').insert({
-                    // Using tutoring_requests as actus table — insert with category=admin_actus
-                    // Adjust if your actus table is different
-                }).then(); // skip errors
-            }
-            toast.success(`📢 Annonce envoyée à ${targetOrgs.length} établissement(s)`);
-            setAnnTitle(''); setAnnBody('');
-        } catch (e: any) {
-            toast.error(e.message);
+        const { data, error } = await supabase.rpc('superadmin_send_announcement', {
+            p_title:  annTitle.trim(),
+            p_body:   annBody.trim(),
+            p_org_id: annTarget === 'all' ? null : annTarget,
+        });
+
+        if (error) {
+            toast.error('Erreur: ' + error.message);
+        } else {
+            const count = (data as any)?.sent_to ?? 0;
+            toast.success(`📢 Annonce envoyée à ${count} établissement(s) !`);
+            setAnnTitle('');
+            setAnnBody('');
+            setAnnTarget('all');
         }
         setSendingAnn(false);
     };
@@ -213,413 +271,564 @@ export default function SuperAdminPage() {
     const handleLogout = async () => {
         await supabase.auth.signOut();
         setAuthStep('login');
-        setStats(null); setOrgs([]); setUsers([]);
+        setStats(null); setOrgs([]); setUsers([]); setActivity([]);
+        setEmail(''); setPassword('');
     };
 
-    // ─── Filter ───────────────────────────────────────────────
+    // ─── Filtered lists ───────────────────────────────────────────
+    const q = search.toLowerCase();
     const filteredOrgs = orgs.filter(o =>
-        o.name.toLowerCase().includes(search.toLowerCase()) ||
-        o.slug.toLowerCase().includes(search.toLowerCase()) ||
-        (o.city || '').toLowerCase().includes(search.toLowerCase())
+        o.name.toLowerCase().includes(q) ||
+        o.slug.toLowerCase().includes(q) ||
+        (o.city || '').toLowerCase().includes(q) ||
+        (o.school_type || '').toLowerCase().includes(q)
     );
     const filteredUsers = users.filter(u =>
-        u.full_name.toLowerCase().includes(search.toLowerCase()) ||
-        u.email.toLowerCase().includes(search.toLowerCase()) ||
-        u.org_name?.toLowerCase().includes(search.toLowerCase())
+        u.full_name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        (u.org_name || '').toLowerCase().includes(q)
     );
     const domainsOrgs = orgs.filter(o => o.custom_domain);
+    const pendingDomains = domainsOrgs.filter(o => !o.domain_verified);
 
-    // ══════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════
     // RENDER — Loading
-    // ══════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════
     if (authStep === 'loading') {
         return (
             <div className="min-h-screen bg-[#06080F] flex items-center justify-center">
-                <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
+                <div className="text-center">
+                    <div className="w-12 h-12 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center animate-pulse">
+                        <ShieldCheck className="w-6 h-6 text-white" />
+                    </div>
+                    <Loader2 className="w-5 h-5 text-violet-400 animate-spin mx-auto" />
+                </div>
             </div>
         );
     }
 
-    // ══════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════
     // RENDER — Login
-    // ══════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════
     if (authStep === 'login') {
         return (
             <div className="min-h-screen bg-[#06080F] flex items-center justify-center p-4 relative overflow-hidden">
-                {/* Background glow */}
-                <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-violet-600/15 rounded-full blur-[100px] pointer-events-none" />
-                <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-600/10 rounded-full blur-[80px] pointer-events-none" />
+                <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-violet-600/12 rounded-full blur-[120px] pointer-events-none" />
+                <div className="absolute bottom-1/4 right-1/3 w-96 h-96 bg-purple-700/8 rounded-full blur-[80px] pointer-events-none" />
 
                 <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
                     className="w-full max-w-md relative z-10">
                     {/* Header */}
                     <div className="text-center mb-8">
-                        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-2xl shadow-violet-500/30">
-                            <ShieldCheck className="w-8 h-8 text-white" />
-                        </div>
-                        <h1 className="text-2xl font-black text-white">SuperAdmin</h1>
-                        <p className="text-sm text-slate-500 mt-1">Accès réservé à l&apos;équipe SYGMA-TECH</p>
+                        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.1 }}
+                            className="w-20 h-20 mx-auto mb-5 rounded-3xl bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-600 flex items-center justify-center shadow-2xl shadow-violet-500/40">
+                            <ShieldCheck className="w-10 h-10 text-white" />
+                        </motion.div>
+                        <h1 className="text-3xl font-black text-white tracking-tight">SuperAdmin</h1>
+                        <p className="text-sm text-slate-500 mt-2">Panneau d&apos;administration CampusFlow</p>
+                        <p className="text-xs text-slate-700 mt-1">Réservé à l&apos;équipe SYGMA-TECH</p>
                     </div>
 
-                    {/* Form */}
-                    <div className="bg-white/[0.04] border border-white/8 rounded-2xl p-6 backdrop-blur-sm">
+                    {/* Form card */}
+                    <div className="bg-white/[0.04] border border-white/8 rounded-2xl p-6 backdrop-blur-sm shadow-xl">
                         <form onSubmit={handleLogin} className="space-y-4">
                             <div>
-                                <label className="text-xs text-slate-400 mb-1.5 block">Adresse email</label>
+                                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Adresse email</label>
                                 <div className="relative">
                                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                                     <Input value={email} onChange={e => setEmail(e.target.value)}
-                                        type="email" placeholder="admin@sygma-tech.com" required
-                                        className="bg-white/5 border-white/10 text-white pl-9 h-11 rounded-xl text-sm" />
+                                        type="email" placeholder="admin@sygma-tech.com" required autoComplete="email"
+                                        className="bg-white/5 border-white/10 text-white pl-9 h-11 rounded-xl text-sm focus-visible:border-violet-500/50" />
                                 </div>
                             </div>
                             <div>
-                                <label className="text-xs text-slate-400 mb-1.5 block">Mot de passe</label>
+                                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Mot de passe</label>
                                 <div className="relative">
                                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                                     <Input value={password} onChange={e => setPassword(e.target.value)}
-                                        type={showPw ? 'text' : 'password'} placeholder="••••••••" required
-                                        className="bg-white/5 border-white/10 text-white pl-9 pr-10 h-11 rounded-xl text-sm" />
+                                        type={showPw ? 'text' : 'password'} placeholder="••••••••" required autoComplete="current-password"
+                                        className="bg-white/5 border-white/10 text-white pl-9 pr-10 h-11 rounded-xl text-sm focus-visible:border-violet-500/50" />
                                     <button type="button" onClick={() => setShowPw(!showPw)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors">
                                         {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                     </button>
                                 </div>
                             </div>
 
-                            {loginError && (
-                                <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-400">
-                                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {loginError}
-                                </div>
-                            )}
+                            <AnimatePresence>
+                                {loginError && (
+                                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                                        className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-400">
+                                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {loginError}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
 
                             <Button type="submit" disabled={loginLoading}
-                                className="w-full h-11 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 font-bold rounded-xl shadow-lg shadow-violet-500/25">
-                                {loginLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
-                                    <><ShieldCheck className="w-4 h-4 mr-2" />Accéder au panneau</>
-                                )}
+                                className="w-full h-11 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 font-bold rounded-xl shadow-lg shadow-violet-500/30 transition-all">
+                                {loginLoading
+                                    ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Vérification...</>
+                                    : <><ShieldCheck className="w-4 h-4 mr-2" />Accéder au panneau</>
+                                }
                             </Button>
                         </form>
                     </div>
 
                     <p className="text-center text-xs text-slate-700 mt-6">
-                        CampusFlow SuperAdmin v1.0 — SYGMA-TECH © 2026
+                        CampusFlow SuperAdmin · SYGMA-TECH © 2026
                     </p>
                 </motion.div>
             </div>
         );
     }
 
-    // ══════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════
     // RENDER — Dashboard
-    // ══════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════
     return (
         <div className="min-h-screen bg-[#06080F] text-white flex">
 
-            {/* ─── Sidebar ─────────────────────────────────── */}
-            <aside className="w-64 shrink-0 border-r border-white/[0.06] flex flex-col bg-[#080B12] sticky top-0 h-screen">
-                {/* Logo */}
-                <div className="p-5 border-b border-white/[0.06]">
+            {/* ─── Sidebar ──────────────────────────────────────── */}
+            <aside className="w-60 shrink-0 border-r border-white/[0.06] flex flex-col bg-[#080B12] sticky top-0 h-screen">
+                {/* Brand */}
+                <div className="p-4 border-b border-white/[0.06]">
                     <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/25">
-                            <ShieldCheck className="w-5 h-5 text-white" />
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/25 shrink-0">
+                            <ShieldCheck className="w-4.5 h-4.5 text-white" />
                         </div>
                         <div>
-                            <p className="font-black text-sm">SuperAdmin</p>
-                            <p className="text-[10px] text-slate-600">CampusFlow Platform</p>
+                            <p className="font-black text-sm leading-tight">SuperAdmin</p>
+                            <p className="text-[9px] text-slate-600 leading-tight">CampusFlow Platform</p>
                         </div>
                     </div>
                 </div>
 
-                {/* Nav */}
-                <nav className="flex-1 p-3 space-y-1">
+                {/* Nav links */}
+                <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
                     {SIDEBAR.map(item => (
-                        <button key={item.id} onClick={() => { setTab(item.id as Tab); setSearch(''); }}
+                        <button key={item.id}
+                            onClick={() => { setTab(item.id); setSearch(''); }}
                             className={cn(
-                                'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                                'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150',
                                 tab === item.id
-                                    ? 'bg-violet-600/20 text-violet-300 border border-violet-500/20'
-                                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                                    ? 'bg-violet-600/20 text-violet-300 border border-violet-500/25 shadow-sm'
+                                    : 'text-slate-400 hover:text-slate-100 hover:bg-white/5'
                             )}>
                             <item.icon className="w-4 h-4 shrink-0" />
-                            {item.label}
-                            {tab === item.id && <ChevronRight className="w-3 h-3 ml-auto" />}
+                            <span className="flex-1 text-left text-xs">{item.label}</span>
+                            {tab === item.id && <ChevronRight className="w-3 h-3 text-violet-400" />}
+                            {/* Pending domains badge */}
+                            {item.id === 'domains' && pendingDomains.length > 0 && (
+                                <span className="w-4 h-4 rounded-full bg-amber-500 text-[9px] font-black text-black flex items-center justify-center">
+                                    {pendingDomains.length}
+                                </span>
+                            )}
                         </button>
                     ))}
                 </nav>
 
-                {/* Stats summary */}
+                {/* Quick stats */}
                 {stats && (
-                    <div className="p-3 border-t border-white/[0.06] space-y-2">
-                        <div className="flex items-center justify-between text-[10px] text-slate-600 px-1">
-                            <span>Organisations</span><span className="text-slate-400 font-bold">{stats.total_orgs}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-[10px] text-slate-600 px-1">
-                            <span>Utilisateurs</span><span className="text-slate-400 font-bold">{stats.total_users}</span>
-                        </div>
+                    <div className="p-3 border-t border-white/[0.05] space-y-1.5">
+                        {[
+                            { label: 'Organisations', value: stats.total_orgs, color: 'text-violet-400' },
+                            { label: 'Utilisateurs',  value: stats.total_users, color: 'text-teal-400' },
+                            { label: 'Domaines',      value: stats.custom_domains, color: 'text-amber-400' },
+                        ].map(s => (
+                            <div key={s.label} className="flex items-center justify-between px-1">
+                                <span className="text-[10px] text-slate-600">{s.label}</span>
+                                <span className={cn('text-[10px] font-black', s.color)}>{s.value}</span>
+                            </div>
+                        ))}
                     </div>
                 )}
 
                 {/* Logout */}
-                <div className="p-3 border-t border-white/[0.06]">
+                <div className="p-2 border-t border-white/[0.05]">
                     <button onClick={handleLogout}
-                        className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-slate-500 hover:text-red-400 hover:bg-red-500/5 transition-all">
-                        <LogOut className="w-4 h-4" /> Déconnexion
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-slate-500 hover:text-red-400 hover:bg-red-500/5 transition-all">
+                        <LogOut className="w-3.5 h-3.5" /> Déconnexion
                     </button>
                 </div>
             </aside>
 
-            {/* ─── Main content ─────────────────────────────── */}
-            <main className="flex-1 overflow-auto">
-                {/* Top bar */}
-                <div className="sticky top-0 z-10 border-b border-white/[0.06] bg-[#06080F]/80 backdrop-blur-xl px-6 py-3 flex items-center justify-between">
-                    <h1 className="font-black text-base">
-                        {SIDEBAR.find(s => s.id === tab)?.label}
-                    </h1>
+            {/* ─── Main ─────────────────────────────────────────── */}
+            <main className="flex-1 overflow-auto min-w-0">
+
+                {/* Topbar */}
+                <div className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#06080F]/80 backdrop-blur-xl px-6 py-3 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
+                        <h1 className="font-black text-sm">
+                            {SIDEBAR.find(s => s.id === tab)?.label}
+                        </h1>
+                        {pendingDomains.length > 0 && tab === 'domains' && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20 font-bold">
+                                {pendingDomains.length} en attente
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2">
                         {dataLoading && <Loader2 className="w-4 h-4 text-violet-400 animate-spin" />}
-                        <button onClick={loadData} className="p-2 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-white/5 transition-all" title="Actualiser">
+                        <button onClick={loadAllData} title="Actualiser"
+                            className="p-2 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-white/5 transition-all">
                             <RefreshCw className="w-4 h-4" />
                         </button>
-                        <div className="text-xs text-slate-600 bg-violet-500/10 border border-violet-500/20 px-3 py-1 rounded-full text-violet-400">
+                        <span className="text-[10px] text-violet-400 bg-violet-500/10 border border-violet-500/20 px-3 py-1 rounded-full font-bold">
                             ⚡ SuperAdmin
-                        </div>
+                        </span>
                     </div>
                 </div>
 
+                {/* Content */}
                 <div className="p-6">
                     <AnimatePresence mode="wait">
 
-                        {/* ═════════════════════════════════════
-                            TAB: OVERVIEW
-                        ═════════════════════════════════════ */}
+                        {/* ══════════════════════════════════════════
+                            OVERVIEW
+                        ══════════════════════════════════════════ */}
                         {tab === 'overview' && (
                             <motion.div key="overview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+                                {/* KPI Grid */}
                                 {stats ? (
-                                    <>
-                                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                                            <KpiCard label="Organisations" value={stats.total_orgs} icon={Building2} color="bg-violet-500" sub={`+${stats.new_orgs_week} cette semaine`} />
-                                            <KpiCard label="Étudiants" value={stats.total_students} icon={School} color="bg-teal-500" />
-                                            <KpiCard label="Professeurs" value={stats.total_teachers} icon={UserCheck} color="bg-indigo-500" />
-                                            <KpiCard label="Total utilisateurs" value={stats.total_users} icon={Users} color="bg-blue-500" />
-                                            <KpiCard label="Domaines custom" value={stats.custom_domains} icon={Globe} color="bg-amber-500" />
-                                            <KpiCard label="Nouveaux (7j)" value={stats.new_orgs_week} icon={TrendingUp} color="bg-emerald-500" />
-                                        </div>
-
-                                        {/* Recent orgs */}
-                                        <div>
-                                            <h2 className="font-bold text-sm text-slate-300 mb-3">Dernières organisations</h2>
-                                            <div className="space-y-2">
-                                                {orgs.slice(0, 5).map(org => (
-                                                    <div key={org.id} className="flex items-center gap-4 p-3 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-all">
-                                                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-500/20 to-purple-500/20 flex items-center justify-center text-sm font-bold text-violet-300 shrink-0">
-                                                            {org.name[0]?.toUpperCase()}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-sm truncate">{org.name}</p>
-                                                            <p className="text-[10px] text-slate-500">/{org.slug} · {org.city || org.country || 'N/A'}</p>
-                                                        </div>
-                                                        <div className="flex items-center gap-2 shrink-0">
-                                                            <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-medium', org.is_active ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400')}>
-                                                                {org.is_active ? 'Actif' : 'Suspendu'}
-                                                            </span>
-                                                            <span className="text-[10px] text-slate-600">{timeAgo(org.created_at)}</span>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </>
+                                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                                        <KpiCard label="Organisations" value={stats.total_orgs}    icon={Building2}  gradient="from-violet-500 to-purple-600"   sub={stats.new_orgs_week > 0 ? `+${stats.new_orgs_week} cette semaine` : undefined} />
+                                        <KpiCard label="Étudiants"     value={stats.total_students} icon={School}     gradient="from-teal-500 to-emerald-600" />
+                                        <KpiCard label="Professeurs"   value={stats.total_teachers} icon={UserCheck}  gradient="from-indigo-500 to-blue-600" />
+                                        <KpiCard label="Total users"   value={stats.total_users}    icon={Users}      gradient="from-blue-500 to-cyan-600" />
+                                        <KpiCard label="Domaines custom" value={stats.custom_domains} icon={Globe}   gradient="from-amber-500 to-orange-600" />
+                                        <KpiCard label="Nouveaux (7j)" value={stats.new_orgs_week}  icon={TrendingUp} gradient="from-rose-500 to-pink-600" />
+                                    </div>
                                 ) : (
-                                    <div className="flex items-center justify-center py-20">
-                                        <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
+                                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {Array.from({length: 6}).map((_, i) => (
+                                            <div key={i} className="h-28 rounded-2xl bg-white/[0.03] border border-white/5 animate-pulse" />
+                                        ))}
                                     </div>
                                 )}
+
+                                {/* Recent orgs + Activity side by side */}
+                                <div className="grid lg:grid-cols-2 gap-6">
+                                    {/* Recent orgs */}
+                                    <div>
+                                        <h2 className="font-bold text-sm text-slate-300 mb-3 flex items-center gap-2">
+                                            <Building2 className="w-4 h-4 text-violet-400" /> Dernières organisations
+                                        </h2>
+                                        <div className="space-y-2">
+                                            {orgs.slice(0, 8).map(org => (
+                                                <div key={org.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:border-white/10 transition-all group">
+                                                    <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black shrink-0',
+                                                        org.is_active ? 'bg-violet-500/20 text-violet-300' : 'bg-red-500/15 text-red-400'
+                                                    )}>
+                                                        {org.name[0]?.toUpperCase()}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-xs truncate">{org.name}</p>
+                                                        <p className="text-[10px] text-slate-600">/{org.slug}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <Badge active={org.is_active}
+                                                            label={['Actif', 'Suspendu']}
+                                                            activeClass="bg-emerald-500/15 text-emerald-400"
+                                                            inactiveClass="bg-red-500/15 text-red-400" />
+                                                        <span className="text-[10px] text-slate-700">{timeAgo(org.created_at)}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Activity feed */}
+                                    <div>
+                                        <h2 className="font-bold text-sm text-slate-300 mb-3 flex items-center gap-2">
+                                            <Activity className="w-4 h-4 text-teal-400" /> Activité récente
+                                        </h2>
+                                        <div className="space-y-1.5">
+                                            {activity.slice(0, 12).map((a, i) => (
+                                                <div key={i} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/[0.02] transition-all">
+                                                    <div className={cn('w-6 h-6 rounded-lg flex items-center justify-center text-[9px] shrink-0',
+                                                        a.type === 'org'     ? 'bg-violet-500/20 text-violet-400' :
+                                                        a.type === 'teacher' ? 'bg-indigo-500/20 text-indigo-400' :
+                                                                               'bg-teal-500/20 text-teal-400'
+                                                    )}>
+                                                        {a.type === 'org' ? '🏫' : a.type === 'teacher' ? '👨‍🏫' : '👩‍🎓'}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-xs text-slate-300 truncate font-medium">{a.label}</p>
+                                                        <p className="text-[10px] text-slate-600 truncate">{a.meta}</p>
+                                                    </div>
+                                                    <span className="text-[9px] text-slate-700 shrink-0">{timeAgo(a.created_at)}</span>
+                                                </div>
+                                            ))}
+                                            {activity.length === 0 && !dataLoading && (
+                                                <p className="text-center text-xs text-slate-600 py-8">Aucune activité</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
                             </motion.div>
                         )}
 
-                        {/* ═════════════════════════════════════
-                            TAB: ORGANISATIONS
-                        ═════════════════════════════════════ */}
+                        {/* ══════════════════════════════════════════
+                            ORGANISATIONS
+                        ══════════════════════════════════════════ */}
                         {tab === 'orgs' && (
                             <motion.div key="orgs" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-                                {/* Search */}
-                                <div className="relative max-w-sm">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                                    <input value={search} onChange={e => setSearch(e.target.value)}
-                                        placeholder="Rechercher une organisation..."
-                                        className="w-full bg-white/5 border border-white/10 text-white pl-9 pr-4 h-9 rounded-xl text-sm placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40" />
+                                {/* Search + count */}
+                                <div className="flex items-center gap-4 flex-wrap">
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                        <input value={search} onChange={e => setSearch(e.target.value)}
+                                            placeholder="Rechercher..." autoFocus
+                                            className="bg-white/5 border border-white/10 text-white pl-9 pr-4 h-9 w-64 rounded-xl text-sm placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40" />
+                                    </div>
+                                    <span className="text-xs text-slate-500">{filteredOrgs.length} organisation(s)</span>
+                                    <span className="text-xs text-slate-600">
+                                        {orgs.filter(o => o.is_active).length} actives ·{' '}
+                                        {orgs.filter(o => !o.is_active).length} suspendues
+                                    </span>
                                 </div>
 
-                                <p className="text-xs text-slate-500">{filteredOrgs.length} organisation(s)</p>
-
-                                <div className="space-y-3">
+                                {/* List */}
+                                <div className="space-y-2">
                                     {filteredOrgs.map(org => (
                                         <motion.div key={org.id} layout
-                                            className={cn(
-                                                'p-4 rounded-2xl border transition-all',
+                                            className={cn('p-4 rounded-2xl border transition-all duration-200',
                                                 org.is_active
-                                                    ? 'bg-white/[0.03] border-white/8 hover:border-white/15'
-                                                    : 'bg-red-500/5 border-red-500/15'
+                                                    ? 'bg-white/[0.025] border-white/8 hover:border-white/15'
+                                                    : 'bg-red-500/[0.04] border-red-500/15'
                                             )}>
-                                            <div className="flex items-start gap-4">
+                                            <div className="flex items-center gap-4">
                                                 {/* Avatar */}
-                                                <div className={cn(
-                                                    'w-12 h-12 rounded-xl flex items-center justify-center text-lg font-black shrink-0',
-                                                    org.is_active ? 'bg-gradient-to-br from-violet-500/20 to-purple-500/20 text-violet-300' : 'bg-red-500/10 text-red-400'
+                                                <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center text-base font-black shrink-0',
+                                                    org.is_active
+                                                        ? 'bg-gradient-to-br from-violet-500/25 to-purple-500/25 text-violet-300'
+                                                        : 'bg-red-500/10 text-red-400'
                                                 )}>
                                                     {org.name[0]?.toUpperCase()}
                                                 </div>
 
+                                                {/* Info */}
                                                 <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
                                                         <span className="font-bold text-sm">{org.name}</span>
-                                                        <span className="text-[10px] text-slate-500">/{org.slug}</span>
-                                                        {!org.is_active && <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-bold">SUSPENDU</span>}
+                                                        <span className="text-[10px] text-slate-600">/{org.slug}</span>
+                                                        {!org.is_active && (
+                                                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-black uppercase tracking-wide">
+                                                                SUSPENDU
+                                                            </span>
+                                                        )}
                                                         {org.custom_domain && (
-                                                            <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-medium', org.domain_verified ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400')}>
-                                                                🌐 {org.domain_verified ? 'Domaine vérifié' : 'En attente'}
+                                                            <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-semibold',
+                                                                org.domain_verified
+                                                                    ? 'bg-emerald-500/15 text-emerald-400'
+                                                                    : 'bg-amber-500/15 text-amber-400'
+                                                            )}>
+                                                                🌐 {org.domain_verified ? 'Vérifié' : 'En attente'}
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <div className="flex items-center gap-4 mt-1 text-[11px] text-slate-500">
-                                                        <span>📍 {org.city || 'N/A'}, {org.country || 'N/A'}</span>
-                                                        <span>🏫 {org.school_type || 'N/A'}</span>
-                                                        <span>👩‍🎓 {org.student_count} étudiants</span>
+                                                    <div className="flex items-center gap-3 text-[10px] text-slate-500 flex-wrap">
+                                                        {org.school_type && <span>🏫 {org.school_type}</span>}
+                                                        {org.city && <span>📍 {org.city}</span>}
+                                                        <span>👩‍🎓 {org.student_count} étud.</span>
                                                         <span>👨‍🏫 {org.teacher_count} profs</span>
-                                                        <span>🕐 {timeAgo(org.created_at)}</span>
+                                                        <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{timeAgo(org.created_at)}</span>
                                                     </div>
                                                     {org.custom_domain && (
-                                                        <p className="text-[10px] text-slate-600 mt-0.5">🔗 {org.custom_domain}</p>
+                                                        <p className="text-[10px] text-violet-400/70 mt-0.5 font-mono">{org.custom_domain}</p>
                                                     )}
                                                 </div>
 
                                                 {/* Actions */}
-                                                <div className="flex items-center gap-2 shrink-0">
-                                                    <a href={`/${org.slug}`} target="_blank" rel="noreferrer"
-                                                        className="p-2 rounded-lg text-slate-500 hover:text-violet-400 hover:bg-violet-500/10 transition-all" title="Ouvrir">
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    <a href={`/${org.slug}/campus`} target="_blank" rel="noreferrer"
+                                                        className="p-2 rounded-lg text-slate-600 hover:text-violet-400 hover:bg-violet-500/10 transition-all" title="Voir le campus">
                                                         <ExternalLink className="w-3.5 h-3.5" />
                                                     </a>
                                                     {org.custom_domain && (
-                                                        <button onClick={() => verifyDomain(org)}
-                                                            className={cn('p-2 rounded-lg transition-all', org.domain_verified ? 'text-emerald-400 hover:bg-emerald-500/10' : 'text-amber-400 hover:bg-amber-500/10')}
-                                                            title={org.domain_verified ? 'Retirer vérification' : 'Vérifier domaine'}>
-                                                            {org.domain_verified ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Globe className="w-3.5 h-3.5" />}
+                                                        <button onClick={() => verifyDomain(org)} title={org.domain_verified ? 'Retirer vérif.' : 'Valider domaine'}
+                                                            className={cn('p-2 rounded-lg transition-all',
+                                                                org.domain_verified
+                                                                    ? 'text-emerald-400 hover:bg-emerald-500/10'
+                                                                    : 'text-amber-400 hover:bg-amber-500/10'
+                                                            )}>
+                                                            {org.domain_verified
+                                                                ? <CheckCircle2 className="w-3.5 h-3.5" />
+                                                                : <Globe className="w-3.5 h-3.5" />
+                                                            }
                                                         </button>
                                                     )}
                                                     <button onClick={() => toggleOrg(org)}
-                                                        className={cn('p-2 rounded-lg transition-all text-xs font-medium px-3',
+                                                        className={cn('px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border',
                                                             org.is_active
-                                                                ? 'text-red-400 hover:bg-red-500/10 border border-red-500/20'
-                                                                : 'text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20'
+                                                                ? 'text-red-400 border-red-500/20 hover:bg-red-500/10'
+                                                                : 'text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10'
                                                         )}>
-                                                        {org.is_active ? <><Ban className="w-3 h-3 inline mr-1" />Suspendre</> : <><RotateCcw className="w-3 h-3 inline mr-1" />Réactiver</>}
+                                                        {org.is_active
+                                                            ? <><Ban className="w-3 h-3 inline mr-1" />Suspendre</>
+                                                            : <><RotateCcw className="w-3 h-3 inline mr-1" />Réactiver</>
+                                                        }
+                                                    </button>
+                                                    <button onClick={() => setDeleteConfirm(org)}
+                                                        className="p-2 rounded-lg text-slate-700 hover:text-red-400 hover:bg-red-500/10 transition-all" title="Supprimer définitivement">
+                                                        <Trash2 className="w-3.5 h-3.5" />
                                                     </button>
                                                 </div>
                                             </div>
                                         </motion.div>
                                     ))}
-                                    {filteredOrgs.length === 0 && (
-                                        <div className="text-center py-12 text-slate-500 text-sm">Aucune organisation trouvée</div>
+                                    {filteredOrgs.length === 0 && !dataLoading && (
+                                        <div className="text-center py-16 text-slate-500 text-sm">
+                                            {search ? 'Aucun résultat pour cette recherche' : 'Aucune organisation'}
+                                        </div>
                                     )}
                                 </div>
                             </motion.div>
                         )}
 
-                        {/* ═════════════════════════════════════
-                            TAB: UTILISATEURS
-                        ═════════════════════════════════════ */}
+                        {/* ══════════════════════════════════════════
+                            UTILISATEURS
+                        ══════════════════════════════════════════ */}
                         {tab === 'users' && (
                             <motion.div key="users" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-                                <div className="relative max-w-sm">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                                    <input value={search} onChange={e => setSearch(e.target.value)}
-                                        placeholder="Nom, email, organisation..."
-                                        className="w-full bg-white/5 border border-white/10 text-white pl-9 pr-4 h-9 rounded-xl text-sm placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40" />
+                                <div className="flex items-center gap-4 flex-wrap">
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                        <input value={search} onChange={e => setSearch(e.target.value)}
+                                            placeholder="Nom, email, organisation..." autoFocus
+                                            className="bg-white/5 border border-white/10 text-white pl-9 pr-4 h-9 w-72 rounded-xl text-sm placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40" />
+                                    </div>
+                                    <span className="text-xs text-slate-500">{filteredUsers.length} / {users.length} utilisateurs</span>
+                                    <div className="flex gap-2">
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-400">
+                                            {users.filter(u => u.role === 'student').length} étudiants
+                                        </span>
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400">
+                                            {users.filter(u => u.role === 'teacher').length} professeurs
+                                        </span>
+                                    </div>
                                 </div>
-
-                                <p className="text-xs text-slate-500">{filteredUsers.length} utilisateur(s)</p>
 
                                 {/* Table */}
                                 <div className="rounded-2xl border border-white/8 overflow-hidden">
-                                    <table className="w-full text-sm">
-                                        <thead>
-                                            <tr className="border-b border-white/5 bg-white/[0.02]">
-                                                <th className="text-left px-4 py-3 text-xs text-slate-500 font-semibold">Nom</th>
-                                                <th className="text-left px-4 py-3 text-xs text-slate-500 font-semibold">Email</th>
-                                                <th className="text-left px-4 py-3 text-xs text-slate-500 font-semibold">Rôle</th>
-                                                <th className="text-left px-4 py-3 text-xs text-slate-500 font-semibold">Organisation</th>
-                                                <th className="text-left px-4 py-3 text-xs text-slate-500 font-semibold">Inscrit</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {filteredUsers.map((user, i) => (
-                                                <tr key={user.id} className={cn('border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors', i % 2 === 0 ? '' : 'bg-white/[0.01]')}>
-                                                    <td className="px-4 py-3">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className={cn('w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0',
-                                                                user.role === 'teacher' ? 'bg-indigo-500' : 'bg-teal-500'
-                                                            )}>
-                                                                {user.full_name.split(' ').map(w => w[0]).join('').slice(0, 2)}
-                                                            </div>
-                                                            <span className="font-medium text-xs truncate max-w-[120px]">{user.full_name}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-3 text-xs text-slate-400 max-w-[160px] truncate">{user.email}</td>
-                                                    <td className="px-4 py-3">
-                                                        <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-medium',
-                                                            user.role === 'teacher' ? 'bg-indigo-500/15 text-indigo-400' : 'bg-teal-500/15 text-teal-400'
-                                                        )}>
-                                                            {user.role === 'teacher' ? 'Professeur' : 'Étudiant'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-3 text-xs text-slate-500 truncate max-w-[150px]">
-                                                        <a href={`/${user.org_slug}`} target="_blank" rel="noreferrer" className="hover:text-violet-400 transition-colors">
-                                                            {user.org_name}
-                                                        </a>
-                                                    </td>
-                                                    <td className="px-4 py-3 text-xs text-slate-600">{timeAgo(user.created_at)}</td>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm min-w-[700px]">
+                                            <thead>
+                                                <tr className="border-b border-white/5 bg-white/[0.02]">
+                                                    {['Utilisateur', 'Email', 'Rôle', 'Organisation', 'Inscrit le'].map(h => (
+                                                        <th key={h} className="text-left px-4 py-3 text-[10px] text-slate-500 font-bold uppercase tracking-wide">{h}</th>
+                                                    ))}
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                    {filteredUsers.length === 0 && (
-                                        <div className="text-center py-12 text-slate-500 text-sm">Aucun utilisateur trouvé</div>
+                                            </thead>
+                                            <tbody>
+                                                {filteredUsers.map((user, i) => (
+                                                    <tr key={user.id}
+                                                        className={cn('border-b border-white/[0.04] hover:bg-white/[0.025] transition-colors',
+                                                            i % 2 !== 0 ? 'bg-white/[0.01]' : ''
+                                                        )}>
+                                                        <td className="px-4 py-3">
+                                                            <div className="flex items-center gap-2.5">
+                                                                <div className={cn('w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black text-white shrink-0',
+                                                                    user.role === 'teacher' ? 'bg-indigo-500' : 'bg-teal-500'
+                                                                )}>
+                                                                    {user.full_name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                                                                </div>
+                                                                <span className="font-semibold text-xs truncate max-w-[130px]">{user.full_name}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-xs text-slate-400 max-w-[180px] truncate">{user.email}</td>
+                                                        <td className="px-4 py-3">
+                                                            <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-semibold',
+                                                                user.role === 'teacher'
+                                                                    ? 'bg-indigo-500/15 text-indigo-400'
+                                                                    : 'bg-teal-500/15 text-teal-400'
+                                                            )}>
+                                                                {user.role === 'teacher' ? '👨‍🏫 Prof' : '👩‍🎓 Étud.'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-xs text-slate-500 max-w-[160px] truncate">
+                                                            {user.org_slug ? (
+                                                                <a href={`/${user.org_slug}/campus`} target="_blank" rel="noreferrer"
+                                                                    className="hover:text-violet-400 transition-colors flex items-center gap-1 group">
+                                                                    {user.org_name}
+                                                                    <ExternalLink className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                                </a>
+                                                            ) : (
+                                                                <span className="text-slate-700">N/A</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-[10px] text-slate-600">
+                                                            {new Date(user.created_at).toLocaleDateString('fr-FR')}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    {filteredUsers.length === 0 && !dataLoading && (
+                                        <div className="text-center py-12 text-slate-500 text-sm">
+                                            {search ? 'Aucun résultat' : 'Aucun utilisateur'}
+                                        </div>
                                     )}
                                 </div>
                             </motion.div>
                         )}
 
-                        {/* ═════════════════════════════════════
-                            TAB: DOMAINES
-                        ═════════════════════════════════════ */}
+                        {/* ══════════════════════════════════════════
+                            DOMAINES
+                        ══════════════════════════════════════════ */}
                         {tab === 'domains' && (
                             <motion.div key="domains" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-                                <p className="text-xs text-slate-500">{domainsOrgs.length} domaine(s) custom configuré(s)</p>
+                                <div className="flex items-center gap-4">
+                                    <span className="text-xs text-slate-500">{domainsOrgs.length} domaine(s) configuré(s)</span>
+                                    {pendingDomains.length > 0 && (
+                                        <span className="text-xs text-amber-400 font-semibold">⚠️ {pendingDomains.length} en attente de validation</span>
+                                    )}
+                                </div>
 
+                                {/* DNS Config card */}
+                                <div className="p-4 rounded-2xl bg-violet-500/5 border border-violet-500/15">
+                                    <p className="text-xs font-bold text-violet-400 mb-2 flex items-center gap-2">
+                                        <Zap className="w-3.5 h-3.5" /> Configuration DNS requise chez le registrar
+                                    </p>
+                                    <div className="grid grid-cols-3 gap-3 text-[10px] font-mono">
+                                        {[
+                                            { label: 'Type', value: 'CNAME', color: 'text-amber-300' },
+                                            { label: 'Nom', value: '@  ou  www', color: 'text-white' },
+                                            { label: 'Valeur (Cible)', value: 'campusfl.netlify.app', color: 'text-teal-300' },
+                                        ].map(({ label, value, color }) => (
+                                            <div key={label} className="bg-black/30 rounded-xl p-3 border border-white/5">
+                                                <p className="text-slate-500 mb-1 text-[9px] uppercase tracking-wide">{label}</p>
+                                                <p className={cn('font-bold', color)}>{value}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Domain list */}
                                 <div className="space-y-3">
                                     {domainsOrgs.map(org => (
-                                        <div key={org.id} className="p-4 rounded-2xl bg-white/[0.03] border border-white/8 hover:border-white/15 transition-all">
+                                        <div key={org.id} className={cn('p-4 rounded-2xl border transition-all',
+                                            org.domain_verified
+                                                ? 'bg-emerald-500/[0.03] border-emerald-500/15'
+                                                : 'bg-amber-500/[0.03] border-amber-500/15'
+                                        )}>
                                             <div className="flex items-center gap-4">
-                                                <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0',
+                                                <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0',
                                                     org.domain_verified ? 'bg-emerald-500/15' : 'bg-amber-500/15'
                                                 )}>
                                                     {org.domain_verified ? '✅' : '⏳'}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2 flex-wrap">
                                                         <span className="font-bold text-sm">{org.name}</span>
-                                                        <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-bold',
-                                                            org.domain_verified ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                                                        )}>
-                                                            {org.domain_verified ? 'Vérifié' : 'En attente'}
-                                                        </span>
+                                                        <Badge active={org.domain_verified}
+                                                            label={['Domaine vérifié', 'En attente']}
+                                                            activeClass="bg-emerald-500/20 text-emerald-400"
+                                                            inactiveClass="bg-amber-500/20 text-amber-400" />
                                                     </div>
-                                                    <p className="text-sm text-violet-400 font-mono mt-0.5">{org.custom_domain}</p>
-                                                    <div className="flex items-center gap-4 mt-1 text-[10px] text-slate-600">
-                                                        <span>📍 /{org.slug}</span>
-                                                        <span>🕐 Ajouté {timeAgo(org.created_at)}</span>
-                                                    </div>
+                                                    <p className="text-sm text-violet-300 font-mono mt-0.5">{org.custom_domain}</p>
+                                                    <p className="text-[10px] text-slate-600 mt-0.5">/{org.slug} · {timeAgo(org.created_at)}</p>
                                                 </div>
                                                 <div className="flex items-center gap-2 shrink-0">
                                                     <a href={`https://${org.custom_domain}`} target="_blank" rel="noreferrer"
@@ -627,95 +836,105 @@ export default function SuperAdminPage() {
                                                         <ExternalLink className="w-4 h-4" />
                                                     </a>
                                                     <button onClick={() => verifyDomain(org)}
-                                                        className={cn('px-4 py-2 rounded-xl text-xs font-bold transition-all',
+                                                        className={cn('px-4 py-2 rounded-xl text-xs font-bold border transition-all',
                                                             org.domain_verified
-                                                                ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20'
-                                                                : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20'
+                                                                ? 'border-red-500/20 text-red-400 hover:bg-red-500/10'
+                                                                : 'border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10'
                                                         )}>
-                                                        {org.domain_verified ? 'Retirer' : '✅ Valider'}
+                                                        {org.domain_verified
+                                                            ? <><Ban className="w-3 h-3 inline mr-1" />Retirer</>
+                                                            : <><CheckSquare className="w-3 h-3 inline mr-1" />Valider</>
+                                                        }
                                                     </button>
                                                 </div>
                                             </div>
-
-                                            {/* DNS config reminder */}
-                                            {!org.domain_verified && (
-                                                <div className="mt-3 p-3 rounded-xl bg-amber-500/5 border border-amber-500/15">
-                                                    <p className="text-[10px] text-amber-400 mb-2 font-semibold">Configuration DNS requise chez le registrar :</p>
-                                                    <div className="grid grid-cols-3 gap-2 text-[9px] font-mono">
-                                                        <div className="bg-black/30 rounded-lg p-2">
-                                                            <p className="text-slate-500 mb-0.5">Type</p>
-                                                            <p className="text-amber-300">CNAME</p>
-                                                        </div>
-                                                        <div className="bg-black/30 rounded-lg p-2">
-                                                            <p className="text-slate-500 mb-0.5">Nom</p>
-                                                            <p className="text-white">www</p>
-                                                        </div>
-                                                        <div className="bg-black/30 rounded-lg p-2">
-                                                            <p className="text-slate-500 mb-0.5">Valeur</p>
-                                                            <p className="text-teal-300">campusfl.netlify.app</p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
                                         </div>
                                     ))}
                                     {domainsOrgs.length === 0 && (
                                         <div className="text-center py-16">
-                                            <Globe className="w-10 h-10 text-slate-700 mx-auto mb-3" />
+                                            <Globe className="w-12 h-12 text-slate-700 mx-auto mb-3" />
                                             <p className="text-slate-500 text-sm">Aucun domaine custom configuré</p>
+                                            <p className="text-slate-700 text-xs mt-1">Les organisations peuvent ajouter leur domaine dans les paramètres admin.</p>
                                         </div>
                                     )}
                                 </div>
                             </motion.div>
                         )}
 
-                        {/* ═════════════════════════════════════
-                            TAB: ANNOUNCEMENTS
-                        ═════════════════════════════════════ */}
+                        {/* ══════════════════════════════════════════
+                            ANNONCES GLOBALES
+                        ══════════════════════════════════════════ */}
                         {tab === 'announcements' && (
                             <motion.div key="announcements" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6 max-w-2xl">
+
+                                {/* Info */}
+                                <div className="p-4 rounded-2xl bg-violet-500/5 border border-violet-500/15 text-xs text-violet-300 space-y-1">
+                                    <p className="font-bold flex items-center gap-2"><BarChart3 className="w-3.5 h-3.5" /> Comment ça fonctionne</p>
+                                    <p className="text-slate-400 leading-relaxed">
+                                        Les annonces apparaissent dans l&apos;onglet <strong className="text-white">Actus officielles</strong> de chaque
+                                        établissement cible avec le badge <strong className="text-amber-400">📣 OFFICIEL</strong>.
+                                        Elles sont publiées via la fonction RPC <code className="text-violet-300 bg-black/30 px-1 rounded">superadmin_send_announcement</code>.
+                                    </p>
+                                </div>
+
+                                {/* Form */}
                                 <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/8 space-y-4">
-                                    <div className="flex items-center gap-2 mb-2">
+                                    <div className="flex items-center gap-2 mb-1">
                                         <Megaphone className="w-5 h-5 text-violet-400" />
-                                        <h2 className="font-bold text-sm">Envoyer une annonce globale</h2>
+                                        <h2 className="font-bold text-sm">Nouvelle annonce</h2>
                                     </div>
 
                                     <div>
-                                        <label className="text-xs text-slate-400 mb-1.5 block">Cible</label>
+                                        <label className="text-xs text-slate-400 mb-1.5 block font-medium">Cible</label>
                                         <select value={annTarget} onChange={e => setAnnTarget(e.target.value)}
-                                            className="w-full bg-white/5 border border-white/10 text-white h-9 rounded-xl text-sm px-3 focus:outline-none focus:border-violet-500/40">
-                                            <option value="all">Toutes les organisations ({orgs.length})</option>
-                                            {orgs.map(o => (
-                                                <option key={o.id} value={o.id}>{o.name}</option>
-                                            ))}
+                                            className="w-full bg-white/5 border border-white/10 text-white h-9 rounded-xl text-sm px-3 focus:outline-none focus:border-violet-500/40 cursor-pointer">
+                                            <option value="all">📢 Toutes les organisations actives ({orgs.filter(o => o.is_active).length})</option>
+                                            <optgroup label="Organisation spécifique">
+                                                {orgs.map(o => (
+                                                    <option key={o.id} value={o.id}>{o.name} ({o.student_count + o.teacher_count} membres)</option>
+                                                ))}
+                                            </optgroup>
                                         </select>
                                     </div>
 
                                     <div>
-                                        <label className="text-xs text-slate-400 mb-1.5 block">Titre de l&apos;annonce</label>
+                                        <label className="text-xs text-slate-400 mb-1.5 block font-medium">Titre <span className="text-red-400">*</span></label>
                                         <input value={annTitle} onChange={e => setAnnTitle(e.target.value)}
-                                            placeholder="Maintenance prévue le 25 Juillet..."
+                                            placeholder="Ex: Maintenance prévue le 25 Juillet à 02h00..."
                                             className="w-full bg-white/5 border border-white/10 text-white h-9 rounded-xl text-sm px-3 placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40" />
                                     </div>
 
                                     <div>
-                                        <label className="text-xs text-slate-400 mb-1.5 block">Message</label>
+                                        <label className="text-xs text-slate-400 mb-1.5 block font-medium">Message <span className="text-red-400">*</span></label>
                                         <textarea value={annBody} onChange={e => setAnnBody(e.target.value)}
-                                            placeholder="Détails de l'annonce..."
-                                            rows={4}
+                                            placeholder="Détails complets de l'annonce..."
+                                            rows={5}
                                             className="w-full bg-white/5 border border-white/10 text-white rounded-xl text-sm px-3 py-2.5 placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40 resize-none" />
+                                        <p className="text-[10px] text-slate-600 mt-1">{annBody.length} caractères</p>
                                     </div>
 
-                                    <Button onClick={sendAnnouncement} disabled={sendingAnn || !annTitle.trim() || !annBody.trim()}
-                                        className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 font-bold rounded-xl">
-                                        {sendingAnn ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Megaphone className="w-4 h-4 mr-2" />}
-                                        Envoyer l&apos;annonce
-                                    </Button>
-                                </div>
+                                    {/* Preview */}
+                                    {(annTitle || annBody) && (
+                                        <div className="p-3 rounded-xl bg-black/30 border border-white/5">
+                                            <p className="text-[10px] text-slate-500 mb-2 font-semibold uppercase tracking-wide">Aperçu</p>
+                                            <div className="flex items-start gap-2">
+                                                <span className="text-lg">📣</span>
+                                                <div>
+                                                    <p className="text-xs font-bold text-white">{annTitle || 'Titre...'}</p>
+                                                    <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed whitespace-pre-line">{annBody || 'Message...'}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
 
-                                <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/15 text-xs text-amber-400 space-y-1">
-                                    <p className="font-bold">📌 Note</p>
-                                    <p>Les annonces apparaîtront dans l&apos;onglet &quot;Actus officielles&quot; de chaque établissement cible avec le badge <strong>📣 OFFICIEL</strong>.</p>
+                                    <Button onClick={sendAnnouncement}
+                                        disabled={sendingAnn || !annTitle.trim() || !annBody.trim()}
+                                        className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 font-bold rounded-xl h-10 shadow-lg shadow-violet-500/20">
+                                        {sendingAnn
+                                            ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Envoi en cours...</>
+                                            : <><Megaphone className="w-4 h-4 mr-2" />Envoyer l&apos;annonce</>
+                                        }
+                                    </Button>
                                 </div>
                             </motion.div>
                         )}
@@ -723,6 +942,39 @@ export default function SuperAdminPage() {
                     </AnimatePresence>
                 </div>
             </main>
+
+            {/* ─── Delete Confirm Modal ─────────────────────────── */}
+            <AnimatePresence>
+                {deleteConfirm && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+                        onClick={() => !deleting && setDeleteConfirm(null)}>
+                        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+                            onClick={e => e.stopPropagation()}
+                            className="bg-[#0F1117] border border-red-500/25 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+                            <div className="w-12 h-12 rounded-xl bg-red-500/15 flex items-center justify-center mx-auto mb-4">
+                                <Trash2 className="w-6 h-6 text-red-400" />
+                            </div>
+                            <h3 className="font-black text-lg text-center">Supprimer l&apos;organisation ?</h3>
+                            <p className="text-sm text-slate-400 text-center mt-2">
+                                <strong className="text-white">{deleteConfirm.name}</strong> et toutes ses données
+                                (étudiants, cours, notes...) seront <span className="text-red-400 font-bold">définitivement supprimés</span>.
+                            </p>
+                            <p className="text-xs text-slate-600 text-center mt-2">Cette action est irréversible.</p>
+                            <div className="flex gap-3 mt-5">
+                                <Button onClick={() => setDeleteConfirm(null)} disabled={deleting} variant="outline"
+                                    className="flex-1 border-white/10 text-slate-300 hover:bg-white/5 rounded-xl">
+                                    Annuler
+                                </Button>
+                                <Button onClick={handleDeleteOrg} disabled={deleting}
+                                    className="flex-1 bg-red-600 hover:bg-red-500 font-bold rounded-xl">
+                                    {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : '🗑️ Supprimer'}
+                                </Button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
