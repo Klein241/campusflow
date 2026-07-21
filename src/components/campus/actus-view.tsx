@@ -36,10 +36,11 @@ interface PostItem {
     prayer_count: number;
     prayed_by: string[];
     created_at: string;
-    senderName?: string;
-    senderRole?: string;
     isAdmin?: boolean;
     avatarUrl?: string;
+    image_url?: string;
+    senderName?: string;
+    senderRole?: string;
 }
 
 interface StoryItem {
@@ -85,6 +86,11 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
     const [showNewPost, setShowNewPost] = useState(false);
     const [newPostContent, setNewPostContent] = useState('');
     const [publishing, setPublishing] = useState(false);
+    
+    // New Actus States
+    const [postImage, setPostImage] = useState<File | null>(null);
+    const [uploadingPost, setUploadingPost] = useState(false);
+    const [activePostTab, setActivePostTab] = useState<'general' | 'officiel'>('general');
 
     // Stories
     const [storyTab, setStoryTab] = useState<'active' | 'history'>('active');
@@ -109,6 +115,7 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
 
     // Post Comments
     const [comments, setComments] = useState<Record<string, CommentItem[]>>({});
+    const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
     const [expandedComments, setExpandedComments] = useState<string | null>(null);
     const [newComment, setNewComment] = useState('');
     const [postingComment, setPostingComment] = useState(false);
@@ -161,6 +168,17 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                     return { ...p, ...user } as PostItem;
                 }));
                 setPosts(enriched);
+                // Pre-load comment counts for all posts
+                const postIds = data.map((p: any) => p.id);
+                if (postIds.length > 0) {
+                    const { data: commentData } = await supabase.from('post_comments')
+                        .select('post_id').in('post_id', postIds);
+                    if (commentData) {
+                        const counts: Record<string, number> = {};
+                        commentData.forEach((c: any) => { counts[c.post_id] = (counts[c.post_id] || 0) + 1; });
+                        setCommentCounts(counts);
+                    }
+                }
             }
         } catch (e) { console.error('Error loading posts:', e); }
         setLoading(false);
@@ -198,18 +216,60 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
 
     // ═══ POSTS LOGIC ═══
     const publishPost = async () => {
-        if (!newPostContent.trim()) return;
+        if (!newPostContent.trim() && !postImage) return;
+        
+        // Sky Points check
+        const { data: spendResult } = await supabase.rpc('spend_sky_point', {
+            p_user_id: userId,
+            p_org_id: orgId,
+            p_amount: 1,
+            p_reason: 'actus_post',
+            p_description: 'Publication d\'une actus'
+        });
+        if (spendResult && !spendResult.success) {
+            toast.error('Solde Sky Points insuffisant \u2014 1 point requis pour poster');
+            return;
+        }
+
         setPublishing(true);
+        setUploadingPost(true);
         try {
+            let finalImageUrl = null;
+            if (postImage) {
+                const compressed = await compressImage(postImage, { maxWidth: 1200, quality: 0.8 });
+                const ext = postImage.name.split('.').pop();
+                const path = `posts/${orgId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+                const { data: uploadData, error: uploadError } = await supabase.storage
+                    .from('organization-assets')
+                    .upload(path, compressed);
+                
+                if (uploadError) throw uploadError;
+                
+                const { data: publicUrlData } = supabase.storage
+                    .from('organization-assets')
+                    .getPublicUrl(path);
+                    
+                finalImageUrl = publicUrlData.publicUrl;
+            }
+
             const { error } = await supabase.from('tutoring_requests').insert({
-                user_id: userId, content: newPostContent.trim(),
-                category: 'post', is_anonymous: false, prayer_count: 0, prayed_by: [],
+                user_id: userId, 
+                content: newPostContent.trim(),
+                category: activePostTab === 'officiel' && userRole === 'admin' ? 'admin_actus' : 'post', 
+                is_anonymous: false, 
+                prayer_count: 0, 
+                prayed_by: [],
+                ...(finalImageUrl ? { image_url: finalImageUrl } : {})
             });
             if (error) throw error;
             toast.success('Publication partagée ! 🎉');
-            setNewPostContent(''); setShowNewPost(false); loadPosts();
+            setNewPostContent('');
+            setPostImage(null); 
+            setShowNewPost(false); 
+            loadPosts();
         } catch (e: any) { toast.error(e.message || 'Erreur'); }
         setPublishing(false);
+        setUploadingPost(false);
     };
 
     const likePost = async (post: PostItem) => {
@@ -222,7 +282,7 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
 
     const sharePost = async (post: PostItem) => {
         const url = `${window.location.origin}/${orgSlug}/campus`;
-        const text = `${post.senderName}: ${post.content.slice(0, 100)}...`;
+        const text = `${post.senderName || 'Utilisateur'}: ${post.content.slice(0, 100)}...`;
         if (navigator.share) {
             try { await navigator.share({ title: 'CampusFlow', text, url }); } catch { }
         } else {
@@ -537,12 +597,13 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
 
                     return (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                            className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-2 md:p-6"
-                            onClick={() => setViewingStory(null)}>
+                            className="fixed inset-0 z-50 bg-black flex">
                             
-                            <div className="flex flex-col md:flex-row w-full max-w-4xl h-[90vh] md:h-[80vh] bg-[#1a1d27] rounded-2xl overflow-hidden border border-white/10 shadow-2xl" onClick={e => e.stopPropagation()}>
+                            <div className="flex flex-col md:flex-row w-full h-full">
                                 {/* LEFT PANEL: IMAGE & NAV */}
-                                <div className="relative flex-1 bg-black flex flex-col justify-center items-center group overflow-hidden">
+                                <div className="relative flex-1 bg-black flex flex-col justify-center items-center group overflow-hidden"
+                                    onTouchStart={e => { (window as any).__storyTouchX = e.touches[0].clientX; }}
+                                    onTouchEnd={e => { const delta = e.changedTouches[0].clientX - ((window as any).__storyTouchX || 0); if (Math.abs(delta) > 50) navigateStory(delta < 0 ? 1 : -1); }}>
                                     {/* Progress bars */}
                                     <div className="absolute top-0 left-0 right-0 p-3 flex gap-1 z-30">
                                         {userStories.map((_, si) => (
@@ -611,7 +672,7 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                                 </div>
 
                                 {/* RIGHT PANEL: COMMENTS & VIEWS */}
-                                <div className="w-full md:w-80 bg-slate-900 flex flex-col h-1/2 md:h-full border-t md:border-t-0 md:border-l border-white/10 shrink-0">
+                                <div className="w-full md:w-96 bg-[#111827] flex flex-col h-1/2 md:h-full border-t md:border-t-0 md:border-l border-white/[0.08] shrink-0">
                                     <div className="flex border-b border-white/10 p-2 gap-2">
                                         <button onClick={() => setRightTab('comments')} className={cn("px-3 py-1.5 text-sm font-medium rounded-lg transition-colors", rightTab === 'comments' ? 'bg-amber-500/20 text-amber-400' : 'text-slate-400 hover:text-slate-200')}>
                                             Commentaires
@@ -845,6 +906,13 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                         <Plus className="w-3.5 h-3.5 mr-1" /> Publier
                     </Button>
                 </div>
+                
+                <div className="flex gap-2 mb-3">
+                    <button onClick={() => setActivePostTab('general')} className={cn("px-3 py-1.5 rounded-full text-xs font-medium transition-all", activePostTab === 'general' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-white/5 text-slate-400 hover:bg-white/10 border border-white/5')}>📝 Fil général</button>
+                    {(userRole === 'admin' || posts.some(p => p.category === 'admin_actus')) && (
+                        <button onClick={() => setActivePostTab('officiel')} className={cn("px-3 py-1.5 rounded-full text-xs font-medium transition-all", activePostTab === 'officiel' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-white/5 text-slate-400 hover:bg-white/10 border border-white/5')}>📣 Annonces officelles</button>
+                    )}
+                </div>
 
                 {/* New Post Dialog */}
                 <AnimatePresence>
@@ -853,20 +921,44 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                             className="overflow-hidden mb-4">
                             <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/5 to-orange-500/5 border border-amber-500/20 space-y-3">
                                 <div className="flex items-center justify-between">
-                                    <h3 className="text-sm font-bold text-amber-300">📢 Nouvelle publication</h3>
+                                    <h3 className="text-sm font-bold text-amber-300">
+                                        {activePostTab === 'officiel' && userRole === 'admin' ? "📣 Annonce officielle" : "📢 Nouvelle publication"}
+                                    </h3>
                                     <button onClick={() => setShowNewPost(false)}><X className="w-4 h-4 text-slate-400" /></button>
                                 </div>
+                                {postImage && (
+                                    <div className="relative">
+                                        <img src={URL.createObjectURL(postImage)} alt="preview" className="w-full max-h-48 object-cover rounded-xl border border-white/10" />
+                                        <button onClick={() => setPostImage(null)} className="absolute top-2 right-2 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center">
+                                            <X className="w-3 h-3 text-white" />
+                                        </button>
+                                    </div>
+                                )}
                                 <textarea value={newPostContent} onChange={e => setNewPostContent(e.target.value)}
                                     placeholder="Partagez une actualité avec l'école..."
                                     rows={3}
                                     className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-500 resize-none focus:outline-none focus:border-amber-500/30"
                                     autoFocus />
-                                <div className="flex justify-end">
-                                    <Button onClick={publishPost} disabled={publishing || !newPostContent.trim()}
-                                        className="bg-gradient-to-r from-amber-600 to-orange-600 text-white text-xs rounded-xl shadow-lg shadow-amber-600/20">
-                                        {publishing ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Send className="w-3.5 h-3.5 mr-1" />}
-                                        Publier
-                                    </Button>
+                                <div className="flex items-center justify-between">
+                                    <label className="flex items-center gap-1.5 cursor-pointer px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/10 border border-dashed border-white/10 hover:border-amber-500/30 transition-all">
+                                        {postImage ? (
+                                            <span className="text-[11px] text-amber-400 flex items-center gap-1">
+                                                <ImageIcon className="w-3.5 h-3.5" />{postImage.name.slice(0, 20)}
+                                                <button type="button" onClick={e => { e.preventDefault(); setPostImage(null); }} className="text-red-400 hover:text-red-300"><X className="w-3 h-3" /></button>
+                                            </span>
+                                        ) : (
+                                            <span className="text-[11px] text-slate-500 flex items-center gap-1"><ImageIcon className="w-3.5 h-3.5" />Photo</span>
+                                        )}
+                                        <input type="file" accept="image/*" className="hidden" onChange={e => setPostImage(e.target.files?.[0] || null)} />
+                                    </label>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-[10px] text-amber-400">⭐ 1 Sky</span>
+                                        <Button onClick={publishPost} disabled={publishing || uploadingPost || (!newPostContent.trim() && !postImage)}
+                                            className="bg-gradient-to-r from-amber-600 to-orange-600 text-white text-xs rounded-xl shadow-lg shadow-amber-600/20">
+                                            {(publishing || uploadingPost) ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Send className="w-3.5 h-3.5 mr-1" />}
+                                            Publier
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
                         </motion.div>
@@ -877,13 +969,13 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                 <div className="space-y-4">
                     {loading ? (
                         <div className="text-center py-12"><Loader2 className="w-6 h-6 animate-spin mx-auto text-amber-400" /></div>
-                    ) : posts.length === 0 ? (
+                    ) : posts.filter(p => activePostTab === 'officiel' ? p.category === 'admin_actus' : p.category !== 'admin_actus').length === 0 ? (
                         <div className="text-center py-16 bg-white/[0.02] rounded-2xl border border-white/[0.05]">
                             <TrendingUp className="w-12 h-12 mx-auto mb-3 text-slate-700" />
                             <p className="text-sm text-slate-400">Pas encore de publications</p>
                             <p className="text-xs text-slate-500 mt-1">Soyez le premier à partager une actu !</p>
                         </div>
-                    ) : posts.map((post, i) => (
+                    ) : posts.filter(p => activePostTab === 'officiel' ? p.category === 'admin_actus' : p.category !== 'admin_actus').map((post, i) => (
                         <motion.div key={post.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.02 }}
                             className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:border-white/10 transition-all group">
                             <div className="flex items-start gap-3">
@@ -895,7 +987,7 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                                         "w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0",
                                         post.isAdmin ? "bg-gradient-to-br from-yellow-500 to-amber-600" : "bg-gradient-to-br from-teal-600 to-indigo-600"
                                     )}>
-                                        {post.is_anonymous ? '?' : (post.senderName || 'M').split(' ').map(w => w[0]).join('').slice(0, 2)}
+                                        {post.is_anonymous ? '?' : (post.senderName || 'M').split(' ').map((w: string) => w[0]).join('').slice(0, 2)}
                                     </div>
                                 )}
                                 <div className="flex-1 min-w-0">
@@ -910,6 +1002,9 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                                             <span className={cn("text-[10px] px-2 py-0.5 rounded-full",
                                                 post.senderRole === 'Professeur' ? 'bg-indigo-500/15 text-indigo-400' : 'bg-teal-500/15 text-teal-400'
                                             )}>{post.senderRole}</span>
+                                        )}
+                                        {post.category === 'admin_actus' && (
+                                            <span className="text-[9px] px-2 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full font-bold">📣 OFFICIEL</span>
                                         )}
                                     </div>
                                     <p className="text-[10px] text-slate-500 mt-0.5">{timeAgo(post.created_at)}</p>
@@ -926,6 +1021,10 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                                 </div>
                             )}
 
+                            {post.image_url && (
+                                <img src={post.image_url} alt="" className="w-full max-h-64 object-cover rounded-xl mt-2 border border-white/10" />
+                            )}
+
                             {/* Actions */}
                             <div className="flex items-center gap-4 mt-3 pt-3 border-t border-white/5">
                                 <button onClick={() => likePost(post)}
@@ -938,7 +1037,7 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                                     className={cn("flex items-center gap-1.5 text-xs transition-colors",
                                         expandedComments === post.id ? 'text-blue-400' : 'text-slate-500 hover:text-blue-400')}>
                                     <MessageCircle className="w-4 h-4" />
-                                    <span>{comments[post.id]?.length || 0}</span>
+                                    <span>{comments[post.id]?.length || commentCounts[post.id] || 0}</span>
                                 </button>
                                 <button onClick={() => sharePost(post)}
                                     className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-teal-400 transition-colors ml-auto">

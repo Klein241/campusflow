@@ -15,6 +15,8 @@ import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { RichContentEditor, parseContent, serializeContent, type ContentBlock } from './rich-content-editor';
+import { RichContentRenderer } from './rich-content-renderer';
 
 interface AdminCursusProps {
     orgId: string;
@@ -43,15 +45,15 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
     const [subForm, setSubForm] = useState({ name: '', coefficient: '1', classroom_id: '', teacher_id: '' });
     const [savingSub, setSavingSub] = useState(false);
     const [showNewCh, setShowNewCh] = useState<string | null>(null);
-    const [chForm, setChForm] = useState({ title: '', content: '' });
+    const [chForm, setChForm] = useState<{ title: string; contentBlocks: ContentBlock[] }>({ title: '', contentBlocks: [] });
     const [savingCh, setSavingCh] = useState(false);
     const [showNewLesson, setShowNewLesson] = useState<string | null>(null);
-    const [lessonForm, setLessonForm] = useState({ title: '', content: '', estimated_minutes: '15' });
+    const [lessonForm, setLessonForm] = useState<{ title: string; contentBlocks: ContentBlock[]; estimated_minutes: string }>({ title: '', contentBlocks: [], estimated_minutes: '15' });
     const [savingLesson, setSavingLesson] = useState(false);
     const [editCh, setEditCh] = useState<string | null>(null);
-    const [editChContent, setEditChContent] = useState('');
+    const [editChBlocks, setEditChBlocks] = useState<ContentBlock[]>([]);
     const [editLesson, setEditLesson] = useState<string | null>(null);
-    const [editLessonContent, setEditLessonContent] = useState('');
+    const [editLessonBlocks, setEditLessonBlocks] = useState<ContentBlock[]>([]);
 
     // Exercise form
     const [showNewEx, setShowNewEx] = useState<{ type: 'chapter'; id: string } | null>(null);
@@ -134,11 +136,11 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
         const { data, error } = await supabase.from('chapters').insert({
             organization_id: orgId,
             teacher_id: parentSubject?.teacher_id || null,
-            subject_id: subjectId, title: chForm.title.trim(), content: chForm.content,
+            subject_id: subjectId, title: chForm.title.trim(), content: serializeContent(chForm.contentBlocks),
             status: 'published', position: pos
         }).select().single();
         if (error) toast.error(error.message);
-        else { setChapters(p => [...p, data]); setShowNewCh(null); setChForm({ title: '', content: '' }); toast.success('Chapitre ajouté ✅'); }
+        else { setChapters(p => [...p, data]); setShowNewCh(null); setChForm({ title: '', contentBlocks: [] }); toast.success('Chapitre ajouté ✅'); }
         setSavingCh(false);
     };
 
@@ -150,8 +152,9 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
     };
 
     const saveChapterContent = async (chId: string) => {
-        await supabase.from('chapters').update({ content: editChContent }).eq('id', chId);
-        setChapters(p => p.map(c => c.id === chId ? { ...c, content: editChContent } : c));
+        const serialized = serializeContent(editChBlocks);
+        await supabase.from('chapters').update({ content: serialized }).eq('id', chId);
+        setChapters(p => p.map(c => c.id === chId ? { ...c, content: serialized } : c));
         setEditCh(null); toast.success('Contenu mis à jour');
     };
 
@@ -167,17 +170,18 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
         const pos = lessons.filter(l => l.chapter_id === chapterId).length;
         const { data, error } = await supabase.from('lessons').insert({
             organization_id: orgId,
-            chapter_id: chapterId, title: lessonForm.title.trim(), content: lessonForm.content,
+            chapter_id: chapterId, title: lessonForm.title.trim(), content: serializeContent(lessonForm.contentBlocks),
             status: 'published', position: pos, estimated_minutes: parseInt(lessonForm.estimated_minutes) || 15
         }).select().single();
         if (error) toast.error(error.message);
-        else { setLessons(p => [...p, data]); setShowNewLesson(null); setLessonForm({ title: '', content: '', estimated_minutes: '15' }); toast.success('Leçon ajoutée ✅'); }
+        else { setLessons(p => [...p, data]); setShowNewLesson(null); setLessonForm({ title: '', contentBlocks: [], estimated_minutes: '15' }); toast.success('Leçon ajoutée ✅'); }
         setSavingLesson(false);
     };
 
     const saveLessonContent = async (lId: string) => {
-        await supabase.from('lessons').update({ content: editLessonContent }).eq('id', lId);
-        setLessons(p => p.map(l => l.id === lId ? { ...l, content: editLessonContent } : l));
+        const serialized = serializeContent(editLessonBlocks);
+        await supabase.from('lessons').update({ content: serialized }).eq('id', lId);
+        setLessons(p => p.map(l => l.id === lId ? { ...l, content: serialized } : l));
         setEditLesson(null); toast.success('Leçon mise à jour');
     };
 
@@ -394,7 +398,7 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
                                                                     className={cn("p-1.5 rounded-lg transition-all", published ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-700/50 text-slate-500')}>
                                                                     {published ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
                                                                 </button>
-                                                                <button onClick={() => { setEditCh(ch.id); setEditChContent(ch.content || ''); }}
+                                                                <button onClick={() => { setEditCh(ch.id); setEditChBlocks(parseContent(ch.content)); }}
                                                                     className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/10 text-slate-400">
                                                                     <Edit2 className="w-3 h-3" />
                                                                 </button>
@@ -406,8 +410,7 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
 
                                                         {editCh === ch.id && (
                                                             <div className="px-3 pb-3 border-t border-white/[0.05] pt-2 space-y-2">
-                                                                <Textarea value={editChContent} onChange={e => setEditChContent(e.target.value)}
-                                                                    rows={5} placeholder="Contenu..." className="bg-white/[0.05] border-white/10 text-white text-sm resize-none rounded-xl" />
+                                                                <RichContentEditor blocks={editChBlocks} onChange={setEditChBlocks} placeholder="Contenu du chapitre..." userId={orgId} />
                                                                 <div className="flex gap-2">
                                                                     <Button size="sm" onClick={() => saveChapterContent(ch.id)} className="bg-teal-600 text-white rounded-xl text-xs flex-1 h-8"><Save className="w-3 h-3 mr-1" />OK</Button>
                                                                     <Button size="sm" variant="ghost" onClick={() => setEditCh(null)} className="text-slate-400 text-xs h-8">Annuler</Button>
@@ -426,12 +429,12 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
                                                                                 <FileText className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                                                                                 <span className="text-xs font-medium text-white flex-1 truncate">{l.title}</span>
                                                                                 <span className="text-[10px] text-slate-600">{l.estimated_minutes}min</span>
-                                                                                <button onClick={() => { setEditLesson(l.id); setEditLessonContent(l.content || ''); }} className="p-1 text-slate-500 hover:text-white"><Edit2 className="w-2.5 h-2.5" /></button>
+                                                                                <button onClick={() => { setEditLesson(l.id); setEditLessonBlocks(parseContent(l.content)); }} className="p-1 text-slate-500 hover:text-white"><Edit2 className="w-2.5 h-2.5" /></button>
                                                                                 <button onClick={async () => { await supabase.from('lessons').delete().eq('id', l.id); setLessons(p => p.filter(x => x.id !== l.id)); }} className="p-1 text-red-500/60 hover:text-red-400"><Trash2 className="w-2.5 h-2.5" /></button>
                                                                             </div>
                                                                             {editLesson === l.id && (
                                                                                 <div className="mt-2 space-y-1.5">
-                                                                                    <Textarea value={editLessonContent} onChange={e => setEditLessonContent(e.target.value)} rows={4} className="bg-white/[0.05] border-white/10 text-white text-xs resize-none rounded-xl" />
+                                                                                    <RichContentEditor blocks={editLessonBlocks} onChange={setEditLessonBlocks} placeholder="Contenu de la leçon..." userId={orgId} />
                                                                                     <div className="flex gap-1.5">
                                                                                         <Button size="sm" onClick={() => saveLessonContent(l.id)} className="bg-teal-600 text-white rounded-xl text-[10px] h-7 px-3"><Save className="w-2.5 h-2.5 mr-1" />OK</Button>
                                                                                         <Button size="sm" variant="ghost" onClick={() => setEditLesson(null)} className="text-slate-400 text-[10px] h-7 px-2">Annuler</Button>
@@ -444,7 +447,7 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
                                                                     {showNewLesson === ch.id ? (
                                                                         <div className="space-y-2 bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
                                                                             <Input value={lessonForm.title} onChange={e => setLessonForm(p => ({ ...p, title: e.target.value }))} placeholder="Titre..." className="bg-white/[0.05] border-white/10 text-white h-8 text-xs rounded-xl" />
-                                                                            <Textarea value={lessonForm.content} onChange={e => setLessonForm(p => ({ ...p, content: e.target.value }))} rows={3} placeholder="Contenu..." className="bg-white/[0.05] border-white/10 text-white text-xs resize-none rounded-xl" />
+                                                                            <RichContentEditor blocks={lessonForm.contentBlocks} onChange={blocks => setLessonForm(p => ({ ...p, contentBlocks: blocks }))} placeholder="Contenu de la leçon..." userId={orgId} />
                                                                             <div className="flex gap-2">
                                                                                 <Button size="sm" onClick={() => createLesson(ch.id)} disabled={savingLesson} className="bg-teal-600 text-white rounded-xl text-xs flex-1 h-8">Ajouter</Button>
                                                                                 <Button size="sm" variant="ghost" onClick={() => setShowNewLesson(null)} className="text-slate-400 text-xs h-8">Annuler</Button>
@@ -477,7 +480,7 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
                                             {showNewCh === sub.id ? (
                                                 <div className="space-y-2 bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
                                                     <Input value={chForm.title} onChange={e => setChForm(p => ({ ...p, title: e.target.value }))} placeholder="Titre du chapitre..." className="bg-white/[0.05] border-white/10 text-white h-9 text-sm rounded-xl" />
-                                                    <Textarea value={chForm.content} onChange={e => setChForm(p => ({ ...p, content: e.target.value }))} placeholder="Contenu..." rows={4} className="bg-white/[0.05] border-white/10 text-white text-sm resize-none rounded-xl" />
+                                                    <RichContentEditor blocks={chForm.contentBlocks} onChange={blocks => setChForm(p => ({ ...p, contentBlocks: blocks }))} placeholder="Contenu du chapitre..." userId={orgId} />
                                                     <div className="flex gap-2">
                                                         <Button size="sm" onClick={() => createChapter(sub.id)} disabled={savingCh || !chForm.title} className="bg-teal-600 text-white rounded-xl text-xs flex-1 h-9">Ajouter</Button>
                                                         <Button size="sm" variant="ghost" onClick={() => setShowNewCh(null)} className="text-slate-400 text-xs h-9">Annuler</Button>

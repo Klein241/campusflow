@@ -17,15 +17,19 @@ import { supabase } from '@/lib/supabase';
 import { compressImage } from '@/lib/compress';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { RichContentEditor, parseContent, serializeContent, type ContentBlock } from './rich-content-editor';
+import { DiscussButton } from '../discuss-button';
 
 interface TeacherCursusProps {
     orgId: string;
     userId: string;
+    userName: string;
     allClasses: any[];
     onStartDM?: (targetId: string, name: string) => void;
+    onOpenGroupChat?: (convId: string, convName: string) => void;
 }
 
-export function TeacherCursus({ orgId, userId, allClasses, onStartDM }: TeacherCursusProps) {
+export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, onOpenGroupChat }: TeacherCursusProps) {
     const [subjects, setSubjects] = useState<any[]>([]);
     const [chapters, setChapters] = useState<any[]>([]);
     const [lessons, setLessons] = useState<any[]>([]);
@@ -45,16 +49,16 @@ export function TeacherCursus({ orgId, userId, allClasses, onStartDM }: TeacherC
 
     // Chapter form
     const [showNewCh, setShowNewCh] = useState<string | null>(null);
-    const [chForm, setChForm] = useState({ title: '', description: '', content: '' });
+    const [chForm, setChForm] = useState<{ title: string; description: string; contentBlocks: ContentBlock[] }>({ title: '', description: '', contentBlocks: [] });
     const [editCh, setEditCh] = useState<string | null>(null);
-    const [editChContent, setEditChContent] = useState('');
+    const [editChBlocks, setEditChBlocks] = useState<ContentBlock[]>([]);
     const [savingCh, setSavingCh] = useState(false);
 
     // Lesson form
     const [showNewLesson, setShowNewLesson] = useState<string | null>(null);
-    const [lessonForm, setLessonForm] = useState({ title: '', content: '', estimated_minutes: '15' });
+    const [lessonForm, setLessonForm] = useState<{ title: string; contentBlocks: ContentBlock[]; estimated_minutes: string }>({ title: '', contentBlocks: [], estimated_minutes: '15' });
     const [editLesson, setEditLesson] = useState<string | null>(null);
-    const [editLessonContent, setEditLessonContent] = useState('');
+    const [editLessonBlocks, setEditLessonBlocks] = useState<ContentBlock[]>([]);
     const [savingLesson, setSavingLesson] = useState(false);
 
     // Exercise form
@@ -133,17 +137,18 @@ export function TeacherCursus({ orgId, userId, allClasses, onStartDM }: TeacherC
             organization_id: orgId,
             teacher_id: userId,
             subject_id: subjectId, title: chForm.title.trim(), description: chForm.description,
-            content: chForm.content, status: 'published', position: pos
+            content: serializeContent(chForm.contentBlocks), status: 'published', position: pos
         }).select().single();
         if (error) toast.error(error.message);
-        else { setChapters(prev => [...prev, data]); setShowNewCh(null); setChForm({ title: '', description: '', content: '' }); toast.success('Chapitre ajouté ✅'); }
+        else { setChapters(prev => [...prev, data]); setShowNewCh(null); setChForm({ title: '', description: '', contentBlocks: [] }); toast.success('Chapitre ajouté ✅'); }
         setSavingCh(false);
     };
 
     const saveChapterContent = async (chId: string) => {
-        const { error } = await supabase.from('chapters').update({ content: editChContent }).eq('id', chId);
+        const serialized = serializeContent(editChBlocks);
+        const { error } = await supabase.from('chapters').update({ content: serialized }).eq('id', chId);
         if (error) toast.error(error.message);
-        else { setChapters(prev => prev.map(c => c.id === chId ? { ...c, content: editChContent } : c)); setEditCh(null); toast.success('Contenu mis à jour ✅'); }
+        else { setChapters(prev => prev.map(c => c.id === chId ? { ...c, content: serialized } : c)); setEditCh(null); toast.success('Contenu mis à jour ✅'); }
     };
 
     const toggleChapterStatus = async (ch: any) => {
@@ -167,18 +172,19 @@ export function TeacherCursus({ orgId, userId, allClasses, onStartDM }: TeacherC
         const pos = lessons.filter(l => l.chapter_id === chapterId).length;
         const { data, error } = await supabase.from('lessons').insert({
             organization_id: orgId,
-            chapter_id: chapterId, title: lessonForm.title.trim(), content: lessonForm.content,
+            chapter_id: chapterId, title: lessonForm.title.trim(), content: serializeContent(lessonForm.contentBlocks),
             status: 'published', position: pos, estimated_minutes: parseInt(lessonForm.estimated_minutes) || 15
         }).select().single();
         if (error) toast.error(error.message);
-        else { setLessons(prev => [...prev, data]); setShowNewLesson(null); setLessonForm({ title: '', content: '', estimated_minutes: '15' }); toast.success('Leçon ajoutée ✅'); }
+        else { setLessons(prev => [...prev, data]); setShowNewLesson(null); setLessonForm({ title: '', contentBlocks: [], estimated_minutes: '15' }); toast.success('Leçon ajoutée ✅'); }
         setSavingLesson(false);
     };
 
     const saveLessonContent = async (lId: string) => {
-        const { error } = await supabase.from('lessons').update({ content: editLessonContent }).eq('id', lId);
+        const serialized = serializeContent(editLessonBlocks);
+        const { error } = await supabase.from('lessons').update({ content: serialized }).eq('id', lId);
         if (error) toast.error(error.message);
-        else { setLessons(prev => prev.map(l => l.id === lId ? { ...l, content: editLessonContent } : l)); setEditLesson(null); toast.success('Leçon mise à jour ✅'); }
+        else { setLessons(prev => prev.map(l => l.id === lId ? { ...l, content: serialized } : l)); setEditLesson(null); toast.success('Leçon mise à jour ✅'); }
     };
 
     const deleteLesson = async (lId: string) => {
@@ -347,7 +353,15 @@ export function TeacherCursus({ orgId, userId, allClasses, onStartDM }: TeacherC
                                             <Badge className="text-[9px] bg-teal-500/15 text-teal-400 border-teal-500/25">{publishedChaps.length}/{subChaps.length} ch. publiés</Badge>
                                         </div>
                                     </div>
-                                    {isOpen ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <DiscussButton
+                                            context={{ type: 'subject', id: sub.id, title: sub.name }}
+                                            orgId={orgId} userId={userId} userName={userName}
+                                            onOpenChat={onOpenGroupChat || (() => {})}
+                                            size="xs"
+                                        />
+                                        {isOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                                    </div>
                                 </button>
 
                                 {/* Chapters */}
@@ -374,12 +388,18 @@ export function TeacherCursus({ orgId, userId, allClasses, onStartDM }: TeacherC
                                                                 <p className="text-[10px] text-slate-500">{chLessons.length} leçons • {chExs.length} exercices</p>
                                                             </button>
                                                             <div className="flex items-center gap-1 shrink-0">
+                                                                <DiscussButton
+                                                                    context={{ type: 'chapter', id: ch.id, title: ch.title, parentTitle: sub.name }}
+                                                                    orgId={orgId} userId={userId} userName={userName}
+                                                                    onOpenChat={onOpenGroupChat || (() => {})}
+                                                                    size="xs"
+                                                                />
                                                                 <button onClick={() => toggleChapterStatus(ch)}
                                                                     className={cn("p-1.5 rounded-lg transition-all text-[10px] flex items-center gap-1",
                                                                         published ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25' : 'bg-slate-700/50 text-slate-500 hover:bg-slate-700')}>
                                                                     {published ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
                                                                 </button>
-                                                                <button onClick={() => { setEditCh(ch.id); setEditChContent(ch.content || ''); }}
+                                                                <button onClick={() => { setEditCh(ch.id); setEditChBlocks(parseContent(ch.content)); }}
                                                                     className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/10 text-slate-400 transition-all">
                                                                     <Edit2 className="w-3 h-3" />
                                                                 </button>
@@ -393,9 +413,7 @@ export function TeacherCursus({ orgId, userId, allClasses, onStartDM }: TeacherC
                                                         {/* Edit chapter content */}
                                                         {editCh === ch.id && (
                                                             <div className="px-3 pb-3 space-y-2 border-t border-white/[0.05] pt-2">
-                                                                <Textarea value={editChContent} onChange={e => setEditChContent(e.target.value)}
-                                                                    placeholder="Contenu du chapitre..." rows={6}
-                                                                    className="bg-white/[0.04] border-white/10 text-white text-sm resize-none rounded-xl" />
+                                                                <RichContentEditor blocks={editChBlocks} onChange={setEditChBlocks} placeholder="Contenu du chapitre..." userId={userId} />
                                                                 <div className="flex gap-2">
                                                                     <Button size="sm" onClick={() => saveChapterContent(ch.id)} className="bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs flex-1"><Save className="w-3 h-3 mr-1" />Sauvegarder</Button>
                                                                     <Button size="sm" variant="ghost" onClick={() => setEditCh(null)} className="text-slate-400 rounded-xl text-xs">Annuler</Button>
@@ -415,16 +433,14 @@ export function TeacherCursus({ orgId, userId, allClasses, onStartDM }: TeacherC
                                                                                 <FileText className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                                                                                 <span className="text-xs font-medium text-white flex-1 truncate">{lesson.title}</span>
                                                                                 <span className="text-[10px] text-slate-600">{lesson.estimated_minutes}min</span>
-                                                                                <button onClick={() => { setEditLesson(lesson.id); setEditLessonContent(lesson.content || ''); }}
+                                                                                <button onClick={() => { setEditLesson(lesson.id); setEditLessonBlocks(parseContent(lesson.content)); }}
                                                                                     className="p-1 rounded text-slate-500 hover:text-white"><Edit2 className="w-2.5 h-2.5" /></button>
                                                                                 <button onClick={() => deleteLesson(lesson.id)}
                                                                                     className="p-1 rounded text-red-500/60 hover:text-red-400"><Trash2 className="w-2.5 h-2.5" /></button>
                                                                             </div>
                                                                             {editLesson === lesson.id && (
                                                                                 <div className="mt-2 space-y-1.5">
-                                                                                    <Textarea value={editLessonContent} onChange={e => setEditLessonContent(e.target.value)}
-                                                                                        placeholder="Contenu de la leçon..." rows={5}
-                                                                                        className="bg-white/[0.04] border-white/10 text-white text-xs resize-none rounded-xl" />
+                                                                                    <RichContentEditor blocks={editLessonBlocks} onChange={setEditLessonBlocks} placeholder="Contenu de la leçon..." userId={userId} />
                                                                                     <div className="flex gap-1.5">
                                                                                         <Button size="sm" onClick={() => saveLessonContent(lesson.id)} className="bg-teal-600 text-white rounded-xl text-[10px] h-7 px-3"><Save className="w-2.5 h-2.5 mr-1" />OK</Button>
                                                                                         <Button size="sm" variant="ghost" onClick={() => setEditLesson(null)} className="text-slate-400 text-[10px] h-7 px-2">Annuler</Button>
@@ -441,8 +457,7 @@ export function TeacherCursus({ orgId, userId, allClasses, onStartDM }: TeacherC
                                                                                 placeholder="Titre de la leçon..." className="bg-white/[0.05] border-white/10 text-white h-8 text-xs rounded-xl" />
                                                                             <Input type="number" value={lessonForm.estimated_minutes} onChange={e => setLessonForm(p => ({ ...p, estimated_minutes: e.target.value }))}
                                                                                 placeholder="Durée (min)" className="bg-white/[0.05] border-white/10 text-white h-8 text-xs rounded-xl" />
-                                                                            <Textarea value={lessonForm.content} onChange={e => setLessonForm(p => ({ ...p, content: e.target.value }))}
-                                                                                placeholder="Contenu..." rows={4} className="bg-white/[0.05] border-white/10 text-white text-xs resize-none rounded-xl" />
+                                                                            <RichContentEditor blocks={lessonForm.contentBlocks} onChange={blocks => setLessonForm(p => ({ ...p, contentBlocks: blocks }))} placeholder="Contenu de la leçon..." userId={userId} />
                                                                             <div className="flex gap-2">
                                                                                 <Button size="sm" onClick={() => createLesson(ch.id)} disabled={savingLesson} className="bg-teal-600 text-white rounded-xl text-xs flex-1 h-8">Ajouter</Button>
                                                                                 <Button size="sm" variant="ghost" onClick={() => setShowNewLesson(null)} className="text-slate-400 text-xs h-8">Annuler</Button>
@@ -489,8 +504,7 @@ export function TeacherCursus({ orgId, userId, allClasses, onStartDM }: TeacherC
                                                 <div className="space-y-2 bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
                                                     <Input value={chForm.title} onChange={e => setChForm(p => ({ ...p, title: e.target.value }))}
                                                         placeholder="Titre du chapitre..." className="bg-white/[0.05] border-white/10 text-white h-9 text-sm rounded-xl" />
-                                                    <Textarea value={chForm.content} onChange={e => setChForm(p => ({ ...p, content: e.target.value }))}
-                                                        placeholder="Contenu du chapitre..." rows={5} className="bg-white/[0.05] border-white/10 text-white text-sm resize-none rounded-xl" />
+                                                    <RichContentEditor blocks={chForm.contentBlocks} onChange={blocks => setChForm(p => ({ ...p, contentBlocks: blocks }))} placeholder="Contenu du chapitre..." userId={userId} />
                                                     <div className="flex gap-2">
                                                         <Button size="sm" onClick={() => createChapter(sub.id)} disabled={savingCh || !chForm.title} className="bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs flex-1">Ajouter</Button>
                                                         <Button size="sm" variant="ghost" onClick={() => setShowNewCh(null)} className="text-slate-400 text-xs">Annuler</Button>

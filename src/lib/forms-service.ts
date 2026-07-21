@@ -146,7 +146,7 @@ export const formsService = {
     async getOrgPublishedForms(organizationId: string): Promise<CampusForm[]> {
         const { data, error } = await supabase
             .from('forms')
-            .select('id, title, description, form_type, slug, created_by_id, created_by_role, created_at')
+            .select('id, title, description, form_type, slug, created_by_id, created_by_role, created_at, organization_id, is_published, accepts_responses, show_results_to_respondents')
             .eq('organization_id', organizationId)
             .eq('is_published', true)
             .eq('accepts_responses', true)

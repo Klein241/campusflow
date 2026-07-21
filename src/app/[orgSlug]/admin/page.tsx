@@ -12,6 +12,9 @@ import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
 import { compressImage } from '@/lib/compress';
 import { toast } from 'sonner';
+import { ChatDMView } from '@/components/campus/chat-dm-view';
+import { GroupesView } from '@/components/campus/groupes-view';
+import { ActusView } from '@/components/campus/actus-view';
 
 // ═══ ERROR BOUNDARY (catches React render errors) ═══
 class AdminErrorBoundary extends Component<{ children: ReactNode; orgSlug: string }, { hasError: boolean; error: Error | null }> {
@@ -56,7 +59,7 @@ const Sel = ({ v, onChange, opts, ph = '—' }: { v: string, onChange: (v: strin
     </select>
 );
 
-type Tab = 'general' | 'landing' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'modeles' | 'cursus' | 'settings';
+type Tab = 'general' | 'landing' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'modeles' | 'cursus' | 'settings' | 'chat' | 'stories' | 'actus' | 'groupes';
 interface Cls { id?: string; name: string; cycle: string; filiere_id: string | null; level: number; capacity: number; }
 interface Sub { id?: string; name: string; code: string; coefficient: number; classroom_id: string; teacher_id: string | null; }
 interface Room { id?: string; name: string; }
@@ -70,6 +73,9 @@ const SIDES = [
     { id: 'payments' as Tab, icon: CreditCard, label: 'Paiements' }, { id: 'disciplines' as Tab, icon: ShieldCheck, label: 'Discipline' },
     { id: 'modeles' as Tab, icon: FileText, label: 'Modèles PDF' },
     { id: 'cursus' as Tab, icon: BookMarked, label: 'Cursus' },
+    { id: 'chat' as Tab, icon: MessageSquare, label: 'Chat DM' },
+    { id: 'groupes' as Tab, icon: Users, label: 'Groupes' },
+    { id: 'actus' as Tab, icon: Bell, label: 'Actus' },
     { id: 'settings' as Tab, icon: Palette, label: 'Paramètres' },
 ];
 const COLLEGE = ['6ème', '5ème', '4ème', '3ème'], LYCEE = ['Seconde', 'Première', 'Terminale'], SECS = ['A', 'B', 'C'];
@@ -93,6 +99,7 @@ function AdminPageContent() {
     const [loading, setLoading] = useState(true);
     const [authChecked, setAuthChecked] = useState(false);
     const [isAuthorized, setIsAuthorized] = useState(false);
+    const [session, setSession] = useState<any>(null);
     const [tab, setTab] = useState<Tab>('general');
     const [step, setStep] = useState(0);
     const [cls, setCls] = useState<Cls[]>([]);
@@ -219,6 +226,7 @@ function AdminPageContent() {
                 if (cancelled) return;
                 setIsAuthorized(true);
                 setOrg(o);
+                setSession({ id: authUser.id, first_name: authUser.user_metadata?.first_name || 'Admin', last_name: authUser.user_metadata?.last_name || '' });
                 const { data: c } = await supabase.from('classrooms').select('*').eq('organization_id', o.id).order('name');
                 if (cancelled) return;
                 setCls((c || []).map((x: any) => ({ id: x.id, name: x.name, cycle: x.cycle || '', filiere_id: x.filiere_id, level: x.level || 1, capacity: x.capacity || 50 })));
@@ -549,12 +557,12 @@ ${bodyHtml}
                 <div className="absolute bottom-[-25%] left-[-15%] w-[40%] h-[40%] bg-indigo-600/4 blur-[150px] rounded-full" />
             </div>
             {/* Sidebar */}
-            <aside className={`fixed lg:static inset-y-0 left-0 z-40 w-60 bg-[#0F1219]/90 backdrop-blur-xl border-r border-white/5 transform transition-transform lg:transform-none ${sidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+            <aside className={`fixed lg:static inset-y-0 left-0 z-40 w-60 bg-[#0F1219]/90 backdrop-blur-xl border-r border-white/5 transform transition-transform lg:transform-none flex flex-col ${sidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
                 <div className="p-4 border-b border-white/5">
                     <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-xl bg-gradient-to-br from-teal-500 to-indigo-600 flex items-center justify-center"><GraduationCap className="w-4 h-4" /></div><span className="font-bold text-sm truncate">{org.name}</span></div>
                     <p className="text-xs text-slate-500 mt-1">Backoffice</p>
                 </div>
-                <nav className="p-2 space-y-0.5">{SIDES.map(i => (<button key={i.id} onClick={() => onTab(i.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${tab === i.id ? 'bg-teal-600/15 text-teal-300 font-medium' : 'text-slate-400 hover:bg-white/5'}`}><i.icon className="w-4 h-4" />{i.label}</button>))}
+                <nav className="p-2 space-y-0.5 flex-1 overflow-y-auto pb-16">{SIDES.map(i => (<button key={i.id} onClick={() => onTab(i.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${tab === i.id ? 'bg-teal-600/15 text-teal-300 font-medium' : 'text-slate-400 hover:bg-white/5'}`}><i.icon className="w-4 h-4" />{i.label}</button>))}
                     <div className="mt-3 pt-3 border-t border-white/5 space-y-0.5">
                         <button onClick={() => router.push(`/${orgSlug}/library`)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-emerald-400 hover:bg-emerald-600/10"><BookMarked className="w-4 h-4" />Bibliothèque</button>
                         <button onClick={() => router.push(`/${orgSlug}/shop`)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-teal-400 hover:bg-teal-600/10"><ShoppingBag className="w-4 h-4" />Marketplace</button>
@@ -1414,6 +1422,45 @@ ${bodyHtml}
                             );
                         })}
                     </div>}
+
+                    {/* ── CHAT DM ── */}
+                    {tab === 'chat' && session && org && (
+                        <div className="h-[calc(100vh-120px)]">
+                            <ChatDMView
+                                orgId={org.id}
+                                orgSlug={org.slug}
+                                userId={session.id}
+                                userName={`${session.first_name || ''} ${session.last_name || ''}`.trim()}
+                                userRole="admin"
+                            />
+                        </div>
+                    )}
+
+                    {/* ── GROUPES ── */}
+                    {tab === 'groupes' && session && org && (
+                        <div className="h-[calc(100vh-120px)]">
+                            <GroupesView
+                                orgId={org.id}
+                                orgSlug={org.slug}
+                                userId={session.id}
+                                userName={`${session.first_name || ''} ${session.last_name || ''}`.trim()}
+                                userRole="admin"
+                            />
+                        </div>
+                    )}
+
+                    {/* ── ACTUS ADMIN ── */}
+                    {tab === 'actus' && session && org && (
+                        <div className="h-[calc(100vh-120px)] overflow-y-auto">
+                            <ActusView
+                                orgId={org.id}
+                                orgSlug={org.slug}
+                                userId={session.id}
+                                userName={`${session.first_name || ''} ${session.last_name || ''}`.trim()}
+                                userRole="admin"
+                            />
+                        </div>
+                    )}
                 </div>
             </main>
         </div>

@@ -378,9 +378,16 @@ export default function LoginPage() {
         setSaving(false);
     };
 
-    const redirectToDashboard = () => {
+    const redirectToDashboard = async () => {
         if (!userProfile) return;
         const now = new Date();
+        // Re-fetch classroom_id from DB to ensure latest assignment
+        let freshClassroomId = userProfile.classroom_id;
+        if (userProfile.role === 'student') {
+            const { data: freshProfile } = await supabase.from('student_profiles')
+                .select('classroom_id').eq('id', userProfile.id).single();
+            if (freshProfile?.classroom_id) freshClassroomId = freshProfile.classroom_id;
+        }
         // Store session in localStorage WITH expiration
         localStorage.setItem('campusflow_session', JSON.stringify({
             id: userProfile.id,
@@ -388,7 +395,7 @@ export default function LoginPage() {
             last_name: userProfile.last_name,
             role: userProfile.role,
             organization_id: userProfile.organization_id,
-            classroom_id: userProfile.classroom_id,
+            classroom_id: freshClassroomId,
             logged_in_at: now.toISOString(),
             expires_at: new Date(now.getTime() + SESSION_TTL_MS).toISOString(),
         }));

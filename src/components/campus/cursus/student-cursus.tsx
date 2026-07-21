@@ -2,10 +2,10 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    BookOpen, ChevronDown, ChevronUp, Play, CheckCircle2, Lock,
-    Award, Star, Timer, FileText, Image as ImageIcon, Download,
-    AlertCircle, Send, X, Trophy, BarChart3, GraduationCap,
-    MessageSquare, Clock, Layers, Zap, TrendingUp, Flag
+    BookOpen, ChevronDown, ChevronUp, Play, CheckCircle2,
+    Award, Star, Timer, FileText,
+    Send, X, Trophy, BarChart3, GraduationCap,
+    MessageSquare, Clock, Zap, TrendingUp, Flag, Hash
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,16 +15,20 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { CursusExerciseModal } from './cursus-exercise-modal';
+import { RichContentRenderer } from './rich-content-renderer';
+import { DiscussButton } from '../discuss-button';
 
 interface StudentCursusProps {
     orgId: string;
     userId: string;
+    userName: string;
     classroomId: string | null;
     skyPoints: number;
     onSkyUpdate: (delta: number) => void;
+    onOpenGroupChat?: (convId: string, convName: string) => void;
 }
 
-export function StudentCursus({ orgId, userId, classroomId, skyPoints, onSkyUpdate }: StudentCursusProps) {
+export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints, onSkyUpdate, onOpenGroupChat }: StudentCursusProps) {
     const [subjects, setSubjects] = useState<any[]>([]);
     const [chapters, setChapters] = useState<any[]>([]);
     const [lessons, setLessons] = useState<any[]>([]);
@@ -274,28 +278,38 @@ export function StudentCursus({ orgId, userId, classroomId, skyPoints, onSkyUpda
                                 isOpen ? 'border-indigo-500/30 bg-gradient-to-br from-indigo-500/[0.08] to-violet-500/[0.04]' : 'border-white/[0.06] bg-white/[0.03] hover:border-white/10')}>
 
                                 {/* Subject header */}
-                                <button className="w-full p-4 flex items-center gap-3 text-left" onClick={() => setExpandedSub(isOpen ? null : sub.id)}>
-                                    <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 text-xl",
-                                        isOpen ? 'bg-indigo-500/20' : 'bg-white/[0.05]')}>
-                                        📖
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <h4 className="font-bold text-sm text-white truncate">{sub.name}</h4>
-                                        <div className="flex items-center gap-2 mt-0.5">
-                                            <span className="text-[10px] text-slate-500">Coef. {sub.coefficient || 1}</span>
-                                            {teacher && <span className="text-[10px] text-slate-500">• {teacher.first_name} {teacher.last_name}</span>}
-                                            <span className="text-[10px] text-slate-500">• {subChaps.length} ch.</span>
+                                <div className="p-4 flex items-center gap-3">
+                                    <button className="flex items-center gap-3 text-left flex-1 min-w-0" onClick={() => setExpandedSub(isOpen ? null : sub.id)}>
+                                        <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 text-xl",
+                                            isOpen ? 'bg-indigo-500/20' : 'bg-white/[0.05]')}>
+                                            📖
                                         </div>
-                                        {subLessons.length > 0 && <Progress value={subPct} className="mt-1.5 h-1" />}
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0">
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="font-bold text-sm text-white truncate">{sub.name}</h4>
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                                <span className="text-[10px] text-slate-500">Coef. {sub.coefficient || 1}</span>
+                                                {teacher && <span className="text-[10px] text-slate-500">• {teacher.first_name} {teacher.last_name}</span>}
+                                                <span className="text-[10px] text-slate-500">• {subChaps.length} ch.</span>
+                                            </div>
+                                            {subLessons.length > 0 && <Progress value={subPct} className="mt-1.5 h-1" />}
+                                        </div>
+                                    </button>
+                                    <div className="flex items-center gap-1.5 shrink-0">
                                         <span className={cn("text-lg font-black", scoreColor)}>
                                             {subScore ? subScore.avg.toFixed(1) : '—'}
                                             {subScore && <span className="text-slate-600 text-xs font-normal">/20</span>}
                                         </span>
-                                        {isOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                                        <DiscussButton
+                                            context={{ type: 'subject', id: sub.id, title: sub.name }}
+                                            orgId={orgId} userId={userId} userName={userName}
+                                            onOpenChat={onOpenGroupChat || (() => {})}
+                                            size="xs"
+                                        />
+                                        <button onClick={() => setExpandedSub(isOpen ? null : sub.id)} className="p-1.5 text-slate-400 hover:text-white transition">
+                                            {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                        </button>
                                     </div>
-                                </button>
+                                </div>
 
                                 {/* Chapters */}
                                 <AnimatePresence>
@@ -322,27 +336,37 @@ export function StudentCursus({ orgId, userId, classroomId, skyPoints, onSkyUpda
                                                             isChOpen ? 'border-teal-500/30 bg-teal-500/[0.05]' : 'border-white/[0.06] bg-white/[0.02] hover:border-white/10')}>
 
                                                             {/* Chapter header */}
-                                                            <button className="w-full p-3.5 flex items-center gap-3 text-left" onClick={() => setExpandedCh(isChOpen ? null : ch.id)}>
-                                                                <div className="w-8 h-8 rounded-xl bg-teal-500/15 flex items-center justify-center shrink-0 text-xs font-bold text-teal-400">
-                                                                    {ci + 1}
-                                                                </div>
-                                                                <div className="flex-1 min-w-0">
-                                                                    <p className="text-sm font-semibold text-white truncate">{ch.title}</p>
-                                                                    <div className="flex items-center gap-1.5 mt-0.5">
-                                                                        <span className="text-[10px] text-slate-500">{chLessons.length} leçons</span>
-                                                                        {chExs.length > 0 && <span className="text-[10px] text-violet-400">• {chExs.length} exercices</span>}
+                                                            <div className="p-3.5 flex items-center gap-3">
+                                                                <button className="flex items-center gap-3 text-left flex-1 min-w-0" onClick={() => setExpandedCh(isChOpen ? null : ch.id)}>
+                                                                    <div className="w-8 h-8 rounded-xl bg-teal-500/15 flex items-center justify-center shrink-0 text-xs font-bold text-teal-400">
+                                                                        {ci + 1}
                                                                     </div>
-                                                                    {chLessons.length > 0 && <Progress value={chPct} className="mt-1.5 h-0.5" />}
-                                                                </div>
-                                                                <div className="flex items-center gap-2 shrink-0">
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <p className="text-sm font-semibold text-white truncate">{ch.title}</p>
+                                                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                                                            <span className="text-[10px] text-slate-500">{chLessons.length} leçons</span>
+                                                                            {chExs.length > 0 && <span className="text-[10px] text-violet-400">• {chExs.length} exercices</span>}
+                                                                        </div>
+                                                                        {chLessons.length > 0 && <Progress value={chPct} className="mt-1.5 h-0.5" />}
+                                                                    </div>
+                                                                </button>
+                                                                <div className="flex items-center gap-1 shrink-0">
                                                                     {chScore && (
-                                                                        <span className={cn("text-sm font-bold", chScoreColor)}>
+                                                                        <span className={cn("text-xs font-bold", chScoreColor)}>
                                                                             {((chScore.score / chScore.max) * 20).toFixed(1)}/20
                                                                         </span>
                                                                     )}
-                                                                    {isChOpen ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+                                                                    <DiscussButton
+                                                                        context={{ type: 'chapter', id: ch.id, title: ch.title, parentTitle: sub.name }}
+                                                                        orgId={orgId} userId={userId} userName={userName}
+                                                                        onOpenChat={onOpenGroupChat || (() => {})}
+                                                                        size="xs"
+                                                                    />
+                                                                    <button onClick={() => setExpandedCh(isChOpen ? null : ch.id)} className="p-1.5 text-slate-400 hover:text-white transition">
+                                                                        {isChOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                                                    </button>
                                                                 </div>
-                                                            </button>
+                                                            </div>
 
                                                             {/* Chapter content */}
                                                             <AnimatePresence>
@@ -350,10 +374,10 @@ export function StudentCursus({ orgId, userId, classroomId, skyPoints, onSkyUpda
                                                                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
                                                                         className="border-t border-white/[0.05] px-3 pb-3 pt-2 space-y-2">
 
-                                                                        {/* Chapter text content */}
+                                                                        {/* Chapter rich content */}
                                                                         {ch.content && (
-                                                                            <div className="bg-white/[0.03] rounded-xl p-3 text-xs text-slate-400 leading-relaxed">
-                                                                                {ch.content.slice(0, 300)}{ch.content.length > 300 ? '...' : ''}
+                                                                            <div className="bg-white/[0.03] rounded-xl p-3">
+                                                                                <RichContentRenderer content={ch.content} />
                                                                             </div>
                                                                         )}
 
@@ -364,24 +388,36 @@ export function StudentCursus({ orgId, userId, classroomId, skyPoints, onSkyUpda
                                                                             return (
                                                                                 <div key={lesson.id} className={cn("rounded-xl border transition-all",
                                                                                     done ? 'border-emerald-500/20 bg-emerald-500/[0.04]' : 'border-white/[0.05] bg-white/[0.02]')}>
-                                                                                    <button className="w-full p-3 flex items-center gap-2.5 text-left" onClick={() => setExpandedLesson(isLOpen ? null : lesson.id)}>
-                                                                                        <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
-                                                                                            done ? 'bg-emerald-500/20' : 'bg-white/[0.05]')}>
-                                                                                            {done ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Play className="w-3 h-3 text-slate-400" />}
-                                                                                        </div>
-                                                                                        <div className="flex-1 min-w-0">
-                                                                                            <p className="text-xs font-semibold text-white truncate">{lesson.title}</p>
-                                                                                            {lesson.estimated_minutes && <p className="text-[10px] text-slate-500"><Clock className="w-2.5 h-2.5 inline mr-0.5" />{lesson.estimated_minutes} min</p>}
-                                                                                        </div>
-                                                                                        {done && <Badge className="text-[9px] bg-emerald-500/20 text-emerald-400 border-emerald-500/30">Terminé</Badge>}
-                                                                                    </button>
+                                                                                    {/* Lesson header */}
+                                                                                    <div className="p-3 flex items-center gap-2.5">
+                                                                                        <button className="flex items-center gap-2.5 text-left flex-1 min-w-0" onClick={() => setExpandedLesson(isLOpen ? null : lesson.id)}>
+                                                                                            <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
+                                                                                                done ? 'bg-emerald-500/20' : 'bg-white/[0.05]')}>
+                                                                                                {done ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Play className="w-3 h-3 text-slate-400" />}
+                                                                                            </div>
+                                                                                            <div className="flex-1 min-w-0">
+                                                                                                <p className="text-xs font-semibold text-white truncate">{lesson.title}</p>
+                                                                                                {lesson.estimated_minutes && <p className="text-[10px] text-slate-500"><Clock className="w-2.5 h-2.5 inline mr-0.5" />{lesson.estimated_minutes} min</p>}
+                                                                                            </div>
+                                                                                            {done && <Badge className="text-[9px] bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shrink-0">Terminé</Badge>}
+                                                                                        </button>
+                                                                                        <DiscussButton
+                                                                                            context={{ type: 'lesson', id: lesson.id, title: lesson.title, parentTitle: ch.title }}
+                                                                                            orgId={orgId} userId={userId} userName={userName}
+                                                                                            onOpenChat={onOpenGroupChat || (() => {})}
+                                                                                            size="xs"
+                                                                                        />
+                                                                                        <button onClick={() => setExpandedLesson(isLOpen ? null : lesson.id)} className="p-1 text-slate-500 hover:text-white transition shrink-0">
+                                                                                            {isLOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                                                                        </button>
+                                                                                    </div>
 
                                                                                     <AnimatePresence>
                                                                                         {isLOpen && (
-                                                                                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="border-t border-white/[0.05] px-3 pb-3 pt-2 space-y-2">
+                                                                                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="border-t border-white/[0.05] px-3 pb-3 pt-2 space-y-2 overflow-hidden">
                                                                                                 {lesson.content && (
-                                                                                                    <div className="text-xs text-slate-400 leading-relaxed bg-white/[0.02] rounded-lg p-2.5">
-                                                                                                        {lesson.content}
+                                                                                                    <div className="bg-white/[0.02] rounded-xl p-3">
+                                                                                                        <RichContentRenderer content={lesson.content} />
                                                                                                     </div>
                                                                                                 )}
                                                                                                 {!done && (
@@ -397,10 +433,10 @@ export function StudentCursus({ orgId, userId, classroomId, skyPoints, onSkyUpda
                                                                             );
                                                                         })}
 
-                                                                        {/* Exercises of chapter */}
+                                                                        {/* Exercises of chapter — always visible */}
                                                                         {chExs.length > 0 && (
                                                                             <div className="mt-2">
-                                                                                <p className="text-[10px] text-violet-400 font-semibold uppercase tracking-wider mb-2">⚡ Exercices</p>
+                                                                                <p className="text-[10px] text-violet-400 font-semibold uppercase tracking-wider mb-2">⚡ Exercices ({chExs.length})</p>
                                                                                 <div className="space-y-2">
                                                                                     {chExs.map((ex: any) => {
                                                                                         const sub2 = getSubmission(ex.id);
@@ -428,7 +464,13 @@ export function StudentCursus({ orgId, userId, classroomId, skyPoints, onSkyUpda
                                                                                                             </div>
                                                                                                         )}
                                                                                                     </div>
-                                                                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                                                                    <div className="flex items-center gap-1 shrink-0">
+                                                                                                        <DiscussButton
+                                                                                                            context={{ type: 'exercise', id: ex.id, title: ex.title, parentTitle: ch.title }}
+                                                                                                            orgId={orgId} userId={userId} userName={userName}
+                                                                                                            onOpenChat={onOpenGroupChat || (() => {})}
+                                                                                                            size="xs"
+                                                                                                        />
                                                                                                         {scored && (
                                                                                                             <button onClick={() => setDisputeTarget({ exercise_id: ex.id, submission_id: sub2.id, subject_id: sub.id, title: ex.title })}
                                                                                                                 className="p-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 transition-all" title="Réclamer">

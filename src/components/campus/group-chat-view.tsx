@@ -104,6 +104,11 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
     const [uploading, setUploading] = useState(false);
     const [memberCount, setMemberCount] = useState(0);
 
+    // Sky Points chat credits
+    const [freeRemaining, setFreeRemaining] = useState<number | null>(null);
+    const [skyBalance, setSkyBalance] = useState<number | null>(null);
+    const [showSkyAlert, setShowSkyAlert] = useState(false);
+
     // Voice recording
     const [isRecording, setIsRecording] = useState(false);
     const [recordingTime, setRecordingTime] = useState(0);
@@ -181,6 +186,22 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
         if (!msgText.trim()) return;
         setSending(true);
         const text = msgText.trim();
+
+        // Check / consume sky credit
+        const { data: creditResult } = await supabase.rpc('use_chat_credit', {
+            p_user_id: userId,
+            p_org_id: orgId,
+        });
+        if (creditResult) {
+            setFreeRemaining(creditResult.free_remaining ?? 0);
+            setSkyBalance(creditResult.balance ?? 0);
+            if (!creditResult.success) {
+                setShowSkyAlert(true);
+                setSending(false);
+                return;
+            }
+        }
+
         const tempId = `temp_${Date.now()}`;
         const optimistic: MsgInfo = {
             id: tempId, conversation_id: groupId, sender_id: userId,
@@ -203,7 +224,7 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
             toast.error("Erreur d'envoi");
         }
         setSending(false);
-    }, [msgText, groupId, userId]);
+    }, [msgText, groupId, userId, orgId]);
 
     // ═══ FILE UPLOAD ═══
     const handleFileUpload = async (files: FileList | null) => {
@@ -382,15 +403,40 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
                         <Loader2 className="w-3 h-3 animate-spin" /> Envoi en cours...
                     </div>
                 )}
+                {/* Sky Points alert */}
+                {showSkyAlert && (
+                    <div className="mb-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-3">
+                        <span className="text-xl">⭐</span>
+                        <div className="flex-1">
+                            <p className="text-xs font-bold text-amber-300">Crédits épuisés</p>
+                            <p className="text-[10px] text-slate-400">Solde: {skyBalance ?? 0} pts — 1 Sky Point par message</p>
+                        </div>
+                        <a href="#store" onClick={() => setShowSkyAlert(false)}
+                            className="text-[10px] px-3 py-1.5 rounded-lg bg-amber-500 text-black font-bold hover:bg-amber-400 transition">
+                            Acheter
+                        </a>
+                        <button onClick={() => setShowSkyAlert(false)} className="text-slate-500 hover:text-white"><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                )}
                 <div className="flex gap-2 items-center">
                     <button onClick={() => fileInputRef.current?.click()} disabled={isRecording || uploading}
                         className="p-2 hover:bg-white/5 rounded-full transition text-slate-400 hover:text-cyan-400 disabled:opacity-30">
                         <Paperclip className="w-5 h-5" />
                     </button>
-                    <Input value={msgText} onChange={e => setMsgText(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                        placeholder="Écrire un message..." disabled={isRecording}
-                        className="bg-white/5 border-white/10 text-white h-10 rounded-full text-sm flex-1" />
+                    <div className="relative flex-1">
+                        <Input value={msgText} onChange={e => setMsgText(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                            placeholder="Écrire un message..." disabled={isRecording}
+                            className="bg-white/5 border-white/10 text-white h-10 rounded-full text-sm w-full pr-20" />
+                        {/* Credit indicator */}
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px]">
+                            {freeRemaining !== null && freeRemaining > 0 ? (
+                                <span className="text-teal-500">{freeRemaining} gratuits</span>
+                            ) : skyBalance !== null ? (
+                                <span className="text-amber-500">⭐ {skyBalance}</span>
+                            ) : null}
+                        </div>
+                    </div>
                     {msgText.trim() ? (
                         <Button onClick={sendMessage} disabled={sending || uploading}
                             className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-full w-10 h-10 p-0 shrink-0 shadow-lg shadow-emerald-600/20">

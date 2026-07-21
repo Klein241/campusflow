@@ -15,6 +15,8 @@ import { GroupesView } from '@/components/campus/groupes-view';
 import { MySpaceView } from '@/components/campus/myspace-view';
 import { ProfileView } from '@/components/campus/profile-view';
 import { NotificationCenter, NotificationBell } from '@/components/campus/notification-center';
+import { SkyPoints } from '@/components/campus/sky-points';
+import { SkyPointsStore } from '@/components/campus/sky-points-store';
 
 // ═══════════════════════════════════════════════════════
 // CAMPUS PAGE — 5 onglets séparés
@@ -68,6 +70,9 @@ export default function CampusPage() {
     // Notification center
     const [notifOpen, setNotifOpen] = useState(false);
 
+    // Sky Points store
+    const [storeOpen, setStoreOpen] = useState(false);
+
     useEffect(() => {
         (async () => {
             const sess = getSession();
@@ -93,6 +98,11 @@ export default function CampusPage() {
     };
 
     const handleOpenGroupChat = (convId: string, convName: string) => {
+        setChatSubTab('groupes');
+        setActiveTab('chatdm');
+    };
+
+    const handleDiscussContext = (convId: string, convName: string) => {
         setChatSubTab('groupes');
         setActiveTab('chatdm');
     };
@@ -149,7 +159,9 @@ export default function CampusPage() {
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5">
+                        {/* Sky Points */}
+                        <SkyPoints userId={session.id} orgId={org.id} compact onOpenStore={() => setStoreOpen(true)} />
                         {/* Notification Bell */}
                         <NotificationBell orgId={org.id} userId={session.id} onClick={() => setNotifOpen(true)} />
                         <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium ${
@@ -217,6 +229,7 @@ export default function CampusPage() {
                             <MySpaceView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role}
                                 orgName={org.name} orgLogo={org.logo_url} orgPhone={org.phone} orgEmail={org.email}
                                 orgCity={org.city} orgCountry={org.country} onStartDM={handleStartDM}
+                                onOpenGroupChat={handleOpenGroupChat}
                                 orgBulletinTemplate={org.bulletin_template} orgCurrentTerm={org.current_term} />
                         </motion.div>
                     )}
@@ -251,6 +264,14 @@ export default function CampusPage() {
                 isOpen={notifOpen}
                 onClose={() => setNotifOpen(false)}
                 onNavigate={handleNotifNavigate}
+            />
+
+            {/* Sky Points Store */}
+            <SkyPointsStore
+                isOpen={storeOpen}
+                onClose={() => setStoreOpen(false)}
+                userId={session.id}
+                orgId={org.id}
             />
         </main>
     );

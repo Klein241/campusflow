@@ -126,8 +126,22 @@ export default function ShopPage() {
     // ═══ ADD PRODUCT ═══
     const addProduct = async () => {
         if (!pName.trim() || !pPrice) { toast.error('Nom et prix requis'); return; }
+        if (!session?.id) { toast.error('Connectez-vous pour vendre'); return; }
         setSaving(true);
         try {
+            // Deduct 10 Sky Points
+            const { data: spendResult } = await supabase.rpc('spend_sky_point', {
+                p_user_id: session.id,
+                p_org_id: org.id,
+                p_amount: 10,
+                p_reason: 'marketplace_post',
+                p_description: `Produit: ${pName.trim()}`,
+            });
+            if (spendResult && !spendResult.success) {
+                toast.error(`⚡ Solde insuffisant — 10 Sky Points requis (solde actuel: ${spendResult.balance ?? 0} pts)`);
+                setSaving(false);
+                return;
+            }
             let imageUrl = '';
             if (pImg) {
                 const compressed = await compressImage(pImg, { maxWidth: 800, quality: 0.7 });
@@ -141,9 +155,10 @@ export default function ShopPage() {
                 tenant_id: org.id, nom: pName.trim(), description: pDesc || null,
                 prix: parseFloat(pPrice), categorie: pCat, stock: parseInt(pStock) || 0,
                 image_url: imageUrl || null, created_by: session?.id || null,
+                is_visible: isAdmin,
             });
             if (error) throw error;
-            toast.success('🎉 Produit ajouté !');
+            toast.success(isAdmin ? '🎉 Produit publié ! (-10 Sky Points)' : '🎉 Produit soumis — en attente de validation (-10 pts)');
             setPName(''); setPDesc(''); setPPrice(''); setPImg(null); setShowAddForm(false);
             const { data: p } = await supabase.from('shop_products').select('*')
                 .eq('tenant_id', org.id).order('created_at', { ascending: false });
@@ -456,9 +471,10 @@ export default function ShopPage() {
                                 <ShoppingCart className="h-4 w-4 mr-1" /> Commandes ({myOrders.length})
                             </Button>
                         )}
-                        {isAdmin && (
+                        {session && (
                             <Button size="sm" onClick={() => setShowAddForm(!showAddForm)} className="bg-linear-to-r from-teal-600 to-emerald-600 font-bold rounded-xl border-none">
-                                <Plus className="h-4 w-4 mr-1" /> Ajouter
+                                <Plus className="h-4 w-4 mr-1" /> Vendre
+                                <span className="ml-1.5 text-[9px] bg-white/20 px-1.5 py-0.5 rounded-full">⚡ 10 pts</span>
                             </Button>
                         )}
                     </div>
@@ -466,11 +482,15 @@ export default function ShopPage() {
 
                 {/* Add Product Form */}
                 <AnimatePresence>
-                    {showAddForm && isAdmin && (
+                    {showAddForm && session && (
                         <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-4">
                             <Card className="bg-linear-to-br from-teal-500/10 to-emerald-500/5 border-teal-500/20 backdrop-blur-sm overflow-hidden">
                                 <CardContent className="p-5 space-y-3">
-                                    <h3 className="font-black text-lg">🛍️ Nouveau produit</h3>
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="font-black text-lg">🛔 Vendre un produit</h3>
+                                        <span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">⚡ 10 Sky Points</span>
+                                    </div>
+                                    {!isAdmin && <p className="text-[11px] text-slate-500 bg-white/5 rounded-lg px-3 py-2">📌 Votre produit sera examiné avant publication.</p>}
                                     <div className="grid sm:grid-cols-2 gap-3">
                                         <div><Label className="text-slate-400 text-xs">Nom *</Label><Input value={pName} onChange={e => setPName(e.target.value)} placeholder="Uniforme scolaire" className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-sm" /></div>
                                         <div><Label className="text-slate-400 text-xs">Prix (XAF) *</Label><Input type="number" value={pPrice} onChange={e => setPPrice(e.target.value)} placeholder="15000" className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-sm" /></div>
@@ -586,9 +606,10 @@ export default function ShopPage() {
                     <div className="flex flex-col items-center justify-center py-16">
                         <ShoppingBag className="h-12 w-12 text-slate-600 mb-3" />
                         <p className="text-sm text-slate-400">Aucun produit trouvé</p>
-                        {isAdmin && (
+                        {!session && <p className="text-xs text-slate-500 mt-3">Connectez-vous pour vendre</p>}
+                        {session && (
                             <Button className="mt-4 bg-linear-to-r from-teal-600 to-emerald-600 font-bold rounded-xl" onClick={() => setShowAddForm(true)}>
-                                <Plus className="h-4 w-4 mr-2" /> Ajouter un produit
+                                <Plus className="h-4 w-4 mr-2" /> Vendre un produit ⚡ 10 pts
                             </Button>
                         )}
                     </div>
