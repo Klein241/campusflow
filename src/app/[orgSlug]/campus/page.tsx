@@ -33,6 +33,8 @@ interface SessionData {
     classroom_id?: string;
     logged_in_at: string;
     expires_at: string;
+    sky_points?: number;
+    avatar_url?: string;
 }
 
 function getSession(): SessionData | null {
@@ -271,7 +273,11 @@ export default function CampusPage() {
                 isOpen={storeOpen}
                 onClose={() => setStoreOpen(false)}
                 userId={session.id}
+                userName={session.first_name + ' ' + session.last_name}
                 orgId={org.id}
+                orgSlug={orgSlug}
+                currentBalance={session.sky_points ?? 0}
+                userRole={session.role as any}
             />
         </main>
     );
