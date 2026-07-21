@@ -84,6 +84,17 @@
   to = "/_/index.html"
   status = 200
 
+# Superadmin — must come before the /* fallback
+[[redirects]]
+  from = "/superadmin"
+  to = "/superadmin/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/superadmin/*"
+  to = "/superadmin/index.html"
+  status = 200
+
 # Fallback SPA for any unmatched route
 [[redirects]]
   from = "/*"
