@@ -36,6 +36,7 @@ interface SessionData {
     expires_at: string;
     sky_points?: number;
     avatar_url?: string;
+    photo_url?: string | null;
 }
 
 function getSession(): SessionData | null {
@@ -62,6 +63,8 @@ export default function CampusPage() {
     const [session, setSession] = useState<SessionData | null>(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<CampusTab>('actus');
+    // Photo URL — synced from session and updated on profile change
+    const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
     // DM target from contacts
     const [dmTargetId, setDmTargetId] = useState<string | null>(null);
@@ -89,9 +92,44 @@ export default function CampusPage() {
             }
             setOrg(o);
             setSession(sess);
+            // Load photo from session (or fetch fresh if missing)
+            if (sess.photo_url) {
+                setPhotoUrl(sess.photo_url);
+            } else {
+                // Fetch fresh photo if not in session
+                const table = sess.role === 'student' ? 'student_profiles' : 'teacher_profiles';
+                const { data: prof } = await supabase.from(table)
+                    .select('photo_url').eq('id', sess.id).single();
+                if (prof?.photo_url) {
+                    setPhotoUrl(prof.photo_url);
+                    // Patch session in localStorage
+                    const raw = localStorage.getItem('campusflow_session');
+                    if (raw) {
+                        try {
+                            const s = JSON.parse(raw);
+                            s.photo_url = prof.photo_url;
+                            localStorage.setItem('campusflow_session', JSON.stringify(s));
+                        } catch {}
+                    }
+                }
+            }
             setLoading(false);
         })();
     }, [orgSlug, router]);
+
+    // Called by ProfileView when user changes their photo
+    const handlePhotoUpdate = (newUrl: string) => {
+        setPhotoUrl(newUrl);
+        // Update localStorage session too
+        const raw = localStorage.getItem('campusflow_session');
+        if (raw) {
+            try {
+                const s = JSON.parse(raw);
+                s.photo_url = newUrl;
+                localStorage.setItem('campusflow_session', JSON.stringify(s));
+            } catch {}
+        }
+    };
 
     const handleStartDM = (targetId: string, targetName: string) => {
         setDmTargetId(targetId);
@@ -253,13 +291,13 @@ export default function CampusPage() {
 
                     {activeTab === 'profile' && (
                         <motion.div key="profile" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
-                            <ProfileView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role} orgName={org.name} orgLogo={org.logo_url} />
+                            <ProfileView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role} orgName={org.name} orgLogo={org.logo_url} onPhotoUpdate={handlePhotoUpdate} />
                         </motion.div>
                     )}
                 </AnimatePresence>
             </div>
 
-            <CampusBottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+            <CampusBottomNav activeTab={activeTab} onTabChange={setActiveTab} userPhotoUrl={photoUrl} userRole={session.role} />
 
             {/* Notification Center (slide-out panel) */}
             <NotificationCenter

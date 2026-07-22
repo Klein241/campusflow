@@ -5,7 +5,7 @@ import { Newspaper, Users, MessageSquare, Lock, User, ClipboardList } from 'luci
 import { cn } from '@/lib/utils';
 
 // ═══════════════════════════════════════════════════════
-// CAMPUS BOTTOM NAV — 6 onglets
+// CAMPUS BOTTOM NAV — 6 onglets + user avatar on profile tab
 // ═══════════════════════════════════════════════════════
 
 export type CampusTab = 'actus' | 'contacts' | 'chatdm' | 'myspace' | 'forms' | 'profile';
@@ -14,6 +14,8 @@ interface CampusBottomNavProps {
     activeTab: CampusTab;
     onTabChange: (tab: CampusTab) => void;
     unreadCount?: number;
+    userPhotoUrl?: string | null;
+    userRole?: string;
 }
 
 const navItems: { id: CampusTab; icon: any; label: string; gradient: string; activeGlow: string }[] = [
@@ -25,7 +27,13 @@ const navItems: { id: CampusTab; icon: any; label: string; gradient: string; act
     { id: 'profile',  icon: User,           label: 'Profil',   gradient: 'from-rose-500 to-pink-500',     activeGlow: 'shadow-rose-500/30' },
 ];
 
-export function CampusBottomNav({ activeTab, onTabChange, unreadCount = 0 }: CampusBottomNavProps) {
+export function CampusBottomNav({
+    activeTab,
+    onTabChange,
+    unreadCount = 0,
+    userPhotoUrl,
+    userRole,
+}: CampusBottomNavProps) {
     return (
         <div className="fixed bottom-0 left-0 right-0 z-50 px-3 pb-[env(safe-area-inset-bottom,6px)]">
             <div className="relative max-w-lg mx-auto">
@@ -33,6 +41,7 @@ export function CampusBottomNav({ activeTab, onTabChange, unreadCount = 0 }: Cam
                 <div className="relative flex items-center justify-around p-1.5 rounded-2xl bg-[#0F172A]/90 backdrop-blur-2xl border border-white/[0.08] shadow-[0_-8px_32px_rgba(0,0,0,0.6)]">
                     {navItems.map((item) => {
                         const isActive = activeTab === item.id;
+                        const isProfileTab = item.id === 'profile';
                         return (
                             <button
                                 key={item.id}
@@ -49,20 +58,38 @@ export function CampusBottomNav({ activeTab, onTabChange, unreadCount = 0 }: Cam
                                         transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                                     />
                                 )}
+                                {/* Unread badge for chat */}
                                 {item.id === 'chatdm' && unreadCount > 0 && (
                                     <span className="absolute top-0 right-1 w-4 h-4 rounded-full bg-red-500 text-[8px] font-bold text-white flex items-center justify-center shadow-lg shadow-red-500/30 animate-pulse">
                                         {unreadCount > 9 ? '9+' : unreadCount}
                                     </span>
                                 )}
-                                <div className={cn(
-                                    "p-1.5 rounded-xl transition-all duration-300",
-                                    isActive ? `bg-gradient-to-br ${item.gradient} shadow-lg ${item.activeGlow}` : ""
-                                )}>
-                                    <item.icon
-                                        className={cn("w-[18px] h-[18px] transition-all duration-300", isActive ? "text-white" : "text-slate-500")}
-                                        strokeWidth={isActive ? 2.5 : 1.8}
-                                    />
-                                </div>
+                                {/* Profile tab: show real avatar if available */}
+                                {isProfileTab && userPhotoUrl ? (
+                                    <div className={cn(
+                                        "w-7 h-7 rounded-full overflow-hidden border-2 transition-all duration-300",
+                                        isActive
+                                            ? "border-rose-400 shadow-lg shadow-rose-500/40 scale-110"
+                                            : "border-white/20"
+                                    )}>
+                                        <img
+                                            src={userPhotoUrl}
+                                            alt="Mon profil"
+                                            className="w-full h-full object-cover"
+                                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className={cn(
+                                        "p-1.5 rounded-xl transition-all duration-300",
+                                        isActive ? `bg-gradient-to-br ${item.gradient} shadow-lg ${item.activeGlow}` : ""
+                                    )}>
+                                        <item.icon
+                                            className={cn("w-[18px] h-[18px] transition-all duration-300", isActive ? "text-white" : "text-slate-500")}
+                                            strokeWidth={isActive ? 2.5 : 1.8}
+                                        />
+                                    </div>
+                                )}
                                 <span className={cn(
                                     "text-[9px] mt-0.5 font-medium transition-all duration-300",
                                     isActive ? "text-white font-semibold" : "text-slate-500"

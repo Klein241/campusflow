@@ -5,7 +5,7 @@ import {
     BookOpen, ChevronDown, ChevronUp, Play, CheckCircle2,
     Award, Star, Timer, FileText,
     Send, X, Trophy, BarChart3, GraduationCap,
-    MessageSquare, Clock, Zap, TrendingUp, Flag, Hash
+    MessageSquare, Clock, Zap, TrendingUp, Flag, Hash, Maximize2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { CursusExerciseModal } from './cursus-exercise-modal';
 import { RichContentRenderer } from './rich-content-renderer';
 import { DiscussButton } from '../discuss-button';
+import { LessonReader } from './lesson-reader';
 
 interface StudentCursusProps {
     orgId: string;
@@ -38,6 +39,8 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
     const [submissions, setSubmissions] = useState<any[]>([]);
     const [progress, setProgress] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    // Fullscreen lesson reader
+    const [readerLesson, setReaderLesson] = useState<any | null>(null);
 
     const [expandedSub, setExpandedSub] = useState<string | null>(null);
     const [expandedCh, setExpandedCh] = useState<string | null>(null);
@@ -477,6 +480,14 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                                                                                         className="border-t border-white/[0.06] px-3 pb-3 pt-2.5 space-y-2.5 overflow-hidden">
                                                                                                         {lesson.content && (
                                                                                                             <div className="bg-white/[0.02] rounded-xl p-3">
+                                                                                                                {/* Fullscreen reader button */}
+                                                                                                                <button
+                                                                                                                    onClick={() => setReaderLesson({ ...lesson, chapter_title: ch.title })}
+                                                                                                                    className="w-full flex items-center justify-center gap-2 py-2 mb-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-medium hover:bg-indigo-500/20 transition-all"
+                                                                                                                >
+                                                                                                                    <Maximize2 className="w-3.5 h-3.5" />
+                                                                                                                    Ouvrir en plein écran
+                                                                                                                </button>
                                                                                                                 <RichContentRenderer content={lesson.content} />
                                                                                                             </div>
                                                                                                         )}
@@ -625,6 +636,17 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* ── Fullscreen Lesson Reader ── */}
+            {readerLesson && (
+                <LessonReader
+                    isOpen={!!readerLesson}
+                    onClose={() => setReaderLesson(null)}
+                    lesson={readerLesson}
+                    userId={userId}
+                    orgId={orgId}
+                />
+            )}
         </div>
     );
 }

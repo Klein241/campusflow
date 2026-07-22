@@ -30,11 +30,13 @@ interface ProfileViewProps {
     userRole: string;
     orgName: string;
     orgLogo?: string | null;
+    /** Called after user successfully uploads a new profile photo */
+    onPhotoUpdate?: (newUrl: string) => void;
 }
 
 const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n);
 
-export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgName, orgLogo }: ProfileViewProps) {
+export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgName, orgLogo, onPhotoUpdate }: ProfileViewProps) {
     const router = useRouter();
     const [profile, setProfile] = useState<any>(null);
     const [classroom, setClassroom] = useState<any>(null);
@@ -134,7 +136,18 @@ export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgNam
             const photoUrl = urlData.publicUrl;
             const { error: dbErr } = await supabase.from(table).update({ photo_url: photoUrl }).eq('id', userId);
             if (dbErr) throw dbErr;
-            setProfile({ ...profile, photo_url: photoUrl });
+            setProfile((prev: any) => ({ ...prev, photo_url: photoUrl }));
+            // Persist photo_url in localStorage session so it survives page reload
+            try {
+                const raw = localStorage.getItem('campusflow_session');
+                if (raw) {
+                    const s = JSON.parse(raw);
+                    s.photo_url = photoUrl;
+                    localStorage.setItem('campusflow_session', JSON.stringify(s));
+                }
+            } catch {}
+            // Notify parent (CampusPage) to update avatar in bottom nav & header
+            onPhotoUpdate?.(photoUrl);
             setShowPhotoModal(false);
             toast.success('Photo de profil mise à jour ! 📸');
         } catch (e: any) { toast.error(e.message || 'Erreur upload'); }

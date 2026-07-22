@@ -381,14 +381,25 @@ export default function LoginPage() {
     const redirectToDashboard = async () => {
         if (!userProfile) return;
         const now = new Date();
-        // Re-fetch classroom_id from DB to ensure latest assignment
+        // Re-fetch classroom_id + photo_url from DB to ensure latest data
         let freshClassroomId = userProfile.classroom_id;
+        let photoUrl: string | null = null;
         if (userProfile.role === 'student') {
             const { data: freshProfile } = await supabase.from('student_profiles')
-                .select('classroom_id').eq('id', userProfile.id).single();
+                .select('classroom_id, photo_url').eq('id', userProfile.id).single();
             if (freshProfile?.classroom_id) freshClassroomId = freshProfile.classroom_id;
+            if (freshProfile?.photo_url) photoUrl = freshProfile.photo_url;
+        } else if (userProfile.role === 'teacher') {
+            const { data: freshTeacher } = await supabase.from('teacher_profiles')
+                .select('photo_url').eq('id', userProfile.id).single();
+            if (freshTeacher?.photo_url) photoUrl = freshTeacher.photo_url;
+        } else if (userProfile.role === 'admin') {
+            // Try admin_profiles first, fallback to teacher_profiles
+            const { data: adminProfile } = await supabase.from('teacher_profiles')
+                .select('photo_url').eq('id', userProfile.id).single();
+            if (adminProfile?.photo_url) photoUrl = adminProfile.photo_url;
         }
-        // Store session in localStorage WITH expiration
+        // Store session in localStorage WITH expiration + photo_url
         localStorage.setItem('campusflow_session', JSON.stringify({
             id: userProfile.id,
             first_name: userProfile.first_name,
@@ -396,6 +407,7 @@ export default function LoginPage() {
             role: userProfile.role,
             organization_id: userProfile.organization_id,
             classroom_id: freshClassroomId,
+            photo_url: photoUrl,
             logged_in_at: now.toISOString(),
             expires_at: new Date(now.getTime() + SESSION_TTL_MS).toISOString(),
         }));

@@ -25,7 +25,10 @@ DROP POLICY IF EXISTS "Author can delete own post" ON tutoring_requests;
 CREATE POLICY "Author can delete own post" ON tutoring_requests
     FOR DELETE USING (true);
 
--- 4. Create spend_sky_point RPC function (atomic, prevents race conditions)
+-- 4. Drop existing function first (fixes parameter defaults conflict)
+DROP FUNCTION IF EXISTS spend_sky_point(uuid, uuid, integer, text, text);
+
+-- 5. Create spend_sky_point RPC function (atomic, prevents race conditions)
 CREATE OR REPLACE FUNCTION spend_sky_point(
     p_user_id      UUID,
     p_org_id       UUID,
