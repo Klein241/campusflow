@@ -7,9 +7,11 @@
   NEXT_TELEMETRY_DISABLED = "1"
   NEXT_PUBLIC_SUPABASE_URL = "https://nuisijvopyudmbcqpaua.supabase.co"
   NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51aXNpanZvcHl1ZG1iY3FwYXVhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNTQyMDksImV4cCI6MjA4OTkzMDIwOX0.gAelghYCc0u5i0LeesZhVjUIQy7sQthWCMTRtbZV0OE"
-  NEXT_PUBLIC_WORKER_URL = "https://campusflow-notifications.bufferwave.workers.dev"
+  NEXT_PUBLIC_WORKER_URL = "https://campusflow-worker.bufferwave.workers.dev"
+  NEXT_PUBLIC_NOTIFICATION_WORKER_URL = "https://campusflow-worker.bufferwave.workers.dev"
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY = "BK97xxBUH7iiYBgPJCAkfWQWpu0is8TT6RG2dWIHr23WreI3CjBytKxRb0KyLjuPvWAH_Jr8Kn5Bmchdn2MikJE"
   NEXT_PUBLIC_GOOGLE_CLIENT_ID = "585921336296-np8i09h6l468i0lu7oh97jckgilmp5ah.apps.googleusercontent.com"
-  # NEXT_PUBLIC_ADMIN_KEY — Set this in Netlify Dashboard > Site Settings > Environment Variables
+  # Secrets (ADMIN_KEY, R2_UPLOAD_SECRET) — Set in Netlify Dashboard > Site Settings > Environment Variables
   # DO NOT commit secrets to version control
 
 # ═══ Edge Functions ═══
