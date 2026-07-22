@@ -5,7 +5,7 @@ import {
     Plus, X, Save, Trash2, ChevronDown, ChevronUp, Eye, EyeOff,
     BookOpen, FileText, Image as ImageIcon, Upload, Layers,
     Timer, GraduationCap, Users, BarChart3, CheckCircle2,
-    AlertCircle, Edit2, Send, Flag, MessageSquare, Star
+    AlertCircle, Edit2, Send, Flag, MessageSquare, Star, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -66,6 +66,12 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
     const [exForm, setExForm] = useState({ title: '', type: 'qcm', duration_minutes: 10, max_score: 20, questions: [] as any[] });
     const [newQ, setNewQ] = useState({ question: '', answer: '', options: ['', '', '', ''] });
     const [savingEx, setSavingEx] = useState(false);
+
+    // Exercise editing
+    const [editEx, setEditEx] = useState<any | null>(null);
+    const [editExForm, setEditExForm] = useState({ title: '', type: 'qcm', duration_minutes: 10, max_score: 20, questions: [] as any[] });
+    const [editNewQ, setEditNewQ] = useState({ question: '', answer: '', options: ['', '', '', ''] });
+    const [savingEditEx, setSavingEditEx] = useState(false);
 
     const loadData = async () => {
         setLoading(true);
@@ -213,6 +219,32 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
         if (error) toast.error(error.message);
         else { setExercises(prev => [...prev, data]); setShowNewEx(null); setExForm({ title: '', type: 'qcm', duration_minutes: 10, max_score: 20, questions: [] }); toast.success('Exercice créé ✅'); }
         setSavingEx(false);
+    };
+
+    const saveEditExercise = async () => {
+        if (!editEx || !editExForm.title) return;
+        setSavingEditEx(true);
+        try {
+            const { error } = await supabase.from('exercises').update({
+                title: editExForm.title,
+                type: editExForm.type,
+                duration_minutes: editExForm.duration_minutes,
+                max_score: editExForm.max_score,
+                questions: editExForm.questions,
+            }).eq('id', editEx.id);
+            if (error) throw error;
+            setExercises(prev => prev.map(e => e.id === editEx.id ? { ...e, ...editExForm } : e));
+            setEditEx(null);
+            toast.success('Exercice mis à jour ✅');
+        } catch (e: any) { toast.error(e.message); }
+        setSavingEditEx(false);
+    };
+
+    const deleteExercise = async (exId: string) => {
+        if (!confirm('Supprimer cet exercice ?')) return;
+        await supabase.from('exercises').delete().eq('id', exId);
+        setExercises(prev => prev.filter(e => e.id !== exId));
+        toast.success('Exercice supprimé');
     };
 
     const resolveDispute = async (dId: string, status: 'accepted' | 'rejected', response: string) => {
@@ -513,8 +545,18 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
                                                                                         <Badge className="text-[9px] bg-violet-500/20 text-violet-400 border-none">{ex.type?.toUpperCase()}</Badge>
                                                                                         <span className="text-xs font-medium text-white truncate">{ex.title}</span>
                                                                                     </div>
-                                                                                    <p className="text-[10px] text-slate-500">{ex.duration_minutes}min • max {ex.max_score}pts • {exSubs.length} soumission(s){avgScore !== null ? ` • moy. ${avgScore.toFixed(1)}` : ''}</p>
+                                                                                    <p className="text-[10px] text-slate-500">{ex.duration_minutes}min &bull; max {ex.max_score}pts &bull; {exSubs.length} soumission(s){avgScore !== null ? ` • moy. ${avgScore.toFixed(1)}` : ''}</p>
                                                                                 </div>
+                                                                                <button
+                                                                                    onClick={() => { setEditEx(ex); setEditExForm({ title: ex.title, type: ex.type || 'qcm', duration_minutes: ex.duration_minutes || 10, max_score: ex.max_score || 20, questions: ex.questions || [] }); }}
+                                                                                    className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-violet-500/20 text-slate-400 hover:text-violet-400 transition-all shrink-0">
+                                                                                    <Edit2 className="w-3.5 h-3.5" />
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={() => deleteExercise(ex.id)}
+                                                                                    className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400/70 hover:text-red-400 transition-all shrink-0">
+                                                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                                                </button>
                                                                             </div>
                                                                         );
                                                                     })}
@@ -605,7 +647,7 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
                                             <span className="text-[10px] text-slate-500 shrink-0 mt-0.5">{qi + 1}.</span>
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-xs text-white">{q.question}</p>
-                                                {q.answer && <p className="text-[10px] text-emerald-400 mt-0.5">→ {q.answer}</p>}
+                                                {q.answer && <p className="text-[10px] text-emerald-400 mt-0.5">&rarr; {q.answer}</p>}
                                             </div>
                                             <button onClick={() => setExForm(p => ({ ...p, questions: p.questions.filter((_, i) => i !== qi) }))}
                                                 className="text-red-400/60 hover:text-red-400 shrink-0"><X className="w-3 h-3" /></button>
@@ -634,7 +676,110 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
 
                                 <Button onClick={createExercise} disabled={savingEx || !exForm.title || exForm.questions.length === 0}
                                     className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-xl h-10">
-                                    {savingEx ? 'Création...' : 'Créer l\'exercice'}
+                                    {savingEx ? 'Création...' : "Créer l'exercice"}
+                                </Button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ═══ EDIT EXERCISE MODAL ═══ */}
+            <AnimatePresence>
+                {editEx && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-4"
+                        onClick={() => setEditEx(null)}>
+                        <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }}
+                            className="bg-[#0f1117] border border-violet-500/30 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 shadow-2xl"
+                            onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-bold text-white flex items-center gap-2">
+                                    <Edit2 className="w-4 h-4 text-violet-400" /> Modifier l&apos;exercice
+                                </h3>
+                                <button onClick={() => setEditEx(null)}><X className="w-4 h-4 text-slate-400" /></button>
+                            </div>
+
+                            <div className="space-y-3">
+                                <Input value={editExForm.title} onChange={e => setEditExForm(p => ({ ...p, title: e.target.value }))}
+                                    placeholder="Titre de l'exercice..." className="bg-white/[0.05] border-white/10 text-white rounded-xl" />
+                                <div className="grid grid-cols-3 gap-2">
+                                    <div>
+                                        <Label className="text-xs text-slate-400">Type</Label>
+                                        <select value={editExForm.type} onChange={e => setEditExForm(p => ({ ...p, type: e.target.value }))}
+                                            className="mt-1 w-full bg-[#1a1d2e] border border-white/10 text-white text-sm rounded-xl px-2 h-9">
+                                            <option value="qcm">QCM</option>
+                                            <option value="quiz">Quiz</option>
+                                            <option value="qa">Q/R</option>
+                                            <option value="open">Ouvert</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-slate-400">Durée (min)</Label>
+                                        <Input type="number" value={editExForm.duration_minutes} onChange={e => setEditExForm(p => ({ ...p, duration_minutes: parseInt(e.target.value) || 10 }))}
+                                            className="mt-1 bg-white/[0.05] border-white/10 text-white h-9 rounded-xl" />
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-slate-400">Note max</Label>
+                                        <Input type="number" value={editExForm.max_score} onChange={e => setEditExForm(p => ({ ...p, max_score: parseInt(e.target.value) || 20 }))}
+                                            className="mt-1 bg-white/[0.05] border-white/10 text-white h-9 rounded-xl" />
+                                    </div>
+                                </div>
+
+                                {/* Existing questions */}
+                                <div className="space-y-2">
+                                    <Label className="text-xs text-slate-400">Questions ({editExForm.questions.length})</Label>
+                                    {editExForm.questions.map((q: any, qi: number) => (
+                                        <div key={qi} className="bg-white/[0.03] rounded-xl p-2.5 flex items-start gap-2 border border-white/[0.04]">
+                                            <span className="text-[10px] text-slate-500 shrink-0 mt-0.5">{qi + 1}.</span>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-xs text-white">{q.question}</p>
+                                                {q.answer && <p className="text-[10px] text-emerald-400 mt-0.5">&rarr; {q.answer}</p>}
+                                                {q.options && q.options.length > 0 && (
+                                                    <div className="mt-1 flex flex-wrap gap-1">
+                                                        {q.options.map((o: string, oi: number) => (
+                                                            <span key={oi} className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/[0.06] text-slate-400">{o}</span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <button onClick={() => setEditExForm(p => ({ ...p, questions: p.questions.filter((_, i) => i !== qi) }))}
+                                                className="text-red-400/60 hover:text-red-400 shrink-0 p-1"><X className="w-3 h-3" /></button>
+                                        </div>
+                                    ))}
+
+                                    {/* Add new question to existing exercise */}
+                                    <div className="bg-white/[0.03] rounded-xl p-3 space-y-2 border border-violet-500/10">
+                                        <p className="text-[10px] text-violet-400 font-semibold">+ Nouvelle question</p>
+                                        <Textarea value={editNewQ.question} onChange={e => setEditNewQ(p => ({ ...p, question: e.target.value }))}
+                                            placeholder="Question..." rows={2} className="bg-white/[0.05] border-white/10 text-white text-xs resize-none rounded-xl" />
+                                        {editExForm.type === 'qcm' && (
+                                            <div className="space-y-1.5">
+                                                {editNewQ.options.map((opt, oi) => (
+                                                    <Input key={oi} value={opt} onChange={e => setEditNewQ(p => ({ ...p, options: p.options.map((o, i) => i === oi ? e.target.value : o) }))}
+                                                        placeholder={`Option ${String.fromCharCode(65 + oi)}`} className="bg-white/[0.05] border-white/10 text-white h-8 text-xs rounded-xl" />
+                                                ))}
+                                            </div>
+                                        )}
+                                        <Input value={editNewQ.answer} onChange={e => setEditNewQ(p => ({ ...p, answer: e.target.value }))}
+                                            placeholder={editExForm.type === 'qcm' ? 'Bonne réponse...' : 'Réponse attendue...'}
+                                            className="bg-white/[0.05] border-white/10 text-white h-8 text-xs rounded-xl" />
+                                        <button
+                                            onClick={() => {
+                                                if (!editNewQ.question) return;
+                                                setEditExForm(p => ({ ...p, questions: [...p.questions, { ...editNewQ, options: editNewQ.options.filter(o => o.trim()) }] }));
+                                                setEditNewQ({ question: '', answer: '', options: ['', '', '', ''] });
+                                            }}
+                                            disabled={!editNewQ.question}
+                                            className="w-full py-1.5 rounded-xl bg-violet-500/15 border border-violet-500/25 text-violet-400 text-xs hover:bg-violet-500/25 transition-all flex items-center justify-center gap-1 disabled:opacity-40">
+                                            <Plus className="w-3 h-3" /> Ajouter cette question
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <Button onClick={saveEditExercise} disabled={savingEditEx || !editExForm.title}
+                                    className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-xl h-10">
+                                    {savingEditEx ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Sauvegarde...</> : <><Save className="w-4 h-4 mr-2" />Enregistrer les modifications</>}
                                 </Button>
                             </div>
                         </motion.div>

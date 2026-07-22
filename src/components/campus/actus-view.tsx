@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     TrendingUp, Plus, Loader2, Heart, Send, X, Share2,
     ShieldCheck, Image as ImageIcon, MessageCircle, ChevronLeft,
-    ChevronRight, Globe, Users, UserCheck, Eye, Clock, Repeat, Trash2, Reply
+    ChevronRight, Globe, Users, UserCheck, Eye, Clock, Repeat, Trash2, Reply,
+    Edit2, MoreVertical, Star
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -123,6 +124,12 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
     const [newComment, setNewComment] = useState('');
     const [postingComment, setPostingComment] = useState(false);
 
+    // Post editing
+    const [editingPost, setEditingPost] = useState<PostItem | null>(null);
+    const [editContent, setEditContent] = useState('');
+    const [savingEdit, setSavingEdit] = useState(false);
+    const [postMenuOpen, setPostMenuOpen] = useState<string | null>(null);
+
     // Contacts for "selected" visibility
     const [contacts, setContacts] = useState<any[]>([]);
     const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
@@ -220,59 +227,84 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
     // ═══ POSTS LOGIC ═══
     const publishPost = async () => {
         if (!newPostContent.trim() && !postImage) return;
-        
-        // Sky Points check
-        const { data: spendResult } = await supabase.rpc('spend_sky_point', {
-            p_user_id: userId,
-            p_org_id: orgId,
-            p_amount: 1,
-            p_reason: 'actus_post',
-            p_description: 'Publication d\'une actus'
-        });
-        if (spendResult && !spendResult.success) {
-            toast.error('Solde Sky Points insuffisant \u2014 1 point requis pour poster');
-            return;
+
+        // ── Sky Points : débit atomique via RPC ──
+        if (userRole === 'student') {
+            const { data: spendResult, error: spendErr } = await supabase.rpc('spend_sky_point', {
+                p_user_id: userId,
+                p_org_id: orgId,
+                p_amount: 1,
+                p_reason: 'actus_post',
+                p_description: "Publication d'une actus"
+            });
+            if (spendErr || !spendResult || spendResult.success === false) {
+                const pts = spendResult?.points ?? '?';
+                toast.error(`Solde insuffisant — 1 Sky requis (solde: ${pts})`);
+                return;
+            }
         }
 
         setPublishing(true);
         setUploadingPost(true);
         try {
-            let finalImageUrl = null;
+            let finalImageUrl: string | null = null;
             if (postImage) {
                 const compressed = await compressImage(postImage, { maxWidth: 1200, quality: 0.8 });
                 const ext = postImage.name.split('.').pop();
                 const path = `posts/${orgId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-                const { data: uploadData, error: uploadError } = await supabase.storage
+                const { error: uploadError } = await supabase.storage
                     .from('organization-assets')
                     .upload(path, compressed);
-                
                 if (uploadError) throw uploadError;
-                
                 const { data: publicUrlData } = supabase.storage
                     .from('organization-assets')
                     .getPublicUrl(path);
-                    
                 finalImageUrl = publicUrlData.publicUrl;
             }
 
-            const { error } = await supabase.from('tutoring_requests').insert({
-                user_id: userId, 
+            const payload: any = {
+                user_id: userId,
                 content: newPostContent.trim(),
-                category: activePostTab === 'officiel' && userRole === 'admin' ? 'admin_actus' : 'post', 
-                is_anonymous: false, 
-                prayer_count: 0, 
+                category: activePostTab === 'officiel' && userRole === 'admin' ? 'admin_actus' : 'post',
+                is_anonymous: false,
+                prayer_count: 0,
                 prayed_by: [],
-                ...(finalImageUrl ? { image_url: finalImageUrl } : {})
-            });
+                image_url: finalImageUrl,
+            };
+            const { error } = await supabase.from('tutoring_requests').insert(payload);
             if (error) throw error;
             toast.success('Publication partagée ! 🎉');
             setNewPostContent('');
-            setPostImage(null); 
-            setShowNewPost(false); 
+            setPostImage(null);
+            setShowNewPost(false);
             loadPosts();
-        } catch (e: any) { toast.error(e.message || 'Erreur'); }
+        } catch (e: any) { toast.error(e.message || 'Erreur publication'); }
         setPublishing(false);
         setUploadingPost(false);
+    };
+
+    const deletePost = async (postId: string) => {
+        if (!confirm('Supprimer cette publication ?')) return;
+        try {
+            await supabase.from('tutoring_requests').delete().eq('id', postId);
+            setPosts(prev => prev.filter(p => p.id !== postId));
+            toast.success('Publication supprimée');
+        } catch (e: any) { toast.error(e.message); }
+    };
+
+    const saveEditPost = async () => {
+        if (!editingPost || !editContent.trim()) return;
+        setSavingEdit(true);
+        try {
+            const { error } = await supabase.from('tutoring_requests')
+                .update({ content: editContent.trim(), edited_at: new Date().toISOString() })
+                .eq('id', editingPost.id);
+            if (error) throw error;
+            setPosts(prev => prev.map(p => p.id === editingPost.id ? { ...p, content: editContent.trim() } : p));
+            setEditingPost(null);
+            toast.success('Publication modifiée ✅');
+        } catch (e: any) { toast.error(e.message); }
+        setSavingEdit(false);
     };
 
     const likePost = async (post: PostItem) => {
@@ -982,7 +1014,8 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                         </div>
                     ) : posts.filter(p => activePostTab === 'officiel' ? p.category === 'admin_actus' : p.category !== 'admin_actus').map((post, i) => (
                         <motion.div key={post.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.02 }}
-                            className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:border-white/10 transition-all group">
+                            className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:border-white/10 transition-all group relative">
+
                             <div className="flex items-start gap-3">
                                 {/* Avatar */}
                                 {post.avatarUrl ? (
@@ -1014,7 +1047,42 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                                     </div>
                                     <p className="text-[10px] text-slate-500 mt-0.5">{timeAgo(post.created_at)}</p>
                                 </div>
+
+                                {/* ── Menu ⋮ (auteur ou admin) ── */}
+                                {(post.user_id === userId || userRole === 'admin') && (
+                                    <div className="relative shrink-0">
+                                        <button
+                                            onClick={() => setPostMenuOpen(postMenuOpen === post.id ? null : post.id)}
+                                            className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/10 transition-all">
+                                            <MoreVertical className="w-4 h-4" />
+                                        </button>
+                                        <AnimatePresence>
+                                            {postMenuOpen === post.id && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, scale: 0.95, y: -5 }}
+                                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                                    exit={{ opacity: 0, scale: 0.95, y: -5 }}
+                                                    className="absolute right-0 top-8 z-50 bg-[#1a1d2e] border border-white/10 rounded-xl shadow-2xl overflow-hidden min-w-[130px]"
+                                                    onClick={e => e.stopPropagation()}>
+                                                    {post.user_id === userId && (
+                                                        <button
+                                                            onClick={() => { setEditingPost(post); setEditContent(post.content); setPostMenuOpen(null); }}
+                                                            className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-slate-300 hover:bg-white/[0.06] transition-colors">
+                                                            <Edit2 className="w-3.5 h-3.5 text-indigo-400" /> Modifier
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        onClick={() => { deletePost(post.id); setPostMenuOpen(null); }}
+                                                        className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors">
+                                                        <Trash2 className="w-3.5 h-3.5" /> Supprimer
+                                                    </button>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </div>
+                                )}
                             </div>
+
                             <p className="mt-3 text-sm text-slate-200 leading-relaxed whitespace-pre-line">{post.content}</p>
 
                             {/* Photos */}
@@ -1094,6 +1162,43 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                     ))}
                 </div>
             </div>
+
+            {/* ═══ EDIT POST MODAL ═══ */}
+            <AnimatePresence>
+                {editingPost && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[70] bg-black/70 flex items-end sm:items-center justify-center p-4"
+                        onClick={() => setEditingPost(null)}>
+                        <motion.div initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}
+                            className="bg-[#0f1117] border border-indigo-500/20 rounded-2xl w-full max-w-lg p-5 shadow-2xl"
+                            onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-bold text-white flex items-center gap-2">
+                                    <Edit2 className="w-4 h-4 text-indigo-400" /> Modifier la publication
+                                </h3>
+                                <button onClick={() => setEditingPost(null)}><X className="w-4 h-4 text-slate-400" /></button>
+                            </div>
+                            <textarea
+                                value={editContent}
+                                onChange={e => setEditContent(e.target.value)}
+                                rows={5}
+                                autoFocus
+                                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-500 resize-none focus:outline-none focus:border-indigo-500/40"
+                            />
+                            <div className="flex gap-3 mt-4">
+                                <button onClick={() => setEditingPost(null)}
+                                    className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-400 text-sm hover:bg-white/5 transition">
+                                    Annuler
+                                </button>
+                                <button onClick={saveEditPost} disabled={savingEdit || !editContent.trim()}
+                                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50 hover:from-indigo-500 hover:to-violet-500 transition-all">
+                                    {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Edit2 className="w-4 h-4" /> Enregistrer</>}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
