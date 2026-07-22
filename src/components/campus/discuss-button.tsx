@@ -1,14 +1,14 @@
 'use client';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, BookOpen, Layers, FileText, Dumbbell, X, Send, Users } from 'lucide-react';
+import { MessageSquare, BookOpen, Layers, FileText, Dumbbell, X, Users, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 // ══════════════════════════════════════════════════════════
-// DISCUSS BUTTON — Bouton contextuel qui tag le sujet/chapitre/leçon
-// Crée ou ouvre un groupe de discussion tagué au contexte
+// DISCUSS BUTTON — Ouvre le groupe de discussion unique par sujet
+// Utilise le RPC join_or_create_topic_group (SECURITY DEFINER)
 // ══════════════════════════════════════════════════════════
 
 export type DiscussContext = {
@@ -32,7 +32,7 @@ const typeConfig = {
     subject:  { icon: BookOpen,  color: 'text-orange-400 hover:bg-orange-500/10 border-orange-500/20', label: 'Discuter de la matière' },
     chapter:  { icon: Layers,    color: 'text-teal-400   hover:bg-teal-500/10   border-teal-500/20',   label: 'Discuter du chapitre' },
     lesson:   { icon: FileText,  color: 'text-indigo-400 hover:bg-indigo-500/10 border-indigo-500/20', label: 'Discuter de la leçon' },
-    exercise: { icon: Dumbbell,  color: 'text-violet-400 hover:bg-violet-500/10 border-violet-500/20', label: 'Discuter de l\'exercice' },
+    exercise: { icon: Dumbbell,  color: 'text-violet-400 hover:bg-violet-500/10 border-violet-500/20', label: "Discuter de l'exercice" },
 };
 
 export function DiscussButton({ context, orgId, userId, userName, onOpenChat, size = 'sm' }: DiscussButtonProps) {
@@ -41,80 +41,94 @@ export function DiscussButton({ context, orgId, userId, userName, onOpenChat, si
     const cfg = typeConfig[context.type];
     const Icon = cfg.icon;
 
+    // For exercises we fall back to the old tag-based approach since they don't
+    // need the unique-group constraint (multiple groups per exercise OK).
     const handleDiscuss = async () => {
         setLoading(true);
         try {
-            // Context tag stored as a metadata field; search by name prefix
-            const groupName = context.parentTitle
-                ? `💬 ${context.parentTitle} › ${context.title}`
-                : `💬 ${context.title}`;
-            const tagKey = `[tag:${context.type}:${context.id}]`;
-
-            // Check if a group already exists with this tag in name
-            const { data: existingGroups } = await supabase
-                .from('chat_conversations')
-                .select('id, name')
-                .eq('organization_id', orgId)
-                .eq('type', 'group')
-                .ilike('name', `%${tagKey}%`);
-
-            let convId: string;
-            let convName: string;
-
-            if (existingGroups && existingGroups.length > 0) {
-                const existing = existingGroups[0];
-                convId = existing.id;
-                convName = existing.name;
-                // Ensure user is a participant
-                await supabase.from('chat_participants').upsert(
-                    { conversation_id: convId, user_id: userId, role: 'member' },
-                    { onConflict: 'conversation_id,user_id' }
-                );
+            if (context.type === 'exercise') {
+                // Legacy: tag-based group for exercises
+                await handleExerciseDiscuss();
             } else {
-                // Create a new tagged group
-                const fullName = `${groupName} ${tagKey}`;
-
-                const { data: newGroup, error } = await supabase
-                    .from('chat_conversations')
-                    .insert({
-                        organization_id: orgId,
-                        type: 'group',
-                        name: fullName,
-                        created_by: userId,
-                    })
-                    .select('id, name')
-                    .single();
-
-                if (error || !newGroup) throw new Error(error?.message || 'Erreur création groupe');
-
-                convId = newGroup.id;
-                convName = groupName; // display name without tag
-
-                // Add creator as participant
-                await supabase.from('chat_participants').insert({
-                    conversation_id: convId,
-                    user_id: userId,
-                    role: 'admin',
-                });
-
-                // System message
-                await supabase.from('chat_messages').insert({
-                    conversation_id: convId,
-                    sender_id: userId,
-                    content: `Groupe de discussion créé pour : ${context.title}`,
-                    msg_type: 'system',
-                });
-
-                toast.success(`Groupe "${groupName}" créé ✅`);
+                // New: RPC for subject/chapter/lesson — guarantees uniqueness
+                await handleTopicGroupRpc();
             }
-
-            onOpenChat(convId, convName);
         } catch (e: any) {
             console.error('DiscussButton error:', e);
-            toast.error('Impossible d\'ouvrir la discussion: ' + (e.message || 'Erreur inconnue'));
+            toast.error("Impossible d'ouvrir la discussion: " + (e.message || 'Erreur inconnue'));
         }
         setLoading(false);
         setShowPreview(false);
+    };
+
+    const handleTopicGroupRpc = async () => {
+        const topicName = context.parentTitle
+            ? `${context.parentTitle} › ${context.title}`
+            : context.title;
+
+        const { data, error } = await supabase.rpc('join_or_create_topic_group', {
+            p_org_id:     orgId,
+            p_user_id:    userId,
+            p_user_role:  'student', // overridden by teacher components that pass a prop
+            p_topic_type: context.type,
+            p_topic_id:   context.id,
+            p_topic_name: topicName,
+        });
+
+        if (error) throw new Error(error.message);
+
+        const result = data as { conversation_id: string; conversation_name: string; created: boolean; member_count: number };
+        const convName = result.conversation_name || `💬 ${topicName}`;
+
+        if (result.created) {
+            toast.success(`Groupe "${convName}" créé ✅`);
+        } else {
+            toast.success(`Groupe rejoint (${result.member_count} membres) 👥`);
+        }
+        onOpenChat(result.conversation_id, convName);
+    };
+
+    const handleExerciseDiscuss = async () => {
+        const groupName = context.parentTitle
+            ? `💬 ${context.parentTitle} › ${context.title}`
+            : `💬 ${context.title}`;
+        const tagKey = `[tag:${context.type}:${context.id}]`;
+
+        const { data: existingGroups } = await supabase
+            .from('chat_conversations')
+            .select('id, name')
+            .eq('organization_id', orgId)
+            .eq('type', 'group')
+            .ilike('name', `%${tagKey}%`);
+
+        let convId: string;
+        let convName: string;
+
+        if (existingGroups && existingGroups.length > 0) {
+            convId = existingGroups[0].id;
+            convName = existingGroups[0].name;
+            await supabase.from('chat_participants').upsert(
+                { conversation_id: convId, user_id: userId, role: 'member' },
+                { onConflict: 'conversation_id,user_id' }
+            );
+        } else {
+            const fullName = `${groupName} ${tagKey}`;
+            const { data: newGroup, error } = await supabase
+                .from('chat_conversations')
+                .insert({ organization_id: orgId, type: 'group', name: fullName, created_by: userId })
+                .select('id, name')
+                .single();
+            if (error || !newGroup) throw new Error(error?.message || 'Erreur création groupe');
+            convId = newGroup.id;
+            convName = groupName;
+            await supabase.from('chat_participants').insert({ conversation_id: convId, user_id: userId, role: 'admin' });
+            await supabase.from('chat_messages').insert({
+                conversation_id: convId, sender_id: userId,
+                content: `Groupe de discussion créé pour : ${context.title}`, msg_type: 'system',
+            });
+            toast.success(`Groupe "${groupName}" créé ✅`);
+        }
+        onOpenChat(convId, convName);
     };
 
     return (
@@ -131,7 +145,9 @@ export function DiscussButton({ context, orgId, userId, userName, onOpenChat, si
                         : 'px-2 py-1 text-[10px]',
                     loading && 'opacity-50 cursor-wait'
                 )}>
-                <Icon className={size === 'xs' ? 'w-2.5 h-2.5' : 'w-3 h-3'} />
+                {loading
+                    ? <Loader2 className={cn('animate-spin', size === 'xs' ? 'w-2.5 h-2.5' : 'w-3 h-3')} />
+                    : <Icon className={size === 'xs' ? 'w-2.5 h-2.5' : 'w-3 h-3'} />}
                 {size === 'sm' && <span>Discussion</span>}
             </button>
 
@@ -147,7 +163,7 @@ export function DiscussButton({ context, orgId, userId, userName, onOpenChat, si
                         <div className="flex items-start justify-between mb-2">
                             <div className="flex items-center gap-1.5">
                                 <Icon className={cn('w-3.5 h-3.5', cfg.color.split(' ')[0])} />
-                                <p className="text-[10px] font-bold text-white">Discussion taggée</p>
+                                <p className="text-[10px] font-bold text-white">{cfg.label}</p>
                             </div>
                             <button onClick={() => setShowPreview(false)} className="text-slate-500 hover:text-white">
                                 <X className="w-3.5 h-3.5" />
@@ -162,8 +178,10 @@ export function DiscussButton({ context, orgId, userId, userName, onOpenChat, si
                             )}
                         </div>
 
-                        <p className="text-[9px] text-slate-500 mb-2 leading-relaxed">
-                            Ouvre un groupe de discussion dédié à ce sujet. Tous les membres peuvent rejoindre.
+                        <p className="text-[9px] text-slate-500 mb-3 leading-relaxed">
+                            {context.type === 'exercise'
+                                ? "Ouvre un groupe de discussion pour cet exercice."
+                                : "Un seul groupe par sujet — rejoignez ou créez automatiquement."}
                         </p>
 
                         <button
@@ -171,12 +189,9 @@ export function DiscussButton({ context, orgId, userId, userName, onOpenChat, si
                             disabled={loading}
                             className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-gradient-to-r from-teal-600 to-indigo-600 text-white text-xs font-medium hover:opacity-90 transition disabled:opacity-50">
                             {loading ? (
-                                <span className="animate-pulse">Ouverture...</span>
+                                <><Loader2 className="w-3 h-3 animate-spin" />Ouverture...</>
                             ) : (
-                                <>
-                                    <Users className="w-3 h-3" />
-                                    Rejoindre / Créer le groupe
-                                </>
+                                <><Users className="w-3 h-3" />Rejoindre / Créer le groupe</>
                             )}
                         </button>
                     </motion.div>

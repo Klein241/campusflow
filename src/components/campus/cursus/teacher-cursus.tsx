@@ -337,30 +337,42 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
                     return (
                         <motion.div key={sub.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: si * 0.04 }}>
                             <div className={cn("rounded-2xl overflow-hidden border transition-all",
-                                isOpen ? 'border-indigo-500/30 bg-gradient-to-br from-indigo-500/[0.08] to-violet-500/[0.04]' : 'border-white/[0.06] bg-white/[0.03]')}>
+                                isOpen ? 'border-indigo-500/30 bg-gradient-to-br from-indigo-500/[0.07] to-transparent' : 'border-white/[0.07] bg-white/[0.03]')}>
 
-                                {/* Subject header */}
-                                <button className="w-full p-4 flex items-center gap-3 text-left" onClick={() => setExpandedSub(isOpen ? null : sub.id)}>
-                                    <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shrink-0",
-                                        isOpen ? 'bg-indigo-500/20' : 'bg-white/[0.05]')}>
-                                        <BookOpen className={cn("w-5 h-5", isOpen ? 'text-indigo-400' : 'text-slate-500')} />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <h4 className="font-bold text-sm text-white">{sub.name}</h4>
-                                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                            <span className="text-[10px] text-slate-500">Coef. {sub.coefficient || 1}</span>
-                                            {sub.classrooms && <span className="text-[10px] text-slate-500">• {sub.classrooms.name}</span>}
-                                            <Badge className="text-[9px] bg-teal-500/15 text-teal-400 border-teal-500/25">{publishedChaps.length}/{subChaps.length} ch. publiés</Badge>
+                                {/* Subject header — 2 rows */}
+                                <button className="w-full text-left" onClick={() => setExpandedSub(isOpen ? null : sub.id)}>
+                                    <div className="px-4 pt-4 pb-3">
+                                        <div className="flex items-start gap-3">
+                                            <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5",
+                                                isOpen ? 'bg-indigo-500/20' : 'bg-white/[0.06]')}>
+                                                <BookOpen className={cn("w-5 h-5", isOpen ? 'text-indigo-400' : 'text-slate-500')} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-[15px] font-bold text-white leading-tight">{sub.name}</p>
+                                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
+                                                    {sub.classrooms && <span className="text-xs text-slate-400">🏫 {sub.classrooms.name}</span>}
+                                                    <span className="text-xs text-slate-500">Coef. {sub.coefficient || 1}</span>
+                                                </div>
+                                            </div>
+                                            {/* Published badge */}
+                                            <div className={cn("shrink-0 px-2.5 py-1 rounded-xl text-xs font-semibold",
+                                                publishedChaps.length > 0 ? 'bg-teal-500/20 text-teal-400' : 'bg-slate-700/40 text-slate-500')}>
+                                                {publishedChaps.length}/{subChaps.length}
+                                                <span className="text-[10px] font-normal ml-0.5 opacity-70">ch.</span>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-1.5 shrink-0">
+                                    <div className="flex items-center justify-between px-4 pb-3">
                                         <DiscussButton
                                             context={{ type: 'subject', id: sub.id, title: sub.name }}
                                             orgId={orgId} userId={userId} userName={userName}
                                             onOpenChat={onOpenGroupChat || (() => {})}
                                             size="xs"
                                         />
-                                        {isOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                                        <span className={cn("flex items-center gap-1 text-xs transition-colors", isOpen ? 'text-indigo-400' : 'text-slate-500')}>
+                                            {isOpen ? 'Réduire' : 'Gérer les chapitres'}
+                                            {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                        </span>
                                     </div>
                                 </button>
 
@@ -378,36 +390,43 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
 
                                                 return (
                                                     <div key={ch.id} className={cn("rounded-xl border overflow-hidden transition-all",
-                                                        published ? 'border-teal-500/20' : 'border-slate-700/50 opacity-75',
-                                                        isChOpen ? 'bg-teal-500/[0.04]' : 'bg-white/[0.02]')}>
+                                                        published ? 'border-teal-500/25' : 'border-slate-700/40 opacity-80',
+                                                        isChOpen ? 'bg-teal-500/[0.05]' : 'bg-white/[0.02]')}>
 
-                                                        <div className="flex items-center p-3 gap-2">
-                                                            <div className="w-7 h-7 rounded-lg bg-teal-500/15 flex items-center justify-center text-xs font-bold text-teal-400 shrink-0">{ci + 1}</div>
+                                                        {/* Chapter title row */}
+                                                        <div className="flex items-center gap-2.5 px-3 pt-3 pb-1">
+                                                            <div className="w-8 h-8 rounded-xl bg-teal-500/20 flex items-center justify-center text-xs font-black text-teal-400 shrink-0">{ci + 1}</div>
                                                             <button className="flex-1 text-left min-w-0" onClick={() => setExpandedCh(isChOpen ? null : ch.id)}>
-                                                                <p className="text-sm font-semibold text-white truncate">{ch.title}</p>
-                                                                <p className="text-[10px] text-slate-500">{chLessons.length} leçons • {chExs.length} exercices</p>
+                                                                <p className="text-sm font-bold text-white leading-tight">{ch.title}</p>
+                                                                <div className="flex items-center gap-2 mt-0.5">
+                                                                    <span className="text-[11px] text-slate-400">{chLessons.length} leçon{chLessons.length !== 1 ? 's' : ''}</span>
+                                                                    {chExs.length > 0 && <span className="text-[11px] text-violet-400">⚡ {chExs.length} ex.</span>}
+                                                                </div>
                                                             </button>
-                                                            <div className="flex items-center gap-1 shrink-0">
-                                                                <DiscussButton
-                                                                    context={{ type: 'chapter', id: ch.id, title: ch.title, parentTitle: sub.name }}
-                                                                    orgId={orgId} userId={userId} userName={userName}
-                                                                    onOpenChat={onOpenGroupChat || (() => {})}
-                                                                    size="xs"
-                                                                />
-                                                                <button onClick={() => toggleChapterStatus(ch)}
-                                                                    className={cn("p-1.5 rounded-lg transition-all text-[10px] flex items-center gap-1",
-                                                                        published ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25' : 'bg-slate-700/50 text-slate-500 hover:bg-slate-700')}>
-                                                                    {published ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                                                                </button>
-                                                                <button onClick={() => { setEditCh(ch.id); setEditChBlocks(parseContent(ch.content)); }}
-                                                                    className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/10 text-slate-400 transition-all">
-                                                                    <Edit2 className="w-3 h-3" />
-                                                                </button>
-                                                                <button onClick={() => deleteChapter(ch.id)}
-                                                                    className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-all">
-                                                                    <Trash2 className="w-3 h-3" />
-                                                                </button>
-                                                            </div>
+                                                            {isChOpen ? <ChevronUp className="w-4 h-4 text-teal-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />}
+                                                        </div>
+                                                        {/* Chapter action toolbar — separate row */}
+                                                        <div className="flex items-center gap-1.5 px-3 pb-2.5">
+                                                            <button onClick={() => toggleChapterStatus(ch)}
+                                                                className={cn("flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all",
+                                                                    published ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25' : 'bg-slate-700/40 text-slate-400 hover:bg-slate-700/60')}>
+                                                                {published ? <><Eye className="w-3 h-3" />Publié</> : <><EyeOff className="w-3 h-3" />Brouillon</>}
+                                                            </button>
+                                                            <div className="flex-1" />
+                                                            <DiscussButton
+                                                                context={{ type: 'chapter', id: ch.id, title: ch.title, parentTitle: sub.name }}
+                                                                orgId={orgId} userId={userId} userName={userName}
+                                                                onOpenChat={onOpenGroupChat || (() => {})}
+                                                                size="xs"
+                                                            />
+                                                            <button onClick={() => { setEditCh(ch.id); setEditChBlocks(parseContent(ch.content)); }}
+                                                                className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-400 transition-all">
+                                                                <Edit2 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                            <button onClick={() => deleteChapter(ch.id)}
+                                                                className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400/70 hover:text-red-400 transition-all">
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </button>
                                                         </div>
 
                                                         {/* Edit chapter content */}
@@ -427,28 +446,41 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
                                                                     className="border-t border-white/[0.05] px-3 pb-3 pt-2 space-y-2">
 
                                                                     {/* Lessons */}
-                                                                    {chLessons.map((lesson: any) => (
-                                                                        <div key={lesson.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5">
-                                                                            <div className="flex items-center gap-2">
-                                                                                <FileText className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                                                                                <span className="text-xs font-medium text-white flex-1 truncate">{lesson.title}</span>
-                                                                                <span className="text-[10px] text-slate-600">{lesson.estimated_minutes}min</span>
-                                                                                <button onClick={() => { setEditLesson(lesson.id); setEditLessonBlocks(parseContent(lesson.content)); }}
-                                                                                    className="p-1 rounded text-slate-500 hover:text-white"><Edit2 className="w-2.5 h-2.5" /></button>
-                                                                                <button onClick={() => deleteLesson(lesson.id)}
-                                                                                    className="p-1 rounded text-red-500/60 hover:text-red-400"><Trash2 className="w-2.5 h-2.5" /></button>
-                                                                            </div>
-                                                                            {editLesson === lesson.id && (
-                                                                                <div className="mt-2 space-y-1.5">
-                                                                                    <RichContentEditor blocks={editLessonBlocks} onChange={setEditLessonBlocks} placeholder="Contenu de la leçon..." userId={userId} />
-                                                                                    <div className="flex gap-1.5">
-                                                                                        <Button size="sm" onClick={() => saveLessonContent(lesson.id)} className="bg-teal-600 text-white rounded-xl text-[10px] h-7 px-3"><Save className="w-2.5 h-2.5 mr-1" />OK</Button>
-                                                                                        <Button size="sm" variant="ghost" onClick={() => setEditLesson(null)} className="text-slate-400 text-[10px] h-7 px-2">Annuler</Button>
+                                                                    {chLessons.length > 0 && (
+                                                                        <div className="space-y-1.5">
+                                                                            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold px-1 mb-1.5">Leçons</p>
+                                                                            {chLessons.map((lesson: any) => (
+                                                                                <div key={lesson.id} className="rounded-xl border border-white/[0.07] bg-white/[0.02] overflow-hidden">
+                                                                                    <div className="flex items-center gap-2.5 px-3 py-2.5">
+                                                                                        <FileText className="w-4 h-4 text-slate-500 shrink-0" />
+                                                                                        <div className="flex-1 min-w-0">
+                                                                                            <p className="text-sm font-semibold text-white leading-tight">{lesson.title}</p>
+                                                                                            {lesson.estimated_minutes && (
+                                                                                                <p className="text-[11px] text-slate-400 mt-0.5">⏱ {lesson.estimated_minutes} min</p>
+                                                                                            )}
+                                                                                        </div>
+                                                                                        <button onClick={() => { setEditLesson(lesson.id); setEditLessonBlocks(parseContent(lesson.content)); }}
+                                                                                            className="p-2 rounded-lg bg-white/[0.05] hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-400 transition-all shrink-0">
+                                                                                            <Edit2 className="w-3.5 h-3.5" />
+                                                                                        </button>
+                                                                                        <button onClick={() => deleteLesson(lesson.id)}
+                                                                                            className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400/70 hover:text-red-400 transition-all shrink-0">
+                                                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                                                        </button>
                                                                                     </div>
+                                                                                    {editLesson === lesson.id && (
+                                                                                        <div className="border-t border-white/[0.06] px-3 pb-3 pt-2.5 space-y-2">
+                                                                                            <RichContentEditor blocks={editLessonBlocks} onChange={setEditLessonBlocks} placeholder="Contenu de la leçon..." userId={userId} />
+                                                                                            <div className="flex gap-2">
+                                                                                                <Button size="sm" onClick={() => saveLessonContent(lesson.id)} className="bg-teal-600 text-white rounded-xl text-xs flex-1"><Save className="w-3 h-3 mr-1" />Sauvegarder</Button>
+                                                                                                <Button size="sm" variant="ghost" onClick={() => setEditLesson(null)} className="text-slate-400 text-xs">Annuler</Button>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    )}
                                                                                 </div>
-                                                                            )}
+                                                                            ))}
                                                                         </div>
-                                                                    ))}
+                                                                    )}
 
                                                                     {/* Add lesson */}
                                                                     {showNewLesson === ch.id ? (

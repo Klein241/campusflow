@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -50,7 +50,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
     const loadData = async () => {
         setLoading(true);
         try {
-            // Load subjects — try with classroom first, fallback to org
+            // Load subjects â€” try with classroom first, fallback to org
             let subs: any[] = [];
             if (classroomId) {
                 const { data } = await supabase.from('subjects')
@@ -94,7 +94,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                 setLessons(lsns || []);
             }
 
-            // Exercises (by chapter or subject) — guard empty arrays
+            // Exercises (by chapter or subject) â€” guard empty arrays
             let exs: any[] = [];
             if (chapterIds.length > 0) {
                 const { data: exData } = await supabase.from('exercises')
@@ -125,7 +125,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
 
     useEffect(() => { loadData(); }, [orgId, userId, classroomId]);
 
-    // ── Helpers ──
+    // â”€â”€ Helpers â”€â”€
     const getSubmission = (exId: string) => submissions.find(s => s.exercise_id === exId);
     const getLessonProgress = (lessonId: string) => progress.find(p => p.lesson_id === lessonId);
     const isLessonCompleted = (lessonId: string) => getLessonProgress(lessonId)?.completed === true;
@@ -164,7 +164,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
             completed_at: new Date().toISOString(), organization_id: orgId
         }, { onConflict: 'student_id,lesson_id' });
         setProgress(prev => [...prev.filter(p => p.lesson_id !== lessonId), { student_id: userId, lesson_id: lessonId, completed: true }]);
-        toast.success('Leçon marquée terminée ✅');
+        toast.success('LeÃ§on marquÃ©e terminÃ©e âœ…');
     };
 
     const sendDispute = async () => {
@@ -179,7 +179,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
             organization_id: orgId
         });
         if (error) toast.error(error.message);
-        else { toast.success('Réclamation envoyée ✅'); setDisputeTarget(null); setDisputeMsg(''); }
+        else { toast.success('RÃ©clamation envoyÃ©e âœ…'); setDisputeTarget(null); setDisputeMsg(''); }
         setSendingDispute(false);
     };
 
@@ -197,7 +197,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
 
     return (
         <div className="space-y-4">
-            {/* ── OVERVIEW CARDS ── */}
+            {/* â”€â”€ OVERVIEW CARDS â”€â”€ */}
             <div className="grid grid-cols-2 gap-3">
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                     className="bg-gradient-to-br from-indigo-500/15 to-violet-500/10 border border-indigo-500/20 rounded-2xl p-4">
@@ -206,9 +206,9 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                         <BarChart3 className="w-4 h-4 text-indigo-400" />
                     </div>
                     <div className="text-3xl font-black text-white">
-                        {overall !== null ? <><span className="text-indigo-400">{overall.toFixed(1)}</span><span className="text-slate-500 text-lg">/20</span></> : <span className="text-slate-600">—</span>}
+                        {overall !== null ? <><span className="text-indigo-400">{overall.toFixed(1)}</span><span className="text-slate-500 text-lg">/20</span></> : <span className="text-slate-600">â€”</span>}
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-1">Générale toutes matières</p>
+                    <p className="text-[10px] text-slate-500 mt-1">GÃ©nÃ©rale toutes matiÃ¨res</p>
                 </motion.div>
 
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
@@ -218,7 +218,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                         <Star className="w-4 h-4 text-amber-400" />
                     </div>
                     <div className="text-3xl font-black text-amber-400">{skyPoints}</div>
-                    <p className="text-[10px] text-slate-500 mt-1">Points accumulés</p>
+                    <p className="text-[10px] text-slate-500 mt-1">Points accumulÃ©s</p>
                 </motion.div>
 
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
@@ -231,7 +231,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                         <span className="text-teal-400">{completedLessons}</span>
                         <span className="text-slate-500 text-lg">/{totalLessons}</span>
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-1">Leçons terminées</p>
+                    <p className="text-[10px] text-slate-500 mt-1">LeÃ§ons terminÃ©es</p>
                     {totalLessons > 0 && <Progress value={(completedLessons / totalLessons) * 100} className="mt-2 h-1" />}
                 </motion.div>
 
@@ -245,19 +245,22 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                         <span className="text-violet-400">{doneExercises}</span>
                         <span className="text-slate-500 text-lg">/{totalExercises}</span>
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-1">Complétés</p>
+                    <p className="text-[10px] text-slate-500 mt-1">ComplÃ©tÃ©s</p>
                     {totalExercises > 0 && <Progress value={(doneExercises / totalExercises) * 100} className="mt-2 h-1" />}
                 </motion.div>
             </div>
 
-            {/* ── SUBJECTS ── */}
-            <h3 className="font-bold text-sm text-slate-300 mt-2">📚 Mes Matières ({subjects.length})</h3>
+            {/* â”€â”€ SUBJECTS â”€â”€ */}
+            <div className="flex items-center justify-between mt-2">
+                <h3 className="font-bold text-sm text-slate-300">ðŸ“š Mes MatiÃ¨res</h3>
+                <span className="text-xs text-slate-500 bg-white/[0.04] px-2 py-0.5 rounded-full">{subjects.length}</span>
+            </div>
 
             {subjects.length === 0 && (
                 <div className="text-center py-16 bg-white/[0.02] rounded-2xl border border-white/[0.05]">
                     <GraduationCap className="w-14 h-14 mx-auto mb-3 text-slate-700" />
-                    <p className="text-slate-500 font-medium">Aucune matière disponible</p>
-                    <p className="text-xs text-slate-600 mt-1">Ton professeur n'a pas encore publié de contenu</p>
+                    <p className="text-slate-500 font-medium">Aucune matiÃ¨re disponible</p>
+                    <p className="text-xs text-slate-600 mt-1">Ton professeur n'a pas encore publiÃ© de contenu</p>
                 </div>
             )}
 
@@ -270,55 +273,78 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                     const subLessons = lessons.filter(l => subChaps.some(c => c.id === l.chapter_id));
                     const subCompleted = subLessons.filter(l => isLessonCompleted(l.id)).length;
                     const subPct = subLessons.length > 0 ? (subCompleted / subLessons.length) * 100 : 0;
-                    const scoreColor = subScore ? (subScore.avg >= 14 ? 'text-emerald-400' : subScore.avg >= 10 ? 'text-amber-400' : 'text-red-400') : 'text-slate-600';
+                    const avg = subScore?.avg ?? null;
+                    const scoreColor = avg !== null ? (avg >= 14 ? 'bg-emerald-500/20 text-emerald-400' : avg >= 10 ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400') : 'bg-slate-700/40 text-slate-500';
 
                     return (
                         <motion.div key={sub.id} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: si * 0.05 }}>
-                            <div className={cn("rounded-2xl overflow-hidden border transition-all duration-300",
-                                isOpen ? 'border-indigo-500/30 bg-gradient-to-br from-indigo-500/[0.08] to-violet-500/[0.04]' : 'border-white/[0.06] bg-white/[0.03] hover:border-white/10')}>
+                            <div className={cn("rounded-2xl border transition-all duration-300 overflow-hidden",
+                                isOpen ? 'border-indigo-500/30 bg-gradient-to-br from-indigo-500/[0.07] to-transparent' : 'border-white/[0.07] bg-white/[0.03]')}>
 
-                                {/* Subject header */}
-                                <div className="p-4 flex items-center gap-3">
-                                    <button className="flex items-center gap-3 text-left flex-1 min-w-0" onClick={() => setExpandedSub(isOpen ? null : sub.id)}>
-                                        <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 text-xl",
-                                            isOpen ? 'bg-indigo-500/20' : 'bg-white/[0.05]')}>
-                                            📖
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <h4 className="font-bold text-sm text-white truncate">{sub.name}</h4>
-                                            <div className="flex items-center gap-2 mt-0.5">
-                                                <span className="text-[10px] text-slate-500">Coef. {sub.coefficient || 1}</span>
-                                                {teacher && <span className="text-[10px] text-slate-500">• {teacher.first_name} {teacher.last_name}</span>}
-                                                <span className="text-[10px] text-slate-500">• {subChaps.length} ch.</span>
+                                {/* â”€â”€ Subject header â”€â”€ */}
+                                <button
+                                    className="w-full text-left"
+                                    onClick={() => setExpandedSub(isOpen ? null : sub.id)}>
+                                    <div className="px-4 pt-4 pb-3">
+                                        {/* Row 1: Icon + Name + Score badge */}
+                                        <div className="flex items-start gap-3">
+                                            <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg mt-0.5",
+                                                isOpen ? 'bg-indigo-500/20' : 'bg-white/[0.06]')}>
+                                                ðŸ“–
                                             </div>
-                                            {subLessons.length > 0 && <Progress value={subPct} className="mt-1.5 h-1" />}
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-[15px] font-bold text-white leading-tight">{sub.name}</p>
+                                                {/* Row 2: Meta info */}
+                                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
+                                                    {teacher && (
+                                                        <span className="text-xs text-slate-400">ðŸ‘¨â€ðŸ« {teacher.first_name} {teacher.last_name}</span>
+                                                    )}
+                                                    <span className="text-xs text-slate-500">Coef. {sub.coefficient || 1}</span>
+                                                    <span className="text-xs text-slate-500">{subChaps.length} chapitre{subChaps.length > 1 ? 's' : ''}</span>
+                                                </div>
+                                            </div>
+                                            {/* Score badge */}
+                                            <div className={cn("shrink-0 px-2.5 py-1 rounded-xl text-sm font-black", scoreColor)}>
+                                                {avg !== null ? `${avg.toFixed(1)}` : 'â€”'}
+                                                {avg !== null && <span className="text-[10px] font-normal opacity-70">/20</span>}
+                                            </div>
                                         </div>
-                                    </button>
-                                    <div className="flex items-center gap-1.5 shrink-0">
-                                        <span className={cn("text-lg font-black", scoreColor)}>
-                                            {subScore ? subScore.avg.toFixed(1) : '—'}
-                                            {subScore && <span className="text-slate-600 text-xs font-normal">/20</span>}
-                                        </span>
-                                        <DiscussButton
-                                            context={{ type: 'subject', id: sub.id, title: sub.name }}
-                                            orgId={orgId} userId={userId} userName={userName}
-                                            onOpenChat={onOpenGroupChat || (() => {})}
-                                            size="xs"
-                                        />
-                                        <button onClick={() => setExpandedSub(isOpen ? null : sub.id)} className="p-1.5 text-slate-400 hover:text-white transition">
-                                            {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                                        </button>
+                                        {/* Progress bar full-width */}
+                                        {subLessons.length > 0 && (
+                                            <div className="mt-3">
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="text-[10px] text-slate-500">{subCompleted}/{subLessons.length} leÃ§ons</span>
+                                                    <span className="text-[10px] text-slate-500">{Math.round(subPct)}%</span>
+                                                </div>
+                                                <Progress value={subPct} className="h-1.5" />
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
+                                    {/* Expand indicator */}
+                                    <div className="flex items-center justify-between px-4 pb-3 pt-0">
+                                        <div className="flex gap-1.5">
+                                            <DiscussButton
+                                                context={{ type: 'subject', id: sub.id, title: sub.name }}
+                                                orgId={orgId} userId={userId} userName={userName}
+                                                onOpenChat={onOpenGroupChat || (() => {})}
+                                                size="xs"
+                                            />
+                                        </div>
+                                        <span className={cn("flex items-center gap-1 text-xs transition-colors", isOpen ? 'text-indigo-400' : 'text-slate-500')}>
+                                            {isOpen ? 'RÃ©duire' : 'Voir les chapitres'}
+                                            {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                        </span>
+                                    </div>
+                                </button>
 
-                                {/* Chapters */}
+                                {/* â”€â”€ Chapters â”€â”€ */}
                                 <AnimatePresence>
                                     {isOpen && (
                                         <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                                            className="border-t border-white/[0.05] px-4 pb-4 pt-3 space-y-3">
+                                            className="border-t border-white/[0.06] bg-black/10 px-3 pb-3 pt-3 space-y-2.5">
 
                                             {subChaps.length === 0 && (
-                                                <p className="text-xs text-slate-500 text-center py-6">📚 Aucun chapitre publié pour l'instant</p>
+                                                <p className="text-xs text-slate-500 text-center py-6">ðŸ“š Aucun chapitre publiÃ© pour l'instant</p>
                                             )}
 
                                             {subChaps.map((ch: any, ci: number) => {
@@ -328,143 +354,175 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                                 const isChOpen = expandedCh === ch.id;
                                                 const chCompleted = chLessons.filter(l => isLessonCompleted(l.id)).length;
                                                 const chPct = chLessons.length > 0 ? (chCompleted / chLessons.length) * 100 : 0;
-                                                const chScoreColor = chScore ? ((chScore.score / chScore.max) * 20 >= 10 ? 'text-emerald-400' : 'text-red-400') : 'text-slate-600';
+                                                const chAvg = chScore ? ((chScore.score / chScore.max) * 20) : null;
+                                                const chScoreColor = chAvg !== null ? (chAvg >= 10 ? 'text-emerald-400' : 'text-red-400') : 'text-slate-600';
 
                                                 return (
-                                                    <motion.div key={ch.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ci * 0.04 }}>
-                                                        <div className={cn("rounded-xl overflow-hidden border transition-all",
-                                                            isChOpen ? 'border-teal-500/30 bg-teal-500/[0.05]' : 'border-white/[0.06] bg-white/[0.02] hover:border-white/10')}>
+                                                    <motion.div key={ch.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ci * 0.04 }}>
+                                                        <div className={cn("rounded-xl border transition-all overflow-hidden",
+                                                            isChOpen ? 'border-teal-500/30 bg-teal-500/[0.06]' : 'border-white/[0.06] bg-white/[0.03]')}>
 
                                                             {/* Chapter header */}
-                                                            <div className="p-3.5 flex items-center gap-3">
-                                                                <button className="flex items-center gap-3 text-left flex-1 min-w-0" onClick={() => setExpandedCh(isChOpen ? null : ch.id)}>
-                                                                    <div className="w-8 h-8 rounded-xl bg-teal-500/15 flex items-center justify-center shrink-0 text-xs font-bold text-teal-400">
+                                                            <button className="w-full text-left" onClick={() => setExpandedCh(isChOpen ? null : ch.id)}>
+                                                                <div className="px-3 py-3 flex items-center gap-3">
+                                                                    {/* Chapter number */}
+                                                                    <div className="w-8 h-8 rounded-xl bg-teal-500/20 flex items-center justify-center shrink-0 text-xs font-black text-teal-400">
                                                                         {ci + 1}
                                                                     </div>
+                                                                    {/* Title + meta */}
                                                                     <div className="flex-1 min-w-0">
-                                                                        <p className="text-sm font-semibold text-white truncate">{ch.title}</p>
-                                                                        <div className="flex items-center gap-1.5 mt-0.5">
-                                                                            <span className="text-[10px] text-slate-500">{chLessons.length} leçons</span>
-                                                                            {chExs.length > 0 && <span className="text-[10px] text-violet-400">• {chExs.length} exercices</span>}
+                                                                        <p className="text-sm font-bold text-white leading-tight">{ch.title}</p>
+                                                                        <div className="flex items-center gap-2 mt-0.5">
+                                                                            <span className="text-[11px] text-slate-400">{chLessons.length} leÃ§on{chLessons.length > 1 ? 's' : ''}</span>
+                                                                            {chExs.length > 0 && <span className="text-[11px] text-violet-400">âš¡ {chExs.length} ex.</span>}
+                                                                            {chCompleted > 0 && <span className="text-[11px] text-teal-400">âœ“ {chCompleted}/{chLessons.length}</span>}
                                                                         </div>
-                                                                        {chLessons.length > 0 && <Progress value={chPct} className="mt-1.5 h-0.5" />}
                                                                     </div>
-                                                                </button>
-                                                                <div className="flex items-center gap-1 shrink-0">
-                                                                    {chScore && (
-                                                                        <span className={cn("text-xs font-bold", chScoreColor)}>
-                                                                            {((chScore.score / chScore.max) * 20).toFixed(1)}/20
-                                                                        </span>
-                                                                    )}
-                                                                    <DiscussButton
-                                                                        context={{ type: 'chapter', id: ch.id, title: ch.title, parentTitle: sub.name }}
-                                                                        orgId={orgId} userId={userId} userName={userName}
-                                                                        onOpenChat={onOpenGroupChat || (() => {})}
-                                                                        size="xs"
-                                                                    />
-                                                                    <button onClick={() => setExpandedCh(isChOpen ? null : ch.id)} className="p-1.5 text-slate-400 hover:text-white transition">
-                                                                        {isChOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                                                                    </button>
+                                                                    {/* Score + chevron */}
+                                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                                        {chAvg !== null && (
+                                                                            <span className={cn("text-xs font-black", chScoreColor)}>{chAvg.toFixed(0)}<span className="text-[10px] opacity-60">/20</span></span>
+                                                                        )}
+                                                                        <DiscussButton
+                                                                            context={{ type: 'chapter', id: ch.id, title: ch.title, parentTitle: sub.name }}
+                                                                            orgId={orgId} userId={userId} userName={userName}
+                                                                            onOpenChat={onOpenGroupChat || (() => {})}
+                                                                            size="xs"
+                                                                        />
+                                                                        {isChOpen ? <ChevronUp className="w-4 h-4 text-teal-400" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+                                                                    </div>
                                                                 </div>
-                                                            </div>
+                                                                {/* Progress bar */}
+                                                                {chLessons.length > 0 && chPct > 0 && (
+                                                                    <div className="px-3 pb-2">
+                                                                        <Progress value={chPct} className="h-1" />
+                                                                    </div>
+                                                                )}
+                                                            </button>
 
                                                             {/* Chapter content */}
                                                             <AnimatePresence>
                                                                 {isChOpen && (
                                                                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                                                                        className="border-t border-white/[0.05] px-3 pb-3 pt-2 space-y-2">
+                                                                        className="border-t border-white/[0.06] bg-black/10 px-3 pb-3 pt-2.5 space-y-2">
 
-                                                                        {/* Chapter rich content */}
                                                                         {ch.content && (
-                                                                            <div className="bg-white/[0.03] rounded-xl p-3">
+                                                                            <div className="bg-white/[0.03] rounded-xl p-3 mb-2">
                                                                                 <RichContentRenderer content={ch.content} />
                                                                             </div>
                                                                         )}
 
-                                                                        {/* Lessons */}
-                                                                        {chLessons.map((lesson: any, li: number) => {
-                                                                            const done = isLessonCompleted(lesson.id);
-                                                                            const isLOpen = expandedLesson === lesson.id;
-                                                                            return (
-                                                                                <div key={lesson.id} className={cn("rounded-xl border transition-all",
-                                                                                    done ? 'border-emerald-500/20 bg-emerald-500/[0.04]' : 'border-white/[0.05] bg-white/[0.02]')}>
-                                                                                    {/* Lesson header */}
-                                                                                    <div className="p-3 flex items-center gap-2.5">
-                                                                                        <button className="flex items-center gap-2.5 text-left flex-1 min-w-0" onClick={() => setExpandedLesson(isLOpen ? null : lesson.id)}>
-                                                                                            <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
-                                                                                                done ? 'bg-emerald-500/20' : 'bg-white/[0.05]')}>
-                                                                                                {done ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Play className="w-3 h-3 text-slate-400" />}
-                                                                                            </div>
-                                                                                            <div className="flex-1 min-w-0">
-                                                                                                <p className="text-xs font-semibold text-white truncate">{lesson.title}</p>
-                                                                                                {lesson.estimated_minutes && <p className="text-[10px] text-slate-500"><Clock className="w-2.5 h-2.5 inline mr-0.5" />{lesson.estimated_minutes} min</p>}
-                                                                                            </div>
-                                                                                            {done && <Badge className="text-[9px] bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shrink-0">Terminé</Badge>}
-                                                                                        </button>
-                                                                                        <DiscussButton
-                                                                                            context={{ type: 'lesson', id: lesson.id, title: lesson.title, parentTitle: ch.title }}
-                                                                                            orgId={orgId} userId={userId} userName={userName}
-                                                                                            onOpenChat={onOpenGroupChat || (() => {})}
-                                                                                            size="xs"
-                                                                                        />
-                                                                                        <button onClick={() => setExpandedLesson(isLOpen ? null : lesson.id)} className="p-1 text-slate-500 hover:text-white transition shrink-0">
-                                                                                            {isLOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                                                                                        </button>
-                                                                                    </div>
-
-                                                                                    <AnimatePresence>
-                                                                                        {isLOpen && (
-                                                                                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="border-t border-white/[0.05] px-3 pb-3 pt-2 space-y-2 overflow-hidden">
-                                                                                                {lesson.content && (
-                                                                                                    <div className="bg-white/[0.02] rounded-xl p-3">
-                                                                                                        <RichContentRenderer content={lesson.content} />
+                                                                        {/* â”€â”€ Lessons â”€â”€ */}
+                                                                        {chLessons.length > 0 && (
+                                                                            <div className="space-y-1.5">
+                                                                                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold px-1 mb-2">LeÃ§ons</p>
+                                                                                {chLessons.map((lesson: any) => {
+                                                                                    const done = isLessonCompleted(lesson.id);
+                                                                                    const isLOpen = expandedLesson === lesson.id;
+                                                                                    return (
+                                                                                        <div key={lesson.id} className={cn("rounded-xl border transition-all",
+                                                                                            done ? 'border-emerald-500/20 bg-emerald-500/[0.04]' : 'border-white/[0.06] bg-white/[0.02]')}>
+                                                                                            {/* Lesson row */}
+                                                                                            <div className="flex items-center gap-2.5 px-3 py-2.5">
+                                                                                                {/* Status icon */}
+                                                                                                <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
+                                                                                                    done ? 'bg-emerald-500/20' : 'bg-white/[0.05]')}>
+                                                                                                    {done
+                                                                                                        ? <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                                                                                        : <Play className="w-3.5 h-3.5 text-slate-400" />}
+                                                                                                </div>
+                                                                                                {/* Title + duration */}
+                                                                                                <button className="flex-1 min-w-0 text-left"
+                                                                                                    onClick={() => setExpandedLesson(isLOpen ? null : lesson.id)}>
+                                                                                                    <p className="text-sm font-semibold text-white leading-tight">{lesson.title}</p>
+                                                                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                                                                        {lesson.estimated_minutes && (
+                                                                                                            <span className="text-[11px] text-slate-400 flex items-center gap-0.5">
+                                                                                                                <Clock className="w-2.5 h-2.5" />{lesson.estimated_minutes} min
+                                                                                                            </span>
+                                                                                                        )}
+                                                                                                        {done && <span className="text-[11px] text-emerald-400 font-medium">âœ“ TerminÃ©</span>}
                                                                                                     </div>
-                                                                                                )}
-                                                                                                {!done && (
-                                                                                                    <button onClick={() => markLessonDone(lesson.id)}
-                                                                                                        className="w-full py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 text-xs font-medium hover:bg-emerald-500/25 transition-all">
-                                                                                                        ✅ Marquer comme terminé
+                                                                                                </button>
+                                                                                                <div className="flex items-center gap-1 shrink-0">
+                                                                                                    <DiscussButton
+                                                                                                        context={{ type: 'lesson', id: lesson.id, title: lesson.title, parentTitle: ch.title }}
+                                                                                                        orgId={orgId} userId={userId} userName={userName}
+                                                                                                        onOpenChat={onOpenGroupChat || (() => {})}
+                                                                                                        size="xs"
+                                                                                                    />
+                                                                                                    <button onClick={() => setExpandedLesson(isLOpen ? null : lesson.id)}
+                                                                                                        className="p-1 text-slate-500 hover:text-white transition shrink-0">
+                                                                                                        {isLOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                                                                                                     </button>
-                                                                                                )}
-                                                                                            </motion.div>
-                                                                                        )}
-                                                                                    </AnimatePresence>
-                                                                                </div>
-                                                                            );
-                                                                        })}
-
-                                                                        {/* Exercises of chapter — always visible */}
-                                                                        {chExs.length > 0 && (
-                                                                            <div className="mt-2">
-                                                                                <p className="text-[10px] text-violet-400 font-semibold uppercase tracking-wider mb-2">⚡ Exercices ({chExs.length})</p>
-                                                                                <div className="space-y-2">
-                                                                                    {chExs.map((ex: any) => {
-                                                                                        const sub2 = getSubmission(ex.id);
-                                                                                        const scored = sub2?.score !== undefined && sub2?.score !== null;
-                                                                                        const pct = scored ? (sub2.score / ex.max_score) * 100 : 0;
-                                                                                        const passed = scored && sub2.score >= ex.max_score * 0.5;
-
-                                                                                        return (
-                                                                                            <div key={ex.id} className={cn("rounded-xl border p-3 transition-all",
-                                                                                                scored ? (passed ? 'border-emerald-500/30 bg-emerald-500/[0.05]' : 'border-red-500/30 bg-red-500/[0.05]') : 'border-violet-500/20 bg-violet-500/[0.04]')}>
-                                                                                                <div className="flex items-center justify-between gap-2">
-                                                                                                    <div className="flex-1 min-w-0">
-                                                                                                        <div className="flex items-center gap-1.5 mb-0.5">
-                                                                                                            <Badge className="text-[9px] bg-violet-500/20 text-violet-400 border-violet-500/30">{ex.type?.toUpperCase()}</Badge>
-                                                                                                            <Timer className="w-2.5 h-2.5 text-slate-500" />
-                                                                                                            <span className="text-[10px] text-slate-500">{ex.duration_minutes} min</span>
-                                                                                                        </div>
-                                                                                                        <p className="text-xs font-semibold text-white truncate">{ex.title}</p>
-                                                                                                        {scored && (
-                                                                                                            <div className="flex items-center gap-2 mt-1">
-                                                                                                                <span className={cn("text-xs font-bold", passed ? 'text-emerald-400' : 'text-red-400')}>
-                                                                                                                    {sub2.score}/{ex.max_score}
-                                                                                                                </span>
-                                                                                                                <Progress value={pct} className="flex-1 h-1" />
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            {/* Lesson expanded content */}
+                                                                                            <AnimatePresence>
+                                                                                                {isLOpen && (
+                                                                                                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                                                                                                        className="border-t border-white/[0.06] px-3 pb-3 pt-2.5 space-y-2.5 overflow-hidden">
+                                                                                                        {lesson.content && (
+                                                                                                            <div className="bg-white/[0.02] rounded-xl p-3">
+                                                                                                                <RichContentRenderer content={lesson.content} />
                                                                                                             </div>
                                                                                                         )}
+                                                                                                        {!done && (
+                                                                                                            <button onClick={() => markLessonDone(lesson.id)}
+                                                                                                                className="w-full py-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 text-sm font-semibold hover:bg-emerald-500/25 transition-all">
+                                                                                                                âœ… Marquer comme terminÃ©
+                                                                                                            </button>
+                                                                                                        )}
+                                                                                                    </motion.div>
+                                                                                                )}
+                                                                                            </AnimatePresence>
+                                                                                        </div>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+                                                                        )}
+
+                                                                        {/* â”€â”€ Exercises â”€â”€ */}
+                                                                        {chExs.length > 0 && (
+                                                                            <div className="mt-3 space-y-2">
+                                                                                <p className="text-[10px] text-violet-400 uppercase tracking-wider font-semibold px-1">âš¡ Exercices ({chExs.length})</p>
+                                                                                {chExs.map((ex: any) => {
+                                                                                    const sub2 = getSubmission(ex.id);
+                                                                                    const scored = sub2?.score !== undefined && sub2?.score !== null;
+                                                                                    const pct = scored ? (sub2.score / ex.max_score) * 100 : 0;
+                                                                                    const passed = scored && sub2.score >= ex.max_score * 0.5;
+
+                                                                                    return (
+                                                                                        <div key={ex.id} className={cn("rounded-xl border p-3 transition-all",
+                                                                                            scored ? (passed ? 'border-emerald-500/30 bg-emerald-500/[0.05]' : 'border-red-500/30 bg-red-500/[0.05]') : 'border-violet-500/20 bg-violet-500/[0.04]')}>
+                                                                                            <div className="flex items-start justify-between gap-2">
+                                                                                                <div className="flex-1 min-w-0">
+                                                                                                    <div className="flex items-center gap-1.5 mb-1">
+                                                                                                        <Badge className="text-[9px] bg-violet-500/20 text-violet-400 border-violet-500/30">{ex.type?.toUpperCase()}</Badge>
+                                                                                                        <span className="text-[11px] text-slate-400 flex items-center gap-0.5"><Timer className="w-2.5 h-2.5" />{ex.duration_minutes} min</span>
                                                                                                     </div>
-                                                                                                    <div className="flex items-center gap-1 shrink-0">
+                                                                                                    <p className="text-sm font-bold text-white">{ex.title}</p>
+                                                                                                    {scored && (
+                                                                                                        <div className="flex items-center gap-2 mt-1.5">
+                                                                                                            <span className={cn("text-sm font-bold", passed ? 'text-emerald-400' : 'text-red-400')}>
+                                                                                                                {sub2.score}/{ex.max_score}
+                                                                                                            </span>
+                                                                                                            <Progress value={pct} className="flex-1 h-1.5" />
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                                                                                    {!scored ? (
+                                                                                                        <button onClick={() => setActiveExercise(ex)}
+                                                                                                            className="px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-all flex items-center gap-1">
+                                                                                                            <Play className="w-3 h-3" /> Commencer
+                                                                                                        </button>
+                                                                                                    ) : (
+                                                                                                        <span className={cn("text-xs font-bold px-2 py-1 rounded-lg", passed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400')}>
+                                                                                                            {passed ? 'âœ“ RÃ©ussi' : 'âœ— RatÃ©'}
+                                                                                                        </span>
+                                                                                                    )}
+                                                                                                    <div className="flex gap-1">
                                                                                                         <DiscussButton
                                                                                                             context={{ type: 'exercise', id: ex.id, title: ex.title, parentTitle: ch.title }}
                                                                                                             orgId={orgId} userId={userId} userName={userName}
@@ -473,26 +531,16 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                                                                                         />
                                                                                                         {scored && (
                                                                                                             <button onClick={() => setDisputeTarget({ exercise_id: ex.id, submission_id: sub2.id, subject_id: sub.id, title: ex.title })}
-                                                                                                                className="p-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 transition-all" title="Réclamer">
+                                                                                                                className="p-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 transition-all" title="RÃ©clamer">
                                                                                                                 <Flag className="w-3 h-3" />
                                                                                                             </button>
-                                                                                                        )}
-                                                                                                        {!scored ? (
-                                                                                                            <button onClick={() => setActiveExercise(ex)}
-                                                                                                                className="px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium transition-all flex items-center gap-1">
-                                                                                                                <Play className="w-2.5 h-2.5" /> Commencer
-                                                                                                            </button>
-                                                                                                        ) : (
-                                                                                                            <span className={cn("text-xs font-bold px-2 py-1 rounded-lg", passed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400')}>
-                                                                                                                {passed ? '✓' : '✗'}
-                                                                                                            </span>
                                                                                                         )}
                                                                                                     </div>
                                                                                                 </div>
                                                                                             </div>
-                                                                                        );
-                                                                                    })}
-                                                                                </div>
+                                                                                        </div>
+                                                                                    );
+                                                                                })}
                                                                             </div>
                                                                         )}
                                                                     </motion.div>
@@ -511,7 +559,9 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                 })}
             </div>
 
-            {/* ── EXERCISE MODAL ── */}
+
+
+            {/* â”€â”€ EXERCISE MODAL â”€â”€ */}
             <AnimatePresence>
                 {activeExercise && (
                     <CursusExerciseModal
@@ -522,13 +572,13 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                             setSubmissions(prev => [...prev, { exercise_id: activeExercise.id, student_id: userId, score, graded: true }]);
                             onSkyUpdate(Math.round(score));
                             setActiveExercise(null);
-                            toast.success(`Score: ${score}/${max} — +${Math.round(score)} Sky ⭐`);
+                            toast.success(`Score: ${score}/${max} â€” +${Math.round(score)} Sky â­`);
                         }}
                     />
                 )}
             </AnimatePresence>
 
-            {/* ── DISPUTE MODAL ── */}
+            {/* â”€â”€ DISPUTE MODAL â”€â”€ */}
             <AnimatePresence>
                 {disputeTarget && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -542,7 +592,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                     <Flag className="w-5 h-5 text-orange-400" />
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-white">Réclamation de note</h3>
+                                    <h3 className="font-bold text-white">RÃ©clamation de note</h3>
                                     <p className="text-xs text-slate-500">{disputeTarget.title}</p>
                                 </div>
                                 <button onClick={() => setDisputeTarget(null)} className="ml-auto text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
@@ -556,7 +606,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                             />
                             <Button onClick={sendDispute} disabled={sendingDispute || !disputeMsg.trim()}
                                 className="w-full bg-orange-600 hover:bg-orange-500 text-white rounded-xl">
-                                {sendingDispute ? 'Envoi...' : 'Envoyer la réclamation'} <Send className="w-4 h-4 ml-2" />
+                                {sendingDispute ? 'Envoi...' : 'Envoyer la rÃ©clamation'} <Send className="w-4 h-4 ml-2" />
                             </Button>
                         </motion.div>
                     </motion.div>

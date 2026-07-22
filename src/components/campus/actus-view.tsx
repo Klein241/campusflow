@@ -106,12 +106,15 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
     const [storyIndex, setStoryIndex] = useState(0);
     const storyScrollRef = useRef<HTMLDivElement>(null);
     
-    // Story Right Panel
+    // Story viewer
     const [rightTab, setRightTab] = useState<'comments' | 'views'>('comments');
     const [storyComments, setStoryComments] = useState<Record<string, StoryCommentItem[]>>({});
     const [newStoryComment, setNewStoryComment] = useState('');
     const [replyingTo, setReplyingTo] = useState<StoryCommentItem | null>(null);
     const [viewerDetails, setViewerDetails] = useState<any[]>([]);
+    const [showComments, setShowComments] = useState(false); // slide-up drawer
+    const touchStartX = useRef<number>(0);
+    const storyTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     // Post Comments
     const [comments, setComments] = useState<Record<string, CommentItem[]>>({});
@@ -577,8 +580,9 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                     const userKeys = storyUsers;
                     const currentUserIdx = userKeys.indexOf(viewingStory.user_id);
                     const isMyStory = current.user_id === userId;
-                    
+
                     const navigateStory = (dir: number) => {
+                        setShowComments(false);
                         if (dir === -1) {
                             if (storyIndex > 0) setStoryIndex(storyIndex - 1);
                             else if (currentUserIdx > 0) {
@@ -595,188 +599,189 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                         }
                     };
 
-                    return (
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                            className="fixed inset-0 z-50 bg-black flex">
-                            
-                            <div className="flex flex-col md:flex-row w-full h-full">
-                                {/* LEFT PANEL: IMAGE & NAV */}
-                                <div className="relative flex-1 bg-black flex flex-col justify-center items-center group overflow-hidden"
-                                    onTouchStart={e => { (window as any).__storyTouchX = e.touches[0].clientX; }}
-                                    onTouchEnd={e => { const delta = e.changedTouches[0].clientX - ((window as any).__storyTouchX || 0); if (Math.abs(delta) > 50) navigateStory(delta < 0 ? 1 : -1); }}>
-                                    {/* Progress bars */}
-                                    <div className="absolute top-0 left-0 right-0 p-3 flex gap-1 z-30">
-                                        {userStories.map((_, si) => (
-                                            <div key={si} className="flex-1 h-1 rounded-full overflow-hidden bg-white/20">
-                                                <div className={cn("h-full rounded-full transition-all", si <= storyIndex ? "bg-white w-full" : "w-0")} />
-                                            </div>
-                                        ))}
-                                    </div>
-                                    
-                                    {/* Header */}
-                                    <div className="absolute top-4 left-0 right-0 p-4 flex items-center gap-3 z-30 bg-gradient-to-b from-black/80 to-transparent">
-                                        {current.avatarUrl ? (
-                                            <img src={current.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover border border-white/20" />
-                                        ) : (
-                                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-600 to-teal-600 flex items-center justify-center text-[10px] font-bold text-white">
-                                                {(current.senderName || '?').split(' ').map(w => w[0]).join('').slice(0, 2)}
-                                            </div>
-                                        )}
-                                        <div className="flex-1">
-                                            <p className="text-sm font-bold text-white">{current.senderName}</p>
-                                            <p className="text-[10px] text-white/50">{timeAgo(current.created_at)}</p>
-                                        </div>
-                                        <div className="flex items-center gap-1 text-[10px] text-white/40">
-                                            {current.visibility === 'public' ? <Globe className="w-3 h-3" /> : current.visibility === 'friends' ? <Users className="w-3 h-3" /> : <UserCheck className="w-3 h-3" />}
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Nav Areas */}
-                                    <div className="absolute inset-y-0 left-0 w-1/4 z-20 cursor-pointer" onClick={(e) => { e.stopPropagation(); navigateStory(-1); }} />
-                                    <div className="absolute inset-y-0 right-0 w-1/4 z-20 cursor-pointer" onClick={(e) => { e.stopPropagation(); navigateStory(1); }} />
 
-                                    {/* Main Content */}
-                                    {current.image_url ? (
-                                        <>
-                                            <img src={current.image_url} alt="" className="w-full h-full object-contain z-10" />
-                                            {current.caption && (
-                                                <div className="absolute bottom-14 left-0 right-0 p-6 bg-gradient-to-t from-black/90 via-black/50 to-transparent z-30 text-center pointer-events-none">
-                                                    <p className="text-white text-sm md:text-base font-medium drop-shadow-md">{current.caption}</p>
-                                                </div>
-                                            )}
-                                        </>
+                    return (
+                        <motion.div key={current.id}
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-[60] bg-black flex flex-col"
+                            onTouchStart={e => { touchStartX.current = e.touches[0].clientX; }}
+                            onTouchEnd={e => {
+                                const delta = e.changedTouches[0].clientX - touchStartX.current;
+                                if (Math.abs(delta) > 50) navigateStory(delta < 0 ? 1 : -1);
+                            }}>
+
+                            {/* ── Progress bars ── */}
+                            <div className="absolute top-0 left-0 right-0 px-3 pt-3 pb-2 flex gap-1 z-30 pointer-events-none">
+                                {userStories.map((_, si) => (
+                                    <div key={si} className="flex-1 h-[3px] rounded-full overflow-hidden bg-white/30">
+                                        <motion.div
+                                            className="h-full bg-white rounded-full"
+                                            initial={{ width: si < storyIndex ? '100%' : '0%' }}
+                                            animate={{ width: si < storyIndex ? '100%' : si === storyIndex ? '100%' : '0%' }}
+                                            transition={si === storyIndex ? { duration: 7, ease: 'linear' } : { duration: 0 }}
+                                            onAnimationComplete={() => { if (si === storyIndex) navigateStory(1); }}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* ── Header overlay ── */}
+                            <div className="absolute top-0 left-0 right-0 pt-10 px-4 pb-6 bg-gradient-to-b from-black/70 to-transparent z-30 pointer-events-none">
+                                <div className="flex items-center gap-3">
+                                    {current.avatarUrl ? (
+                                        <img src={current.avatarUrl} alt="" className="w-9 h-9 rounded-full object-cover border-2 border-white/40" />
                                     ) : (
-                                        <div className="w-full h-full p-8 flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 z-10">
-                                            <p className="text-white text-xl text-center font-medium leading-relaxed">{current.content}</p>
+                                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-teal-500 flex items-center justify-center text-sm font-bold text-white border-2 border-white/30">
+                                            {(current.senderName || '?').split(' ').map(w => w[0]).join('').slice(0, 2)}
                                         </div>
                                     )}
+                                    <div className="flex-1">
+                                        <p className="text-sm font-bold text-white drop-shadow">{current.senderName}</p>
+                                        <p className="text-[11px] text-white/60">{timeAgo(current.created_at)}</p>
+                                    </div>
+                                    {/* Close button — pointer-events re-enabled */}
+                                    <button
+                                        className="pointer-events-auto p-2 rounded-full bg-black/40 hover:bg-black/60 text-white transition"
+                                        onClick={() => setViewingStory(null)}>
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            </div>
 
-                                    {/* Quick Actions (Bottom) */}
-                                    <div className="absolute bottom-0 left-0 right-0 p-4 flex items-center justify-between z-40 bg-gradient-to-t from-black/90 to-transparent">
-                                        <div className="flex gap-5">
-                                            <button onClick={(e) => { e.stopPropagation(); likeStory(current); }} className="flex items-center gap-1.5 text-white/90 hover:text-red-400 transition-colors">
-                                                <Heart className={cn("w-6 h-6 transition-transform", (current.likes || []).includes(userId) && "fill-red-500 text-red-500 scale-110")} />
-                                                <span className="text-sm font-semibold">{current.likes?.length || 0}</span>
+                            {/* ── Tap left / right zones ── */}
+                            <div className="absolute inset-0 z-20 flex">
+                                <div className="flex-1" onClick={() => navigateStory(-1)} />
+                                <div className="flex-1" onClick={() => navigateStory(1)} />
+                            </div>
+
+                            {/* ── Media or text content ── */}
+                            <div className="flex-1 relative overflow-hidden">
+                                {current.image_url ? (
+                                    <img
+                                        src={current.image_url}
+                                        alt={current.caption || ''}
+                                        className="w-full h-full object-cover"
+                                        draggable={false}
+                                    />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 px-8">
+                                        <p className="text-white text-2xl font-bold text-center leading-relaxed drop-shadow-lg">
+                                            {current.content}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* Caption overlay */}
+                                {current.caption && current.image_url && (
+                                    <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 to-transparent pointer-events-none">
+                                        <p className="text-white text-sm text-center font-medium drop-shadow">{current.caption}</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* ── Bottom actions bar ── */}
+                            <div className="relative z-30 bg-gradient-to-t from-black via-black/80 to-transparent px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                    {/* Comment input inline (Instagram style) */}
+                                    <button
+                                        onClick={() => setShowComments(prev => !prev)}
+                                        className="flex items-center gap-1.5 text-white/80 hover:text-white transition">
+                                        <MessageCircle className="w-6 h-6" />
+                                        <span className="text-sm">{(storyComments[current.id] || []).length || ''}</span>
+                                    </button>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); likeStory(current); }}
+                                        className="flex items-center gap-1.5 transition">
+                                        <Heart className={cn("w-6 h-6", (current.likes || []).includes(userId) ? "fill-red-500 text-red-500" : "text-white/80 hover:text-red-400")} />
+                                        <span className="text-sm text-white/80">{(current.likes || []).length || ''}</span>
+                                    </button>
+                                    {isMyStory && (
+                                        <>
+                                            <button onClick={() => setRightTab(rightTab === 'views' ? 'comments' : 'views')} className="flex items-center gap-1 text-white/70 hover:text-white transition">
+                                                <Eye className="w-5 h-5" />
+                                                <span className="text-xs">{current.viewed_by?.length || 0}</span>
                                             </button>
-                                            <button onClick={(e) => { e.stopPropagation(); publishStory(true, current); }} className="flex items-center gap-1.5 text-white/90 hover:text-green-400 transition-colors">
-                                                <Repeat className="w-5 h-5" />
-                                                <span className="text-xs font-semibold hidden sm:inline">Reposter</span>
-                                            </button>
-                                        </div>
-                                        {isMyStory && (
-                                            <button onClick={(e) => { e.stopPropagation(); deleteStory(current.id); }} className="p-2 text-white/60 hover:text-red-400 transition-colors bg-black/40 rounded-full">
+                                            <button onClick={(e) => { e.stopPropagation(); deleteStory(current.id); }} className="ml-auto p-2 text-white/60 hover:text-red-400 transition">
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* RIGHT PANEL: COMMENTS & VIEWS */}
-                                <div className="w-full md:w-96 bg-[#111827] flex flex-col h-1/2 md:h-full border-t md:border-t-0 md:border-l border-white/[0.08] shrink-0">
-                                    <div className="flex border-b border-white/10 p-2 gap-2">
-                                        <button onClick={() => setRightTab('comments')} className={cn("px-3 py-1.5 text-sm font-medium rounded-lg transition-colors", rightTab === 'comments' ? 'bg-amber-500/20 text-amber-400' : 'text-slate-400 hover:text-slate-200')}>
-                                            Commentaires
+                                        </>
+                                    )}
+                                    {!isMyStory && (
+                                        <button onClick={(e) => { e.stopPropagation(); publishStory(true, current); }} className="ml-auto flex items-center gap-1.5 text-white/70 hover:text-green-400 transition">
+                                            <Repeat className="w-5 h-5" />
                                         </button>
-                                        {isMyStory && (
-                                            <button onClick={() => setRightTab('views')} className={cn("px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1", rightTab === 'views' ? 'bg-amber-500/20 text-amber-400' : 'text-slate-400 hover:text-slate-200')}>
-                                                <Eye className="w-4 h-4" />{current.viewed_by?.length || 0}
-                                            </button>
-                                        )}
-                                        <button className="ml-auto p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10" onClick={() => setViewingStory(null)}>
-                                            <X className="w-5 h-5" />
-                                        </button>
-                                    </div>
-
-                                    <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide">
-                                        {rightTab === 'comments' ? (
-                                            (storyComments[current.id] || []).length > 0 ? (
-                                                (storyComments[current.id] || []).map(c => (
-                                                    <div key={c.id} className="flex gap-2">
-                                                        {c.avatarUrl ? (
-                                                            <img src={c.avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
-                                                        ) : (
-                                                            <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-[9px] font-bold text-white shrink-0">
-                                                                {(c.senderName || '?').split(' ').map(w => w[0]).join('').slice(0, 2)}
-                                                            </div>
-                                                        )}
-                                                        <div className="flex-1 bg-white/[0.03] p-2.5 rounded-xl rounded-tl-sm">
-                                                            <div className="flex items-center gap-2 mb-0.5">
-                                                                <span className="text-xs font-bold text-slate-200">{c.senderName}</span>
-                                                                <span className="text-[9px] text-slate-500">{timeAgo(c.created_at)}</span>
-                                                            </div>
-                                                            {c.parent_id && (
-                                                                <div className="text-[10px] text-slate-500 mb-1 flex items-center gap-1">
-                                                                    <Reply className="w-3 h-3" /> 
-                                                                    En réponse
-                                                                </div>
-                                                            )}
-                                                            <p className="text-xs text-slate-300 leading-relaxed">{c.content}</p>
-                                                            {isMyStory && (
-                                                                <button onClick={() => setReplyingTo(c)} className="mt-2 flex items-center gap-1 text-[10px] text-amber-400/70 hover:text-amber-400 transition-colors">
-                                                                    <Reply className="w-3 h-3" /> Répondre
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <div className="text-center py-8 text-slate-500">
-                                                    <MessageCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                                                    <p className="text-xs">Aucun commentaire</p>
-                                                </div>
-                                            )
-                                        ) : (
-                                            <div className="space-y-3">
-                                                {viewerDetails.map(v => (
-                                                    <div key={v.id} className="flex items-center gap-3 p-2 rounded-lg bg-white/[0.02]">
-                                                        {v.photo_url ? (
-                                                            <img src={v.photo_url} className="w-8 h-8 rounded-full object-cover border border-white/10" alt="" />
-                                                        ) : (
-                                                            <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-bold text-white">
-                                                                {v.first_name[0]}{v.last_name[0]}
-                                                            </div>
-                                                        )}
-                                                        <span className="text-sm text-slate-200 font-medium">{v.first_name} {v.last_name}</span>
-                                                    </div>
-                                                ))}
-                                                {viewerDetails.length === 0 && (
-                                                    <div className="text-center py-8 text-slate-500">
-                                                        <Eye className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                                                        <p className="text-xs">Personne n'a encore vu</p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Comment Input */}
-                                    {rightTab === 'comments' && (
-                                        <div className="p-3 border-t border-white/10 bg-slate-900">
-                                            {replyingTo && (
-                                                <div className="flex items-center justify-between bg-white/5 p-2 rounded-lg mb-2">
-                                                    <span className="text-[10px] text-slate-400">Réponse à <span className="text-slate-200">{replyingTo.senderName}</span></span>
-                                                    <button onClick={() => setReplyingTo(null)}><X className="w-3 h-3 text-slate-400" /></button>
-                                                </div>
-                                            )}
-                                            <div className="flex gap-2 items-center">
-                                                <input value={newStoryComment} onChange={e => setNewStoryComment(e.target.value)} 
-                                                    placeholder="Écrire un commentaire..." 
-                                                    className="h-10 flex-1 px-3 text-sm bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500/50" 
-                                                    onKeyDown={e => e.key === 'Enter' && postStoryComment(current.id)} 
-                                                />
-                                                <button onClick={() => postStoryComment(current.id)} disabled={!newStoryComment.trim()}
-                                                    className="h-10 w-10 bg-amber-500 hover:bg-amber-600 text-white rounded-xl flex items-center justify-center shrink-0 disabled:opacity-50 transition-colors">
-                                                    <Send className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </div>
                                     )}
                                 </div>
                             </div>
+
+                            {/* ── Comments slide-up drawer ── */}
+                            <AnimatePresence>
+                                {showComments && (
+                                    <motion.div
+                                        initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+                                        transition={{ type: 'spring', damping: 30, stiffness: 400 }}
+                                        className="absolute bottom-0 left-0 right-0 z-50 bg-[#111827] rounded-t-3xl max-h-[70vh] flex flex-col shadow-2xl border-t border-white/10">
+
+                                        {/* Drawer handle */}
+                                        <div className="flex justify-center py-3">
+                                            <div className="w-12 h-1 rounded-full bg-white/20" />
+                                        </div>
+
+                                        {/* Drawer header */}
+                                        <div className="flex items-center justify-between px-4 pb-3 border-b border-white/[0.07]">
+                                            <p className="text-sm font-bold text-white">Commentaires</p>
+                                            <button onClick={() => setShowComments(false)} className="p-1.5 rounded-full hover:bg-white/10 text-slate-400">
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+
+                                        {/* Comments list */}
+                                        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+                                            {(storyComments[current.id] || []).length === 0 ? (
+                                                <div className="text-center py-6 text-slate-500">
+                                                    <MessageCircle className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                                                    <p className="text-xs">Soyez le premier à commenter</p>
+                                                </div>
+                                            ) : (
+                                                (storyComments[current.id] || []).map(c => (
+                                                    <div key={c.id} className="flex gap-2">
+                                                        <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-[9px] font-bold text-white shrink-0">
+                                                            {(c.senderName || '?').slice(0, 2).toUpperCase()}
+                                                        </div>
+                                                        <div className="flex-1 bg-white/[0.04] px-3 py-2 rounded-2xl rounded-tl-sm">
+                                                            <p className="text-[11px] font-bold text-slate-200 mb-0.5">{c.senderName}</p>
+                                                            <p className="text-xs text-slate-300 leading-relaxed">{c.content}</p>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+
+                                        {/* Comment input */}
+                                        <div className="px-4 py-3 border-t border-white/[0.07] flex gap-2 items-center">
+                                            <input
+                                                value={newStoryComment}
+                                                onChange={e => setNewStoryComment(e.target.value)}
+                                                onKeyDown={e => e.key === 'Enter' && postStoryComment(current.id)}
+                                                placeholder="Écrire un commentaire..."
+                                                className="flex-1 h-10 px-3 text-sm bg-white/[0.06] border border-white/10 rounded-full text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500/50"
+                                            />
+                                            <button
+                                                onClick={() => postStoryComment(current.id)}
+                                                disabled={!newStoryComment.trim()}
+                                                className="w-10 h-10 rounded-full bg-amber-500 hover:bg-amber-400 flex items-center justify-center disabled:opacity-40 transition shrink-0">
+                                                <Send className="w-4 h-4 text-white" />
+                                            </button>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </motion.div>
                     );
                 })()}
+
             </AnimatePresence>
+
 
             {/* ═══ NEW STORY MODAL ═══ */}
             <AnimatePresence>
