@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Plus, X, Save, Trash2, ChevronDown, ChevronUp, Eye, EyeOff,
@@ -19,6 +19,59 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { RichContentEditor, parseContent, serializeContent, type ContentBlock } from './rich-content-editor';
 import { DiscussButton } from '../discuss-button';
+
+// ─── Helper: envoyer une notification push via le Worker ────────────────────
+const WORKER_URL = process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL || process.env.NEXT_PUBLIC_WORKER_URL || '';
+
+async function sendCursusNotification(params: {
+    actorId: string;
+    actorName: string;
+    orgId: string;
+    actionType: 'new_subject' | 'new_chapter' | 'new_lesson';
+    targetId: string;
+    targetName: string;
+    classroomId?: string;
+    /** IDs des élèves à notifier (broadcast) */
+    recipientIds?: string[];
+}) {
+    if (!WORKER_URL) return;
+    const { actorId, actorName, orgId, actionType, targetId, targetName, recipientIds } = params;
+    if (!recipientIds || recipientIds.length === 0) return;
+
+    const titles: Record<string, string> = {
+        new_subject: '📚 Nouvelle matière ajoutée',
+        new_chapter: '📖 Nouveau chapitre disponible',
+        new_lesson:  '📝 Nouvelle leçon disponible',
+    };
+    const bodies: Record<string, string> = {
+        new_subject: `La matière "${targetName}" est maintenant disponible`,
+        new_chapter: `Nouveau chapitre : "${targetName}"`,
+        new_lesson:  `Nouvelle leçon : "${targetName}"`,
+    };
+
+    try {
+        await fetch(`${WORKER_URL}/notify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action_type: 'admin_announcement',
+                actor_id: actorId,
+                actor_name: actorName,
+                recipient_ids: recipientIds,
+                target_id: targetId,
+                target_name: targetName,
+                extra_data: {
+                    push_title: titles[actionType],
+                    push_body: bodies[actionType],
+                    org_id: orgId,
+                    tab: 'cursus',
+                },
+            }),
+        });
+    } catch {
+        // Non-bloquant — la notification push est optionnelle
+    }
+}
 
 interface TeacherCursusProps {
     orgId: string;
@@ -131,7 +184,26 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
             classroom_id: subForm.classroom_id, organization_id: orgId, teacher_id: userId
         }).select('*, classrooms:classroom_id(id,name)').single();
         if (error) toast.error(error.message);
-        else { setSubjects(prev => [...prev, data]); setShowNewSub(false); setSubForm({ name: '', coefficient: '1', classroom_id: '' }); toast.success('Matière créée ✅'); }
+        else {
+            setSubjects(prev => [...prev, data]);
+            setShowNewSub(false);
+            setSubForm({ name: '', coefficient: '1', classroom_id: '' });
+            toast.success('Matière créée ✅');
+            // Récupérer les élèves de la classe pour les notifier
+            const { data: students } = await supabase
+                .from('student_profiles')
+                .select('id')
+                .eq('classroom_id', subForm.classroom_id)
+                .eq('organization_id', orgId);
+            if (students && students.length > 0) {
+                await sendCursusNotification({
+                    actorId: userId, actorName: userName, orgId,
+                    actionType: 'new_subject',
+                    targetId: data.id, targetName: data.name,
+                    recipientIds: students.map((s: any) => s.id),
+                });
+            }
+        }
         setSavingSub(false);
     };
 
@@ -146,7 +218,27 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
             content: serializeContent(chForm.contentBlocks), status: 'published', position: pos
         }).select().single();
         if (error) toast.error(error.message);
-        else { setChapters(prev => [...prev, data]); setShowNewCh(null); setChForm({ title: '', description: '', contentBlocks: [] }); toast.success('Chapitre ajouté ✅'); }
+        else {
+            setChapters(prev => [...prev, data]);
+            setShowNewCh(null);
+            setChForm({ title: '', description: '', contentBlocks: [] });
+            toast.success('Chapitre ajouté ✅');
+            // Notifier les élèves de la classe associée à la matière
+            const subject = subjects.find((s: any) => s.id === subjectId);
+            if (subject?.classroom_id) {
+                const { data: students } = await supabase
+                    .from('student_profiles').select('id')
+                    .eq('classroom_id', subject.classroom_id).eq('organization_id', orgId);
+                if (students && students.length > 0) {
+                    await sendCursusNotification({
+                        actorId: userId, actorName: userName, orgId,
+                        actionType: 'new_chapter',
+                        targetId: data.id, targetName: data.title,
+                        recipientIds: students.map((s: any) => s.id),
+                    });
+                }
+            }
+        }
         setSavingCh(false);
     };
 
@@ -182,7 +274,28 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
             status: 'published', position: pos, estimated_minutes: parseInt(lessonForm.estimated_minutes) || 15
         }).select().single();
         if (error) toast.error(error.message);
-        else { setLessons(prev => [...prev, data]); setShowNewLesson(null); setLessonForm({ title: '', contentBlocks: [], estimated_minutes: '15' }); toast.success('Leçon ajoutée ✅'); }
+        else {
+            setLessons(prev => [...prev, data]);
+            setShowNewLesson(null);
+            setLessonForm({ title: '', contentBlocks: [], estimated_minutes: '15' });
+            toast.success('Leçon ajoutée ✅');
+            // Notifier les élèves via la chaîne chapter → subject → classroom
+            const chapter = chapters.find((c: any) => c.id === chapterId);
+            const subject = chapter ? subjects.find((s: any) => s.id === chapter.subject_id) : null;
+            if (subject?.classroom_id) {
+                const { data: students } = await supabase
+                    .from('student_profiles').select('id')
+                    .eq('classroom_id', subject.classroom_id).eq('organization_id', orgId);
+                if (students && students.length > 0) {
+                    await sendCursusNotification({
+                        actorId: userId, actorName: userName, orgId,
+                        actionType: 'new_lesson',
+                        targetId: data.id, targetName: data.title,
+                        recipientIds: students.map((s: any) => s.id),
+                    });
+                }
+            }
+        }
         setSavingLesson(false);
     };
 

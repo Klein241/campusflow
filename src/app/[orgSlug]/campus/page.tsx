@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOrgSlug } from '@/hooks/use-org-slug';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GraduationCap, Loader2 } from 'lucide-react';
+import { GraduationCap, Loader2, Bell, BellOff } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { CampusBottomNav, type CampusTab } from '@/components/campus/campus-bottom-nav';
 import { ActusView } from '@/components/campus/actus-view';
@@ -18,6 +18,7 @@ import { NotificationCenter, NotificationBell } from '@/components/campus/notifi
 import { SkyPoints } from '@/components/campus/sky-points';
 import { SkyPointsStore } from '@/components/campus/sky-points-store';
 import { PwaInstall } from '@/components/campus/pwa-install';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 // ═══════════════════════════════════════════════════════
 // CAMPUS PAGE — 5 onglets séparés
@@ -79,6 +80,16 @@ export default function CampusPage() {
     // Sky Points store
     const [storeOpen, setStoreOpen] = useState(false);
 
+    // Push notifications — auto-subscribe after login
+    const [showPushBanner, setShowPushBanner] = useState(false);
+    const pushAutoTriggered = useRef(false);
+    const { permission, isSubscribed, isSupported, subscribe } = usePushNotifications({
+        userId: session?.id || '',
+        userRole: session?.role,
+        organizationId: session?.organization_id,
+        orgSlug,
+    });
+
     useEffect(() => {
         (async () => {
             const sess = getSession();
@@ -116,6 +127,15 @@ export default function CampusPage() {
             setLoading(false);
         })();
     }, [orgSlug, router]);
+
+    // Auto-prompt push after 3s if not yet subscribed
+    useEffect(() => {
+        if (!session || !isSupported || isSubscribed || pushAutoTriggered.current) return;
+        if (permission === 'denied') return;
+        pushAutoTriggered.current = true;
+        const t = setTimeout(() => setShowPushBanner(true), 3000);
+        return () => clearTimeout(t);
+    }, [session, isSupported, isSubscribed, permission]);
 
     // Called by ProfileView when user changes their photo
     const handlePhotoUpdate = (newUrl: string) => {
