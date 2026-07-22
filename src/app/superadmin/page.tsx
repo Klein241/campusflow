@@ -8,7 +8,7 @@ import {
     ShieldCheck, Loader2, TrendingUp, RefreshCw,
     ChevronRight, AlertTriangle, Ban, RotateCcw, ExternalLink,
     Mail, Lock, School, UserCheck, Activity,
-    BarChart3, Zap, Clock, CheckSquare
+    BarChart3, Zap, Clock, CheckSquare, Star, Plus, Minus, Menu, X
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -22,7 +22,7 @@ import { Input } from '@/components/ui/input';
 // Protected by platform_admins table (Supabase Auth + RLS)
 // ═══════════════════════════════════════════════════════════════════════
 
-type Tab = 'overview' | 'orgs' | 'users' | 'domains' | 'announcements';
+type Tab = 'overview' | 'orgs' | 'users' | 'domains' | 'announcements' | 'points';
 
 interface Stats {
     total_orgs: number;
@@ -66,12 +66,13 @@ interface ActivityItem {
     created_at: string;
 }
 
-const SIDEBAR: { id: Tab; label: string; icon: any; }[] = [
-    { id: 'overview',       label: 'Vue d\'ensemble',  icon: LayoutDashboard },
-    { id: 'orgs',           label: 'Organisations',    icon: Building2 },
-    { id: 'users',          label: 'Utilisateurs',     icon: Users },
-    { id: 'domains',        label: 'Domaines custom',  icon: Globe },
-    { id: 'announcements',  label: 'Annonces globales',icon: Megaphone },
+const SIDEBAR: { id: Tab; label: string; icon: any; emoji?: string }[] = [
+    { id: 'overview',       label: 'Vue d\'ensemble',  icon: LayoutDashboard, emoji: '📊' },
+    { id: 'orgs',           label: 'Organisations',    icon: Building2,       emoji: '🏫' },
+    { id: 'users',          label: 'Utilisateurs',     icon: Users,           emoji: '👥' },
+    { id: 'points',         label: 'Sky Points',       icon: Star,            emoji: '⭐' },
+    { id: 'domains',        label: 'Domaines',         icon: Globe,           emoji: '🌐' },
+    { id: 'announcements',  label: 'Annonces',         icon: Megaphone,       emoji: '📢' },
 ];
 
 function timeAgo(iso: string) {
@@ -128,8 +129,9 @@ export default function SuperAdminPage() {
     const [loginError, setLoginError]     = useState('');
 
     // ── Navigation ────────────────────────────────────────────────
-    const [tab, setTab]       = useState<Tab>('overview');
-    const [search, setSearch] = useState('');
+    const [tab, setTab]         = useState<Tab>('overview');
+    const [search, setSearch]   = useState('');
+    const [sidebarOpen, setSidebarOpen] = useState(false);
 
     // ── Data ──────────────────────────────────────────────────────
     const [stats, setStats]         = useState<Stats | null>(null);
@@ -147,6 +149,15 @@ export default function SuperAdminPage() {
     // ── Confirm delete dialog ─────────────────────────────────────
     const [deleteConfirm, setDeleteConfirm] = useState<OrgItem | null>(null);
     const [deleting, setDeleting] = useState(false);
+
+    // ── Points management ─────────────────────────────────────────
+    const [pointsSearch, setPointsSearch]   = useState('');
+    const [pointsResults, setPointsResults] = useState<any[]>([]);
+    const [pointsLoading, setPointsLoading] = useState(false);
+    const [pointsTarget, setPointsTarget]   = useState<any | null>(null);
+    const [pointsDelta, setPointsDelta]     = useState(0);
+    const [pointsNote, setPointsNote]       = useState('');
+    const [sendingPoints, setSendingPoints] = useState(false);
 
     // ─── Mount: check auth ───────────────────────────────────────
     useEffect(() => {
@@ -275,6 +286,49 @@ export default function SuperAdminPage() {
         setEmail(''); setPassword('');
     };
 
+    // ─── Points search ────────────────────────────────────────────
+    const searchForPoints = async () => {
+        if (!pointsSearch.trim()) return;
+        setPointsLoading(true);
+        const q2 = pointsSearch.trim().toLowerCase();
+        // Search in student_profiles and teacher_profiles
+        const [stuRes, tchRes] = await Promise.all([
+            supabase.from('student_profiles')
+                .select('id, first_name, last_name, sky_points, organization_id, organizations(name, slug)')
+                .or(`first_name.ilike.%${q2}%,last_name.ilike.%${q2}%,access_code.ilike.%${q2}%`)
+                .limit(10),
+            supabase.from('teacher_profiles')
+                .select('id, first_name, last_name, sky_points, organization_id, organizations(name, slug)')
+                .or(`first_name.ilike.%${q2}%,last_name.ilike.%${q2}%`)
+                .limit(10),
+        ]);
+        const students = (stuRes.data || []).map((u: any) => ({ ...u, role: 'student' }));
+        const teachers = (tchRes.data || []).map((u: any) => ({ ...u, role: 'teacher' }));
+        setPointsResults([...students, ...teachers]);
+        setPointsLoading(false);
+    };
+
+    const applyPoints = async () => {
+        if (!pointsTarget || pointsDelta === 0) return;
+        setSendingPoints(true);
+        const table = pointsTarget.role === 'student' ? 'student_profiles' : 'teacher_profiles';
+        const newBalance = Math.max(0, (pointsTarget.sky_points || 0) + pointsDelta);
+        const { error } = await supabase.from(table)
+            .update({ sky_points: newBalance })
+            .eq('id', pointsTarget.id);
+        if (error) {
+            toast.error('Erreur: ' + error.message);
+        } else {
+            const sign = pointsDelta > 0 ? '+' : '';
+            toast.success(`⭐ ${sign}${pointsDelta} pts → ${pointsTarget.first_name} ${pointsTarget.last_name} (solde: ${newBalance})`);
+            setPointsTarget({ ...pointsTarget, sky_points: newBalance });
+            setPointsResults(prev => prev.map(u => u.id === pointsTarget.id ? { ...u, sky_points: newBalance } : u));
+            setPointsDelta(0);
+            setPointsNote('');
+        }
+        setSendingPoints(false);
+    };
+
     // ─── Filtered lists ───────────────────────────────────────────
     const q = search.toLowerCase();
     const filteredOrgs = orgs.filter(o =>
@@ -388,13 +442,13 @@ export default function SuperAdminPage() {
     return (
         <div className="min-h-screen bg-[#06080F] text-white flex">
 
-            {/* ─── Sidebar ──────────────────────────────────────── */}
-            <aside className="w-60 shrink-0 border-r border-white/[0.06] flex flex-col bg-[#080B12] sticky top-0 h-screen">
+            {/* ─── Sidebar (desktop only) ──────────────────────── */}
+            <aside className="hidden md:flex w-60 shrink-0 border-r border-white/[0.06] flex-col bg-[#080B12] sticky top-0 h-screen">
                 {/* Brand */}
                 <div className="p-4 border-b border-white/[0.06]">
                     <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/25 shrink-0">
-                            <ShieldCheck className="w-4.5 h-4.5 text-white" />
+                            <ShieldCheck className="w-4 h-4 text-white" />
                         </div>
                         <div>
                             <p className="font-black text-sm leading-tight">SuperAdmin</p>
@@ -417,7 +471,6 @@ export default function SuperAdminPage() {
                             <item.icon className="w-4 h-4 shrink-0" />
                             <span className="flex-1 text-left text-xs">{item.label}</span>
                             {tab === item.id && <ChevronRight className="w-3 h-3 text-violet-400" />}
-                            {/* Pending domains badge */}
                             {item.id === 'domains' && pendingDomains.length > 0 && (
                                 <span className="w-4 h-4 rounded-full bg-amber-500 text-[9px] font-black text-black flex items-center justify-center">
                                     {pendingDomains.length}
@@ -452,15 +505,78 @@ export default function SuperAdminPage() {
                 </div>
             </aside>
 
+            {/* ─── Mobile slide-out sidebar ─────────────────────── */}
+            <AnimatePresence>
+                {sidebarOpen && (
+                    <>
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-black/60 z-40 md:hidden"
+                            onClick={() => setSidebarOpen(false)} />
+                        <motion.aside initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }}
+                            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                            className="fixed left-0 top-0 bottom-0 w-72 bg-[#080B12] border-r border-white/[0.08] z-50 flex flex-col md:hidden">
+                            <div className="p-4 border-b border-white/[0.06] flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                                        <ShieldCheck className="w-4 h-4 text-white" />
+                                    </div>
+                                    <div>
+                                        <p className="font-black text-sm">SuperAdmin</p>
+                                        <p className="text-[9px] text-slate-500">CampusFlow Platform</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setSidebarOpen(false)} className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/5">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                            <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+                                {SIDEBAR.map(item => (
+                                    <button key={item.id}
+                                        onClick={() => { setTab(item.id); setSearch(''); setSidebarOpen(false); }}
+                                        className={cn(
+                                            'w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all',
+                                            tab === item.id
+                                                ? 'bg-violet-600/20 text-violet-300 border border-violet-500/25'
+                                                : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                        )}>
+                                        <span className="text-lg">{item.emoji}</span>
+                                        <span className="text-sm">{item.label}</span>
+                                        {item.id === 'domains' && pendingDomains.length > 0 && (
+                                            <span className="ml-auto w-5 h-5 rounded-full bg-amber-500 text-[9px] font-black text-black flex items-center justify-center">
+                                                {pendingDomains.length}
+                                            </span>
+                                        )}
+                                    </button>
+                                ))}
+                            </nav>
+                            <div className="p-3 border-t border-white/[0.05]">
+                                <button onClick={handleLogout}
+                                    className="w-full flex items-center gap-2 px-4 py-3 rounded-xl text-sm text-red-400 hover:bg-red-500/10 transition-all">
+                                    <LogOut className="w-4 h-4" /> Déconnexion
+                                </button>
+                            </div>
+                        </motion.aside>
+                    </>
+                )}
+            </AnimatePresence>
+
             {/* ─── Main ─────────────────────────────────────────── */}
-            <main className="flex-1 overflow-auto min-w-0">
+            <main className="flex-1 overflow-auto min-w-0 pb-20 md:pb-0">
 
                 {/* Topbar */}
-                <div className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#06080F]/80 backdrop-blur-xl px-6 py-3 flex items-center justify-between gap-4">
+                <div className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#06080F]/90 backdrop-blur-xl px-4 md:px-6 py-3 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                        <h1 className="font-black text-sm">
-                            {SIDEBAR.find(s => s.id === tab)?.label}
-                        </h1>
+                        {/* Hamburger — mobile only */}
+                        <button onClick={() => setSidebarOpen(true)}
+                            className="md:hidden p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+                            <Menu className="w-5 h-5" />
+                        </button>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xl">{SIDEBAR.find(s => s.id === tab)?.emoji}</span>
+                            <h1 className="font-black text-sm">
+                                {SIDEBAR.find(s => s.id === tab)?.label}
+                            </h1>
+                        </div>
                         {pendingDomains.length > 0 && tab === 'domains' && (
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20 font-bold">
                                 {pendingDomains.length} en attente
@@ -473,7 +589,7 @@ export default function SuperAdminPage() {
                             className="p-2 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-white/5 transition-all">
                             <RefreshCw className="w-4 h-4" />
                         </button>
-                        <span className="text-[10px] text-violet-400 bg-violet-500/10 border border-violet-500/20 px-3 py-1 rounded-full font-bold">
+                        <span className="hidden sm:flex text-[10px] text-violet-400 bg-violet-500/10 border border-violet-500/20 px-3 py-1 rounded-full font-bold">
                             ⚡ SuperAdmin
                         </span>
                     </div>
@@ -939,11 +1055,180 @@ export default function SuperAdminPage() {
                             </motion.div>
                         )}
 
+                        {/* ══════════════════════════════════════════
+                            SKY POINTS
+                        ══════════════════════════════════════════ */}
+                        {tab === 'points' && (
+                            <motion.div key="points" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-5">
+
+                                {/* Search bar */}
+                                <div className="bg-white/[0.03] border border-white/8 rounded-2xl p-4 space-y-3">
+                                    <div>
+                                        <p className="text-sm font-black text-white mb-1">⭐ Gestion des Sky Points</p>
+                                        <p className="text-xs text-slate-500">Recherchez un étudiant, professeur ou admin et ajustez son solde.</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <div className="relative flex-1">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                            <input
+                                                value={pointsSearch}
+                                                onChange={e => setPointsSearch(e.target.value)}
+                                                onKeyDown={e => e.key === 'Enter' && searchForPoints()}
+                                                placeholder="Nom, prénom ou code accès..."
+                                                className="w-full bg-white/5 border border-white/10 text-white h-10 rounded-xl text-sm pl-9 pr-3 placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40" />
+                                        </div>
+                                        <Button onClick={searchForPoints} disabled={pointsLoading}
+                                            className="bg-violet-600 hover:bg-violet-500 rounded-xl px-4 shrink-0">
+                                            {pointsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* Results */}
+                                {pointsResults.length > 0 && (
+                                    <div className="space-y-2">
+                                        <p className="text-xs text-slate-500 font-semibold">{pointsResults.length} résultat(s)</p>
+                                        {pointsResults.map(u => (
+                                            <motion.button key={u.id}
+                                                initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                                                onClick={() => { setPointsTarget(u); setPointsDelta(0); setPointsNote(''); }}
+                                                className={cn(
+                                                    'w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all',
+                                                    pointsTarget?.id === u.id
+                                                        ? 'bg-amber-500/10 border-amber-500/30 shadow-sm shadow-amber-500/10'
+                                                        : 'bg-white/[0.03] border-white/[0.06] hover:bg-white/[0.06]'
+                                                )}>
+                                                <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black shrink-0',
+                                                    u.role === 'student' ? 'bg-teal-500/20 text-teal-300' : 'bg-indigo-500/20 text-indigo-300')}>
+                                                    {u.first_name?.[0]}{u.last_name?.[0]}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-bold text-white truncate">{u.first_name} {u.last_name}</p>
+                                                    <p className="text-[10px] text-slate-500">
+                                                        {u.role === 'student' ? '🎓 Étudiant' : '👨‍🏫 Prof'} · {(u.organizations as any)?.name || u.organization_id}
+                                                    </p>
+                                                </div>
+                                                <div className="text-right shrink-0">
+                                                    <p className="text-sm font-black text-amber-400">{u.sky_points ?? 0}</p>
+                                                    <p className="text-[9px] text-slate-600">pts</p>
+                                                </div>
+                                            </motion.button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Points editor */}
+                                {pointsTarget && (
+                                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                                        className="bg-gradient-to-br from-amber-500/[0.07] to-orange-500/[0.04] border border-amber-500/20 rounded-2xl p-5 space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-sm font-black text-white">{pointsTarget.first_name} {pointsTarget.last_name}</p>
+                                                <p className="text-[10px] text-slate-500">{pointsTarget.role === 'student' ? '🎓 Étudiant' : '👨‍🏫 Professeur'}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-xs text-slate-400">Solde actuel</p>
+                                                <p className="text-2xl font-black text-amber-400">{pointsTarget.sky_points ?? 0} <span className="text-sm font-normal text-slate-500">pts</span></p>
+                                            </div>
+                                        </div>
+
+                                        {/* Quick presets */}
+                                        <div>
+                                            <p className="text-xs text-slate-400 mb-2">Montants rapides</p>
+                                            <div className="grid grid-cols-4 gap-2">
+                                                {[-50, -10, +10, +25, +50, +100, +200, +500].map(v => (
+                                                    <button key={v} onClick={() => setPointsDelta(v)}
+                                                        className={cn(
+                                                            'py-2 rounded-xl text-xs font-black border transition-all',
+                                                            pointsDelta === v
+                                                                ? v > 0 ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300' : 'bg-red-500/20 border-red-500/40 text-red-300'
+                                                                : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                                                        )}>
+                                                        {v > 0 ? '+' : ''}{v}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Custom amount */}
+                                        <div>
+                                            <p className="text-xs text-slate-400 mb-1.5">Montant personnalisé</p>
+                                            <div className="flex items-center gap-2">
+                                                <button onClick={() => setPointsDelta(d => d - 10)}
+                                                    className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center hover:bg-red-500/20 transition-all">
+                                                    <Minus className="w-4 h-4" />
+                                                </button>
+                                                <input type="number" value={pointsDelta}
+                                                    onChange={e => setPointsDelta(parseInt(e.target.value) || 0)}
+                                                    className="flex-1 bg-white/5 border border-white/10 text-white h-10 rounded-xl text-center text-sm font-black focus:outline-none focus:border-amber-500/40" />
+                                                <button onClick={() => setPointsDelta(d => d + 10)}
+                                                    className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center hover:bg-emerald-500/20 transition-all">
+                                                    <Plus className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                            {pointsDelta !== 0 && (
+                                                <p className="text-xs text-center mt-1.5">
+                                                    <span className="text-slate-400">Nouveau solde :</span>{' '}
+                                                    <span className="font-black text-amber-300">{Math.max(0, (pointsTarget.sky_points || 0) + pointsDelta)} pts</span>
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {/* Note optionnelle */}
+                                        <div>
+                                            <p className="text-xs text-slate-400 mb-1.5">Note (optionnelle)</p>
+                                            <input value={pointsNote} onChange={e => setPointsNote(e.target.value)}
+                                                placeholder="Ex: Récompense pour..."
+                                                className="w-full bg-white/5 border border-white/10 text-white h-9 rounded-xl text-sm px-3 placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40" />
+                                        </div>
+
+                                        <Button onClick={applyPoints}
+                                            disabled={sendingPoints || pointsDelta === 0}
+                                            className={cn('w-full h-11 font-black rounded-xl shadow-lg transition-all',
+                                                pointsDelta > 0
+                                                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 shadow-amber-500/25'
+                                                    : 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 shadow-red-500/25'
+                                            )}>
+                                            {sendingPoints
+                                                ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Application...</>
+                                                : <>⭐ {pointsDelta > 0 ? `Ajouter +${pointsDelta} pts` : `Retirer ${pointsDelta} pts`}</>
+                                            }
+                                        </Button>
+                                    </motion.div>
+                                )}
+
+                                {pointsResults.length === 0 && !pointsLoading && (
+                                    <div className="text-center py-12 text-slate-600">
+                                        <Star className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                                        <p className="text-sm">Recherchez un utilisateur pour gérer ses Sky Points</p>
+                                    </div>
+                                )}
+                            </motion.div>
+                        )}
+
                     </AnimatePresence>
                 </div>
             </main>
 
-            {/* ─── Delete Confirm Modal ─────────────────────────── */}
+            {/* ─── Mobile bottom nav ──────────────────────────────── */}
+            <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-[#080B12]/95 backdrop-blur-xl border-t border-white/[0.06] flex items-stretch">
+                {SIDEBAR.slice(0, 5).map(item => (
+                    <button key={item.id}
+                        onClick={() => { setTab(item.id); setSearch(''); }}
+                        className={cn(
+                            'flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 transition-all',
+                            tab === item.id ? 'text-violet-300' : 'text-slate-600 hover:text-slate-400'
+                        )}>
+                        <span className="text-lg leading-none">{item.emoji}</span>
+                        <span className="text-[9px] font-semibold leading-none mt-0.5 truncate max-w-[52px]">{item.label.split(' ')[0]}</span>
+                        {tab === item.id && (
+                            <span className="absolute bottom-0 w-6 h-0.5 rounded-full bg-violet-400" />
+                        )}
+                    </button>
+                ))}
+            </nav>
+
+            {/* ─── Delete Confirm Modal ─────────────────────────────── */}
             <AnimatePresence>
                 {deleteConfirm && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}

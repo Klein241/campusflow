@@ -17,6 +17,7 @@ import { ProfileView } from '@/components/campus/profile-view';
 import { NotificationCenter, NotificationBell } from '@/components/campus/notification-center';
 import { SkyPoints } from '@/components/campus/sky-points';
 import { SkyPointsStore } from '@/components/campus/sky-points-store';
+import { PwaInstall } from '@/components/campus/pwa-install';
 
 // ═══════════════════════════════════════════════════════
 // CAMPUS PAGE — 5 onglets séparés
@@ -162,6 +163,8 @@ export default function CampusPage() {
                         </div>
                     </div>
                     <div className="flex items-center gap-1.5">
+                        {/* PWA Install — compact */}
+                        <PwaInstall orgSlug={orgSlug} orgName={org.name} orgLogo={org.logo_url} compact />
                         {/* Sky Points */}
                         <SkyPoints userId={session.id} orgId={org.id} compact onOpenStore={() => setStoreOpen(true)} />
                         {/* Notification Bell */}
@@ -250,7 +253,7 @@ export default function CampusPage() {
 
                     {activeTab === 'profile' && (
                         <motion.div key="profile" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
-                            <ProfileView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role} orgName={org.name} />
+                            <ProfileView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role} orgName={org.name} orgLogo={org.logo_url} />
                         </motion.div>
                     )}
                 </AnimatePresence>

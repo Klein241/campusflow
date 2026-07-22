@@ -589,6 +589,7 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                                 skyPoints={skyPoints}
                                 onSkyUpdate={(delta) => setSkyPoints(p => p + delta)}
                                 onOpenGroupChat={onOpenGroupChat}
+                                onStartDM={onStartDM}
                             />
                         )}
                     </motion.div>

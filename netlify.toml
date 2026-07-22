@@ -13,6 +13,11 @@
   # DO NOT commit secrets to version control
 
 # ═══ Edge Functions ═══
+# org-manifest: generates a per-tenant PWA manifest (runs BEFORE domain-router)
+[[edge_functions]]
+  path = "/:orgSlug/manifest.webmanifest"
+  function = "org-manifest"
+
 # domain-router: detects custom domains and rewrites paths to /_/ prefix
 # so that the /:orgSlug/* redirect rules below can match them.
 [[edge_functions]]
@@ -126,9 +131,16 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
-# PWA manifest
+# PWA manifest (generic)
 [[headers]]
   for = "/manifest.json"
   [headers.values]
     Content-Type = "application/manifest+json"
     Cache-Control = "public, max-age=0, must-revalidate"
+
+# PWA manifest (per-tenant, served by org-manifest edge function)
+[[headers]]
+  for = "/:orgSlug/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json"
+    Cache-Control = "public, max-age=300, stale-while-revalidate=3600"

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -26,9 +26,11 @@ interface StudentCursusProps {
     skyPoints: number;
     onSkyUpdate: (delta: number) => void;
     onOpenGroupChat?: (convId: string, convName: string) => void;
+    /** Opens a direct message with the subject teacher */
+    onStartDM?: (targetId: string, targetName: string) => void;
 }
 
-export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints, onSkyUpdate, onOpenGroupChat }: StudentCursusProps) {
+export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints, onSkyUpdate, onOpenGroupChat, onStartDM }: StudentCursusProps) {
     const [subjects, setSubjects] = useState<any[]>([]);
     const [chapters, setChapters] = useState<any[]>([]);
     const [lessons, setLessons] = useState<any[]>([]);
@@ -50,7 +52,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
     const loadData = async () => {
         setLoading(true);
         try {
-            // Load subjects â€” try with classroom first, fallback to org
+            // Load subjects — try with classroom first, fallback to org
             let subs: any[] = [];
             if (classroomId) {
                 const { data } = await supabase.from('subjects')
@@ -94,7 +96,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                 setLessons(lsns || []);
             }
 
-            // Exercises (by chapter or subject) â€” guard empty arrays
+            // Exercises (by chapter or subject) — guard empty arrays
             let exs: any[] = [];
             if (chapterIds.length > 0) {
                 const { data: exData } = await supabase.from('exercises')
@@ -125,7 +127,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
 
     useEffect(() => { loadData(); }, [orgId, userId, classroomId]);
 
-    // â”€â”€ Helpers â”€â”€
+    // ── Helpers ──
     const getSubmission = (exId: string) => submissions.find(s => s.exercise_id === exId);
     const getLessonProgress = (lessonId: string) => progress.find(p => p.lesson_id === lessonId);
     const isLessonCompleted = (lessonId: string) => getLessonProgress(lessonId)?.completed === true;
@@ -164,7 +166,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
             completed_at: new Date().toISOString(), organization_id: orgId
         }, { onConflict: 'student_id,lesson_id' });
         setProgress(prev => [...prev.filter(p => p.lesson_id !== lessonId), { student_id: userId, lesson_id: lessonId, completed: true }]);
-        toast.success('LeÃ§on marquÃ©e terminÃ©e âœ…');
+        toast.success('Leçon marquée terminée ✅');
     };
 
     const sendDispute = async () => {
@@ -179,7 +181,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
             organization_id: orgId
         });
         if (error) toast.error(error.message);
-        else { toast.success('RÃ©clamation envoyÃ©e âœ…'); setDisputeTarget(null); setDisputeMsg(''); }
+        else { toast.success('Réclamation envoyée ✅'); setDisputeTarget(null); setDisputeMsg(''); }
         setSendingDispute(false);
     };
 
@@ -197,7 +199,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
 
     return (
         <div className="space-y-4">
-            {/* â”€â”€ OVERVIEW CARDS â”€â”€ */}
+            {/* ── OVERVIEW CARDS ── */}
             <div className="grid grid-cols-2 gap-3">
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                     className="bg-gradient-to-br from-indigo-500/15 to-violet-500/10 border border-indigo-500/20 rounded-2xl p-4">
@@ -206,9 +208,9 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                         <BarChart3 className="w-4 h-4 text-indigo-400" />
                     </div>
                     <div className="text-3xl font-black text-white">
-                        {overall !== null ? <><span className="text-indigo-400">{overall.toFixed(1)}</span><span className="text-slate-500 text-lg">/20</span></> : <span className="text-slate-600">â€”</span>}
+                        {overall !== null ? <><span className="text-indigo-400">{overall.toFixed(1)}</span><span className="text-slate-500 text-lg">/20</span></> : <span className="text-slate-600">—</span>}
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-1">GÃ©nÃ©rale toutes matiÃ¨res</p>
+                    <p className="text-[10px] text-slate-500 mt-1">Générale toutes matières</p>
                 </motion.div>
 
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
@@ -218,7 +220,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                         <Star className="w-4 h-4 text-amber-400" />
                     </div>
                     <div className="text-3xl font-black text-amber-400">{skyPoints}</div>
-                    <p className="text-[10px] text-slate-500 mt-1">Points accumulÃ©s</p>
+                    <p className="text-[10px] text-slate-500 mt-1">Points accumulés</p>
                 </motion.div>
 
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
@@ -231,7 +233,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                         <span className="text-teal-400">{completedLessons}</span>
                         <span className="text-slate-500 text-lg">/{totalLessons}</span>
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-1">LeÃ§ons terminÃ©es</p>
+                    <p className="text-[10px] text-slate-500 mt-1">Leçons terminées</p>
                     {totalLessons > 0 && <Progress value={(completedLessons / totalLessons) * 100} className="mt-2 h-1" />}
                 </motion.div>
 
@@ -245,22 +247,22 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                         <span className="text-violet-400">{doneExercises}</span>
                         <span className="text-slate-500 text-lg">/{totalExercises}</span>
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-1">ComplÃ©tÃ©s</p>
+                    <p className="text-[10px] text-slate-500 mt-1">Complétés</p>
                     {totalExercises > 0 && <Progress value={(doneExercises / totalExercises) * 100} className="mt-2 h-1" />}
                 </motion.div>
             </div>
 
-            {/* â”€â”€ SUBJECTS â”€â”€ */}
+            {/* ── SUBJECTS ── */}
             <div className="flex items-center justify-between mt-2">
-                <h3 className="font-bold text-sm text-slate-300">ðŸ“š Mes MatiÃ¨res</h3>
+                <h3 className="font-bold text-sm text-slate-300">📚 Mes Matières</h3>
                 <span className="text-xs text-slate-500 bg-white/[0.04] px-2 py-0.5 rounded-full">{subjects.length}</span>
             </div>
 
             {subjects.length === 0 && (
                 <div className="text-center py-16 bg-white/[0.02] rounded-2xl border border-white/[0.05]">
                     <GraduationCap className="w-14 h-14 mx-auto mb-3 text-slate-700" />
-                    <p className="text-slate-500 font-medium">Aucune matiÃ¨re disponible</p>
-                    <p className="text-xs text-slate-600 mt-1">Ton professeur n'a pas encore publiÃ© de contenu</p>
+                    <p className="text-slate-500 font-medium">Aucune matière disponible</p>
+                    <p className="text-xs text-slate-600 mt-1">Ton professeur n'a pas encore publié de contenu</p>
                 </div>
             )}
 
@@ -281,7 +283,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                             <div className={cn("rounded-2xl border transition-all duration-300 overflow-hidden",
                                 isOpen ? 'border-indigo-500/30 bg-gradient-to-br from-indigo-500/[0.07] to-transparent' : 'border-white/[0.07] bg-white/[0.03]')}>
 
-                                {/* â”€â”€ Subject header â”€â”€ */}
+                                {/* ── Subject header ── */}
                                 <button
                                     className="w-full text-left"
                                     onClick={() => setExpandedSub(isOpen ? null : sub.id)}>
@@ -290,14 +292,14 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                         <div className="flex items-start gap-3">
                                             <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg mt-0.5",
                                                 isOpen ? 'bg-indigo-500/20' : 'bg-white/[0.06]')}>
-                                                ðŸ“–
+                                                📖
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-[15px] font-bold text-white leading-tight">{sub.name}</p>
                                                 {/* Row 2: Meta info */}
                                                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
                                                     {teacher && (
-                                                        <span className="text-xs text-slate-400">ðŸ‘¨â€ðŸ« {teacher.first_name} {teacher.last_name}</span>
+                                                        <span className="text-xs text-slate-400">👨🏫 {teacher.first_name} {teacher.last_name}</span>
                                                     )}
                                                     <span className="text-xs text-slate-500">Coef. {sub.coefficient || 1}</span>
                                                     <span className="text-xs text-slate-500">{subChaps.length} chapitre{subChaps.length > 1 ? 's' : ''}</span>
@@ -305,7 +307,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                             </div>
                                             {/* Score badge */}
                                             <div className={cn("shrink-0 px-2.5 py-1 rounded-xl text-sm font-black", scoreColor)}>
-                                                {avg !== null ? `${avg.toFixed(1)}` : 'â€”'}
+                                                {avg !== null ? `${avg.toFixed(1)}` : '—'}
                                                 {avg !== null && <span className="text-[10px] font-normal opacity-70">/20</span>}
                                             </div>
                                         </div>
@@ -313,7 +315,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                         {subLessons.length > 0 && (
                                             <div className="mt-3">
                                                 <div className="flex items-center justify-between mb-1">
-                                                    <span className="text-[10px] text-slate-500">{subCompleted}/{subLessons.length} leÃ§ons</span>
+                                                    <span className="text-[10px] text-slate-500">{subCompleted}/{subLessons.length} leçons</span>
                                                     <span className="text-[10px] text-slate-500">{Math.round(subPct)}%</span>
                                                 </div>
                                                 <Progress value={subPct} className="h-1.5" />
@@ -329,22 +331,33 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                                 onOpenChat={onOpenGroupChat || (() => {})}
                                                 size="xs"
                                             />
+                                            {/* DM with teacher button */}
+                                            {teacher && sub.teacher_id && onStartDM && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); onStartDM(sub.teacher_id, `${teacher.first_name} ${teacher.last_name}`); }}
+                                                    title={`Message à ${teacher.first_name} ${teacher.last_name}`}
+                                                    className="flex items-center gap-1 p-1 rounded-lg border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/10 transition-all text-[9px]"
+                                                >
+                                                    <MessageSquare className="w-2.5 h-2.5" />
+                                                    <span>Prof</span>
+                                                </button>
+                                            )}
                                         </div>
                                         <span className={cn("flex items-center gap-1 text-xs transition-colors", isOpen ? 'text-indigo-400' : 'text-slate-500')}>
-                                            {isOpen ? 'RÃ©duire' : 'Voir les chapitres'}
+                                            {isOpen ? 'Réduire' : 'Voir les chapitres'}
                                             {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                                         </span>
                                     </div>
                                 </button>
 
-                                {/* â”€â”€ Chapters â”€â”€ */}
+                                {/* ── Chapters ── */}
                                 <AnimatePresence>
                                     {isOpen && (
                                         <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
                                             className="border-t border-white/[0.06] bg-black/10 px-3 pb-3 pt-3 space-y-2.5">
 
                                             {subChaps.length === 0 && (
-                                                <p className="text-xs text-slate-500 text-center py-6">ðŸ“š Aucun chapitre publiÃ© pour l'instant</p>
+                                                <p className="text-xs text-slate-500 text-center py-6">📚 Aucun chapitre publié pour l'instant</p>
                                             )}
 
                                             {subChaps.map((ch: any, ci: number) => {
@@ -373,9 +386,9 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                                                     <div className="flex-1 min-w-0">
                                                                         <p className="text-sm font-bold text-white leading-tight">{ch.title}</p>
                                                                         <div className="flex items-center gap-2 mt-0.5">
-                                                                            <span className="text-[11px] text-slate-400">{chLessons.length} leÃ§on{chLessons.length > 1 ? 's' : ''}</span>
-                                                                            {chExs.length > 0 && <span className="text-[11px] text-violet-400">âš¡ {chExs.length} ex.</span>}
-                                                                            {chCompleted > 0 && <span className="text-[11px] text-teal-400">âœ“ {chCompleted}/{chLessons.length}</span>}
+                                                                            <span className="text-[11px] text-slate-400">{chLessons.length} leçon{chLessons.length > 1 ? 's' : ''}</span>
+                                                                            {chExs.length > 0 && <span className="text-[11px] text-violet-400">⚡ {chExs.length} ex.</span>}
+                                                                            {chCompleted > 0 && <span className="text-[11px] text-teal-400">✓ {chCompleted}/{chLessons.length}</span>}
                                                                         </div>
                                                                     </div>
                                                                     {/* Score + chevron */}
@@ -412,10 +425,10 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                                                             </div>
                                                                         )}
 
-                                                                        {/* â”€â”€ Lessons â”€â”€ */}
+                                                                        {/* ── Lessons ── */}
                                                                         {chLessons.length > 0 && (
                                                                             <div className="space-y-1.5">
-                                                                                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold px-1 mb-2">LeÃ§ons</p>
+                                                                                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold px-1 mb-2">Leçons</p>
                                                                                 {chLessons.map((lesson: any) => {
                                                                                     const done = isLessonCompleted(lesson.id);
                                                                                     const isLOpen = expandedLesson === lesson.id;
@@ -441,7 +454,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                                                                                                 <Clock className="w-2.5 h-2.5" />{lesson.estimated_minutes} min
                                                                                                             </span>
                                                                                                         )}
-                                                                                                        {done && <span className="text-[11px] text-emerald-400 font-medium">âœ“ TerminÃ©</span>}
+                                                                                                        {done && <span className="text-[11px] text-emerald-400 font-medium">✓ Terminé</span>}
                                                                                                     </div>
                                                                                                 </button>
                                                                                                 <div className="flex items-center gap-1 shrink-0">
@@ -470,7 +483,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                                                                                         {!done && (
                                                                                                             <button onClick={() => markLessonDone(lesson.id)}
                                                                                                                 className="w-full py-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 text-sm font-semibold hover:bg-emerald-500/25 transition-all">
-                                                                                                                âœ… Marquer comme terminÃ©
+                                                                                                                ✅ Marquer comme terminé
                                                                                                             </button>
                                                                                                         )}
                                                                                                     </motion.div>
@@ -482,10 +495,10 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                                                             </div>
                                                                         )}
 
-                                                                        {/* â”€â”€ Exercises â”€â”€ */}
+                                                                        {/* ── Exercises ── */}
                                                                         {chExs.length > 0 && (
                                                                             <div className="mt-3 space-y-2">
-                                                                                <p className="text-[10px] text-violet-400 uppercase tracking-wider font-semibold px-1">âš¡ Exercices ({chExs.length})</p>
+                                                                                <p className="text-[10px] text-violet-400 uppercase tracking-wider font-semibold px-1">⚡ Exercices ({chExs.length})</p>
                                                                                 {chExs.map((ex: any) => {
                                                                                     const sub2 = getSubmission(ex.id);
                                                                                     const scored = sub2?.score !== undefined && sub2?.score !== null;
@@ -519,7 +532,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                                                                                         </button>
                                                                                                     ) : (
                                                                                                         <span className={cn("text-xs font-bold px-2 py-1 rounded-lg", passed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400')}>
-                                                                                                            {passed ? 'âœ“ RÃ©ussi' : 'âœ— RatÃ©'}
+                                                                                                            {passed ? '✓ Réussi' : '✗ Raté'}
                                                                                                         </span>
                                                                                                     )}
                                                                                                     <div className="flex gap-1">
@@ -531,7 +544,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                                                                                         />
                                                                                                         {scored && (
                                                                                                             <button onClick={() => setDisputeTarget({ exercise_id: ex.id, submission_id: sub2.id, subject_id: sub.id, title: ex.title })}
-                                                                                                                className="p-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 transition-all" title="RÃ©clamer">
+                                                                                                                className="p-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 transition-all" title="Réclamer">
                                                                                                                 <Flag className="w-3 h-3" />
                                                                                                             </button>
                                                                                                         )}
@@ -561,7 +574,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
 
 
 
-            {/* â”€â”€ EXERCISE MODAL â”€â”€ */}
+            {/* ── EXERCISE MODAL ── */}
             <AnimatePresence>
                 {activeExercise && (
                     <CursusExerciseModal
@@ -572,13 +585,13 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                             setSubmissions(prev => [...prev, { exercise_id: activeExercise.id, student_id: userId, score, graded: true }]);
                             onSkyUpdate(Math.round(score));
                             setActiveExercise(null);
-                            toast.success(`Score: ${score}/${max} â€” +${Math.round(score)} Sky â­`);
+                            toast.success(`Score: ${score}/${max} — +${Math.round(score)} Sky ⭐`);
                         }}
                     />
                 )}
             </AnimatePresence>
 
-            {/* â”€â”€ DISPUTE MODAL â”€â”€ */}
+            {/* ── DISPUTE MODAL ── */}
             <AnimatePresence>
                 {disputeTarget && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -592,7 +605,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                     <Flag className="w-5 h-5 text-orange-400" />
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-white">RÃ©clamation de note</h3>
+                                    <h3 className="font-bold text-white">Réclamation de note</h3>
                                     <p className="text-xs text-slate-500">{disputeTarget.title}</p>
                                 </div>
                                 <button onClick={() => setDisputeTarget(null)} className="ml-auto text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
@@ -606,7 +619,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                             />
                             <Button onClick={sendDispute} disabled={sendingDispute || !disputeMsg.trim()}
                                 className="w-full bg-orange-600 hover:bg-orange-500 text-white rounded-xl">
-                                {sendingDispute ? 'Envoi...' : 'Envoyer la rÃ©clamation'} <Send className="w-4 h-4 ml-2" />
+                                {sendingDispute ? 'Envoi...' : 'Envoyer la réclamation'} <Send className="w-4 h-4 ml-2" />
                             </Button>
                         </motion.div>
                     </motion.div>

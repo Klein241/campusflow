@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import { compressImage } from '@/lib/compress';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { PwaInstall } from './pwa-install';
 
 // ═══════════════════════════════════════════════════════
 // PROFILE VIEW — Profile + Marketplace + Code + Logout
@@ -28,11 +29,12 @@ interface ProfileViewProps {
     userName: string;
     userRole: string;
     orgName: string;
+    orgLogo?: string | null;
 }
 
 const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n);
 
-export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgName }: ProfileViewProps) {
+export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgName, orgLogo }: ProfileViewProps) {
     const router = useRouter();
     const [profile, setProfile] = useState<any>(null);
     const [classroom, setClassroom] = useState<any>(null);
@@ -221,6 +223,9 @@ export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgNam
                     </motion.div>
                 )}
             </div>
+
+            {/* ═══ PWA INSTALL ═══ */}
+            <PwaInstall orgSlug={orgSlug} orgName={orgName} orgLogo={orgLogo} />
 
             {/* ═══ STATS ═══ */}
             <div className="grid grid-cols-3 gap-3">
