@@ -135,48 +135,79 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
     const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
     const [contactSearch, setContactSearch] = useState('');
 
-    // ═══ LOAD ═══
-    useEffect(() => { loadPosts(); loadStories(); }, [orgId]);
+    const batchResolveUsers = async (userIds: string[], ownerId?: string) => {
+        const uniqueIds = [...new Set(userIds.filter(Boolean))];
+        if (uniqueIds.length === 0) return {};
+
+        const userMap: Record<string, { senderName: string; senderRole: string; isAdmin: boolean; avatarUrl?: string }> = {};
+
+        // 1. Fetch teachers
+        const { data: teachers } = await supabase.from('teacher_profiles')
+            .select('id, first_name, last_name, photo_url')
+            .in('id', uniqueIds);
+
+        (teachers || []).forEach((t: any) => {
+            userMap[t.id] = {
+                senderName: `${t.first_name} ${t.last_name}`,
+                senderRole: 'Professeur',
+                isAdmin: false,
+                avatarUrl: t.photo_url || undefined
+            };
+        });
+
+        // 2. Fetch missing students
+        const missingIds = uniqueIds.filter(id => !userMap[id] && id !== ownerId);
+        if (missingIds.length > 0) {
+            const { data: students } = await supabase.from('student_profiles')
+                .select('id, first_name, last_name, photo_url')
+                .in('id', missingIds);
+
+            (students || []).forEach((s: any) => {
+                userMap[s.id] = {
+                    senderName: `${s.first_name} ${s.last_name}`,
+                    senderRole: 'Étudiant',
+                    isAdmin: false,
+                    avatarUrl: s.photo_url || undefined
+                };
+            });
+        }
+
+        // 3. Handle owner/admin
+        if (ownerId && uniqueIds.includes(ownerId)) {
+            userMap[ownerId] = {
+                senderName: 'Administration',
+                senderRole: 'Admin',
+                isAdmin: true,
+                avatarUrl: undefined
+            };
+        }
+
+        return userMap;
+    };
 
     const resolveUser = async (uid: string, ownerId?: string) => {
-        let senderName = 'Membre';
-        let senderRole = '';
-        let isAdmin = false;
-        let avatarUrl: string | undefined;
-
-        if (uid === ownerId) {
-            isAdmin = true; senderName = 'Administration'; senderRole = 'Admin';
-        } else {
-            const { data: teacher } = await supabase.from('teacher_profiles')
-                .select('first_name, last_name, photo_url').eq('id', uid).single();
-            if (teacher) {
-                senderName = `${teacher.first_name} ${teacher.last_name}`;
-                senderRole = 'Professeur'; avatarUrl = teacher.photo_url || undefined;
-            } else {
-                const { data: student } = await supabase.from('student_profiles')
-                    .select('first_name, last_name, photo_url').eq('id', uid).single();
-                if (student) {
-                    senderName = `${student.first_name} ${student.last_name}`;
-                    senderRole = 'Étudiant'; avatarUrl = student.photo_url || undefined;
-                }
-            }
-        }
-        return { senderName, senderRole, isAdmin, avatarUrl };
+        const res = await batchResolveUsers([uid], ownerId);
+        return res[uid] || { senderName: 'Membre', senderRole: '', isAdmin: false, avatarUrl: undefined };
     };
+
+    // ═══ LOAD ═══
+    useEffect(() => { loadPosts(); loadStories(); }, [orgId]);
 
     const loadPosts = async () => {
         setLoading(true);
         try {
             const { data } = await supabase.from('tutoring_requests').select('*')
                 .order('created_at', { ascending: false }).limit(50);
-            if (data) {
+            if (data && data.length > 0) {
                 const { data: orgData } = await supabase.from('organizations')
                     .select('owner_id').eq('id', orgId).single();
                 const ownerId = orgData?.owner_id;
-                const enriched = await Promise.all(data.map(async (p: any) => {
-                    const user = await resolveUser(p.user_id, ownerId);
+                const uids = data.map((p: any) => p.user_id);
+                const userMap = await batchResolveUsers(uids, ownerId);
+                const enriched = data.map((p: any) => {
+                    const user = userMap[p.user_id] || { senderName: 'Membre', senderRole: '', isAdmin: false, avatarUrl: undefined };
                     return { ...p, ...user } as PostItem;
-                }));
+                });
                 setPosts(enriched);
                 // Pre-load comment counts for all posts
                 const postIds = data.map((p: any) => p.id);
@@ -189,6 +220,8 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                         setCommentCounts(counts);
                     }
                 }
+            } else {
+                setPosts([]);
             }
         } catch (e) { console.error('Error loading posts:', e); }
         setLoading(false);
@@ -200,9 +233,11 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
             const { data } = await supabase.from('stories').select('*')
                 .eq('organization_id', orgId)
                 .order('created_at', { ascending: false });
-            if (data) {
-                const enriched = await Promise.all(data.map(async (s: any) => {
-                    const user = await resolveUser(s.user_id);
+            if (data && data.length > 0) {
+                const uids = data.map((s: any) => s.user_id);
+                const userMap = await batchResolveUsers(uids);
+                const enriched = data.map((s: any) => {
+                    const user = userMap[s.user_id] || { senderName: 'Membre', avatarUrl: undefined };
                     return { 
                         ...s, 
                         senderName: user.senderName, 
@@ -210,8 +245,10 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                         likes: s.likes || [],
                         viewed_by: s.viewed_by || []
                     } as StoryItem;
-                }));
+                });
                 setStories(enriched);
+            } else {
+                setStories([]);
             }
         } catch (e) { console.error('Error loading stories:', e); }
     };
@@ -249,47 +286,44 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
         try {
             let finalImageUrl: string | null = null;
             if (postImage) {
-                const compressed = await compressImage(postImage, { maxWidth: 1200, quality: 0.8 });
-                const ext = postImage.name.split('.').pop();
-                const path = `posts/${orgId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-                const { error: uploadError } = await supabase.storage
-                    .from('organization-assets')
-                    .upload(path, compressed);
-                if (uploadError) throw uploadError;
-                const { data: publicUrlData } = supabase.storage
-                    .from('organization-assets')
-                    .getPublicUrl(path);
-                finalImageUrl = publicUrlData.publicUrl;
+                const compressed = await compressImage(postImage, { maxWidth: 1080, quality: 0.7 });
+                const path = `actus/${userId}/${Date.now()}_${postImage.name}`;
+                const { error: uploadErr } = await supabase.storage.from('campus_assets').upload(path, compressed);
+                if (uploadErr) throw uploadErr;
+                const { data: urlData } = supabase.storage.from('campus_assets').getPublicUrl(path);
+                finalImageUrl = urlData.publicUrl;
             }
 
-            const payload: any = {
+            const { error } = await supabase.from('tutoring_requests').insert({
+                organization_id: orgId,
                 user_id: userId,
                 content: newPostContent.trim(),
-                category: activePostTab === 'officiel' && userRole === 'admin' ? 'admin_actus' : 'post',
-                is_anonymous: false,
-                prayer_count: 0,
-                prayed_by: [],
-                image_url: finalImageUrl,
-            };
-            const { error } = await supabase.from('tutoring_requests').insert(payload);
+                category: activePostTab === 'officiel' ? 'officiel' : 'general',
+                photos: finalImageUrl ? [finalImageUrl] : [],
+                is_anonymous: false
+            });
             if (error) throw error;
-            toast.success('Publication partagée ! 🎉');
+            toast.success('Publication ajoutée ! 🚀');
             setNewPostContent('');
             setPostImage(null);
             setShowNewPost(false);
             loadPosts();
-        } catch (e: any) { toast.error(e.message || 'Erreur publication'); }
+        } catch (e: any) { toast.error(e.message); }
         setPublishing(false);
         setUploadingPost(false);
     };
 
     const deletePost = async (postId: string) => {
-        if (!confirm('Supprimer cette publication ?')) return;
-        try {
-            await supabase.from('tutoring_requests').delete().eq('id', postId);
-            setPosts(prev => prev.filter(p => p.id !== postId));
-            toast.success('Publication supprimée');
-        } catch (e: any) { toast.error(e.message); }
+        if (!confirm('Supprimer ce post ?')) return;
+        await supabase.from('tutoring_requests').delete().eq('id', postId);
+        setPosts(prev => prev.filter(p => p.id !== postId));
+        toast.success('Post supprimé');
+    };
+
+    const editPost = (post: PostItem) => {
+        setEditingPost(post);
+        setEditContent(post.content);
+        setPostMenuOpen(null);
     };
 
     const saveEditPost = async () => {
@@ -297,23 +331,23 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
         setSavingEdit(true);
         try {
             const { error } = await supabase.from('tutoring_requests')
-                .update({ content: editContent.trim(), edited_at: new Date().toISOString() })
-                .eq('id', editingPost.id);
+                .update({ content: editContent.trim() }).eq('id', editingPost.id);
             if (error) throw error;
             setPosts(prev => prev.map(p => p.id === editingPost.id ? { ...p, content: editContent.trim() } : p));
             setEditingPost(null);
-            toast.success('Publication modifiée ✅');
+            toast.success('Post modifié !');
         } catch (e: any) { toast.error(e.message); }
         setSavingEdit(false);
     };
 
     const likePost = async (post: PostItem) => {
-        const alreadyLiked = post.prayed_by?.includes(userId);
-        const newCount = alreadyLiked ? Math.max(0, post.prayer_count - 1) : post.prayer_count + 1;
-        const newBy = alreadyLiked ? post.prayed_by.filter(id => id !== userId) : [...(post.prayed_by || []), userId];
-        setPosts(prev => prev.map(p => p.id === post.id ? { ...p, prayer_count: newCount, prayed_by: newBy } : p));
-        await supabase.from('tutoring_requests').update({ prayer_count: newCount, prayed_by: newBy }).eq('id', post.id);
+        const prayed = (post.prayed_by || []).includes(userId);
+        const newPrayedBy = prayed ? (post.prayed_by || []).filter(id => id !== userId) : [...(post.prayed_by || []), userId];
+        const newCount = prayed ? Math.max(0, post.prayer_count - 1) : post.prayer_count + 1;
+        setPosts(prev => prev.map(p => p.id === post.id ? { ...p, prayer_count: newCount, prayed_by: newPrayedBy } : p));
+        await supabase.from('tutoring_requests').update({ prayer_count: newCount, prayed_by: newPrayedBy }).eq('id', post.id);
     };
+    const togglePrayer = likePost;
 
     const sharePost = async (post: PostItem) => {
         const url = `${window.location.origin}/${orgSlug}/campus`;
@@ -329,11 +363,14 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
     const loadComments = async (postId: string) => {
         const { data } = await supabase.from('post_comments').select('*')
             .eq('post_id', postId).order('created_at', { ascending: true });
-        if (data) {
-            const enriched = await Promise.all(data.map(async (c: any) => {
-                const user = await resolveUser(c.user_id);
-                return { ...c, senderName: user.senderName, avatarUrl: user.avatarUrl } as CommentItem;
-            }));
+        if (data && data.length > 0) {
+            const uids = data.map((c: any) => c.user_id);
+            const userMap = await batchResolveUsers(uids);
+            const enriched = data.map((c: any) => ({
+                ...c,
+                senderName: userMap[c.user_id]?.senderName || 'Membre',
+                avatarUrl: userMap[c.user_id]?.avatarUrl
+            })) as CommentItem[];
             setComments(prev => ({ ...prev, [postId]: enriched }));
         }
     };
@@ -360,43 +397,38 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
     // ═══ STORY LOGIC ═══
     const publishStory = async (isRepost = false, repostData?: StoryItem) => {
         if (!isRepost && !storyText.trim() && !storyImage) { toast.error('Ajoutez du texte ou une image'); return; }
-        
-        // 9. Coût Sky Points
+        if (isRepost && !repostData) return;
+
         if (userRole === 'student') {
             const { data: profile } = await supabase.from('student_profiles').select('sky_points').eq('id', userId).single();
-            if (!profile || (profile.sky_points || 0) < 1) {
-                toast.error("Tu n'as pas assez de Sky Points (1 requis)");
-                return;
-            }
+            if (profile && profile.sky_points < 1) { toast.error('Solde insuffisant — 1 Sky Point requis'); return; }
         }
-        
+
         setPublishingStory(true);
         try {
-            let imageUrl: string | null = isRepost && repostData ? repostData.image_url : null;
-            
-            // 1. Fix image upload
-            if (!isRepost && storyImage) {
+            let imageUrl: string | null = null;
+            let captionToSave: string | null = null;
+
+            if (isRepost && repostData) {
+                imageUrl = repostData.image_url;
+                captionToSave = `Repost de @${repostData.senderName}: ${repostData.caption || repostData.content || ''}`;
+            } else if (storyImage) {
                 const compressed = await compressImage(storyImage, { maxWidth: 1080, quality: 0.7 });
                 const path = `stories/${userId}/${Date.now()}_${storyImage.name}`;
-                await supabase.storage.from('organization-assets').upload(path, compressed, { 
-                    contentType: compressed.type,
-                    upsert: true
-                });
-                const { data: u } = supabase.storage.from('organization-assets').getPublicUrl(path);
-                imageUrl = u.publicUrl;
+                const { error: uploadErr } = await supabase.storage.from('campus_assets').upload(path, compressed);
+                if (uploadErr) throw uploadErr;
+                const { data: urlData } = supabase.storage.from('campus_assets').getPublicUrl(path);
+                imageUrl = urlData.publicUrl;
+                captionToSave = caption.trim() || null;
             }
 
             const expiresAt = new Date();
             expiresAt.setHours(expiresAt.getHours() + 24);
 
-            const contentToSave = isRepost && repostData ? repostData.content : storyText.trim();
-            // 2. Caption
-            const captionToSave = isRepost && repostData ? (repostData.caption || '') : caption.trim();
-
             const { error } = await supabase.from('stories').insert({
-                user_id: userId, 
-                organization_id: orgId, 
-                content: contentToSave,
+                organization_id: orgId,
+                user_id: userId,
+                content: isRepost ? (repostData?.content || 'Repost') : (storyImage ? '' : storyText.trim()),
                 caption: captionToSave,
                 image_url: imageUrl, 
                 visibility: isRepost ? 'public' : storyVisibility,
@@ -407,7 +439,6 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
             });
             if (error) throw error;
             
-            // Deduct point
             if (userRole === 'student') {
                 const { data: profile } = await supabase.from('student_profiles').select('sky_points').eq('id', userId).single();
                 if (profile) {
@@ -432,8 +463,8 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
         setPublishingStory(false);
     };
 
-    // 5. Vu par
     const markStoryViewed = async (story: StoryItem) => {
+        if ((story.viewed_by || []).includes(userId)) return;
         const newViewedBy = [...(story.viewed_by || []), userId];
         setStories(prev => prev.map(s => s.id === story.id ? { ...s, viewed_by: newViewedBy } : s));
         if (viewingStory?.id === story.id) {
@@ -443,25 +474,31 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
     };
 
     useEffect(() => {
-        if (viewingStory && viewingStory.user_id !== userId && !(viewingStory.viewed_by || []).includes(userId)) {
-            markStoryViewed(viewingStory);
-        }
         if (viewingStory) {
+            if (viewingStory.user_id !== userId && !(viewingStory.viewed_by || []).includes(userId)) {
+                markStoryViewed(viewingStory);
+            }
             loadStoryComments(viewingStory.id);
-            if (viewingStory.user_id === userId && rightTab === 'views') {
+            if (viewingStory.user_id === userId) {
                 fetchViewers(viewingStory.viewed_by || []);
             }
         }
-    }, [viewingStory?.id, rightTab]);
+    }, [viewingStory?.id]);
 
     const fetchViewers = async (viewedByList: string[]) => {
-        if (!viewedByList.length) { setViewerDetails([]); return; }
-        const { data: students } = await supabase.from('student_profiles').select('id, first_name, last_name, photo_url').in('id', viewedByList);
-        const { data: teachers } = await supabase.from('teacher_profiles').select('id, first_name, last_name, photo_url').in('id', viewedByList);
-        setViewerDetails([...(students || []), ...(teachers || [])]);
+        if (!viewedByList || viewedByList.length === 0) { setViewerDetails([]); return; }
+        const uniqueList = [...new Set(viewedByList)];
+        const userMap = await batchResolveUsers(uniqueList);
+        const details = uniqueList.map(uid => ({
+            id: uid,
+            name: userMap[uid]?.senderName || 'Membre',
+            role: userMap[uid]?.senderRole || 'Membre',
+            photo_url: userMap[uid]?.avatarUrl
+        }));
+        setViewerDetails(details);
     };
 
-    // 3. Likes
+    // Likes
     const likeStory = async (story: StoryItem) => {
         const isLiked = (story.likes || []).includes(userId);
         const newLikes = isLiked ? (story.likes || []).filter(id => id !== userId) : [...(story.likes || []), userId];
@@ -472,7 +509,7 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
         await supabase.from('stories').update({ likes: newLikes }).eq('id', story.id);
     };
 
-    // 8. Delete Story
+    // Delete Story
     const deleteStory = async (storyId: string) => {
         if (!confirm('Voulez-vous vraiment supprimer cette story ?')) return;
         try {
@@ -485,16 +522,21 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
         }
     };
 
-    // 4. Story Comments
+    // Story Comments
     const loadStoryComments = async (storyId: string) => {
         const { data } = await supabase.from('story_comments').select('*')
             .eq('story_id', storyId).order('created_at', { ascending: true });
-        if (data) {
-            const enriched = await Promise.all(data.map(async (c: any) => {
-                const user = await resolveUser(c.user_id);
-                return { ...c, senderName: user.senderName, avatarUrl: user.avatarUrl } as StoryCommentItem;
-            }));
+        if (data && data.length > 0) {
+            const uids = data.map((c: any) => c.user_id);
+            const userMap = await batchResolveUsers(uids);
+            const enriched = data.map((c: any) => ({
+                ...c,
+                senderName: userMap[c.user_id]?.senderName || 'Membre',
+                avatarUrl: userMap[c.user_id]?.avatarUrl
+            })) as StoryCommentItem[];
             setStoryComments(prev => ({ ...prev, [storyId]: enriched }));
+        } else {
+            setStoryComments(prev => ({ ...prev, [storyId]: [] }));
         }
     };
 
@@ -680,14 +722,14 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                                 </div>
                             </div>
 
-                            {/* ── Tap left / right zones ── */}
-                            <div className="absolute inset-0 z-20 flex">
-                                <div className="flex-1" onClick={() => navigateStory(-1)} />
-                                <div className="flex-1" onClick={() => navigateStory(1)} />
+                            {/* ── Tap left / right zones (restricted to middle 60% of screen) ── */}
+                            <div className="absolute top-20 bottom-24 inset-x-0 z-10 flex pointer-events-auto">
+                                <div className="flex-1 cursor-pointer" onClick={() => navigateStory(-1)} />
+                                <div className="flex-1 cursor-pointer" onClick={() => navigateStory(1)} />
                             </div>
 
                             {/* ── Media or text content ── */}
-                            <div className="flex-1 relative overflow-hidden">
+                            <div className="flex-1 relative overflow-hidden flex items-center justify-center">
                                 {current.image_url ? (
                                     <img
                                         src={current.image_url}
@@ -705,106 +747,179 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
 
                                 {/* Caption overlay */}
                                 {current.caption && current.image_url && (
-                                    <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 to-transparent pointer-events-none">
+                                    <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 to-transparent pointer-events-none z-20">
                                         <p className="text-white text-sm text-center font-medium drop-shadow">{current.caption}</p>
                                     </div>
                                 )}
                             </div>
 
-                            {/* ── Bottom actions bar ── */}
-                            <div className="relative z-30 bg-gradient-to-t from-black via-black/80 to-transparent px-4 py-3">
-                                <div className="flex items-center gap-3">
-                                    {/* Comment input inline (Instagram style) */}
-                                    <button
-                                        onClick={() => setShowComments(prev => !prev)}
-                                        className="flex items-center gap-1.5 text-white/80 hover:text-white transition">
-                                        <MessageCircle className="w-6 h-6" />
-                                        <span className="text-sm">{(storyComments[current.id] || []).length || ''}</span>
-                                    </button>
+                            {/* ── Bottom actions bar (Pill buttons style) ── */}
+                            <div className="relative z-40 bg-gradient-to-t from-black via-black/90 to-transparent px-4 pb-6 pt-4 pointer-events-auto">
+                                <div className="flex items-center gap-2">
+                                    {/* Like button */}
                                     <button
                                         onClick={(e) => { e.stopPropagation(); likeStory(current); }}
-                                        className="flex items-center gap-1.5 transition">
-                                        <Heart className={cn("w-6 h-6", (current.likes || []).includes(userId) ? "fill-red-500 text-red-500" : "text-white/80 hover:text-red-400")} />
-                                        <span className="text-sm text-white/80">{(current.likes || []).length || ''}</span>
+                                        className={cn("px-3.5 py-2 rounded-full border backdrop-blur-md flex items-center gap-1.5 text-xs font-bold transition-all shadow-lg pointer-events-auto cursor-pointer",
+                                            (current.likes || []).includes(userId)
+                                                ? "bg-red-500/20 border-red-500/40 text-red-400"
+                                                : "bg-black/60 border-white/20 text-white hover:bg-black/80"
+                                        )}>
+                                        <Heart className={cn("w-4 h-4", (current.likes || []).includes(userId) ? "fill-red-500 text-red-500" : "text-white")} />
+                                        <span>{(current.likes || []).length || 0}</span>
                                     </button>
+
+                                    {/* Comment button */}
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setRightTab('comments'); setShowComments(true); }}
+                                        className="px-3.5 py-2 rounded-full bg-black/60 hover:bg-black/80 border border-white/20 backdrop-blur-md flex items-center gap-1.5 text-xs font-bold text-white transition-all shadow-lg pointer-events-auto cursor-pointer">
+                                        <MessageCircle className="w-4 h-4 text-amber-400" />
+                                        <span>{(storyComments[current.id] || []).length || 0}</span>
+                                    </button>
+
+                                    {/* Views button (for Author) */}
                                     {isMyStory && (
-                                        <>
-                                            <button onClick={() => setRightTab(rightTab === 'views' ? 'comments' : 'views')} className="flex items-center gap-1 text-white/70 hover:text-white transition">
-                                                <Eye className="w-5 h-5" />
-                                                <span className="text-xs">{current.viewed_by?.length || 0}</span>
-                                            </button>
-                                            <button onClick={(e) => { e.stopPropagation(); deleteStory(current.id); }} className="ml-auto p-2 text-white/60 hover:text-red-400 transition">
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setRightTab('views'); setShowComments(true); fetchViewers(current.viewed_by || []); }}
+                                            className="px-3.5 py-2 rounded-full bg-black/60 hover:bg-black/80 border border-white/20 backdrop-blur-md flex items-center gap-1.5 text-xs font-bold text-teal-300 transition-all shadow-lg pointer-events-auto cursor-pointer">
+                                            <Eye className="w-4 h-4 text-teal-400" />
+                                            <span>{(current.viewed_by || []).length || 0} vue{(current.viewed_by || []).length > 1 ? 's' : ''}</span>
+                                        </button>
                                     )}
-                                    {!isMyStory && (
-                                        <button onClick={(e) => { e.stopPropagation(); publishStory(true, current); }} className="ml-auto flex items-center gap-1.5 text-white/70 hover:text-green-400 transition">
-                                            <Repeat className="w-5 h-5" />
+
+                                    <div className="flex-1" />
+
+                                    {/* Delete (Author) or Repost (Non-Author) */}
+                                    {isMyStory ? (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); deleteStory(current.id); }}
+                                            className="p-2 rounded-full bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-400 backdrop-blur-md transition shadow-lg pointer-events-auto cursor-pointer"
+                                            title="Supprimer la story">
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); publishStory(true, current); }}
+                                            className="px-3 py-2 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 backdrop-blur-md text-xs font-semibold flex items-center gap-1 transition shadow-lg pointer-events-auto cursor-pointer"
+                                            title="Reposter cette story">
+                                            <Repeat className="w-4 h-4" /> Reposter
                                         </button>
                                     )}
                                 </div>
                             </div>
 
-                            {/* ── Comments slide-up drawer ── */}
+                            {/* ── Slide-up Drawer (Dual-tab: Comments & Views) ── */}
                             <AnimatePresence>
                                 {showComments && (
                                     <motion.div
                                         initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
                                         transition={{ type: 'spring', damping: 30, stiffness: 400 }}
-                                        className="absolute bottom-0 left-0 right-0 z-50 bg-[#111827] rounded-t-3xl max-h-[70vh] flex flex-col shadow-2xl border-t border-white/10">
+                                        className="absolute bottom-0 left-0 right-0 z-50 bg-[#111827] rounded-t-3xl max-h-[75vh] flex flex-col shadow-2xl border-t border-white/10 pointer-events-auto">
 
                                         {/* Drawer handle */}
                                         <div className="flex justify-center py-3">
                                             <div className="w-12 h-1 rounded-full bg-white/20" />
                                         </div>
 
-                                        {/* Drawer header */}
+                                        {/* Drawer header & Tabs */}
                                         <div className="flex items-center justify-between px-4 pb-3 border-b border-white/[0.07]">
-                                            <p className="text-sm font-bold text-white">Commentaires</p>
+                                            <div className="flex items-center gap-4">
+                                                <button
+                                                    onClick={() => setRightTab('comments')}
+                                                    className={cn("text-sm font-bold transition-colors pb-1 border-b-2",
+                                                        rightTab === 'comments' ? "text-amber-400 border-amber-400" : "text-slate-400 border-transparent hover:text-white"
+                                                    )}>
+                                                    💬 Commentaires ({(storyComments[current.id] || []).length})
+                                                </button>
+                                                {isMyStory && (
+                                                    <button
+                                                        onClick={() => { setRightTab('views'); fetchViewers(current.viewed_by || []); }}
+                                                        className={cn("text-sm font-bold transition-colors pb-1 border-b-2 flex items-center gap-1",
+                                                            rightTab === 'views' ? "text-teal-400 border-teal-400" : "text-slate-400 border-transparent hover:text-white"
+                                                        )}>
+                                                        <Eye className="w-4 h-4" /> Vus par ({(current.viewed_by || []).length})
+                                                    </button>
+                                                )}
+                                            </div>
                                             <button onClick={() => setShowComments(false)} className="p-1.5 rounded-full hover:bg-white/10 text-slate-400">
                                                 <X className="w-4 h-4" />
                                             </button>
                                         </div>
 
-                                        {/* Comments list */}
-                                        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-                                            {(storyComments[current.id] || []).length === 0 ? (
-                                                <div className="text-center py-6 text-slate-500">
-                                                    <MessageCircle className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                                                    <p className="text-xs">Soyez le premier à commenter</p>
+                                        {/* Tab Content: COMMENTS */}
+                                        {rightTab === 'comments' && (
+                                            <>
+                                                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-[160px]">
+                                                    {(storyComments[current.id] || []).length === 0 ? (
+                                                        <div className="text-center py-8 text-slate-500">
+                                                            <MessageCircle className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                                                            <p className="text-xs">Soyez le premier à commenter</p>
+                                                        </div>
+                                                    ) : (
+                                                        (storyComments[current.id] || []).map(c => (
+                                                            <div key={c.id} className="flex gap-2.5 items-start">
+                                                                {c.avatarUrl ? (
+                                                                    <img src={c.avatarUrl} className="w-7 h-7 rounded-full object-cover shrink-0" />
+                                                                ) : (
+                                                                    <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-[9px] font-bold text-white shrink-0">
+                                                                        {(c.senderName || '?').slice(0, 2).toUpperCase()}
+                                                                    </div>
+                                                                )}
+                                                                <div className="flex-1 bg-white/[0.04] px-3 py-2 rounded-2xl rounded-tl-sm border border-white/[0.05]">
+                                                                    <p className="text-[11px] font-bold text-amber-300 mb-0.5">{c.senderName}</p>
+                                                                    <p className="text-xs text-slate-200 leading-relaxed">{c.content}</p>
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    )}
                                                 </div>
-                                            ) : (
-                                                (storyComments[current.id] || []).map(c => (
-                                                    <div key={c.id} className="flex gap-2">
-                                                        <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-[9px] font-bold text-white shrink-0">
-                                                            {(c.senderName || '?').slice(0, 2).toUpperCase()}
-                                                        </div>
-                                                        <div className="flex-1 bg-white/[0.04] px-3 py-2 rounded-2xl rounded-tl-sm">
-                                                            <p className="text-[11px] font-bold text-slate-200 mb-0.5">{c.senderName}</p>
-                                                            <p className="text-xs text-slate-300 leading-relaxed">{c.content}</p>
-                                                        </div>
-                                                    </div>
-                                                ))
-                                            )}
-                                        </div>
 
-                                        {/* Comment input */}
-                                        <div className="px-4 py-3 border-t border-white/[0.07] flex gap-2 items-center">
-                                            <input
-                                                value={newStoryComment}
-                                                onChange={e => setNewStoryComment(e.target.value)}
-                                                onKeyDown={e => e.key === 'Enter' && postStoryComment(current.id)}
-                                                placeholder="Écrire un commentaire..."
-                                                className="flex-1 h-10 px-3 text-sm bg-white/[0.06] border border-white/10 rounded-full text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500/50"
-                                            />
-                                            <button
-                                                onClick={() => postStoryComment(current.id)}
-                                                disabled={!newStoryComment.trim()}
-                                                className="w-10 h-10 rounded-full bg-amber-500 hover:bg-amber-400 flex items-center justify-center disabled:opacity-40 transition shrink-0">
-                                                <Send className="w-4 h-4 text-white" />
-                                            </button>
-                                        </div>
+                                                {/* Comment input */}
+                                                <div className="px-4 py-3 border-t border-white/[0.07] flex gap-2 items-center">
+                                                    <input
+                                                        value={newStoryComment}
+                                                        onChange={e => setNewStoryComment(e.target.value)}
+                                                        onKeyDown={e => e.key === 'Enter' && postStoryComment(current.id)}
+                                                        placeholder="Écrire un commentaire..."
+                                                        className="flex-1 h-10 px-4 text-sm bg-white/[0.06] border border-white/10 rounded-full text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500/50"
+                                                    />
+                                                    <button
+                                                        onClick={() => postStoryComment(current.id)}
+                                                        disabled={!newStoryComment.trim()}
+                                                        className="w-10 h-10 rounded-full bg-amber-500 hover:bg-amber-400 flex items-center justify-center disabled:opacity-40 transition shrink-0 shadow-lg">
+                                                        <Send className="w-4 h-4 text-white" />
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {/* Tab Content: VIEWS (Who viewed the story) */}
+                                        {rightTab === 'views' && isMyStory && (
+                                            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 min-h-[200px]">
+                                                {viewerDetails.length === 0 ? (
+                                                    <div className="text-center py-10 text-slate-500">
+                                                        <Eye className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                                                        <p className="text-xs">Aucune vue enregistrée pour le moment</p>
+                                                    </div>
+                                                ) : (
+                                                    viewerDetails.map((v: any, idx: number) => (
+                                                        <div key={v.id || idx} className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+                                                            {v.photo_url ? (
+                                                                <img src={v.photo_url} className="w-8 h-8 rounded-full object-cover shrink-0" />
+                                                            ) : (
+                                                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-teal-500 flex items-center justify-center text-xs font-bold text-white shrink-0">
+                                                                    {(v.name || '?').slice(0, 2).toUpperCase()}
+                                                                </div>
+                                                            )}
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="text-xs font-bold text-white truncate">{v.name}</p>
+                                                                <p className="text-[10px] text-slate-400">{v.role}</p>
+                                                            </div>
+                                                            <Eye className="w-3.5 h-3.5 text-teal-400 opacity-60" />
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        )}
                                     </motion.div>
                                 )}
                             </AnimatePresence>
