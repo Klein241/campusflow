@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOrgSlug } from '@/hooks/use-org-slug';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GraduationCap, Loader2, Bell, BellOff } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { CampusBottomNav, type CampusTab } from '@/components/campus/campus-bottom-nav';
 import { ActusView } from '@/components/campus/actus-view';
@@ -21,9 +21,9 @@ import { PwaInstall } from '@/components/campus/pwa-install';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 // ═══════════════════════════════════════════════════════
-// CAMPUS PAGE — 5 onglets séparés
-// Actus | Contacts | Chat DM/Groupes | My Space | Profil
-// + Centre de notifications unifié
+// CAMPUS PAGE
+// Actus | Contacts | Chat | My Space | Shop | Profil
+// + FAB : Bibliothèque | Marketplace | Formulaires
 // ═══════════════════════════════════════════════════════
 
 interface SessionData {
@@ -166,7 +166,17 @@ export default function CampusPage() {
 
     // Navigate from notification center
     const handleNotifNavigate = (tab: string) => {
+        if (tab === 'shop') { setStoreOpen(true); return; }
         setActiveTab(tab as CampusTab);
+    };
+
+    // Quand on clique sur Shop dans la nav => ouvre le store en modal
+    const handleTabChange = (tab: CampusTab) => {
+        if (tab === 'shop') {
+            setStoreOpen(true);
+            return; // ne change pas l'onglet actif visuellement
+        }
+        setActiveTab(tab);
     };
 
     if (loading) {
@@ -326,6 +336,40 @@ export default function CampusPage() {
                         </motion.div>
                     )}
 
+                    {activeTab === 'library' && (
+                        <motion.div key="library" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}>
+                            <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+                                <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-amber-500 to-yellow-500 flex items-center justify-center shadow-2xl shadow-amber-500/30 text-4xl">
+                                    📚
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-white">Bibliothèque</h2>
+                                    <p className="text-slate-400 text-sm mt-1">Cours, documents et ressources</p>
+                                </div>
+                                <div className="mt-4 px-6 py-3 rounded-2xl bg-white/5 border border-white/10 text-slate-400 text-sm">
+                                    🚧 Bientôt disponible — Accédez à tous vos documents de cours
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {activeTab === 'marketplace' && (
+                        <motion.div key="marketplace" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}>
+                            <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+                                <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-2xl shadow-emerald-500/30 text-4xl">
+                                    🛍️
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-white">Marketplace</h2>
+                                    <p className="text-slate-400 text-sm mt-1">Achats, offres et produits éducatifs</p>
+                                </div>
+                                <div className="mt-4 px-6 py-3 rounded-2xl bg-white/5 border border-white/10 text-slate-400 text-sm">
+                                    🚧 Bientôt disponible — Explorez les offres de votre établissement
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+
                     {activeTab === 'profile' && (
                         <motion.div key="profile" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
                             <ProfileView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role} orgName={org.name} orgLogo={org.logo_url} onPhotoUpdate={handlePhotoUpdate} />
@@ -334,7 +378,12 @@ export default function CampusPage() {
                 </AnimatePresence>
             </div>
 
-            <CampusBottomNav activeTab={activeTab} onTabChange={setActiveTab} userPhotoUrl={photoUrl} userRole={session.role} />
+            <CampusBottomNav
+                activeTab={activeTab}
+                onTabChange={handleTabChange}
+                userPhotoUrl={photoUrl}
+                userRole={session.role}
+            />
 
             {/* Notification Center (slide-out panel) */}
             <NotificationCenter
