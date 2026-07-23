@@ -103,26 +103,22 @@ export default function CampusPage() {
             }
             setOrg(o);
             setSession(sess);
-            // Load photo from session (or fetch fresh if missing)
-            if (sess.photo_url) {
-                setPhotoUrl(sess.photo_url);
-            } else {
-                // Fetch fresh photo if not in session
-                const table = sess.role === 'student' ? 'student_profiles' : 'teacher_profiles';
-                const { data: prof } = await supabase.from(table)
-                    .select('photo_url').eq('id', sess.id).single();
-                if (prof?.photo_url) {
-                    setPhotoUrl(prof.photo_url);
-                    // Patch session in localStorage
+            // Photo: toujours re-fetch depuis Supabase pour garantir la persistance
+            if (sess.photo_url) setPhotoUrl(sess.photo_url); // affichage immédiat
+            const table = sess.role === 'student' ? 'student_profiles' : 'teacher_profiles';
+            const { data: prof } = await supabase.from(table)
+                .select('photo_url').eq('id', sess.id).single();
+            if (prof?.photo_url) {
+                setPhotoUrl(prof.photo_url);
+                // Toujours patcher le localStorage avec la valeur fraîche
+                try {
                     const raw = localStorage.getItem('campusflow_session');
                     if (raw) {
-                        try {
-                            const s = JSON.parse(raw);
-                            s.photo_url = prof.photo_url;
-                            localStorage.setItem('campusflow_session', JSON.stringify(s));
-                        } catch {}
+                        const s = JSON.parse(raw);
+                        s.photo_url = prof.photo_url;
+                        localStorage.setItem('campusflow_session', JSON.stringify(s));
                     }
-                }
+                } catch {}
             }
             setLoading(false);
         })();
@@ -213,11 +209,25 @@ export default function CampusPage() {
                                 <GraduationCap className="w-5 h-5 text-white" />
                             </div>
                         )}
-                        <div>
-                            <h1 className="text-sm font-black truncate max-w-[200px]">{org.name}</h1>
-                            <p className="text-[10px] text-slate-400">
-                                Bonjour, <span className="text-teal-400 font-medium">{session.first_name}</span> 👋
-                            </p>
+                        <div className="flex items-center gap-2.5">
+                            {/* Avatar utilisateur dans le header */}
+                            <button onClick={() => setActiveTab('profile')} className="shrink-0">
+                                {photoUrl ? (
+                                    <img src={photoUrl} alt="Mon profil"
+                                        className="w-9 h-9 rounded-full object-cover border-2 border-teal-400/40 shadow-md hover:border-teal-400 transition-all"
+                                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                ) : (
+                                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-500/30 to-indigo-500/30 border-2 border-white/10 flex items-center justify-center">
+                                        <span className="text-xs font-black text-white">{session.first_name?.[0]}{session.last_name?.[0]}</span>
+                                    </div>
+                                )}
+                            </button>
+                            <div>
+                                <h1 className="text-sm font-black truncate max-w-[160px]">{org.name}</h1>
+                                <p className="text-[10px] text-slate-400">
+                                    Bonjour, <span className="text-teal-400 font-medium">{session.first_name}</span> 👋
+                                </p>
+                            </div>
                         </div>
                     </div>
                     <div className="flex items-center gap-1.5">
@@ -292,7 +302,7 @@ export default function CampusPage() {
                             <MySpaceView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role}
                                 orgName={org.name} orgLogo={org.logo_url} orgPhone={org.phone} orgEmail={org.email}
                                 orgCity={org.city} orgCountry={org.country} onStartDM={handleStartDM}
-                                onOpenGroupChat={handleOpenGroupChat}
+                                onOpenGroupChat={handleOpenGroupChat} userPhotoUrl={photoUrl}
                                 orgBulletinTemplate={org.bulletin_template} orgCurrentTerm={org.current_term} />
                         </motion.div>
                     )}

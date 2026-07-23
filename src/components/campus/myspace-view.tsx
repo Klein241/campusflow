@@ -54,9 +54,10 @@ interface MySpaceViewProps {
     onOpenGroupChat?: (convId: string, convName: string) => void;
     orgBulletinTemplate?: number;
     orgCurrentTerm?: string;
+    userPhotoUrl?: string | null;
 }
 
-export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgName, orgLogo, orgPhone, orgEmail, orgCity, orgCountry, onStartDM, onOpenGroupChat, orgBulletinTemplate, orgCurrentTerm }: MySpaceViewProps) {
+export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgName, orgLogo, orgPhone, orgEmail, orgCity, orgCountry, onStartDM, onOpenGroupChat, orgBulletinTemplate, orgCurrentTerm, userPhotoUrl }: MySpaceViewProps) {
     const isTeacher = userRole === 'teacher';
 
     const [pinVerified, setPinVerified] = useState(false);
