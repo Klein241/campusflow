@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, Component, type ReactNode, type ErrorInfo 
 import { useRouter } from 'next/navigation';
 import { useOrgSlug } from '@/hooks/use-org-slug';
 import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus, Building2, FileText, Receipt } from 'lucide-react';
-import { BULLETIN_TEMPLATES } from '@/lib/bulletin-pdf';
+import { BULLETIN_TEMPLATES, generateBulletinPDF, type BulletinData } from '@/lib/bulletin-pdf';
 import { RECEIPT_TEMPLATES, generateReceiptPDF, generateReceiptNumber, type ReceiptData } from '@/lib/receipt-pdf';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { ChatDMView } from '@/components/campus/chat-dm-view';
 import { GroupesView } from '@/components/campus/groupes-view';
 import { ActusView } from '@/components/campus/actus-view';
+import { calculateSkyPoints } from '@/components/campus/cursus/cursus-exercise-modal';
 
 // ═══ ERROR BOUNDARY (catches React render errors) ═══
 class AdminErrorBoundary extends Component<{ children: ReactNode; orgSlug: string }, { hasError: boolean; error: Error | null }> {
@@ -289,7 +290,128 @@ function AdminPageContent() {
     const loadDisc = async () => { const { data } = await supabase.from('disciplines').select('*,student_profiles:student_id(first_name,last_name,matricule)').eq('organization_id', org.id).order('created_at', { ascending: false }).limit(50); setDiscs(data || []); setDLoaded(true); };
     const loadGrades = async () => { const { data } = await supabase.from('evaluations').select('*, classrooms:classroom_id(name), subjects:subject_id(name)').eq('organization_id', org.id).order('created_at', { ascending: false }); setGrEvals(data || []); setGrLoaded(true); };
     const loadGradeEntries = async (ev: any) => { setGrSelEval(ev); const clsStudents = students.filter((s: any) => s.classroom_id === ev.classroom_id); const { data: existing } = await supabase.from('grades').select('student_id, score').eq('evaluation_id', ev.id); const gMap: Record<string, string> = {}; clsStudents.forEach((s: any) => { const g = (existing || []).find((g: any) => g.student_id === s.id); gMap[s.id] = g ? String(g.score) : ''; }); setGrGrades(gMap); };
-    const saveGradeEntries = async () => { if (!grSelEval) return; setSaving(true); try { const entries = Object.entries(grGrades).filter(([_, v]) => v !== '').map(([studentId, score]) => ({ evaluation_id: grSelEval.id, student_id: studentId, score: parseFloat(score), graded_by: null })); if (entries.length === 0) { toast.info('Aucune note'); setSaving(false); return; } const { error } = await supabase.from('grades').upsert(entries, { onConflict: 'evaluation_id,student_id' }); if (error) throw error; toast.success(`${entries.length} notes sauvegardées ✅`); } catch (e: any) { toast.error(e.message); } setSaving(false); };
+    const saveGradeEntries = async () => {
+        if (!grSelEval) return;
+        setSaving(true);
+        try {
+            const entries = Object.entries(grGrades).filter(([_, v]) => v !== '').map(([studentId, score]) => ({
+                evaluation_id: grSelEval.id, student_id: studentId, score: parseFloat(score), graded_by: null
+            }));
+            if (entries.length === 0) { toast.info('Aucune note'); setSaving(false); return; }
+            const { error } = await supabase.from('grades').upsert(entries, { onConflict: 'evaluation_id,student_id' });
+            if (error) throw error;
+
+            // Credit Sky Points to students based on score threshold
+            for (const entry of entries) {
+                const skyGain = calculateSkyPoints(entry.score, grSelEval.max_score || 20);
+                if (skyGain > 0) {
+                    const { data: prof } = await supabase.from('student_profiles').select('sky_points').eq('id', entry.student_id).single();
+                    if (prof) {
+                        await supabase.from('student_profiles').update({ sky_points: (prof.sky_points || 0) + skyGain }).eq('id', entry.student_id);
+                        await supabase.from('sky_transactions').insert({
+                            student_id: entry.student_id,
+                            amount: skyGain,
+                            transaction_type: 'evaluation_grade',
+                            description: `Note administration: ${entry.score}/${grSelEval.max_score || 20} (+${skyGain} Sky) — ${grSelEval.title}`
+                        });
+                    }
+                }
+            }
+
+            toast.success(`${entries.length} notes sauvegardées ✅`);
+        } catch (e: any) { toast.error(e.message); }
+        setSaving(false);
+    };
+
+    const exportStudentBulletinPdf = async (student: any) => {
+        toast.info(`Génération du bulletin pour ${student.first_name}...`);
+        try {
+            const classroomName = cls.find(c => c.id === student.classroom_id)?.name || 'Classe';
+            
+            const { data: studentSubs } = await supabase.from('subjects')
+                .select('*, teacher_profiles:teacher_id(first_name, last_name)')
+                .eq('classroom_id', student.classroom_id)
+                .eq('organization_id', org.id);
+
+            const { data: studentGrades } = await supabase.from('grades')
+                .select('*, evaluations:evaluation_id(title, max_score, type, subject_id, subjects:subject_id(name))')
+                .eq('student_id', student.id);
+
+            const { data: studentExSubs } = await supabase.from('exercise_submissions')
+                .select('*, exercises:exercise_id(id, title, max_score, type, chapter_id, subject_id)')
+                .eq('student_id', student.id);
+
+            const subIds = (studentSubs || []).map((s: any) => s.id);
+            let studentChaps: any[] = [];
+            if (subIds.length > 0) {
+                const { data: chs } = await supabase.from('chapters').select('id, subject_id').in('subject_id', subIds);
+                studentChaps = chs || [];
+            }
+
+            const bulletinSubjects = (studentSubs || []).map((sub: any) => {
+                const subGrades = (studentGrades || []).filter((g: any) => g.evaluations?.subject_id === sub.id || g.evaluations?.subjects?.name === sub.name);
+                const subExs = (studentExSubs || []).filter((es: any) => {
+                    const ex = es.exercises;
+                    if (!ex) return false;
+                    if (ex.subject_id === sub.id) return true;
+                    if (ex.chapter_id) return studentChaps.some((c: any) => c.id === ex.chapter_id && c.subject_id === sub.id);
+                    return false;
+                });
+
+                const evalItems = subGrades.map((g: any) => ({
+                    title: g.evaluations?.title || 'Évaluation',
+                    type: g.evaluations?.type || 'devoir',
+                    score: g.score,
+                    max_score: g.evaluations?.max_score || 20,
+                    weight: 1,
+                    remark: g.teacher_remark,
+                }));
+
+                const exItems = subExs.map((es: any) => ({
+                    title: es.exercises?.title || 'Exercice Cursus',
+                    type: `cursus (${es.exercises?.type || 'qcm'})`,
+                    score: es.score,
+                    max_score: es.exercises?.max_score || 20,
+                    weight: 1,
+                    remark: 'Auto-corrigé Cursus',
+                }));
+
+                const allScores = [...evalItems, ...exItems];
+                let avg = 0;
+                if (allScores.length > 0) {
+                    const total = allScores.reduce((sum, item) => sum + (item.score / item.max_score) * 20, 0);
+                    avg = total / allScores.length;
+                }
+
+                return {
+                    name: sub.name,
+                    coefficient: sub.coefficient || 1,
+                    teacher_name: sub.teacher_profiles ? `${sub.teacher_profiles.first_name} ${sub.teacher_profiles.last_name}` : undefined,
+                    grades: allScores,
+                    average: avg,
+                };
+            });
+
+            const scoredSubs = bulletinSubjects.filter((bs: any) => bs.grades.length > 0);
+            const overallAvg = scoredSubs.length > 0
+                ? scoredSubs.reduce((sum: number, bs: any) => sum + bs.average * (bs.coefficient || 1), 0) /
+                  scoredSubs.reduce((sum: number, bs: any) => sum + (bs.coefficient || 1), 0)
+                : 0;
+
+            const data: BulletinData = {
+                org: { name: org.name, logo_url: org.logo_url, phone: org.phone, email: org.email, city: org.city, country: org.country, current_term: org.current_term },
+                student: { first_name: student.first_name, last_name: student.last_name, matricule: student.matricule, sex: student.sex, birth_date: student.birth_date, classroom_name: classroomName },
+                subjects: bulletinSubjects,
+                overallAverage: overallAvg,
+                term: org.current_term || 'Trimestre 1',
+                year: `${new Date().getFullYear() - 1}/${new Date().getFullYear()}`,
+            };
+
+            generateBulletinPDF(data, selBulletinTemplate || org.bulletin_template || 1);
+        } catch (e: any) {
+            toast.error(e.message || 'Erreur lors de la génération du bulletin');
+        }
+    };
     const assignTeacherToSubject = async (subId: string, teacherId: string | null) => { const { error } = await supabase.from('subjects').update({ teacher_id: teacherId }).eq('id', subId); if (error) { toast.error(error.message); return; } setSubs(p => p.map(s => s.id === subId ? { ...s, teacher_id: teacherId } : s)); toast.success('Professeur assigné ✅'); };
     const deleteTeacher = async (id: string) => { if (!confirm('Supprimer ce professeur ?')) return; await supabase.from('teacher_profiles').delete().eq('id', id); setTeachers(p => p.filter(t => t.id !== id)); toast.success('Professeur supprimé'); };
     const deleteStudent = async (id: string) => { if (!confirm('Supprimer cet étudiant ?')) return; await supabase.from('student_profiles').delete().eq('id', id); setStudents(p => p.filter(s => s.id !== id)); toast.success('Étudiant supprimé'); };
@@ -820,7 +942,10 @@ ${bodyHtml}
                                             <p className="text-xs text-slate-500">Mat: {s.matricule || '—'} • {cls.find(c => c.id === s.classroom_id)?.name || '—'}{s.birth_date ? ` • ${s.birth_date}` : ''}{s.nationality ? ` • ${s.nationality}` : ''}</p>
                                             <p className="text-[10px] text-slate-600">{s.guardian_name ? `Tuteur: ${s.guardian_name}` : ''}{s.guardian_phone ? ` (${s.guardian_phone})` : ''}{s.residence ? ` • ${s.residence}` : ''}</p>
                                         </div>
-                                        <div className="flex items-center gap-1">
+                                        <div className="flex items-center gap-1.5">
+                                            <button onClick={() => exportStudentBulletinPdf(s)} className="text-xs px-2.5 py-1 rounded-lg bg-indigo-600/15 text-indigo-300 hover:bg-indigo-600/25 font-semibold flex items-center gap-1 transition">
+                                                <Printer className="w-3 h-3" /> Bulletin
+                                            </button>
                                             {s.access_code && <button onClick={() => { navigator.clipboard.writeText(s.access_code); toast.success('Code copié !'); }} className="text-xs px-2 py-1 rounded bg-blue-600/10 text-blue-300 font-mono hover:bg-blue-600/20">{s.access_code}</button>}
                                             <button onClick={() => deleteStudent(s.id)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-4 h-4" /></button>
                                         </div>
