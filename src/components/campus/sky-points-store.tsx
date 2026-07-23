@@ -54,6 +54,7 @@ interface SkyPointsStoreProps {
     orgSlug: string;
     currentBalance?: number;
     userRole?: 'student' | 'teacher' | 'admin';
+    onBalanceUpdate?: (newBalance: number) => void;
 }
 
 interface ChatMessage {
@@ -75,7 +76,7 @@ function SkysBotAvatar({ size = 8 }: { size?: number }) {
 
 export function SkyPointsStore({
     isOpen, onClose, userId, userName, orgId, orgSlug,
-    currentBalance = 0, userRole = 'student'
+    currentBalance = 0, userRole = 'student', onBalanceUpdate
 }: SkyPointsStoreProps) {
     const [view, setView] = useState<'store' | 'chat'>('store');
     const [selectedPack, setSelectedPack] = useState<typeof PACKS[0] | null>(null);
@@ -84,12 +85,13 @@ export function SkyPointsStore({
     const [sending, setSending] = useState(false);
     const [loadingMessages, setLoadingMessages] = useState(false);
     const chatEndRef = useRef<HTMLDivElement>(null);
-    const SKYS_CONVERSATION_KEY = `skys_chat_${userId}`;
 
-    // Load chat messages from Supabase (table: sky_point_requests)
+    // Load chat messages from Supabase + poll every 4s for SuperAdmin replies
     useEffect(() => {
         if (!isOpen || view !== 'chat') return;
         loadMessages();
+        const interval = setInterval(loadMessages, 4000);
+        return () => clearInterval(interval);
     }, [isOpen, view, userId]);
 
     // Scroll to bottom on new messages
@@ -105,9 +107,15 @@ export function SkyPointsStore({
             .eq('user_id', userId)
             .order('created_at', { ascending: true });
 
+        // Also fetch fresh balance
+        const table = userRole === 'teacher' ? 'teacher_profiles' : 'student_profiles';
+        const { data: p } = await supabase.from(table).select('sky_points').eq('id', userId).single();
+        if (p && p.sky_points !== undefined && p.sky_points !== currentBalance) {
+            onBalanceUpdate?.(p.sky_points);
+        }
+
         if (data) {
             const msgs: ChatMessage[] = [];
-            // Welcome message if no messages yet
             if (data.length === 0) {
                 msgs.push({
                     id: 'welcome',

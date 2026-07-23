@@ -8,7 +8,8 @@ import {
     ShieldCheck, Loader2, TrendingUp, RefreshCw,
     ChevronRight, AlertTriangle, Ban, RotateCcw, ExternalLink,
     Mail, Lock, School, UserCheck, Activity,
-    BarChart3, Zap, Clock, CheckSquare, Star, Plus, Minus, Menu, X
+    BarChart3, Zap, Clock, CheckSquare, Star, Plus, Minus, Menu, X,
+    MessageSquare, Send, Crown, CreditCard
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -22,7 +23,7 @@ import { Input } from '@/components/ui/input';
 // Protected by platform_admins table (Supabase Auth + RLS)
 // ═══════════════════════════════════════════════════════════════════════
 
-type Tab = 'overview' | 'orgs' | 'users' | 'domains' | 'announcements' | 'points';
+type Tab = 'overview' | 'orgs' | 'users' | 'domains' | 'announcements' | 'points' | 'requests';
 
 interface Stats {
     total_orgs: number;
@@ -71,6 +72,7 @@ const SIDEBAR: { id: Tab; label: string; icon: any; emoji?: string }[] = [
     { id: 'orgs',           label: 'Organisations',    icon: Building2,       emoji: '🏫' },
     { id: 'users',          label: 'Utilisateurs',     icon: Users,           emoji: '👥' },
     { id: 'points',         label: 'Sky Points',       icon: Star,            emoji: '⭐' },
+    { id: 'requests',       label: 'Demandes',         icon: MessageSquare,   emoji: '💬' },
     { id: 'domains',        label: 'Domaines',         icon: Globe,           emoji: '🌐' },
     { id: 'announcements',  label: 'Annonces',         icon: Megaphone,       emoji: '📢' },
 ];
@@ -158,6 +160,15 @@ export default function SuperAdminPage() {
     const [pointsDelta, setPointsDelta]     = useState(0);
     const [pointsNote, setPointsNote]       = useState('');
     const [sendingPoints, setSendingPoints] = useState(false);
+
+    // ── Sky Requests (chat) ───────────────────────────────────────
+    const [skyRequests, setSkyRequests]       = useState<any[]>([]);
+    const [reqLoading, setReqLoading]         = useState(false);
+    const [activeReqId, setActiveReqId]       = useState<string | null>(null);
+    const [adminReply, setAdminReply]         = useState('');
+    const [sendingReply, setSendingReply]     = useState(false);
+    const [creditingId, setCreditingId]       = useState<string | null>(null);
+    const [creditPoints, setCreditPoints]     = useState(0);
 
     // ─── Mount: check auth ───────────────────────────────────────
     useEffect(() => {
@@ -284,6 +295,70 @@ export default function SuperAdminPage() {
         setAuthStep('login');
         setStats(null); setOrgs([]); setUsers([]); setActivity([]);
         setEmail(''); setPassword('');
+    };
+
+    // ─── Sky Requests loader (poll) ────────────────────────────────
+    const loadSkyRequests = async () => {
+        setReqLoading(true);
+        const { data, error } = await supabase
+            .from('sky_point_requests')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(100);
+        if (!error && data) setSkyRequests(data);
+        setReqLoading(false);
+    };
+
+    useEffect(() => {
+        if (authStep !== 'dashboard') return;
+        if (tab !== 'requests') return;
+        loadSkyRequests();
+        const interval = setInterval(loadSkyRequests, 5000);
+        return () => clearInterval(interval);
+    }, [tab, authStep]);
+
+    const adminReplyRequest = async (reqId: string) => {
+        if (!adminReply.trim()) return;
+        setSendingReply(true);
+        const { error } = await supabase
+            .from('sky_point_requests')
+            .update({
+                response: adminReply.trim(),
+                responded_at: new Date().toISOString(),
+                status: 'confirmed',
+            })
+            .eq('id', reqId);
+        if (error) {
+            toast.error('Erreur: ' + error.message);
+        } else {
+            toast.success('✅ Réponse envoyée');
+            setAdminReply('');
+            setActiveReqId(null);
+            await loadSkyRequests();
+        }
+        setSendingReply(false);
+    };
+
+    const adminCreditRequest = async (req: any) => {
+        if (!creditPoints || creditPoints <= 0) return;
+        setCreditingId(req.id);
+        const { error } = await supabase.rpc('superadmin_credit_sky_request', {
+            p_request_id: req.id,
+            p_user_id: req.user_id,
+            p_role: req.user_role || 'student',
+            p_points: creditPoints,
+            p_response: `✅ ${creditPoints} Sky Points crédités sur votre compte ! Merci 🎉`,
+        });
+        if (error) {
+            toast.error('Erreur crédit: ' + error.message);
+        } else {
+            toast.success(`⭐ ${creditPoints} pts crédités à ${req.user_name}`);
+            setCreditPoints(0);
+            setCreditingId(null);
+            setActiveReqId(null);
+            await loadSkyRequests();
+        }
+        setCreditingId(null);
     };
 
     // ─── Points search ────────────────────────────────────────────
@@ -1217,8 +1292,179 @@ export default function SuperAdminPage() {
                                 )}
                             </motion.div>
                         )}
+                        {/* ══════════════════════════════════════════
+                            DEMANDES SKY POINTS (Chat persistant)
+                        ══════════════════════════════════════════ */}
+                        {tab === 'requests' && (
+                            <motion.div key="requests" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+
+                                {/* Header */}
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm font-black text-white flex items-center gap-2">
+                                            <MessageSquare className="w-4 h-4 text-amber-400" />
+                                            Demandes Sky Points
+                                        </p>
+                                        <p className="text-xs text-slate-500 mt-0.5">
+                                            {skyRequests.length} demande(s) · Auto-refresh 5s
+                                        </p>
+                                    </div>
+                                    <button onClick={loadSkyRequests}
+                                        className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all">
+                                        <RefreshCw className={`w-4 h-4 text-slate-400 ${reqLoading ? 'animate-spin' : ''}`} />
+                                    </button>
+                                </div>
+
+                                {/* Empty state */}
+                                {!reqLoading && skyRequests.length === 0 && (
+                                    <div className="text-center py-16">
+                                        <Crown className="w-12 h-12 text-slate-700 mx-auto mb-3" />
+                                        <p className="text-slate-500 text-sm">Aucune demande Sky Points</p>
+                                        <p className="text-slate-700 text-xs mt-1">Les demandes des utilisateurs apparaîtront ici</p>
+                                    </div>
+                                )}
+
+                                {/* Request cards */}
+                                <div className="space-y-3">
+                                    {skyRequests.map((req) => {
+                                        const isActive = activeReqId === req.id;
+                                        const statusColors: Record<string, string> = {
+                                            pending: 'bg-amber-500/15 text-amber-400',
+                                            confirmed: 'bg-blue-500/15 text-blue-400',
+                                            credited: 'bg-emerald-500/15 text-emerald-400',
+                                            rejected: 'bg-red-500/15 text-red-400',
+                                        };
+                                        return (
+                                            <motion.div key={req.id}
+                                                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                                                className={cn('rounded-2xl border transition-all',
+                                                    isActive
+                                                        ? 'border-amber-500/30 bg-amber-500/5'
+                                                        : 'border-white/8 bg-white/[0.02] hover:bg-white/[0.04]'
+                                                )}>
+
+                                                {/* Card header */}
+                                                <button className="w-full p-4 flex items-start gap-3 text-left"
+                                                    onClick={() => setActiveReqId(isActive ? null : req.id)}>
+                                                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400/20 to-orange-500/20 flex items-center justify-center shrink-0">
+                                                        <Crown className="w-4 h-4 text-amber-400" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <p className="text-sm font-bold text-white">{req.user_name}</p>
+                                                            <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-semibold',
+                                                                statusColors[req.status] || 'bg-slate-700 text-slate-400'
+                                                            )}>
+                                                                {req.status === 'pending' ? '⏳ En attente' :
+                                                                 req.status === 'confirmed' ? '✉️ Répondu' :
+                                                                 req.status === 'credited' ? '✅ Crédité' : '❌ Refusé'}
+                                                            </span>
+                                                            {req.pack_name && (
+                                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 font-medium">
+                                                                    {req.pack_name}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{req.message}</p>
+                                                        <p className="text-[10px] text-slate-600 mt-1">
+                                                            {req.org_slug && <span className="mr-2">/{req.org_slug}</span>}
+                                                            {new Date(req.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                                        </p>
+                                                    </div>
+                                                    <ChevronRight className={cn('w-4 h-4 text-slate-600 transition-transform shrink-0', isActive && 'rotate-90')} />
+                                                </button>
+
+                                                {/* Expanded panel */}
+                                                <AnimatePresence>
+                                                    {isActive && (
+                                                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                                                            className="overflow-hidden">
+                                                            <div className="px-4 pb-4 space-y-4 border-t border-white/[0.05] pt-3">
+
+                                                                {/* Full message */}
+                                                                <div className="bg-white/5 rounded-xl p-3">
+                                                                    <p className="text-[10px] text-slate-500 mb-1 font-semibold uppercase">Message complet</p>
+                                                                    <p className="text-xs text-white/80 leading-relaxed whitespace-pre-wrap">{req.message}</p>
+                                                                </div>
+
+                                                                {/* Current response */}
+                                                                {req.response && (
+                                                                    <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-3">
+                                                                        <p className="text-[10px] text-emerald-500 mb-1 font-semibold uppercase flex items-center gap-1">
+                                                                            <Crown className="w-2.5 h-2.5" /> Réponse envoyée
+                                                                        </p>
+                                                                        <p className="text-xs text-emerald-300 leading-relaxed">{req.response}</p>
+                                                                        {req.points_credited && (
+                                                                            <p className="text-[10px] text-amber-400 mt-1 font-bold">⭐ {req.points_credited} pts crédités</p>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Credit section */}
+                                                                {req.status !== 'credited' && (
+                                                                    <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 space-y-2">
+                                                                        <p className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                                                                            <Star className="w-3 h-3 fill-amber-400" /> Créditer des Sky Points
+                                                                        </p>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <div className="flex gap-1.5 flex-1">
+                                                                                {[50, 100, 200, 500].map(v => (
+                                                                                    <button key={v} onClick={() => setCreditPoints(v)}
+                                                                                        className={cn('flex-1 py-2 rounded-lg text-xs font-black border transition-all',
+                                                                                            creditPoints === v
+                                                                                                ? 'bg-amber-500/30 border-amber-500/50 text-amber-300'
+                                                                                                : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                                                                                        )}>+{v}</button>
+                                                                                ))}
+                                                                            </div>
+                                                                            <input type="number" value={creditPoints || ''}
+                                                                                onChange={e => setCreditPoints(parseInt(e.target.value) || 0)}
+                                                                                placeholder="Custom"
+                                                                                className="w-20 bg-white/5 border border-white/10 text-white h-9 rounded-lg text-sm px-2 text-center focus:outline-none focus:border-amber-500/50" />
+                                                                        </div>
+                                                                        <Button onClick={() => adminCreditRequest(req)}
+                                                                            disabled={!creditPoints || creditPoints <= 0 || creditingId === req.id}
+                                                                            className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 font-black rounded-xl shadow-lg shadow-amber-500/20">
+                                                                            {creditingId === req.id
+                                                                                ? <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />Créditement...</>
+                                                                                : <><CreditCard className="w-3.5 h-3.5 mr-1.5" />Créditer {creditPoints > 0 ? `${creditPoints} pts` : '...'} à {req.user_name}</>
+                                                                            }
+                                                                        </Button>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Reply */}
+                                                                {req.status !== 'credited' && (
+                                                                    <div className="space-y-2">
+                                                                        <p className="text-[10px] text-slate-500 font-semibold uppercase">Répondre manuellement</p>
+                                                                        <textarea
+                                                                            value={adminReply}
+                                                                            onChange={e => setAdminReply(e.target.value)}
+                                                                            placeholder="Tapez votre réponse..."
+                                                                            rows={3}
+                                                                            className="w-full bg-white/5 border border-white/10 text-white rounded-xl text-xs px-3 py-2 placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40 resize-none" />
+                                                                        <Button onClick={() => adminReplyRequest(req.id)}
+                                                                            disabled={!adminReply.trim() || sendingReply}
+                                                                            className="bg-violet-600 hover:bg-violet-500 rounded-xl font-bold">
+                                                                            {sendingReply ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5 mr-1.5" />}
+                                                                            Envoyer
+                                                                        </Button>
+                                                                    </div>
+                                                                )}
+
+                                                            </div>
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </motion.div>
+                                        );
+                                    })}
+                                </div>
+                            </motion.div>
+                        )}
 
                     </AnimatePresence>
+
                 </div>
             </main>
 

@@ -30,13 +30,14 @@ interface ProfileViewProps {
     userRole: string;
     orgName: string;
     orgLogo?: string | null;
+    userSkyPoints?: number;
     /** Called after user successfully uploads a new profile photo */
     onPhotoUpdate?: (newUrl: string) => void;
 }
 
 const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n);
 
-export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgName, orgLogo, onPhotoUpdate }: ProfileViewProps) {
+export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgName, orgLogo, userSkyPoints, onPhotoUpdate }: ProfileViewProps) {
     const router = useRouter();
     const [profile, setProfile] = useState<any>(null);
     const [classroom, setClassroom] = useState<any>(null);
@@ -225,16 +226,17 @@ export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgNam
                 </h2>
                 <p className="text-sm text-slate-400 mt-1">{classroom?.name || '—'}</p>
                 <p className="text-xs text-slate-500 mt-1 bg-white/5 px-3 py-1 rounded-full">{orgName}</p>
-                {/* Sky Points for students */}
-                {userRole === 'student' && profile?.sky_points !== undefined && (
-                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
-                        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border border-yellow-500/20">
-                            <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
-                            <span className="text-lg font-black text-yellow-400">{profile.sky_points || 0}</span>
-                            <span className="text-xs text-yellow-400/70">Sky Points</span>
-                        </div>
-                    </motion.div>
-                )}
+                {/* Sky Points badge for all user roles */}
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
+                    <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border border-yellow-500/20 shadow-md">
+                        <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+                        <span className="text-lg font-black text-yellow-400">
+                            {userSkyPoints !== undefined ? userSkyPoints : (profile?.sky_points || 0)}
+                        </span>
+                        <span className="text-xs text-yellow-400/70 font-semibold">Sky Points</span>
+                    </div>
+                </motion.div>
+
             </div>
 
             {/* ═══ PWA INSTALL ═══ */}

@@ -153,20 +153,30 @@ function InlineCodeBlock({ lang, code }: { lang: string; code: string }) {
     );
 }
 
+function escapeHtml(str: string): string {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 function renderTextWithCode(raw: string, notes: LessonReaderNote[], colorMap: Record<string, string>): React.ReactNode[] {
     const segs = parseCodeFences(raw);
     return segs.map((seg, idx) => {
         if (seg.type === 'code') {
             return <InlineCodeBlock key={idx} lang={seg.lang} code={seg.value} />;
         }
-        // Plain text with highlight marks
-        let html = seg.value;
+        // HTML escape raw text so HTML code tags (e.g. <h1>, <div>) are displayed as literal text instead of parsed as DOM nodes
+        let html = escapeHtml(seg.value);
         notes.filter(n => n.highlight_text).forEach(n => {
             if (n.highlight_text) {
-                const escaped = n.highlight_text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const escapedTarget = escapeHtml(n.highlight_text);
+                const regexPattern = escapedTarget.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 const colorCss = colorMap[n.color || 'yellow'];
-                html = html.replace(new RegExp(escaped, 'gi'),
-                    `<mark style="background:${colorCss};border-radius:3px;padding:0 2px;">${n.highlight_text}</mark>`);
+                html = html.replace(new RegExp(regexPattern, 'gi'),
+                    `<mark style="background:${colorCss};border-radius:3px;padding:0 2px;">${escapedTarget}</mark>`);
             }
         });
         return html.trim() ? (

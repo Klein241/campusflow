@@ -79,6 +79,7 @@ export default function CampusPage() {
 
     // Sky Points store
     const [storeOpen, setStoreOpen] = useState(false);
+    const [skyPoints, setSkyPoints] = useState<number>(100);
 
     // Push notifications — auto-subscribe after login
     const [showPushBanner, setShowPushBanner] = useState(false);
@@ -103,19 +104,21 @@ export default function CampusPage() {
             }
             setOrg(o);
             setSession(sess);
-            // Photo: toujours re-fetch depuis Supabase pour garantir la persistance
-            if (sess.photo_url) setPhotoUrl(sess.photo_url); // affichage immédiat
+            if (sess.sky_points !== undefined) setSkyPoints(sess.sky_points);
+            // Photo & Sky Points: re-fetch depuis Supabase pour garantir la persistance
+            if (sess.photo_url) setPhotoUrl(sess.photo_url);
             const table = sess.role === 'student' ? 'student_profiles' : 'teacher_profiles';
             const { data: prof } = await supabase.from(table)
-                .select('photo_url').eq('id', sess.id).single();
-            if (prof?.photo_url) {
-                setPhotoUrl(prof.photo_url);
-                // Toujours patcher le localStorage avec la valeur fraîche
+                .select('photo_url, sky_points').eq('id', sess.id).single();
+            if (prof) {
+                if (prof.photo_url) setPhotoUrl(prof.photo_url);
+                if (prof.sky_points !== undefined) setSkyPoints(prof.sky_points ?? 100);
                 try {
                     const raw = localStorage.getItem('campusflow_session');
                     if (raw) {
                         const s = JSON.parse(raw);
-                        s.photo_url = prof.photo_url;
+                        s.photo_url = prof.photo_url || s.photo_url;
+                        s.sky_points = prof.sky_points ?? s.sky_points;
                         localStorage.setItem('campusflow_session', JSON.stringify(s));
                     }
                 } catch {}
@@ -348,7 +351,7 @@ export default function CampusPage() {
 
                     {activeTab === 'profile' && (
                         <motion.div key="profile" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
-                            <ProfileView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role} orgName={org.name} orgLogo={org.logo_url} onPhotoUpdate={handlePhotoUpdate} />
+                            <ProfileView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role} orgName={org.name} orgLogo={org.logo_url} userSkyPoints={skyPoints} onPhotoUpdate={handlePhotoUpdate} />
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -379,8 +382,9 @@ export default function CampusPage() {
                 userName={session.first_name + ' ' + session.last_name}
                 orgId={org.id}
                 orgSlug={orgSlug}
-                currentBalance={session.sky_points ?? 0}
+                currentBalance={skyPoints}
                 userRole={session.role as any}
+                onBalanceUpdate={setSkyPoints}
             />
         </main>
     );
