@@ -350,9 +350,11 @@ export default function SuperAdminPage() {
         return (
             <div className="min-h-screen bg-[#06080F] flex items-center justify-center">
                 <div className="text-center">
-                    <div className="w-12 h-12 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center animate-pulse">
-                        <ShieldCheck className="w-6 h-6 text-white" />
-                    </div>
+                    <img
+                        src="/logo-campusflow.png"
+                        alt="CampusFlow"
+                        className="w-16 h-16 object-contain mx-auto mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(139,92,246,0.6)]"
+                    />
                     <Loader2 className="w-5 h-5 text-violet-400 animate-spin mx-auto" />
                 </div>
             </div>
@@ -372,13 +374,21 @@ export default function SuperAdminPage() {
                     className="w-full max-w-md relative z-10">
                     {/* Header */}
                     <div className="text-center mb-8">
-                        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.1 }}
-                            className="w-20 h-20 mx-auto mb-5 rounded-3xl bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-600 flex items-center justify-center shadow-2xl shadow-violet-500/40">
-                            <ShieldCheck className="w-10 h-10 text-white" />
+                        <motion.div
+                            initial={{ scale: 0.8, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            transition={{ delay: 0.1 }}
+                            className="mx-auto mb-5"
+                        >
+                            <img
+                                src="/logo-campusflow.png"
+                                alt="CampusFlow"
+                                className="w-24 h-24 object-contain mx-auto drop-shadow-[0_0_30px_rgba(139,92,246,0.7)]"
+                            />
                         </motion.div>
-                        <h1 className="text-3xl font-black text-white tracking-tight">SuperAdmin</h1>
-                        <p className="text-sm text-slate-500 mt-2">Panneau d&apos;administration CampusFlow</p>
-                        <p className="text-xs text-slate-700 mt-1">Réservé à l&apos;équipe SYGMA-TECH</p>
+                        <h1 className="text-3xl font-black bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent tracking-tight">CampusFlow</h1>
+                        <p className="text-sm text-slate-400 mt-1 font-medium">SuperAdmin Panel</p>
+                        <p className="text-xs text-slate-600 mt-1">Réservé à l&apos;équipe SYGMA-TECH</p>
                     </div>
 
                     {/* Form card */}
@@ -445,12 +455,14 @@ export default function SuperAdminPage() {
                 {/* Brand */}
                 <div className="p-4 border-b border-white/[0.06]">
                     <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-500/25 shrink-0">
-                            <ShieldCheck className="w-4 h-4 text-white" />
-                        </div>
+                        <img
+                            src="/logo-campusflow.png"
+                            alt="CampusFlow"
+                            className="w-9 h-9 object-contain drop-shadow-[0_0_10px_rgba(139,92,246,0.6)] shrink-0"
+                        />
                         <div>
-                            <p className="font-black text-sm leading-tight">SuperAdmin</p>
-                            <p className="text-[9px] text-slate-600 leading-tight">CampusFlow Platform</p>
+                            <p className="font-black text-sm leading-tight bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">CampusFlow</p>
+                            <p className="text-[9px] text-slate-600 leading-tight">SuperAdmin Platform</p>
                         </div>
                     </div>
                 </div>
@@ -515,12 +527,14 @@ export default function SuperAdminPage() {
                             className="fixed left-0 top-0 bottom-0 w-72 bg-[#080B12] border-r border-white/[0.08] z-50 flex flex-col md:hidden">
                             <div className="p-4 border-b border-white/[0.06] flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
-                                        <ShieldCheck className="w-4 h-4 text-white" />
-                                    </div>
+                                    <img
+                                        src="/logo-campusflow.png"
+                                        alt="CampusFlow"
+                                        className="w-9 h-9 object-contain drop-shadow-[0_0_10px_rgba(139,92,246,0.6)]"
+                                    />
                                     <div>
-                                        <p className="font-black text-sm">SuperAdmin</p>
-                                        <p className="text-[9px] text-slate-500">CampusFlow Platform</p>
+                                        <p className="font-black text-sm bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">CampusFlow</p>
+                                        <p className="text-[9px] text-slate-500">SuperAdmin Platform</p>
                                     </div>
                                 </div>
                                 <button onClick={() => setSidebarOpen(false)} className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/5">

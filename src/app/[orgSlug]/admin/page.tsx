@@ -846,7 +846,10 @@ ${bodyHtml}
             {/* Sidebar */}
             <aside className={`fixed lg:static inset-y-0 left-0 z-40 w-60 bg-[#0F1219]/90 backdrop-blur-xl border-r border-white/5 transform transition-transform lg:transform-none flex flex-col ${sidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
                 <div className="p-4 border-b border-white/5">
-                    <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-xl bg-gradient-to-br from-teal-500 to-indigo-600 flex items-center justify-center"><GraduationCap className="w-4 h-4" /></div><span className="font-bold text-sm truncate">{org.name}</span></div>
+                    <div className="flex items-center gap-2">
+                        <img src="/logo-campusflow.png" alt="CampusFlow" className="w-8 h-8 object-contain drop-shadow-[0_0_8px_rgba(20,184,166,0.4)]" />
+                        <span className="font-bold text-sm truncate">{org.name}</span>
+                    </div>
                     <p className="text-xs text-slate-500 mt-1">Backoffice</p>
                 </div>
                 <nav className="p-2 space-y-0.5 flex-1 overflow-y-auto pb-16">{SIDES.map(i => (<button key={i.id} onClick={() => onTab(i.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${tab === i.id ? 'bg-teal-600/15 text-teal-300 font-medium' : 'text-slate-400 hover:bg-white/5'}`}><i.icon className="w-4 h-4" />{i.label}</button>))}

@@ -22,10 +22,14 @@ export const metadata: Metadata = {
   title: "CampusFlow",
   description: "CampusFlow — Plateforme SaaS de gestion scolaire. Cursus, notes, paiements et marketplace.",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/logo-campusflow.png",
+    apple: "/logo-campusflow.png",
+  },
   openGraph: {
     title: "CampusFlow",
     description: "Plateforme SaaS de gestion scolaire & universitaire.",
-    images: ["/icon-512.png"],
+    images: ["/logo-campusflow.png"],
     type: "website",
   },
   appleWebApp: {
@@ -51,10 +55,12 @@ export default function RootLayout({
   return (
     <html lang="fr" className="dark" style={{ colorScheme: 'dark' }} suppressHydrationWarning>
       <head>
-        <link rel="apple-touch-icon" href="/icon-192.png" />
+        <link rel="icon" href="/logo-campusflow.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/logo-campusflow.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="CampusFlow" />
+        <meta name="msapplication-TileImage" content="/logo-campusflow.png" />
         <meta name="msapplication-TileColor" content="#0B0E14" />
         <meta name="color-scheme" content="dark" />
       </head>

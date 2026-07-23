@@ -172,9 +172,14 @@ export default function CampusPage() {
     if (loading) {
         return (
             <div className="min-h-screen bg-gradient-to-b from-[#0B0E14] to-[#0F1219] flex items-center justify-center">
-                <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}>
-                    <GraduationCap className="w-10 h-10 text-teal-400" />
-                </motion.div>
+                <div className="flex flex-col items-center gap-3">
+                    <img
+                        src="/logo-campusflow.png"
+                        alt="CampusFlow"
+                        className="w-16 h-16 object-contain drop-shadow-[0_0_20px_rgba(20,184,166,0.5)] animate-pulse"
+                    />
+                    <div className="w-5 h-5 border-2 border-teal-400/30 border-t-teal-400 rounded-full animate-spin" />
+                </div>
             </div>
         );
     }
@@ -205,9 +210,11 @@ export default function CampusPage() {
                         {org.logo_url ? (
                             <img src={org.logo_url} alt={org.name} className="w-10 h-10 rounded-xl object-contain bg-white/10 p-0.5 border border-white/10" />
                         ) : (
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-indigo-500 flex items-center justify-center shadow-lg">
-                                <GraduationCap className="w-5 h-5 text-white" />
-                            </div>
+                            <img
+                                src="/logo-campusflow.png"
+                                alt="CampusFlow"
+                                className="w-10 h-10 object-contain drop-shadow-[0_0_10px_rgba(20,184,166,0.4)]"
+                            />
                         )}
                         <div className="flex items-center gap-2.5">
                             {/* Avatar utilisateur dans le header */}

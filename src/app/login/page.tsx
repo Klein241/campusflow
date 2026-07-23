@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { GraduationCap, Mail, Lock, Loader2, Eye, EyeOff, ArrowLeft, KeyRound, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, Loader2, Eye, EyeOff, ArrowLeft, KeyRound, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -120,10 +120,15 @@ export default function GlobalLogin() {
 
             <div className="w-full max-w-sm relative z-10">
                 <div className="text-center mb-8">
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center mx-auto mb-4 shadow-2xl shadow-indigo-500/20">
-                        <GraduationCap className="w-7 h-7" />
+                    {/* Logo officiel CampusFlow */}
+                    <div className="flex items-center justify-center mx-auto mb-4">
+                        <img
+                            src="/logo-campusflow.png"
+                            alt="CampusFlow"
+                            className="w-20 h-20 object-contain drop-shadow-[0_0_20px_rgba(99,102,241,0.5)]"
+                        />
                     </div>
-                    <h1 className="text-2xl font-bold">CampusFlow</h1>
+                    <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">CampusFlow</h1>
                     <p className="text-slate-400 text-sm mt-1">
                         {mode === 'reset_password' ? 'Créer un nouveau mot de passe' :
                          mode === 'reset_success' ? 'Mot de passe mis à jour' :

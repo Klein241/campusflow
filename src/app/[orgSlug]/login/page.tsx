@@ -657,9 +657,11 @@ export default function LoginPage() {
                     {org.logo_url ? (
                         <img src={org.logo_url} alt={org.name} className="w-16 h-16 rounded-2xl mx-auto mb-4 object-cover shadow-2xl" />
                     ) : (
-                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-teal-500 flex items-center justify-center mx-auto mb-4 shadow-2xl shadow-indigo-500/20">
-                            <GraduationCap className="w-8 h-8 text-white" />
-                        </div>
+                        <img
+                            src="/logo-campusflow.png"
+                            alt="CampusFlow"
+                            className="w-16 h-16 object-contain mx-auto mb-4 drop-shadow-[0_0_16px_rgba(99,102,241,0.5)]"
+                        />
                     )}
                     <h1 className="text-2xl font-bold text-white">{org.name}</h1>
                     <p className="text-sm text-slate-400 mt-1">Connexion à votre espace</p>
@@ -865,10 +867,13 @@ export default function LoginPage() {
                     )}
                 </AnimatePresence>
 
-                {/* Footer */}
-                <p className="text-center text-[10px] text-slate-600 mt-6">
-                    Propulsé par <span className="text-teal-500 font-semibold">CampusFlow</span>
-                </p>
+                {/* Footer — Powered by CampusFlow */}
+                <div className="flex items-center justify-center gap-2 mt-6">
+                    <img src="/logo-campusflow.png" alt="CampusFlow" className="w-4 h-4 object-contain opacity-50" />
+                    <p className="text-[10px] text-slate-600">
+                        Propulsé par <span className="text-teal-500 font-semibold">CampusFlow</span>
+                    </p>
+                </div>
             </motion.div>
         </div>
     );
