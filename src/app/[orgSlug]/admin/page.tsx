@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, Component, type ReactNode, type ErrorInfo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOrgSlug } from '@/hooks/use-org-slug';
-import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus, Building2, FileText, Receipt } from 'lucide-react';
+import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus, Building2, FileText, Receipt, PhoneCall } from 'lucide-react';
 import { BULLETIN_TEMPLATES, generateBulletinPDF, type BulletinData } from '@/lib/bulletin-pdf';
 import { RECEIPT_TEMPLATES, generateReceiptPDF, generateReceiptNumber, type ReceiptData } from '@/lib/receipt-pdf';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,8 @@ import { ChatDMView } from '@/components/campus/chat-dm-view';
 import { GroupesView } from '@/components/campus/groupes-view';
 import { ActusView } from '@/components/campus/actus-view';
 import { calculateSkyPoints } from '@/components/campus/cursus/cursus-exercise-modal';
+import { queueGradeNotification, queuePaymentReceipt, queueDisciplineAlert, enqueueWhatsAppMessage } from '@/lib/whatsapp-queue';
+import { cn } from '@/lib/utils';
 
 // ═══ ERROR BOUNDARY (catches React render errors) ═══
 class AdminErrorBoundary extends Component<{ children: ReactNode; orgSlug: string }, { hasError: boolean; error: Error | null }> {
@@ -60,7 +62,7 @@ const Sel = ({ v, onChange, opts, ph = '—' }: { v: string, onChange: (v: strin
     </select>
 );
 
-type Tab = 'general' | 'landing' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'modeles' | 'cursus' | 'settings' | 'chat' | 'stories' | 'actus' | 'groupes';
+type Tab = 'general' | 'landing' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'modeles' | 'cursus' | 'settings' | 'chat' | 'stories' | 'actus' | 'groupes' | 'whatsapp';
 interface Cls { id?: string; name: string; cycle: string; filiere_id: string | null; level: number; capacity: number; }
 interface Sub { id?: string; name: string; code: string; coefficient: number; classroom_id: string; teacher_id: string | null; }
 interface Room { id?: string; name: string; }
@@ -72,6 +74,7 @@ const SIDES = [
     { id: 'timetable' as Tab, icon: Calendar, label: 'Emploi du temps' }, { id: 'evaluations' as Tab, icon: ClipboardList, label: 'Évaluations' },
     { id: 'grades' as Tab, icon: BarChart3, label: 'Notes' },
     { id: 'payments' as Tab, icon: CreditCard, label: 'Paiements' }, { id: 'disciplines' as Tab, icon: ShieldCheck, label: 'Discipline' },
+    { id: 'whatsapp' as Tab, icon: PhoneCall, label: '📱 File WhatsApp' },
     { id: 'modeles' as Tab, icon: FileText, label: 'Modèles PDF' },
     { id: 'cursus' as Tab, icon: BookMarked, label: 'Cursus' },
     { id: 'chat' as Tab, icon: MessageSquare, label: 'Chat DM' },
@@ -194,6 +197,86 @@ function AdminPageContent() {
     const loadSettings = () => { if (!org) return; setSCustomDomain(org.custom_domain || ''); setSDomainVerified(org.domain_verified || false); setSDomainSsl(org.domain_ssl_status || 'pending'); setSBrandColor(org.brand_color || '#4f46e5'); setSLogoUrl(org.logo_url || ''); setSFaviconUrl(org.favicon_url || ''); setSMetaTitle(org.meta_title || ''); setSMetaDesc(org.meta_description || ''); setSOrgName(org.name || ''); setSOrgPhone(org.phone || ''); setSOrgEmail(org.email || ''); setSOrgWhatsapp(org.whatsapp || ''); };
     const loadLanding = () => { if (!org) return; setLHeroImage(org.hero_image_url || ''); setLHeroTitle(org.hero_title || ''); setLHeroSubtitle(org.hero_subtitle || ''); setLAboutText(org.about_text || ''); setLAboutImage(org.about_image_url || ''); setLGalleryImages(org.gallery_images || []); setLSocialFb(org.social_facebook || ''); setLSocialIg(org.social_instagram || ''); setLSocialTw(org.social_twitter || ''); setLSocialTt(org.social_tiktok || ''); setLSocialYt(org.social_youtube || ''); setLSocialLi(org.social_linkedin || ''); setLFooterText(org.footer_text || ''); };
     const saveLanding = async () => { setLSaving(true); try { const updates: any = { hero_image_url: lHeroImage || null, hero_title: lHeroTitle || null, hero_subtitle: lHeroSubtitle || null, about_text: lAboutText || null, about_image_url: lAboutImage || null, gallery_images: lGalleryImages, social_facebook: lSocialFb || null, social_instagram: lSocialIg || null, social_twitter: lSocialTw || null, social_tiktok: lSocialTt || null, social_youtube: lSocialYt || null, social_linkedin: lSocialLi || null, footer_text: lFooterText || null }; const { error } = await supabase.from('organizations').update(updates).eq('id', org.id); if (error) throw error; setOrg({ ...org, ...updates }); toast.success('Page d\'accueil mise à jour ✅'); } catch (e: any) { toast.error(e.message); } setLSaving(false); };
+    // WhatsApp Queue State
+    const [waQueue, setWaQueue] = useState<any[]>([]);
+    const [waLoaded, setWaLoaded] = useState(false);
+    const [waLoading, setWaLoading] = useState(false);
+    const [waFilter, setWaFilter] = useState<'all' | 'en_attente' | 'envoye' | 'echec'>('all');
+    const [waTargetMode, setWaTargetMode] = useState<'single' | 'class' | 'all_school'>('single');
+    const [waTargetStudent, setWaTargetStudent] = useState('');
+    const [waTargetClass, setWaTargetClass] = useState('');
+    const [waCustomMessage, setWaCustomMessage] = useState('');
+    const [waSending, setWaSending] = useState(false);
+
+    const loadWhatsAppQueue = async () => {
+        if (!org) return;
+        setWaLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('whatsapp_queue')
+                .select('*')
+                .eq('organization_id', org.id)
+                .order('created_at', { ascending: false })
+                .limit(100);
+            if (error) throw error;
+            setWaQueue(data || []);
+            setWaLoaded(true);
+        } catch (e: any) {
+            console.error('Error loading WhatsApp Queue:', e);
+        } finally {
+            setWaLoading(false);
+        }
+    };
+
+    const sendCustomWhatsAppBroadcast = async () => {
+        if (!waCustomMessage.trim()) {
+            toast.error('Veuillez saisir le contenu du message');
+            return;
+        }
+        setWaSending(true);
+        try {
+            let targetStudents: any[] = [];
+            if (waTargetMode === 'single') {
+                if (!waTargetStudent) { toast.error('Veuillez sélectionner un élève'); setWaSending(false); return; }
+                targetStudents = students.filter((s: any) => s.id === waTargetStudent);
+            } else if (waTargetMode === 'class') {
+                if (!waTargetClass) { toast.error('Veuillez sélectionner une classe'); setWaSending(false); return; }
+                targetStudents = students.filter((s: any) => s.classroom_id === waTargetClass);
+            } else {
+                targetStudents = students;
+            }
+
+            if (targetStudents.length === 0) {
+                toast.error('Aucun élève trouvé pour cette sélection');
+                setWaSending(false);
+                return;
+            }
+
+            let queuedCount = 0;
+            for (const st of targetStudents) {
+                const phone = st.guardian_phone || st.phone;
+                if (phone) {
+                    const name = `${st.first_name} ${st.last_name}`;
+                    const fullMsg = `🏫 *${org.name}* — Message de l'Administration\n\n` +
+                        `Bonjour,\n\n` +
+                        `${waCustomMessage.trim()}\n\n` +
+                        `📅 *Date* : ${new Date().toLocaleDateString('fr-FR')}`;
+
+                    await enqueueWhatsAppMessage(org.id, phone, name, 'general', fullMsg);
+                    queuedCount++;
+                }
+            }
+
+            toast.success(`🚀 ${queuedCount} message(s) mis en file d'attente WhatsApp !`);
+            setWaCustomMessage('');
+            loadWhatsAppQueue();
+        } catch (e: any) {
+            toast.error(e.message || 'Erreur lors de la mise en file');
+        } finally {
+            setWaSending(false);
+        }
+    };
+
 
 
     useEffect(() => {
@@ -301,8 +384,12 @@ function AdminPageContent() {
             const { error } = await supabase.from('grades').upsert(entries, { onConflict: 'evaluation_id,student_id' });
             if (error) throw error;
 
-            // Credit Sky Points to students based on score threshold
+            // Credit Sky Points & Queue WhatsApp notifications
             for (const entry of entries) {
+                const studentObj = students.find((s: any) => s.id === entry.student_id);
+                const parentPhone = studentObj?.guardian_phone || studentObj?.phone;
+                const studentName = studentObj ? `${studentObj.first_name} ${studentObj.last_name}` : 'Élève';
+
                 const skyGain = calculateSkyPoints(entry.score, grSelEval.max_score || 20);
                 if (skyGain > 0) {
                     const { data: prof } = await supabase.from('student_profiles').select('sky_points').eq('id', entry.student_id).single();
@@ -316,9 +403,22 @@ function AdminPageContent() {
                         });
                     }
                 }
+
+                if (parentPhone) {
+                    await queueGradeNotification(
+                        org.id,
+                        org.name,
+                        parentPhone,
+                        studentName,
+                        grSelEval.subjects?.name || 'Matière',
+                        grSelEval.title,
+                        entry.score,
+                        grSelEval.max_score || 20
+                    );
+                }
             }
 
-            toast.success(`${entries.length} notes sauvegardées ✅`);
+            toast.success(`${entries.length} notes sauvegardées ✅ (Notifications WhatsApp mises en file)`);
         } catch (e: any) { toast.error(e.message); }
         setSaving(false);
     };
@@ -454,7 +554,7 @@ function AdminPageContent() {
         toast.success('Domaine retiré');
     };
     const loadCursus = async () => { const subIds = subs.map((s: any) => s.id); if (subIds.length === 0) { setCursusLoaded(true); return; } const { data: chaps } = await supabase.from('chapters').select('*').in('subject_id', subIds).order('position'); setAdminChapters(chaps || []); const chIds = (chaps || []).map((c: any) => c.id); if (chIds.length > 0) { const { data: lsns } = await supabase.from('lessons').select('*').in('chapter_id', chIds).order('position'); setAdminLessons(lsns || []); } setCursusLoaded(true); };
-    const onTab = (t: Tab) => { setTab(t); setSidebar(false); if (t === 'timetable' && !ttLoaded) loadTT(); if (t === 'evaluations' && !evLoaded) loadEv(); if (t === 'payments' && !payLoaded) loadPay(); if (t === 'disciplines' && !dLoaded) loadDisc(); if (t === 'grades' && !grLoaded) loadGrades(); if (t === 'settings') loadSettings(); if (t === 'landing') loadLanding(); if (t === 'modeles') loadTemplateSettings(); if (t === 'cursus' && !cursusLoaded) loadCursus(); };
+    const onTab = (t: Tab) => { setTab(t); setSidebar(false); if (t === 'timetable' && !ttLoaded) loadTT(); if (t === 'evaluations' && !evLoaded) loadEv(); if (t === 'payments' && !payLoaded) loadPay(); if (t === 'disciplines' && !dLoaded) loadDisc(); if (t === 'grades' && !grLoaded) loadGrades(); if (t === 'settings') loadSettings(); if (t === 'landing') loadLanding(); if (t === 'modeles') loadTemplateSettings(); if (t === 'cursus' && !cursusLoaded) loadCursus(); if (t === 'whatsapp' && !waLoaded) loadWhatsAppQueue(); };
 
     // ═══ CRUD CLASSES INLINE ═══
     const addClassDirect = async () => {
@@ -666,8 +766,73 @@ ${bodyHtml}
     const addSlot = async () => { if (!ttCls2 || !ttSub2) { toast.error('Sélectionnez classe et matière'); return; } setSaving(true); const { error } = await supabase.from('timetable_slots').insert({ organization_id: org.id, classroom_id: ttCls2, subject_id: ttSub2, day_of_week: ttDay, start_time: ttStart, end_time: ttEnd, room: ttRoom || null }); if (error) toast.error(error.message); else { toast.success('Créneau ajouté !'); loadTT(); } setSaving(false); };
     const delSlot = async (id: string) => { await supabase.from('timetable_slots').delete().eq('id', id); setTtSlots(p => p.filter(s => s.id !== id)); toast.success('Supprimé'); };
     const addEval = async () => { if (!evTitle || !evCls || !evSub) { toast.error('Remplissez les champs'); return; } setSaving(true); const { error } = await supabase.from('evaluations').insert({ organization_id: org.id, title: evTitle, type: evType, classroom_id: evCls, subject_id: evSub, date: evDate || null, max_score: parseFloat(evMax) || 20 }); if (error) toast.error(error.message); else { toast.success('Évaluation créée !'); setEvTitle(''); loadEv(); } setSaving(false); };
-    const addPay = async () => { if (!payStu || !payAmt) { toast.error('Sélectionnez un étudiant et un montant'); return; } setSaving(true); const { error } = await supabase.from('school_payments').insert({ organization_id: org.id, student_id: payStu, amount: parseFloat(payAmt), payment_method: payMeth, description: payDesc || 'Paiement scolarité', currency: 'XAF' }); if (error) toast.error(error.message); else { toast.success('Paiement enregistré !'); setPayAmt(''); setPayDesc(''); loadPay(); } setSaving(false); };
-    const addDisc = async () => { if (!dStu || !dReason) { toast.error('Remplissez les champs'); return; } setSaving(true); const { data: { user } } = await supabase.auth.getUser(); const { error } = await supabase.from('disciplines').insert({ organization_id: org.id, student_id: dStu, type: dType, reason: dReason, created_by: user?.id }); if (error) toast.error(error.message); else { toast.success('Sanction enregistrée'); setDReason(''); loadDisc(); } setSaving(false); };
+    const addPay = async () => {
+        if (!payStu || !payAmt) { toast.error('Sélectionnez un étudiant et un montant'); return; }
+        setSaving(true);
+        const amount = parseFloat(payAmt);
+        const { error } = await supabase.from('school_payments').insert({
+            organization_id: org.id,
+            student_id: payStu,
+            amount,
+            payment_method: payMeth,
+            description: payDesc || 'Paiement scolarité',
+            currency: 'XAF'
+        });
+        if (error) {
+            toast.error(error.message);
+        } else {
+            toast.success('Paiement enregistré !');
+            const studentObj = students.find((s: any) => s.id === payStu);
+            const parentPhone = studentObj?.guardian_phone || studentObj?.phone;
+            const studentName = studentObj ? `${studentObj.first_name} ${studentObj.last_name}` : 'Élève';
+            if (parentPhone) {
+                await queuePaymentReceipt(
+                    org.id,
+                    org.name,
+                    parentPhone,
+                    studentName,
+                    amount,
+                    payMeth,
+                    payDesc || 'Paiement scolarité'
+                );
+            }
+            setPayAmt(''); setPayDesc(''); loadPay();
+        }
+        setSaving(false);
+    };
+
+    const addDisc = async () => {
+        if (!dStu || !dReason) { toast.error('Remplissez les champs'); return; }
+        setSaving(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        const { error } = await supabase.from('disciplines').insert({
+            organization_id: org.id,
+            student_id: dStu,
+            type: dType,
+            reason: dReason,
+            created_by: user?.id
+        });
+        if (error) {
+            toast.error(error.message);
+        } else {
+            toast.success('Sanction enregistrée');
+            const studentObj = students.find((s: any) => s.id === dStu);
+            const parentPhone = studentObj?.guardian_phone || studentObj?.phone;
+            const studentName = studentObj ? `${studentObj.first_name} ${studentObj.last_name}` : 'Élève';
+            if (parentPhone) {
+                await queueDisciplineAlert(
+                    org.id,
+                    org.name,
+                    parentPhone,
+                    studentName,
+                    dType,
+                    dReason
+                );
+            }
+            setDReason(''); loadDisc();
+        }
+        setSaving(false);
+    };
 
     // Sel component is now defined outside AdminPage to prevent React 19 hydration issues
 
@@ -1094,6 +1259,190 @@ ${bodyHtml}
                                 })()}
                             </div>
                         )}
+                    </div>}
+
+                    {/* ═══ FILE & DIFFUSION WHATSAPP ═══ */}
+                    {tab === 'whatsapp' && <div className="space-y-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                                <h2 className="font-bold text-lg flex items-center gap-2 text-emerald-400"><PhoneCall className="w-5 h-5" /> Suivi & Diffusion WhatsApp</h2>
+                                <p className="text-xs text-slate-400">Gérez la file d'attente des notifications automatiques (notes, reçus, sanctions) et envoyez des messages personnalisés.</p>
+                            </div>
+                            <Button onClick={loadWhatsAppQueue} disabled={waLoading} size="sm" variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10">
+                                {waLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <RefreshCw className="w-4 h-4 mr-1.5" />} Actualiser la file
+                            </Button>
+                        </div>
+
+                        {/* Stat Cards */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                                <span className="text-xs text-amber-400 font-semibold uppercase tracking-wider">⏳ En Attente</span>
+                                <p className="text-2xl font-black text-amber-300 mt-1">{waQueue.filter(i => i.status === 'en_attente').length}</p>
+                            </div>
+                            <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                                <span className="text-xs text-emerald-400 font-semibold uppercase tracking-wider">✅ Envoyés</span>
+                                <p className="text-2xl font-black text-emerald-300 mt-1">{waQueue.filter(i => i.status === 'envoye').length}</p>
+                            </div>
+                            <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20">
+                                <span className="text-xs text-red-400 font-semibold uppercase tracking-wider">❌ Échecs</span>
+                                <p className="text-2xl font-black text-red-300 mt-1">{waQueue.filter(i => i.status === 'echec').length}</p>
+                            </div>
+                            <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                                <span className="text-xs text-blue-400 font-semibold uppercase tracking-wider">📱 Total</span>
+                                <p className="text-2xl font-black text-blue-300 mt-1">{waQueue.length}</p>
+                            </div>
+                        </div>
+
+                        {/* Form: Custom WhatsApp Broadcast */}
+                        <div className="p-5 rounded-2xl bg-slate-900/60 border border-emerald-500/20 space-y-4">
+                            <h3 className="font-bold text-sm text-emerald-300 flex items-center gap-2">📢 Envoyer un Message WhatsApp Personnalisé</h3>
+                            
+                            <div className="grid sm:grid-cols-2 gap-4">
+                                <div>
+                                    <Label className="text-xs text-slate-400 mb-1.5 block">Cible du message</Label>
+                                    <select
+                                        value={waTargetMode}
+                                        onChange={e => setWaTargetMode(e.target.value as any)}
+                                        className="w-full h-10 px-3 text-xs bg-slate-800 border border-slate-700 rounded-xl text-white">
+                                        <option value="single">👤 Un élève / parent spécifique</option>
+                                        <option value="class">🏫 Toute une classe</option>
+                                        <option value="all_school">📢 Tous les étudiants de l'établissement</option>
+                                    </select>
+                                </div>
+
+                                {waTargetMode === 'single' && (
+                                    <div>
+                                        <Label className="text-xs text-slate-400 mb-1.5 block">Sélectionner l'élève</Label>
+                                        <select
+                                            value={waTargetStudent}
+                                            onChange={e => setWaTargetStudent(e.target.value)}
+                                            className="w-full h-10 px-3 text-xs bg-slate-800 border border-slate-700 rounded-xl text-white">
+                                            <option value="">-- Sélectionner l'élève --</option>
+                                            {students.map((s: any) => (
+                                                <option key={s.id} value={s.id}>
+                                                    {s.first_name} {s.last_name} ({cls.find(c => c.id === s.classroom_id)?.name || 'Sans classe'}) - {s.guardian_phone || s.phone || 'Pas de numéro'}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
+                                {waTargetMode === 'class' && (
+                                    <div>
+                                        <Label className="text-xs text-slate-400 mb-1.5 block">Sélectionner la classe</Label>
+                                        <select
+                                            value={waTargetClass}
+                                            onChange={e => setWaTargetClass(e.target.value)}
+                                            className="w-full h-10 px-3 text-xs bg-slate-800 border border-slate-700 rounded-xl text-white">
+                                            <option value="">-- Sélectionner la classe --</option>
+                                            {cls.map((c: any) => (
+                                                <option key={c.id} value={c.id}>
+                                                    {c.name} ({students.filter((s: any) => s.classroom_id === c.id).length} élèves)
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <Label className="text-xs text-slate-400 mb-1.5 block">Message à diffuser</Label>
+                                <textarea
+                                    rows={3}
+                                    value={waCustomMessage}
+                                    onChange={e => setWaCustomMessage(e.target.value)}
+                                    placeholder="Ex: Rappel : La réunion des parents d'élèves aura lieu ce vendredi à 15h00..."
+                                    className="w-full p-3 text-xs bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500/50"
+                                />
+                            </div>
+
+                            <Button
+                                onClick={sendCustomWhatsAppBroadcast}
+                                disabled={waSending || !waCustomMessage.trim()}
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs">
+                                {waSending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <PhoneCall className="w-4 h-4 mr-2" />}
+                                Mettre en file d'attente WhatsApp 🚀
+                            </Button>
+                        </div>
+
+                        {/* Queue Table */}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <h3 className="font-bold text-sm text-slate-300">📋 Historique & File d'attente (100 derniers)</h3>
+                                <div className="flex gap-1.5">
+                                    {(['all', 'en_attente', 'envoye', 'echec'] as const).map(f => (
+                                        <button
+                                            key={f}
+                                            onClick={() => setWaFilter(f)}
+                                            className={cn("px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all",
+                                                waFilter === f ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-slate-800 text-slate-400 hover:text-white"
+                                            )}>
+                                            {f === 'all' ? 'Tous' : f === 'en_attente' ? 'En attente' : f === 'envoye' ? 'Envoyés' : 'Échecs'}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="border border-white/10 rounded-2xl overflow-hidden bg-slate-900/40">
+                                {waQueue.length === 0 ? (
+                                    <div className="p-8 text-center text-slate-500 text-xs">Aucun message dans la file WhatsApp</div>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left text-xs">
+                                            <thead className="bg-white/5 text-slate-400 uppercase text-[10px]">
+                                                <tr>
+                                                    <th className="p-3">Destinataire</th>
+                                                    <th className="p-3">Type</th>
+                                                    <th className="p-3">Message</th>
+                                                    <th className="p-3">Statut</th>
+                                                    <th className="p-3">Date</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-white/5 text-slate-300">
+                                                {waQueue
+                                                    .filter(item => waFilter === 'all' || item.status === waFilter)
+                                                    .map(item => (
+                                                        <tr key={item.id} className="hover:bg-white/[0.02]">
+                                                            <td className="p-3 font-semibold text-white">
+                                                                {item.recipient_name}
+                                                                <span className="block text-[10px] text-slate-400 font-mono">{item.recipient_phone}</span>
+                                                            </td>
+                                                            <td className="p-3">
+                                                                <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-white/10 text-slate-300">
+                                                                    {item.message_type}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-3 max-w-xs truncate text-slate-400" title={item.message}>
+                                                                {item.message}
+                                                            </td>
+                                                            <td className="p-3">
+                                                                {item.status === 'en_attente' && (
+                                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                                                        ⏳ En attente
+                                                                    </span>
+                                                                )}
+                                                                {item.status === 'envoye' && (
+                                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                                                        ✅ Envoyé
+                                                                    </span>
+                                                                )}
+                                                                {item.status === 'echec' && (
+                                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/30" title={item.error_log}>
+                                                                        ❌ Échec
+                                                                    </span>
+                                                                )}
+                                                            </td>
+                                                            <td className="p-3 text-[10px] text-slate-400">
+                                                                {new Date(item.created_at).toLocaleString('fr-FR')}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>}
 
                     {/* ═══ MODÈLES PDF ═══ */}

@@ -154,46 +154,64 @@ export function DiscussButton({ context, orgId, userId, userName, onOpenChat, si
             <AnimatePresence>
                 {showPreview && (
                     <motion.div
-                        initial={{ opacity: 0, scale: 0.9, y: -4 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.9, y: -4 }}
-                        className="absolute right-0 top-full mt-1.5 z-50 w-64 bg-[#0f1117] border border-white/10 rounded-2xl shadow-2xl p-3"
-                        onClick={e => e.stopPropagation()}>
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+                        style={{ backdropFilter: 'blur(4px)', backgroundColor: 'rgba(0,0,0,0.6)' }}
+                        onClick={() => setShowPreview(false)}>
 
-                        <div className="flex items-start justify-between mb-2">
-                            <div className="flex items-center gap-1.5">
-                                <Icon className={cn('w-3.5 h-3.5', cfg.color.split(' ')[0])} />
-                                <p className="text-[10px] font-bold text-white">{cfg.label}</p>
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.92, y: 12 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.92, y: 12 }}
+                            transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+                            className="w-full max-w-sm bg-[#0f1117] border border-white/10 rounded-2xl shadow-2xl p-4"
+                            onClick={e => e.stopPropagation()}>
+
+                            {/* Header */}
+                            <div className="flex items-start justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                    <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center', cfg.color.split(' ')[1].replace('hover:', '').replace('bg-', 'bg-') + '/20')}>
+                                        <Icon className={cn('w-4.5 h-4.5', cfg.color.split(' ')[0])} />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-white">{cfg.label}</p>
+                                        <p className="text-[10px] text-slate-500 capitalize">{context.type}</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setShowPreview(false)} className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 transition">
+                                    <X className="w-4 h-4" />
+                                </button>
                             </div>
-                            <button onClick={() => setShowPreview(false)} className="text-slate-500 hover:text-white">
-                                <X className="w-3.5 h-3.5" />
+
+                            {/* Context card */}
+                            <div className="px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] mb-4">
+                                <p className="text-xs font-semibold text-white truncate">{context.title}</p>
+                                {context.parentTitle && (
+                                    <p className="text-[10px] text-slate-400 truncate mt-0.5">📚 {context.parentTitle}</p>
+                                )}
+                            </div>
+
+                            {/* Description */}
+                            <p className="text-[11px] text-slate-400 mb-4 leading-relaxed">
+                                {context.type === 'exercise'
+                                    ? "Ouvre un groupe de discussion dédié à cet exercice. Les étudiants peuvent y poser des questions à l'enseignant."
+                                    : "Un seul groupe par sujet — rejoignez ou créez automatiquement. L'enseignant reçoit une notification."}
+                            </p>
+
+                            {/* CTA */}
+                            <button
+                                onClick={handleDiscuss}
+                                disabled={loading}
+                                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-teal-600 to-indigo-600 text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 shadow-lg shadow-teal-500/20">
+                                {loading ? (
+                                    <><Loader2 className="w-4 h-4 animate-spin" />Ouverture...</>
+                                ) : (
+                                    <><Users className="w-4 h-4" />Rejoindre / Créer le groupe</>
+                                )}
                             </button>
-                        </div>
-
-                        <div className="px-2 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] mb-3">
-                            <p className="text-[9px] text-slate-500 capitalize">{context.type}</p>
-                            <p className="text-xs font-semibold text-white truncate">{context.title}</p>
-                            {context.parentTitle && (
-                                <p className="text-[9px] text-slate-500 truncate">📚 {context.parentTitle}</p>
-                            )}
-                        </div>
-
-                        <p className="text-[9px] text-slate-500 mb-3 leading-relaxed">
-                            {context.type === 'exercise'
-                                ? "Ouvre un groupe de discussion pour cet exercice."
-                                : "Un seul groupe par sujet — rejoignez ou créez automatiquement."}
-                        </p>
-
-                        <button
-                            onClick={handleDiscuss}
-                            disabled={loading}
-                            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-gradient-to-r from-teal-600 to-indigo-600 text-white text-xs font-medium hover:opacity-90 transition disabled:opacity-50">
-                            {loading ? (
-                                <><Loader2 className="w-3 h-3 animate-spin" />Ouverture...</>
-                            ) : (
-                                <><Users className="w-3 h-3" />Rejoindre / Créer le groupe</>
-                            )}
-                        </button>
+                        </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>

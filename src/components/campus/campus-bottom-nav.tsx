@@ -1,11 +1,13 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useState } from 'react';
 import { Newspaper, Users, MessageSquare, Lock, User, ClipboardList } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ═══════════════════════════════════════════════════════
 // CAMPUS BOTTOM NAV — 6 onglets + user avatar on profile tab
+// Se cache automatiquement quand une story est ouverte
 // ═══════════════════════════════════════════════════════
 
 export type CampusTab = 'actus' | 'contacts' | 'chatdm' | 'myspace' | 'forms' | 'profile';
@@ -34,73 +36,93 @@ export function CampusBottomNav({
     userPhotoUrl,
     userRole,
 }: CampusBottomNavProps) {
+    const [storyOpen, setStoryOpen] = useState(false);
+
+    useEffect(() => {
+        // Observe body for data-story-open attribute (set by actus-view.tsx)
+        const check = () => setStoryOpen(document.body.hasAttribute('data-story-open'));
+        check();
+        const observer = new MutationObserver(check);
+        observer.observe(document.body, { attributes: true, attributeFilter: ['data-story-open'] });
+        return () => observer.disconnect();
+    }, []);
+
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-50 px-3 pb-[env(safe-area-inset-bottom,6px)]">
-            <div className="relative max-w-lg mx-auto">
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-4/5 h-10 bg-gradient-to-r from-amber-500/8 via-teal-500/8 to-rose-500/8 blur-2xl rounded-full" />
-                <div className="relative flex items-center justify-around p-1.5 rounded-2xl bg-[#0F172A]/90 backdrop-blur-2xl border border-white/[0.08] shadow-[0_-8px_32px_rgba(0,0,0,0.6)]">
-                    {navItems.map((item) => {
-                        const isActive = activeTab === item.id;
-                        const isProfileTab = item.id === 'profile';
-                        return (
-                            <button
-                                key={item.id}
-                                onClick={() => onTabChange(item.id)}
-                                className={cn(
-                                    "relative flex flex-col items-center justify-center flex-1 h-14 rounded-xl transition-all duration-300",
-                                    isActive ? "scale-[1.02]" : "hover:bg-white/[0.04]"
-                                )}
-                            >
-                                {isActive && (
-                                    <motion.div
-                                        layoutId="campus-tab-indicator"
-                                        className={cn("absolute -top-0.5 w-6 h-0.5 rounded-full bg-gradient-to-r", item.gradient)}
-                                        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                                    />
-                                )}
-                                {/* Unread badge for chat */}
-                                {item.id === 'chatdm' && unreadCount > 0 && (
-                                    <span className="absolute top-0 right-1 w-4 h-4 rounded-full bg-red-500 text-[8px] font-bold text-white flex items-center justify-center shadow-lg shadow-red-500/30 animate-pulse">
-                                        {unreadCount > 9 ? '9+' : unreadCount}
-                                    </span>
-                                )}
-                                {/* Profile tab: show real avatar if available */}
-                                {isProfileTab && userPhotoUrl ? (
-                                    <div className={cn(
-                                        "w-7 h-7 rounded-full overflow-hidden border-2 transition-all duration-300",
-                                        isActive
-                                            ? "border-rose-400 shadow-lg shadow-rose-500/40 scale-110"
-                                            : "border-white/20"
-                                    )}>
-                                        <img
-                                            src={userPhotoUrl}
-                                            alt="Mon profil"
-                                            className="w-full h-full object-cover"
-                                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                        />
-                                    </div>
-                                ) : (
-                                    <div className={cn(
-                                        "p-1.5 rounded-xl transition-all duration-300",
-                                        isActive ? `bg-gradient-to-br ${item.gradient} shadow-lg ${item.activeGlow}` : ""
-                                    )}>
-                                        <item.icon
-                                            className={cn("w-[18px] h-[18px] transition-all duration-300", isActive ? "text-white" : "text-slate-500")}
-                                            strokeWidth={isActive ? 2.5 : 1.8}
-                                        />
-                                    </div>
-                                )}
-                                <span className={cn(
-                                    "text-[9px] mt-0.5 font-medium transition-all duration-300",
-                                    isActive ? "text-white font-semibold" : "text-slate-500"
-                                )}>
-                                    {item.label}
-                                </span>
-                            </button>
-                        );
-                    })}
-                </div>
-            </div>
-        </div>
+        <AnimatePresence>
+            {!storyOpen && (
+                <motion.div
+                    key="bottom-nav"
+                    initial={{ y: 0, opacity: 1 }}
+                    exit={{ y: 80, opacity: 0 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+                    className="fixed bottom-0 left-0 right-0 z-50 px-3 pb-[env(safe-area-inset-bottom,6px)]">
+                    <div className="relative max-w-lg mx-auto">
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-4/5 h-10 bg-gradient-to-r from-amber-500/8 via-teal-500/8 to-rose-500/8 blur-2xl rounded-full" />
+                        <div className="relative flex items-center justify-around p-1.5 rounded-2xl bg-[#0F172A]/90 backdrop-blur-2xl border border-white/[0.08] shadow-[0_-8px_32px_rgba(0,0,0,0.6)]">
+                            {navItems.map((item) => {
+                                const isActive = activeTab === item.id;
+                                const isProfileTab = item.id === 'profile';
+                                return (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => onTabChange(item.id)}
+                                        className={cn(
+                                            "relative flex flex-col items-center justify-center flex-1 h-14 rounded-xl transition-all duration-300",
+                                            isActive ? "scale-[1.02]" : "hover:bg-white/[0.04]"
+                                        )}
+                                    >
+                                        {isActive && (
+                                            <motion.div
+                                                layoutId="campus-tab-indicator"
+                                                className={cn("absolute -top-0.5 w-6 h-0.5 rounded-full bg-gradient-to-r", item.gradient)}
+                                                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                                            />
+                                        )}
+                                        {/* Unread badge for chat */}
+                                        {item.id === 'chatdm' && unreadCount > 0 && (
+                                            <span className="absolute top-0 right-1 w-4 h-4 rounded-full bg-red-500 text-[8px] font-bold text-white flex items-center justify-center shadow-lg shadow-red-500/30 animate-pulse">
+                                                {unreadCount > 9 ? '9+' : unreadCount}
+                                            </span>
+                                        )}
+                                        {/* Profile tab: show real avatar if available */}
+                                        {isProfileTab && userPhotoUrl ? (
+                                            <div className={cn(
+                                                "w-7 h-7 rounded-full overflow-hidden border-2 transition-all duration-300",
+                                                isActive
+                                                    ? "border-rose-400 shadow-lg shadow-rose-500/40 scale-110"
+                                                    : "border-white/20"
+                                            )}>
+                                                <img
+                                                    src={userPhotoUrl}
+                                                    alt="Mon profil"
+                                                    className="w-full h-full object-cover"
+                                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className={cn(
+                                                "p-1.5 rounded-xl transition-all duration-300",
+                                                isActive ? `bg-gradient-to-br ${item.gradient} shadow-lg ${item.activeGlow}` : ""
+                                            )}>
+                                                <item.icon
+                                                    className={cn("w-[18px] h-[18px] transition-all duration-300", isActive ? "text-white" : "text-slate-500")}
+                                                    strokeWidth={isActive ? 2.5 : 1.8}
+                                                />
+                                            </div>
+                                        )}
+                                        <span className={cn(
+                                            "text-[9px] mt-0.5 font-medium transition-all duration-300",
+                                            isActive ? "text-white font-semibold" : "text-slate-500"
+                                        )}>
+                                            {item.label}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </motion.div>
+            )}
+        </AnimatePresence>
     );
 }

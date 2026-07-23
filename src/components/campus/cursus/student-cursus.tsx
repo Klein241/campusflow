@@ -5,7 +5,7 @@ import {
     BookOpen, Play, CheckCircle2, Award, Star, Timer, FileText,
     Send, X, Trophy, BarChart3, GraduationCap, MessageSquare,
     Clock, Zap, TrendingUp, Flag, Maximize2, ChevronRight,
-    Lock, Target, Layers
+    Lock, Target, Layers, StickyNote
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -55,13 +55,17 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
     const [selectedSubId, setSelectedSubId] = useState<string | null>(null);
     const [selectedChId,  setSelectedChId]  = useState<string | null>(null);
     const [activeTab,     setActiveTab]     = useState<'lessons' | 'exercises'>('lessons');
-    const [readerLesson,  setReaderLesson]  = useState<any | null>(null);
+    const [readerLesson,    setReaderLesson]    = useState<any | null>(null);
+    const [blocNotesLesson, setBlocNotesLesson] = useState<any | null>(null);
     const [activeExercise,setActiveExercise]= useState<any | null>(null);
 
     // ── Dispute ──
     const [disputeTarget, setDisputeTarget] = useState<any | null>(null);
     const [disputeMsg,    setDisputeMsg]    = useState('');
     const [sendingDispute,setSendingDispute]= useState(false);
+
+    // ── Bloc Notes ──
+    const [notedLessonIds, setNotedLessonIds] = useState<string[]>([]);
 
     const loadData = async () => {
         setLoading(true);
@@ -120,6 +124,21 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
     };
 
     useEffect(() => { loadData(); }, [orgId, userId, classroomId]);
+
+    // ── Load lesson IDs that have notes ───────────────────────────────────────
+    useEffect(() => {
+        if (!userId) return;
+        supabase
+            .from('lesson_reader_notes')
+            .select('lesson_id')
+            .eq('user_id', userId)
+            .then(({ data }) => {
+                if (data) {
+                    const ids = [...new Set(data.map(n => n.lesson_id))] as string[];
+                    setNotedLessonIds(ids);
+                }
+            });
+    }, [userId]);
 
     // ── Helpers ──
     const getColor = (idx: number) => SUBJECT_COLORS[idx % SUBJECT_COLORS.length];
@@ -206,6 +225,18 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                     onClose={() => setReaderLesson(null)}
                     userId={userId}
                     orgId={orgId}
+                    initialShowNotes={false}
+                />
+            )}
+            {/* ── Lesson Reader en mode Bloc Notes ── */}
+            {blocNotesLesson && (
+                <LessonReader
+                    isOpen={true}
+                    lesson={blocNotesLesson}
+                    onClose={() => setBlocNotesLesson(null)}
+                    userId={userId}
+                    orgId={orgId}
+                    initialShowNotes={true}
                 />
             )}
 
@@ -248,6 +279,64 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                     </motion.div>
                 ))}
             </div>
+
+            {/* ═══ BLOC NOTES CARD ═══ */}
+            {(() => {
+                const notedLessons = lessons.filter(l => notedLessonIds.includes(l.id));
+                return (
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+                        className="rounded-2xl border border-indigo-500/20 bg-gradient-to-br from-indigo-500/10 to-violet-500/5 p-4"
+                    >
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-xl bg-indigo-500/20 flex items-center justify-center">
+                                    <StickyNote className="w-4 h-4 text-indigo-400" />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-black text-white">Bloc Notes</p>
+                                    <p className="text-[10px] text-slate-500">
+                                        {notedLessons.length > 0
+                                            ? `${notedLessons.length} leçon${notedLessons.length > 1 ? 's' : ''} avec notes`
+                                            : 'Aucune note encore'}
+                                    </p>
+                                </div>
+                            </div>
+                            {notedLessons.length > 0 && (
+                                <span className="text-[10px] text-indigo-400 bg-indigo-500/15 px-2 py-0.5 rounded-full font-semibold">
+                                    {notedLessons.length}
+                                </span>
+                            )}
+                        </div>
+
+                        {notedLessons.length === 0 ? (
+                            <div className="flex items-center gap-2 py-2">
+                                <p className="text-[11px] text-slate-600">
+                                    Cliquez sur 📝 dans une leçon pour prendre des notes. Elles apparaissent ici.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="flex flex-wrap gap-2">
+                                {notedLessons.map(l => {
+                                    const ch = chapters.find(c => c.id === l.chapter_id);
+                                    const sub = ch ? subjects.find(s => s.id === ch.subject_id) : null;
+                                    return (
+                                        <motion.button
+                                            key={l.id}
+                                            whileTap={{ scale: 0.97 }}
+                                            onClick={() => setBlocNotesLesson({ ...l, chapter_title: ch?.title, subject_title: sub?.name })}
+                                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/20 transition-all group"
+                                        >
+                                            <StickyNote className="w-3 h-3 text-indigo-400 group-hover:scale-110 transition-transform" />
+                                            <span className="text-[11px] font-semibold text-indigo-300 max-w-[120px] truncate">{l.title}</span>
+                                        </motion.button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </motion.div>
+                );
+            })()}
 
             {/* ══════════════ MILLER COLUMNS ══════════════ */}
             <div className="rounded-2xl overflow-hidden border border-white/[0.07] bg-[#0c0e16]">
@@ -479,6 +568,13 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                                     <DiscussButton context={{ type: 'lesson', id: lesson.id, title: lesson.title, parentTitle: selectedCh?.title }}
                                                         orgId={orgId} userId={userId} userName={userName}
                                                         onOpenChat={onOpenGroupChat || (() => {})} size="xs" />
+                                                    {/* Bloc Notes button */}
+                                                    <button
+                                                        onClick={() => setBlocNotesLesson({ ...lesson, chapter_title: selectedCh?.title })}
+                                                        title="Bloc Notes"
+                                                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-semibold hover:bg-indigo-500/20 transition-all">
+                                                        📝
+                                                    </button>
                                                     {lesson.content && (
                                                         <button onClick={() => setReaderLesson({ ...lesson, chapter_title: selectedCh?.title })}
                                                             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-500/15 border border-indigo-500/25 text-indigo-400 text-[10px] font-semibold hover:bg-indigo-500/25 transition-all">

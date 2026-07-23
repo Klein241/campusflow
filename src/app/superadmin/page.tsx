@@ -290,34 +290,32 @@ export default function SuperAdminPage() {
     const searchForPoints = async () => {
         if (!pointsSearch.trim()) return;
         setPointsLoading(true);
-        const q2 = pointsSearch.trim().toLowerCase();
-        // Search in student_profiles and teacher_profiles
-        const [stuRes, tchRes] = await Promise.all([
-            supabase.from('student_profiles')
-                .select('id, first_name, last_name, sky_points, organization_id, organizations(name, slug)')
-                .or(`first_name.ilike.%${q2}%,last_name.ilike.%${q2}%,access_code.ilike.%${q2}%`)
-                .limit(10),
-            supabase.from('teacher_profiles')
-                .select('id, first_name, last_name, sky_points, organization_id, organizations(name, slug)')
-                .or(`first_name.ilike.%${q2}%,last_name.ilike.%${q2}%`)
-                .limit(10),
-        ]);
-        const students = (stuRes.data || []).map((u: any) => ({ ...u, role: 'student' }));
-        const teachers = (tchRes.data || []).map((u: any) => ({ ...u, role: 'teacher' }));
-        setPointsResults([...students, ...teachers]);
+        // Utilise RPC SECURITY DEFINER pour contourner RLS (pas d'auth Supabase dans superadmin)
+        const { data, error } = await supabase.rpc('superadmin_search_users', {
+            p_query: pointsSearch.trim()
+        });
+        if (error) {
+            toast.error('Erreur recherche: ' + error.message);
+            setPointsResults([]);
+        } else {
+            setPointsResults(data as any[] || []);
+        }
         setPointsLoading(false);
     };
 
     const applyPoints = async () => {
         if (!pointsTarget || pointsDelta === 0) return;
         setSendingPoints(true);
-        const table = pointsTarget.role === 'student' ? 'student_profiles' : 'teacher_profiles';
         const newBalance = Math.max(0, (pointsTarget.sky_points || 0) + pointsDelta);
-        const { error } = await supabase.from(table)
-            .update({ sky_points: newBalance })
-            .eq('id', pointsTarget.id);
-        if (error) {
-            toast.error('Erreur: ' + error.message);
+        const { data, error } = await supabase.rpc('superadmin_update_sky_points', {
+            p_user_id:    pointsTarget.id,
+            p_role:       pointsTarget.role,
+            p_new_balance: newBalance,
+            p_delta:      pointsDelta,
+            p_note:       pointsNote || null
+        });
+        if (error || (data && data.success === false)) {
+            toast.error('Erreur: ' + (error?.message || data?.error || 'Inconnue'));
         } else {
             const sign = pointsDelta > 0 ? '+' : '';
             toast.success(`⭐ ${sign}${pointsDelta} pts → ${pointsTarget.first_name} ${pointsTarget.last_name} (solde: ${newBalance})`);
@@ -1105,7 +1103,7 @@ export default function SuperAdminPage() {
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-sm font-bold text-white truncate">{u.first_name} {u.last_name}</p>
                                                     <p className="text-[10px] text-slate-500">
-                                                        {u.role === 'student' ? '🎓 Étudiant' : '👨‍🏫 Prof'} · {(u.organizations as any)?.name || u.organization_id}
+                                                        {u.role === 'student' ? '🎓 Étudiant' : '👨‍🏫 Prof'} · {u.org_name || u.organization_id}
                                                     </p>
                                                 </div>
                                                 <div className="text-right shrink-0">

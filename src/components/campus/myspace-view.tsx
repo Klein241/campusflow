@@ -26,6 +26,7 @@ import { TeacherCursus } from './cursus/teacher-cursus';
 import { StudentCursus } from './cursus/student-cursus';
 import { AdminCursus } from './cursus/admin-cursus';
 import { calculateSkyPoints } from './cursus/cursus-exercise-modal';
+import { queueGradeNotification } from '@/lib/whatsapp-queue';
 
 // ═══════════════════════════════════════════════════════
 // MY SPACE VIEW — PIN-protected, role-aware
@@ -295,8 +296,12 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
             const { error } = await supabase.from('grades').upsert(entries, { onConflict: 'evaluation_id,student_id' });
             if (error) throw error;
 
-            // Credit Sky Points to students based on score threshold
+            // Credit Sky Points & Queue WhatsApp notification
             for (const entry of entries) {
+                const studentObj = myStudents.find((s: any) => s.id === entry.student_id);
+                const parentPhone = studentObj?.guardian_phone || studentObj?.phone;
+                const studentName = studentObj ? `${studentObj.first_name} ${studentObj.last_name}` : 'Élève';
+
                 const skyGain = calculateSkyPoints(entry.score, selEval.max_score || 20);
                 if (skyGain > 0) {
                     const { data: prof } = await supabase.from('student_profiles').select('sky_points').eq('id', entry.student_id).single();
@@ -310,9 +315,22 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                         });
                     }
                 }
+
+                if (parentPhone) {
+                    await queueGradeNotification(
+                        orgId,
+                        orgName,
+                        parentPhone,
+                        studentName,
+                        selEval.subjects?.name || 'Matière',
+                        selEval.title,
+                        entry.score,
+                        selEval.max_score || 20
+                    );
+                }
             }
 
-            toast.success(`${entries.length} notes sauvegardées ✅`);
+            toast.success(`${entries.length} notes sauvegardées ✅ (Notifications WhatsApp en file)`);
         } catch (e: any) { toast.error(e.message); }
         setSavingGrades(false);
     };

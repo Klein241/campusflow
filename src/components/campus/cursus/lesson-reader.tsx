@@ -3,10 +3,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    X, ZoomIn, ZoomOut, Maximize2, Minimize2,
+    X, ZoomIn, ZoomOut,
     Highlighter, BookOpen, StickyNote, Save,
-    ChevronLeft, ChevronRight, RotateCcw, Copy,
-    Check, Trash2, Plus, FileText
+    ChevronLeft, ChevronRight, Copy,
+    Check, Trash2, FileText,
+    Eye, Code2, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -41,6 +42,8 @@ interface LessonReaderProps {
     };
     userId: string;
     orgId: string;
+    /** Si true, ouvre le panneau Notes directement à l'ouverture */
+    initialShowNotes?: boolean;
 }
 
 // Palette de couleurs pour surlignage
@@ -61,7 +64,118 @@ function parseBlocks(raw: string | null | undefined): ContentBlock[] {
     return [{ type: 'text', value: raw }];
 }
 
-export function LessonReader({ isOpen, onClose, lesson, userId, orgId }: LessonReaderProps) {
+// ── Code fence parser for lesson content ───────────────────────────────────────
+type TextSeg = { type: 'text'; value: string } | { type: 'code'; lang: string; value: string };
+
+function parseCodeFences(raw: string): TextSeg[] {
+    const parts: TextSeg[] = [];
+    const re = /```(\w*)\n?([\s\S]*?)```/g;
+    let last = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(raw)) !== null) {
+        if (m.index > last) parts.push({ type: 'text', value: raw.slice(last, m.index) });
+        parts.push({ type: 'code', lang: (m[1] || 'text').toLowerCase(), value: m[2].trimEnd() });
+        last = m.index + m[0].length;
+    }
+    if (last < raw.length) parts.push({ type: 'text', value: raw.slice(last) });
+    return parts.length ? parts : [{ type: 'text', value: raw }];
+}
+
+const LANG_BADGE: Record<string, { bg: string; text: string; label: string }> = {
+    html:       { bg: 'bg-orange-500/20', text: 'text-orange-300', label: 'HTML' },
+    css:        { bg: 'bg-blue-500/20',   text: 'text-blue-300',   label: 'CSS' },
+    js:         { bg: 'bg-yellow-500/20', text: 'text-yellow-300', label: 'JavaScript' },
+    javascript: { bg: 'bg-yellow-500/20', text: 'text-yellow-300', label: 'JavaScript' },
+    ts:         { bg: 'bg-blue-400/20',   text: 'text-blue-200',   label: 'TypeScript' },
+    typescript: { bg: 'bg-blue-400/20',   text: 'text-blue-200',   label: 'TypeScript' },
+    python:     { bg: 'bg-green-500/20',  text: 'text-green-300',  label: 'Python' },
+    sql:        { bg: 'bg-teal-500/20',   text: 'text-teal-300',   label: 'SQL' },
+    bash:       { bg: 'bg-slate-500/20',  text: 'text-slate-300',  label: 'Bash' },
+    json:       { bg: 'bg-amber-500/20',  text: 'text-amber-300',  label: 'JSON' },
+};
+
+function InlineCodeBlock({ lang, code }: { lang: string; code: string }) {
+    const [tab, setTab] = useState<'code' | 'preview'>('code');
+    const [copied, setCopied] = useState(false);
+    const [collapsed, setCollapsed] = useState(false);
+    const cfg = LANG_BADGE[lang] || { bg: 'bg-slate-500/20', text: 'text-slate-300', label: lang.toUpperCase() || 'CODE' };
+    const isHtml = lang === 'html';
+    const iframeSrc = isHtml ? `data:text/html;charset=utf-8,${encodeURIComponent(
+        code.includes('<html') ? code :
+        `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:system-ui,sans-serif;margin:16px;background:#fff}</style></head><body>${code}</body></html>`
+    )}` : '';
+
+    const handleCopy = async () => {
+        await navigator.clipboard.writeText(code);
+        setCopied(true); setTimeout(() => setCopied(false), 1800);
+    };
+
+    return (
+        <div className="rounded-2xl overflow-hidden border border-white/[0.08] bg-[#0a0d14] shadow-xl my-2">
+            <div className="flex items-center justify-between px-4 py-2.5 bg-white/[0.03] border-b border-white/[0.06]">
+                <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-red-500/70" />
+                    <span className="w-2 h-2 rounded-full bg-yellow-500/70" />
+                    <span className="w-2 h-2 rounded-full bg-green-500/70" />
+                    <span className={cn('ml-2 text-[10px] font-semibold px-2 py-0.5 rounded-full', cfg.bg, cfg.text)}>{cfg.label}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                    {isHtml && (
+                        <div className="flex bg-white/[0.05] rounded-lg p-0.5">
+                            <button onClick={() => setTab('code')} className={cn('flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] transition-all', tab==='code' ? 'bg-white/10 text-white' : 'text-slate-500')}>
+                                <Code2 className="w-2.5 h-2.5" />Code
+                            </button>
+                            <button onClick={() => setTab('preview')} className={cn('flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] transition-all', tab==='preview' ? 'bg-orange-500/20 text-orange-300' : 'text-slate-500')}>
+                                <Eye className="w-2.5 h-2.5" />Aperçu
+                            </button>
+                        </div>
+                    )}
+                    <button onClick={handleCopy} className="p-1.5 rounded-lg hover:bg-white/10 transition text-slate-400">
+                        {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                    <button onClick={() => setCollapsed(v => !v)} className="p-1.5 rounded-lg hover:bg-white/10 transition text-slate-400">
+                        {collapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                    </button>
+                </div>
+            </div>
+            {!collapsed && (
+                isHtml && tab === 'preview' ? (
+                    <div className="bg-white" style={{ height: '300px' }}>
+                        <iframe src={iframeSrc} sandbox="allow-scripts allow-same-origin" title="Aperçu HTML" className="w-full h-full border-0" style={{ colorScheme: 'normal' }} />
+                    </div>
+                ) : (
+                    <pre className="overflow-x-auto p-4 text-xs leading-relaxed text-slate-200 font-mono max-h-72">
+                        <code>{code}</code>
+                    </pre>
+                )
+            )}
+        </div>
+    );
+}
+
+function renderTextWithCode(raw: string, notes: LessonReaderNote[], colorMap: Record<string, string>): React.ReactNode[] {
+    const segs = parseCodeFences(raw);
+    return segs.map((seg, idx) => {
+        if (seg.type === 'code') {
+            return <InlineCodeBlock key={idx} lang={seg.lang} code={seg.value} />;
+        }
+        // Plain text with highlight marks
+        let html = seg.value;
+        notes.filter(n => n.highlight_text).forEach(n => {
+            if (n.highlight_text) {
+                const escaped = n.highlight_text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const colorCss = colorMap[n.color || 'yellow'];
+                html = html.replace(new RegExp(escaped, 'gi'),
+                    `<mark style="background:${colorCss};border-radius:3px;padding:0 2px;">${n.highlight_text}</mark>`);
+            }
+        });
+        return html.trim() ? (
+            <div key={idx} className="text-slate-200 leading-[1.9] tracking-wide whitespace-pre-line" dangerouslySetInnerHTML={{ __html: html }} />
+        ) : null;
+    }).filter(Boolean) as React.ReactNode[];
+}
+
+export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialShowNotes = false }: LessonReaderProps) {
     // Zoom
     const [zoom, setZoom] = useState(100);
     // Highlight mode
@@ -99,7 +213,7 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId }: LessonR
             loadNotes();
             setZoom(100);
             setHighlightMode(false);
-            setShowNotes(false);
+            setShowNotes(initialShowNotes);
             setNewNote('');
         }
     }, [isOpen, loadNotes]);
@@ -156,19 +270,20 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId }: LessonR
         if (!content.trim()) return;
         setSavingNote(true);
         const { error } = await supabase.from('lesson_reader_notes').insert({
-            lesson_id: lesson.id,
-            user_id: userId,
-            org_id: orgId,
-            content: content.trim(),
+            lesson_id:      lesson.id,
+            user_id:        userId,
+            content:        content.trim(),
             highlight_text: highlightText || null,
-            color: activeColor.id,
+            color:          activeColor.id,
         });
         if (!error) {
             toast.success(highlightText ? '✨ Surlignage sauvegardé' : '📝 Note sauvegardée');
             setNewNote('');
             loadNotes();
+            // Met à jour le state global des notes (pour la carte Bloc Notes)
         } else {
-            toast.error('Erreur sauvegarde');
+            toast.error('Erreur sauvegarde: ' + error.message);
+            console.error('[BlocNotes] insert error:', error);
         }
         setSavingNote(false);
     };
@@ -249,7 +364,7 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId }: LessonR
                         )}
                     >
                         <StickyNote className="w-3.5 h-3.5" />
-                        Notes
+                        Bloc Notes
                         {notes.length > 0 && (
                             <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-indigo-500 text-[8px] font-bold flex items-center justify-center text-white">
                                 {notes.length > 9 ? '9+' : notes.length}
@@ -352,7 +467,16 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId }: LessonR
                                     {blocks.map((block, i) => {
                                         if (block.type === 'text') {
                                             if (!block.value?.trim()) return null;
-                                            // Highlight saved text
+                                            // Detect code fences
+                                            const hasCodeFence = block.value.includes('```');
+                                            if (hasCodeFence) {
+                                                return (
+                                                    <div key={i} className="space-y-3">
+                                                        {renderTextWithCode(block.value, notes, colorMap)}
+                                                    </div>
+                                                );
+                                            }
+                                            // Plain text with highlight marks
                                             let html = block.value;
                                             notes
                                                 .filter(n => n.highlight_text)
@@ -412,7 +536,7 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId }: LessonR
                                 <div className="flex-none flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
                                     <div className="flex items-center gap-2">
                                         <StickyNote className="w-4 h-4 text-indigo-400" />
-                                        <span className="text-sm font-bold text-white">Mes Notes</span>
+                                        <span className="text-sm font-bold text-white">Bloc Notes</span>
                                         <span className="text-[10px] text-slate-500 bg-white/5 rounded-full px-2">{notes.length}</span>
                                     </div>
                                     <button onClick={() => setShowNotes(false)} className="p-1 hover:bg-white/10 rounded-lg text-slate-500 hover:text-white transition-colors">

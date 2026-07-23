@@ -566,6 +566,16 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
         return `il y a ${days}j`;
     };
 
+    // ── Hide bottom nav while story is open ─────────────────────
+    useEffect(() => {
+        if (viewingStory) {
+            document.body.setAttribute('data-story-open', 'true');
+        } else {
+            document.body.removeAttribute('data-story-open');
+        }
+        return () => document.body.removeAttribute('data-story-open');
+    }, [!!viewingStory]);
+
     // 7. Filter stories based on tab (active vs history)
     const now = new Date().toISOString();
     const filteredStories = storyTab === 'active' 
@@ -677,12 +687,17 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                     return (
                         <motion.div key={current.id}
                             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                            className="fixed inset-0 z-[60] bg-black flex flex-col"
+                            className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center"
                             onTouchStart={e => { touchStartX.current = e.touches[0].clientX; }}
                             onTouchEnd={e => {
                                 const delta = e.changedTouches[0].clientX - touchStartX.current;
                                 if (Math.abs(delta) > 50) navigateStory(delta < 0 ? 1 : -1);
                             }}>
+
+                            {/* ── 9:16 Centered Story Container ── */}
+                            <div
+                                className="relative w-full max-w-[430px] flex flex-col overflow-hidden bg-black sm:rounded-[28px] shadow-2xl"
+                                style={{ height: 'min(100dvh, calc(430px * 16 / 9))' }}>
 
                             {/* ── Progress bars ── */}
                             <div className="absolute top-0 left-0 right-0 px-3 pt-3 pb-2 flex gap-1 z-30 pointer-events-none">
@@ -923,6 +938,8 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                                     </motion.div>
                                 )}
                             </AnimatePresence>
+
+                            </div>{/* /9:16 container */}
                         </motion.div>
                     );
                 })()}

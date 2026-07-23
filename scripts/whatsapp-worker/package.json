@@ -1,0 +1,16 @@
+{
+  "name": "campusflow-whatsapp-worker",
+  "version": "1.0.0",
+  "description": "Auto-hosted Baileys worker to send queued WhatsApp notifications for CampusFlow",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "@whiskeysockets/baileys": "^6.7.0",
+    "dotenv": "^16.4.5",
+    "pino": "^8.19.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
