@@ -574,11 +574,15 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                         exercise={activeExercise}
                         studentId={userId}
                         onClose={() => setActiveExercise(null)}
-                        onComplete={(score, max) => {
+                        onComplete={(score, max, skyGain) => {
                             setSubmissions(prev => [...prev, { exercise_id: activeExercise.id, student_id: userId, score, graded: true }]);
-                            onSkyUpdate(Math.round(score));
+                            if (skyGain > 0) {
+                                onSkyUpdate(skyGain);
+                                toast.success(`Score: ${score}/${max} — +${skyGain} Sky ⭐`);
+                            } else {
+                                toast.info(`Score: ${score}/${max}`);
+                            }
                             setActiveExercise(null);
-                            toast.success(`Score: ${score}/${max} — +${Math.round(score)} Sky ⭐`);
                         }}
                     />
                 )}

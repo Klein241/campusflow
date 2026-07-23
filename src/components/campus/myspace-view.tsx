@@ -25,6 +25,7 @@ import { generateBulletinPDF, type BulletinData, computeSubjectAverage, computeO
 import { TeacherCursus } from './cursus/teacher-cursus';
 import { StudentCursus } from './cursus/student-cursus';
 import { AdminCursus } from './cursus/admin-cursus';
+import { calculateSkyPoints } from './cursus/cursus-exercise-modal';
 
 // ═══════════════════════════════════════════════════════
 // MY SPACE VIEW — PIN-protected, role-aware
@@ -74,6 +75,7 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
     const [timetableSlots, setTimetableSlots] = useState<any[]>([]);
     const [evaluations, setEvaluations] = useState<any[]>([]);
     const [grades, setGrades] = useState<any[]>([]);
+    const [exerciseSubmissions, setExerciseSubmissions] = useState<any[]>([]);
     const [payments, setPayments] = useState<any[]>([]);
 
     // Teacher-specific state
@@ -218,6 +220,17 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                         .select('*, evaluations:evaluation_id(title, max_score, type, subject_id, subjects:subject_id(name))')
                         .eq('student_id', userId);
                     setGrades(grs || []);
+
+                    const { data: exSubs } = await supabase.from('exercise_submissions')
+                        .select('*, exercises:exercise_id(id, title, max_score, type, chapter_id, subject_id)')
+                        .eq('student_id', userId);
+                    setExerciseSubmissions(exSubs || []);
+
+                    const subIds = (subs || []).map((sb: any) => sb.id);
+                    if (subIds.length > 0) {
+                        const { data: chaps } = await supabase.from('chapters').select('id, subject_id').in('subject_id', subIds);
+                        setChapters(chaps || []);
+                    }
                 }
                 const { data: pays } = await supabase.from('school_payments').select('*')
                     .eq('student_id', userId).order('paid_at', { ascending: false });
@@ -281,6 +294,24 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
             if (entries.length === 0) { toast.info('Aucune note'); setSavingGrades(false); return; }
             const { error } = await supabase.from('grades').upsert(entries, { onConflict: 'evaluation_id,student_id' });
             if (error) throw error;
+
+            // Credit Sky Points to students based on score threshold
+            for (const entry of entries) {
+                const skyGain = calculateSkyPoints(entry.score, selEval.max_score || 20);
+                if (skyGain > 0) {
+                    const { data: prof } = await supabase.from('student_profiles').select('sky_points').eq('id', entry.student_id).single();
+                    if (prof) {
+                        await supabase.from('student_profiles').update({ sky_points: (prof.sky_points || 0) + skyGain }).eq('id', entry.student_id);
+                        await supabase.from('sky_transactions').insert({
+                            student_id: entry.student_id,
+                            amount: skyGain,
+                            transaction_type: 'evaluation_grade',
+                            description: `Note éval: ${entry.score}/${selEval.max_score || 20} (+${skyGain} Sky) — ${selEval.title}`
+                        });
+                    }
+                }
+            }
+
             toast.success(`${entries.length} notes sauvegardées ✅`);
         } catch (e: any) { toast.error(e.message); }
         setSavingGrades(false);
@@ -289,13 +320,43 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
     // ═══ STUDENT: Computed grades ═══
     const gradesBySubject = subjects.map(sub => {
         const subGrades = grades.filter((g: any) => g.evaluations?.subject_id === sub.id || g.evaluations?.subjects?.name === sub.name);
-        const scored = subGrades.filter((g: any) => g.score !== null && g.score !== undefined);
-        let avg = 0;
-        if (scored.length > 0) {
-            const total = scored.reduce((sum: number, g: any) => sum + (g.score / (g.evaluations?.max_score || 20)) * 20, 0);
-            avg = total / scored.length;
-        }
-        return { subject: sub, grades: subGrades, average: avg, count: scored.length };
+        const subExSubs = exerciseSubmissions.filter((es: any) => {
+            const ex = es.exercises;
+            if (!ex) return false;
+            if (ex.subject_id === sub.id) return true;
+            if (ex.chapter_id) return chapters.some((c: any) => c.id === ex.chapter_id && c.subject_id === sub.id);
+            return false;
+        });
+
+        const evalScored = subGrades.filter((g: any) => g.score !== null && g.score !== undefined);
+        const exScored = subExSubs.filter((es: any) => es.score !== null && es.score !== undefined);
+
+        let totalPoints = 0;
+        let totalCount = 0;
+
+        evalScored.forEach((g: any) => {
+            const max = g.evaluations?.max_score || 20;
+            totalPoints += (g.score / max) * 20;
+            totalCount += 1;
+        });
+
+        exScored.forEach((es: any) => {
+            const max = es.exercises?.max_score || 20;
+            totalPoints += (es.score / max) * 20;
+            totalCount += 1;
+        });
+
+        const avg = totalCount > 0 ? totalPoints / totalCount : 0;
+
+        return {
+            subject: sub,
+            grades: subGrades,
+            exerciseSubmissions: subExSubs,
+            average: avg,
+            count: totalCount,
+            evalCount: evalScored.length,
+            exCount: exScored.length
+        };
     });
 
     const overallAvg = gradesBySubject.filter(gs => gs.count > 0).length > 0
@@ -324,20 +385,33 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
     // ═══ STUDENT: Export Bulletin PDF ═══
     const exportBulletinPDF = () => {
         if (!profile || !classroom) { toast.error('Données de profil manquantes'); return; }
-        const bulletinSubjects = gradesBySubject.map(gs => ({
-            name: gs.subject.name,
-            coefficient: gs.subject.coefficient || 1,
-            teacher_name: gs.subject.teacher_profiles ? `${gs.subject.teacher_profiles.first_name} ${gs.subject.teacher_profiles.last_name}` : undefined,
-            grades: gs.grades.map((g: any) => ({
+        const bulletinSubjects = gradesBySubject.map(gs => {
+            const evalItems = gs.grades.map((g: any) => ({
                 title: g.evaluations?.title || 'Évaluation',
                 type: g.evaluations?.type || 'devoir',
                 score: g.score,
                 max_score: g.evaluations?.max_score || 20,
                 weight: g.evaluations?.weight || 1,
                 remark: g.teacher_remark,
-            })),
-            average: gs.average,
-        }));
+            }));
+
+            const exItems = gs.exerciseSubmissions.map((es: any) => ({
+                title: es.exercises?.title || 'Exercice Cursus',
+                type: `cursus (${es.exercises?.type || 'qcm'})`,
+                score: es.score,
+                max_score: es.exercises?.max_score || 20,
+                weight: 1,
+                remark: 'Auto-corrigé Cursus',
+            }));
+
+            return {
+                name: gs.subject.name,
+                coefficient: gs.subject.coefficient || 1,
+                teacher_name: gs.subject.teacher_profiles ? `${gs.subject.teacher_profiles.first_name} ${gs.subject.teacher_profiles.last_name}` : undefined,
+                grades: [...evalItems, ...exItems],
+                average: gs.average,
+            };
+        });
         const data: BulletinData = {
             org: { name: orgName, logo_url: orgLogo, phone: orgPhone, email: orgEmail, city: orgCity, country: orgCountry, current_term: orgCurrentTerm },
             student: { first_name: profile.first_name, last_name: profile.last_name, matricule: profile.matricule, sex: profile.sex, birth_date: profile.birth_date, classroom_name: classroom.name, filiere_name: filiere?.nom },
@@ -600,40 +674,102 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                 {activeTab === 'bulletin' && !isTeacher && (
                     <motion.div key="bulletin" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
                         <div className="flex items-center justify-between">
-                            <h3 className="font-bold text-sm text-slate-300">📊 Bulletin de notes</h3>
+                            <div>
+                                <h3 className="font-bold text-sm text-slate-300">📊 Bulletin de notes</h3>
+                                <p className="text-[10px] text-slate-500">Synthèse des évaluations prof & exercices Cursus</p>
+                            </div>
                             <Button size="sm" onClick={exportBulletinPDF} disabled={overallAvg === 0}
                                 className="bg-gradient-to-r from-violet-600 to-indigo-600 text-xs rounded-xl shadow-lg shadow-violet-600/20">
                                 <Printer className="w-3.5 h-3.5 mr-1" />Exporter PDF
                             </Button>
                         </div>
-                        <Card className={cn("backdrop-blur-sm overflow-hidden text-center",
-                            overallAvg >= 10 ? "bg-gradient-to-br from-emerald-500/10 to-teal-500/5 border-emerald-500/20" :
-                            overallAvg > 0 ? "bg-gradient-to-br from-red-500/10 to-rose-500/5 border-red-500/20" : "bg-card/50 border-white/10")}>
+
+                        {/* Overall Average Card */}
+                        <Card className={cn("backdrop-blur-sm overflow-hidden text-center border",
+                            overallAvg >= 14 ? "bg-gradient-to-br from-emerald-500/15 to-teal-500/5 border-emerald-500/30" :
+                            overallAvg >= 10 ? "bg-gradient-to-br from-indigo-500/15 to-violet-500/5 border-indigo-500/30" :
+                            overallAvg > 0 ? "bg-gradient-to-br from-red-500/15 to-rose-500/5 border-red-500/30" : "bg-card/50 border-white/10")}>
                             <CardContent className="p-5">
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Moyenne générale</p>
-                                <p className={cn("text-4xl font-black mt-1", overallAvg >= 10 ? "text-emerald-400" : overallAvg > 0 ? "text-red-400" : "text-slate-500")}>
-                                    {overallAvg > 0 ? overallAvg.toFixed(2) : '—'}
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Moyenne générale calculée</p>
+                                <div className="flex items-center justify-center gap-2 mt-1">
+                                    <p className={cn("text-4xl font-black", overallAvg >= 10 ? "text-emerald-400" : overallAvg > 0 ? "text-red-400" : "text-slate-500")}>
+                                        {overallAvg > 0 ? overallAvg.toFixed(2) : '—'}
+                                    </p>
+                                    <span className="text-slate-500 text-lg font-bold">/20</span>
+                                </div>
+
+                                {overallAvg > 0 && (
+                                    <div className="mt-2 flex items-center justify-center gap-2">
+                                        <Badge className={cn("text-xs font-bold px-2.5 py-0.5 border-none",
+                                            overallAvg >= 16 ? "bg-emerald-500/20 text-emerald-300" :
+                                            overallAvg >= 14 ? "bg-teal-500/20 text-teal-300" :
+                                            overallAvg >= 12 ? "bg-indigo-500/20 text-indigo-300" :
+                                            overallAvg >= 10 ? "bg-amber-500/20 text-amber-300" : "bg-red-500/20 text-red-300"
+                                        )}>
+                                            {overallAvg >= 16 ? "Mention Très Bien 🎉" :
+                                             overallAvg >= 14 ? "Mention Bien 👏" :
+                                             overallAvg >= 12 ? "Mention Assez Bien 👍" :
+                                             overallAvg >= 10 ? "Passable ✅" : "Insuffisant ⚠️"}
+                                        </Badge>
+                                    </div>
+                                )}
+
+                                <p className="text-xs text-muted-foreground mt-2">
+                                    {gradesBySubject.filter(gs => gs.count > 0).length} matière(s) évaluée(s)
                                 </p>
-                                <p className="text-sm text-muted-foreground mt-1">/20 • {gradesBySubject.filter(gs => gs.count > 0).length} matière(s)</p>
                             </CardContent>
                         </Card>
+
+                        {/* Subject detail cards */}
                         {gradesBySubject.map((gs, i) => (
                             <motion.div key={gs.subject.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 * i }}>
                                 <Card className="bg-card/50 backdrop-blur-sm border-white/10 overflow-hidden">
                                     <CardContent className="p-4">
                                         <div className="flex items-center justify-between mb-3">
-                                            <div><h3 className="font-bold text-sm">{gs.subject.name}</h3><p className="text-[10px] text-muted-foreground">Coef. {gs.subject.coefficient || 1}</p></div>
+                                            <div>
+                                                <h3 className="font-bold text-sm text-white">{gs.subject.name}</h3>
+                                                <p className="text-[10px] text-muted-foreground">
+                                                    Coef. {gs.subject.coefficient || 1} • {gs.evalCount} éval(s) prof • {gs.exCount} ex. Cursus
+                                                </p>
+                                            </div>
                                             <span className={cn("text-lg font-black", gs.count > 0 ? (gs.average >= 10 ? "text-emerald-400" : "text-red-400") : "text-slate-600")}>
-                                                {gs.count > 0 ? gs.average.toFixed(1) : '—'}
+                                                {gs.count > 0 ? gs.average.toFixed(1) : '—'}<span className="text-[10px] text-slate-500">/20</span>
                                             </span>
                                         </div>
-                                        {gs.count > 0 && <Progress value={(gs.average / 20) * 100} className="h-2 mb-2" />}
-                                        {gs.grades.map((g: any) => (
-                                            <div key={g.id} className="flex items-center justify-between text-xs p-1.5 rounded-lg hover:bg-white/5">
-                                                <span className="text-slate-400">{g.evaluations?.title} ({g.evaluations?.type})</span>
-                                                <span className={cn("font-bold", g.score >= (g.evaluations?.max_score || 20) / 2 ? "text-emerald-400" : "text-red-400")}>{g.score}/{g.evaluations?.max_score || 20}</span>
-                                            </div>
-                                        ))}
+
+                                        {gs.count > 0 && <Progress value={(gs.average / 20) * 100} className="h-1.5 mb-3" />}
+
+                                        <div className="space-y-1.5">
+                                            {/* Teacher evaluations */}
+                                            {gs.grades.map((g: any) => (
+                                                <div key={g.id} className="flex items-center justify-between text-xs p-2 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-semibold uppercase">Prof</span>
+                                                        <span className="text-slate-300 truncate">{g.evaluations?.title}</span>
+                                                    </div>
+                                                    <span className={cn("font-bold shrink-0 ml-2", g.score >= (g.evaluations?.max_score || 20) / 2 ? "text-emerald-400" : "text-red-400")}>
+                                                        {g.score}/{g.evaluations?.max_score || 20}
+                                                    </span>
+                                                </div>
+                                            ))}
+
+                                            {/* Cursus auto-corrected exercises */}
+                                            {gs.exerciseSubmissions.map((es: any) => (
+                                                <div key={es.id} className="flex items-center justify-between text-xs p-2 rounded-xl bg-violet-500/[0.05] border border-violet-500/20">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 font-semibold uppercase">Cursus</span>
+                                                        <span className="text-slate-300 truncate">{es.exercises?.title || 'Exercice auto-corrigé'}</span>
+                                                    </div>
+                                                    <span className={cn("font-bold shrink-0 ml-2", es.score >= (es.exercises?.max_score || 20) / 2 ? "text-emerald-400" : "text-red-400")}>
+                                                        {es.score}/{es.exercises?.max_score || 20}
+                                                    </span>
+                                                </div>
+                                            ))}
+
+                                            {gs.count === 0 && (
+                                                <p className="text-xs text-slate-600 italic text-center py-2">Aucune note enregistrée</p>
+                                            )}
+                                        </div>
                                     </CardContent>
                                 </Card>
                             </motion.div>

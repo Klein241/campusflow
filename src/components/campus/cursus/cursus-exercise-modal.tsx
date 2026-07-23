@@ -13,11 +13,20 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 
+export function calculateSkyPoints(score: number, maxScore: number): number {
+    if (!maxScore || maxScore <= 0) return 0;
+    const ratio = score / maxScore;
+    if (ratio >= 0.75) return 5;
+    if (ratio >= 0.60) return 3;
+    if (ratio >= 0.50) return 1;
+    return 0;
+}
+
 interface ExerciseModalProps {
     exercise: any;
     studentId: string;
     onClose: () => void;
-    onComplete: (score: number, maxScore: number) => void;
+    onComplete: (score: number, maxScore: number, skyGain: number) => void;
 }
 
 export function CursusExerciseModal({ exercise, studentId, onClose, onComplete }: ExerciseModalProps) {
@@ -25,7 +34,7 @@ export function CursusExerciseModal({ exercise, studentId, onClose, onComplete }
     const [answers, setAnswers] = useState<Record<number, string>>({});
     const [timeLeft, setTimeLeft] = useState(exercise.duration_minutes * 60);
     const [submitted, setSubmitted] = useState(false);
-    const [result, setResult] = useState<{ score: number; max: number; details: any[] } | null>(null);
+    const [result, setResult] = useState<{ score: number; max: number; skyGain: number; details: any[] } | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -82,20 +91,25 @@ export function CursusExerciseModal({ exercise, studentId, onClose, onComplete }
             });
         }
 
-        // Sky points
-        const skyGain = Math.round(score);
+        // Sky points calculation
+        const skyGain = calculateSkyPoints(score, exercise.max_score);
         if (skyGain > 0) {
             const { data: prof } = await supabase.from('student_profiles').select('sky_points').eq('id', studentId).single();
             if (prof) {
                 await supabase.from('student_profiles').update({ sky_points: (prof.sky_points || 0) + skyGain }).eq('id', studentId);
-                await supabase.from('sky_transactions').insert({ student_id: studentId, amount: skyGain, transaction_type: 'exercise_score', description: `Score: ${score}/${exercise.max_score} — ${exercise.title}` });
+                await supabase.from('sky_transactions').insert({
+                    student_id: studentId,
+                    amount: skyGain,
+                    transaction_type: 'exercise_score',
+                    description: `Score: ${score}/${exercise.max_score} (+${skyGain} Sky) — ${exercise.title}`
+                });
             }
         }
 
-        setResult({ score, max: exercise.max_score, details });
+        setResult({ score, max: exercise.max_score, skyGain, details });
         setSubmitted(true);
         setSubmitting(false);
-        onComplete(score, exercise.max_score);
+        onComplete(score, exercise.max_score, skyGain);
     }, [answers, questions, exercise, studentId, submitting]);
 
     if (submitted && result) {
@@ -125,7 +139,13 @@ export function CursusExerciseModal({ exercise, studentId, onClose, onComplete }
                         </div>
                         <Progress value={pct} className="mt-3 h-2" />
                         <p className="text-xs text-slate-500 mt-2">{pct.toFixed(0)}% de réussite</p>
-                        {result.score > 0 && <p className="text-xs text-amber-400 mt-1">+{Math.round(result.score)} Sky Points gagnés ⭐</p>}
+                        {result.skyGain > 0 ? (
+                            <p className="text-xs text-amber-400 font-bold mt-1.5 flex items-center justify-center gap-1">
+                                <span>⭐</span> +{result.skyGain} Sky Point{result.skyGain > 1 ? 's' : ''} gagné{result.skyGain > 1 ? 's' : ''} !
+                            </p>
+                        ) : (
+                            <p className="text-[10px] text-slate-500 mt-1">Nécessite au moins 50% de réussite (10/20) pour des Sky Points</p>
+                        )}
                     </div>
 
                     {result.details.length > 0 && (
