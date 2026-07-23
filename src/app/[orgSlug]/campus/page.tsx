@@ -170,11 +170,19 @@ export default function CampusPage() {
         setActiveTab(tab as CampusTab);
     };
 
-    // Quand on clique sur Shop dans la nav => ouvre le store en modal
+    // Navigation handlers
     const handleTabChange = (tab: CampusTab) => {
         if (tab === 'shop') {
             setStoreOpen(true);
-            return; // ne change pas l'onglet actif visuellement
+            return;
+        }
+        if (tab === 'marketplace') {
+            router.push(`/${orgSlug}/shop`);
+            return;
+        }
+        if (tab === 'library') {
+            router.push(`/${orgSlug}/library`);
+            return;
         }
         setActiveTab(tab);
     };
@@ -336,39 +344,7 @@ export default function CampusPage() {
                         </motion.div>
                     )}
 
-                    {activeTab === 'library' && (
-                        <motion.div key="library" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}>
-                            <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
-                                <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-amber-500 to-yellow-500 flex items-center justify-center shadow-2xl shadow-amber-500/30 text-4xl">
-                                    📚
-                                </div>
-                                <div>
-                                    <h2 className="text-xl font-bold text-white">Bibliothèque</h2>
-                                    <p className="text-slate-400 text-sm mt-1">Cours, documents et ressources</p>
-                                </div>
-                                <div className="mt-4 px-6 py-3 rounded-2xl bg-white/5 border border-white/10 text-slate-400 text-sm">
-                                    🚧 Bientôt disponible — Accédez à tous vos documents de cours
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
 
-                    {activeTab === 'marketplace' && (
-                        <motion.div key="marketplace" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}>
-                            <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
-                                <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-2xl shadow-emerald-500/30 text-4xl">
-                                    🛍️
-                                </div>
-                                <div>
-                                    <h2 className="text-xl font-bold text-white">Marketplace</h2>
-                                    <p className="text-slate-400 text-sm mt-1">Achats, offres et produits éducatifs</p>
-                                </div>
-                                <div className="mt-4 px-6 py-3 rounded-2xl bg-white/5 border border-white/10 text-slate-400 text-sm">
-                                    🚧 Bientôt disponible — Explorez les offres de votre établissement
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
 
                     {activeTab === 'profile' && (
                         <motion.div key="profile" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>

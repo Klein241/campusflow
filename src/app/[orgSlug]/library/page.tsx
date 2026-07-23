@@ -533,7 +533,7 @@ export default function LibraryPage() {
                 {/* Header */}
                 <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-3">
-                        <button onClick={() => router.push(`/${orgSlug}/admin`)} className="p-2 hover:bg-white/5 rounded-lg"><ArrowLeft className="w-5 h-5" /></button>
+                        <button onClick={() => router.back()} className="p-2 hover:bg-white/5 rounded-lg"><ArrowLeft className="w-5 h-5" /></button>
                         <div>
                             <h1 className="text-2xl font-black tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent flex items-center gap-2">
                                 <BookOpen className="h-6 w-6 text-emerald-400" /> Bibliothèque

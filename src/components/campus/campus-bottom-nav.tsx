@@ -2,9 +2,11 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useOrgSlug } from '@/hooks/use-org-slug';
 import {
     Newspaper, Users, MessageSquare, Lock, User,
-    ShoppingBag, Plus, X, BookOpen, Store, ClipboardList
+    ShoppingBag, Plus, BookOpen, Store, ClipboardList
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -111,6 +113,8 @@ export function CampusBottomNav({
     userPhotoUrl,
     userRole,
 }: CampusBottomNavProps) {
+    const router = useRouter();
+    const orgSlug = useOrgSlug();
     const [storyOpen, setStoryOpen] = useState(false);
     const [fabOpen, setFabOpen] = useState(false);
 
@@ -132,6 +136,15 @@ export function CampusBottomNav({
 
     const handleFabItemClick = (tabId: CampusTab) => {
         setFabOpen(false);
+        if (tabId === 'marketplace') {
+            router.push(`/${orgSlug}/shop`);
+            return;
+        }
+        if (tabId === 'library') {
+            router.push(`/${orgSlug}/library`);
+            return;
+        }
+        // 'forms' → onglet campus inline
         onTabChange(tabId);
     };
 

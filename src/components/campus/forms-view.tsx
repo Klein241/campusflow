@@ -697,7 +697,7 @@ export function FormsView({ orgId, orgSlug, userId, userRole, userName }: FormsV
                     <FormBuilder
                         form={builderForm === 'new' ? null : builderForm}
                         onClose={() => setBuilderForm(null)}
-                        onSaved={() => { setBuilderForm(null); load(); }}
+                        onSaved={() => { setBuilderForm(null); setActiveTab('my'); load(); }}
                         orgId={orgId}
                         userId={userId}
                         userRole={userRole}
