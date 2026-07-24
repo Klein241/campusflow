@@ -302,14 +302,20 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                 finalImageUrl = urlData.publicUrl;
             }
 
-            const { error } = await supabase.from('tutoring_requests').insert({
-                organization_id: orgId,
+            const payload: any = {
                 user_id: userId,
                 content: newPostContent.trim(),
                 category: activePostTab === 'officiel' ? 'officiel' : 'general',
                 photos: finalImageUrl ? [finalImageUrl] : [],
                 is_anonymous: false
-            });
+            };
+
+            // Essayer avec organization_id, fallback sans si la colonne n'existe pas encore dans la DB
+            let { error } = await supabase.from('tutoring_requests').insert({ ...payload, organization_id: orgId });
+            if (error && (error.message?.includes('organization_id') || error.code === 'PGRST204')) {
+                const res = await supabase.from('tutoring_requests').insert(payload);
+                error = res.error;
+            }
             if (error) throw error;
             toast.success('Publication ajoutée ! 🚀');
             setNewPostContent('');
