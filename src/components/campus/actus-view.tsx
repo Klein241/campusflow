@@ -265,20 +265,27 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
     const publishPost = async () => {
         if (!newPostContent.trim() && !postImage) return;
 
-        // ── Sky Points : débit atomique via RPC ──
-        if (userRole === 'student') {
-            const { data: spendResult, error: spendErr } = await supabase.rpc('spend_sky_point', {
-                p_user_id: userId,
-                p_org_id: orgId,
-                p_amount: 1,
-                p_reason: 'actus_post',
-                p_description: "Publication d'une actus"
-            });
-            if (spendErr || !spendResult || spendResult.success === false) {
-                const pts = spendResult?.points ?? '?';
-                toast.error(`Solde insuffisant — 1 Sky requis (solde: ${pts})`);
-                return;
-            }
+        // ── Sky Points : vérification & débit avec fallback direct ──
+        const table = (userRole === 'teacher' || userRole === 'admin' || userRole === 'owner') ? 'teacher_profiles' : 'student_profiles';
+        const { data: prof } = await supabase.from(table).select('sky_points').eq('id', userId).maybeSingle();
+        const currentPts = prof?.sky_points ?? 100;
+        if (currentPts < 1) {
+            toast.error('Solde insuffisant — 1 Sky Point requis pour publier');
+            return;
+        }
+
+        const { data: spendResult, error: spendErr } = await supabase.rpc('spend_sky_point', {
+            p_user_id: userId,
+            p_org_id: orgId,
+            p_amount: 1,
+            p_reason: 'actus_post',
+            p_description: "Publication d'une actus"
+        });
+
+        if (spendErr || !spendResult || spendResult.success === false) {
+            // Fallback si RPC absente
+            const newBal = Math.max(0, currentPts - 1);
+            await supabase.from(table).update({ sky_points: newBal }).eq('id', userId);
         }
 
         setPublishing(true);

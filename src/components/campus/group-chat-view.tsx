@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { compressImage } from '@/lib/compress';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { ChatMessageRenderer } from './chat-message-renderer';
 
 // ═══════════════════════════════════════════════════════
 // GROUP CHAT VIEW — Chat de groupe enrichi
@@ -326,7 +327,7 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
                 </a>
             );
         }
-        return <span className="whitespace-pre-wrap break-words">{m.content}</span>;
+        return <ChatMessageRenderer content={m.content} isMe={isMe} />;
     };
 
     return (

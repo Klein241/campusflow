@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { ChatMessageRenderer } from './chat-message-renderer';
 
 // ═══════════════════════════════════════════════════════
 // CHAT DM VIEW — Espace dédié aux messages directs
@@ -540,7 +541,7 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
         }
 
         // Text (default)
-        return <span className="whitespace-pre-wrap break-words">{m.content}</span>;
+        return <ChatMessageRenderer content={m.content} isMe={isMe} />;
     };
 
     // ═══ ACTIVE CONVERSATION VIEW ═══

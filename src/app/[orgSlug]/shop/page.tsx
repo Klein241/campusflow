@@ -129,7 +129,18 @@ export default function ShopPage() {
         if (!session?.id) { toast.error('Connectez-vous pour vendre'); return; }
         setSaving(true);
         try {
-            // Deduct 10 Sky Points
+            // ── Deduct 10 Sky Points (with fallback) ──
+            const role = session.role || 'student';
+            const table = (role === 'teacher' || role === 'admin' || role === 'owner') ? 'teacher_profiles' : 'student_profiles';
+            const { data: prof } = await supabase.from(table).select('sky_points').eq('id', session.id).maybeSingle();
+            const currentPts = prof?.sky_points ?? 100;
+
+            if (currentPts < 10) {
+                toast.error(`⚡ Solde insuffisant — 10 Sky Points requis pour ajouter un produit (solde actuel: ${currentPts} pts)`);
+                setSaving(false);
+                return;
+            }
+
             const { data: spendResult } = await supabase.rpc('spend_sky_point', {
                 p_user_id: session.id,
                 p_org_id: org.id,
@@ -137,10 +148,11 @@ export default function ShopPage() {
                 p_reason: 'marketplace_post',
                 p_description: `Produit: ${pName.trim()}`,
             });
-            if (spendResult && !spendResult.success) {
-                toast.error(`⚡ Solde insuffisant — 10 Sky Points requis (solde actuel: ${spendResult.balance ?? 0} pts)`);
-                setSaving(false);
-                return;
+
+            if (!spendResult || spendResult.success === false) {
+                // Fallback direct update
+                const newBal = Math.max(0, currentPts - 10);
+                await supabase.from(table).update({ sky_points: newBal }).eq('id', session.id);
             }
             let imageUrl = '';
             if (pImg) {
