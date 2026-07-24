@@ -16,6 +16,7 @@ import { ChatDMView } from '@/components/campus/chat-dm-view';
 import { GroupesView } from '@/components/campus/groupes-view';
 import { ActusView } from '@/components/campus/actus-view';
 import { calculateSkyPoints } from '@/components/campus/cursus/cursus-exercise-modal';
+import { RichContentRenderer } from '@/components/campus/cursus/rich-content-renderer';
 import { queueGradeNotification, queuePaymentReceipt, queueDisciplineAlert, enqueueWhatsAppMessage } from '@/lib/whatsapp-queue';
 import { cn } from '@/lib/utils';
 
@@ -1852,7 +1853,7 @@ ${bodyHtml}
                                                                     </div>
                                                                 ) : (
                                                                     <div>
-                                                                        {ch.content ? <div className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed p-3 rounded-lg bg-white/[0.02] border border-white/5 mb-2">{ch.content}</div> : <p className="text-xs text-slate-600 italic mb-2">Pas de contenu texte</p>}
+                                                                        {ch.content ? <div className="p-3 rounded-lg bg-white/[0.02] border border-white/5 mb-2"><RichContentRenderer content={ch.content} /></div> : <p className="text-xs text-slate-600 italic mb-2">Pas de contenu texte</p>}
                                                                         <button onClick={() => { setEditAdminChId(ch.id); setEditAdminChContent(ch.content || ''); }} className="text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1"><Edit className="w-3 h-3" />Modifier le contenu</button>
                                                                     </div>
                                                                 )}
@@ -1879,7 +1880,7 @@ ${bodyHtml}
                                                                                 </div>
                                                                             ) : (
                                                                                 <>
-                                                                                    {lesson.content ? <div className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed mb-2">{lesson.content}</div> : <p className="text-[10px] text-slate-600 italic mb-1">Pas de contenu</p>}
+                                                                                    {lesson.content ? <div className="mb-2"><RichContentRenderer content={lesson.content} /></div> : <p className="text-[10px] text-slate-600 italic mb-1">Pas de contenu</p>}
                                                                                     <button onClick={() => { setEditAdminLessonId(lesson.id); setEditAdminLessonContent(lesson.content || ''); }} className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1"><Edit className="w-3 h-3" />Modifier</button>
                                                                                 </>
                                                                             )}
