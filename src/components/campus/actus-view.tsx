@@ -399,9 +399,13 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
         if (!isRepost && !storyText.trim() && !storyImage) { toast.error('Ajoutez du texte ou une image'); return; }
         if (isRepost && !repostData) return;
 
-        if (userRole === 'student') {
-            const { data: profile } = await supabase.from('student_profiles').select('sky_points').eq('id', userId).single();
-            if (profile && profile.sky_points < 1) { toast.error('Solde insuffisant — 1 Sky Point requis'); return; }
+        const table = userRole === 'teacher' ? 'teacher_profiles' : 'student_profiles';
+        const { data: profile } = await supabase.from(table).select('sky_points').eq('id', userId).maybeSingle();
+        const currentPoints = profile?.sky_points ?? 100;
+
+        if (currentPoints < 1) {
+            toast.error('Solde insuffisant — 1 Sky Point requis pour publier');
+            return;
         }
 
         setPublishingStory(true);
@@ -439,19 +443,17 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
             });
             if (error) throw error;
             
-            if (userRole === 'student') {
-                const { data: profile } = await supabase.from('student_profiles').select('sky_points').eq('id', userId).single();
-                if (profile) {
-                    await supabase.from('student_profiles').update({ sky_points: profile.sky_points - 1 }).eq('id', userId);
-                    await supabase.from('sky_transactions').insert({
-                        student_id: userId,
-                        amount: -1,
-                        transaction_type: 'story_post',
-                        description: isRepost ? 'Repost d\'une story' : 'Publication d\'une story',
-                        organization_id: orgId
-                    });
-                }
-            }
+            // Deduct 1 Sky Point
+            const newBal = Math.max(0, currentPoints - 1);
+            await supabase.from(table).update({ sky_points: newBal }).eq('id', userId);
+            await supabase.from('sky_transactions').insert({
+                user_id: userId,
+                student_id: userRole === 'student' ? userId : null,
+                amount: -1,
+                transaction_type: 'story_post',
+                description: isRepost ? 'Repost d\'une story' : 'Publication d\'une story',
+                organization_id: orgId
+            });
             
             toast.success(isRepost ? 'Story repostée ! ✨' : 'Story publiée ! ✨');
             if (!isRepost) {

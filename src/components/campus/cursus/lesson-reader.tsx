@@ -186,6 +186,18 @@ function renderTextWithCode(raw: string, notes: LessonReaderNote[], colorMap: Re
 }
 
 export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialShowNotes = false }: LessonReaderProps) {
+    // Hide bottom nav when lesson reader is open
+    useEffect(() => {
+        if (isOpen) {
+            document.body.setAttribute('data-lesson-open', 'true');
+        } else {
+            document.body.removeAttribute('data-lesson-open');
+        }
+        return () => {
+            document.body.removeAttribute('data-lesson-open');
+        };
+    }, [isOpen]);
+
     // Zoom
     const [zoom, setZoom] = useState(100);
     // Highlight mode
@@ -486,17 +498,18 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
                                                     </div>
                                                 );
                                             }
-                                            // Plain text with highlight marks
-                                            let html = block.value;
+                                            // Plain text with highlight marks (HTML escaped so HTML tags show as text)
+                                            let html = escapeHtml(block.value);
                                             notes
                                                 .filter(n => n.highlight_text)
                                                 .forEach(n => {
                                                     if (n.highlight_text) {
-                                                        const escaped = n.highlight_text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                                                        const escapedTarget = escapeHtml(n.highlight_text);
+                                                        const escapedRegex = escapedTarget.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                                                         const colorCss = colorMap[n.color || 'yellow'];
                                                         html = html.replace(
-                                                            new RegExp(escaped, 'gi'),
-                                                            `<mark style="background:${colorCss};border-radius:3px;padding:0 2px;">${n.highlight_text}</mark>`
+                                                            new RegExp(escapedRegex, 'gi'),
+                                                            `<mark style="background:${colorCss};border-radius:3px;padding:0 2px;">${escapedTarget}</mark>`
                                                         );
                                                     }
                                                 });

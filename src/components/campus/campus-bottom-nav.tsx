@@ -119,10 +119,13 @@ export function CampusBottomNav({
     const [fabOpen, setFabOpen] = useState(false);
 
     useEffect(() => {
-        const check = () => setStoryOpen(document.body.hasAttribute('data-story-open'));
+        const check = () => setStoryOpen(
+            document.body.hasAttribute('data-story-open') || 
+            document.body.hasAttribute('data-lesson-open')
+        );
         check();
         const observer = new MutationObserver(check);
-        observer.observe(document.body, { attributes: true, attributeFilter: ['data-story-open'] });
+        observer.observe(document.body, { attributes: true, attributeFilter: ['data-story-open', 'data-lesson-open'] });
         return () => observer.disconnect();
     }, []);
 

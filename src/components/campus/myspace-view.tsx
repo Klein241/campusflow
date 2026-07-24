@@ -244,11 +244,10 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                 setAllTeachers(teachers || []);
             }
             
-            // Load sky points for student
-            if (!isTeacher && userRole !== 'admin' && userRole !== 'owner') {
-                const { data: sp } = await supabase.from('student_profiles').select('sky_points').eq('id', userId).single();
-                if (sp) setSkyPoints(sp.sky_points || 0);
-            }
+            // Load sky points for all user roles
+            const skyTable = (userRole === 'teacher' || userRole === 'admin' || userRole === 'owner') ? 'teacher_profiles' : 'student_profiles';
+            const { data: sp } = await supabase.from(skyTable).select('sky_points').eq('id', userId).maybeSingle();
+            setSkyPoints(sp?.sky_points ?? 100);
             
             setLoading(false);
         })();

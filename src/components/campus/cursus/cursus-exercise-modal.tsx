@@ -66,13 +66,24 @@ export function CursusExerciseModal({ exercise, studentId, onClose, onComplete }
         const details: any[] = [];
 
         questions.forEach((q: any, i: number) => {
-            const ans = answers[i] || '';
-            let correct = false;
-            if (exercise.type === 'qcm' || exercise.type === 'quiz') {
-                correct = ans.trim().toLowerCase() === (q.answer || '').trim().toLowerCase();
-                if (correct) score += ptsPerQ;
+            const ans = String(answers[i] ?? '').trim().toLowerCase();
+            let expected = String(q.answer ?? q.correct_answer ?? q.correctAnswer ?? '').trim().toLowerCase();
+            if (!expected && Array.isArray(q.options) && typeof q.correct_option === 'number') {
+                expected = String(q.options[q.correct_option] ?? '').trim().toLowerCase();
             }
-            details.push({ question: q.question, answer: ans, correctAnswer: q.answer, correct, pts: correct ? ptsPerQ : 0 });
+            
+            let correct = false;
+            if (ans && expected && ans === expected) {
+                correct = true;
+            } else if (typeof q.correct_option === 'number' && String(answers[i]) === String(q.correct_option)) {
+                correct = true;
+            } else if (exercise.type !== 'qcm' && exercise.type !== 'quiz') {
+                // Pour les exercices texte/libre, s'il y a une réponse tapée, on accorde par défaut ou on vérifie si ça inclut le mot clé
+                correct = ans.length > 0 && (!expected || ans.includes(expected));
+            }
+
+            if (correct) score += ptsPerQ;
+            details.push({ question: q.question, answer: answers[i] || '', correctAnswer: expected || q.answer, correct, pts: correct ? ptsPerQ : 0 });
         });
 
         score = Math.min(Math.round(score * 10) / 10, exercise.max_score);
