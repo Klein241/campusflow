@@ -194,15 +194,27 @@ export default function ShopPage() {
         setSaving(true);
         try {
             const total = selectedProduct.prix * orderQty;
-            const { error } = await supabase.from('shop_orders').insert({
-                student_id: session.id, product_id: selectedProduct.id,
-                quantite: orderQty, montant_total: total,
-            });
+            const orderPayload: any = {
+                student_id: session.id,
+                product_id: selectedProduct.id,
+                quantite: orderQty,
+                montant_total: total,
+            };
+            let { error } = await supabase.from('shop_orders').insert(orderPayload);
+            if (error && (error.message?.includes('student_id') || error.code === 'PGRST204')) {
+                const { error: err2 } = await supabase.from('shop_orders').insert({
+                    user_id: session.id,
+                    product_id: selectedProduct.id,
+                    quantite: orderQty,
+                    montant_total: total,
+                });
+                error = err2;
+            }
             if (error) throw error;
             toast.success('🎉 Commande passée ! L\'administration vous contactera.');
             setShowOrderForm(false); setOrderQty(1);
             const { data: ord } = await supabase.from('shop_orders').select('*, shop_products:product_id(nom, prix, image_url, devise)')
-                .eq('student_id', session.id).order('created_at', { ascending: false }).limit(50);
+                .order('created_at', { ascending: false }).limit(50);
             setMyOrders(ord || []);
         } catch (e: any) { toast.error(e.message); }
         setSaving(false);
