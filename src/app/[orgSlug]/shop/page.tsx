@@ -163,12 +163,21 @@ export default function ShopPage() {
                 const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
                 imageUrl = urlData.publicUrl;
             }
-            const { error } = await supabase.from('shop_products').insert({
+            const productPayload = {
                 tenant_id: org.id, nom: pName.trim(), description: pDesc || null,
                 prix: parseFloat(pPrice), categorie: pCat, stock: parseInt(pStock) || 0,
                 image_url: imageUrl || null, created_by: session?.id || null,
                 is_visible: isAdmin,
-            });
+            };
+            let { error } = await supabase.from('shop_products').insert(productPayload);
+            if (error && (error.code === '23503' || error.message?.includes('foreign key constraint') || error.message?.includes('created_by_fkey'))) {
+                // Fallback sans created_by si contrainte FK vers auth.users présente dans Supabase
+                const { error: fallbackErr } = await supabase.from('shop_products').insert({
+                    ...productPayload,
+                    created_by: null
+                });
+                error = fallbackErr;
+            }
             if (error) throw error;
             toast.success(isAdmin ? '🎉 Produit publié ! (-10 Sky Points)' : '🎉 Produit soumis — en attente de validation (-10 pts)');
             setPName(''); setPDesc(''); setPPrice(''); setPImg(null); setShowAddForm(false);
