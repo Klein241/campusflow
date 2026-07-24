@@ -294,10 +294,11 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
             let finalImageUrl: string | null = null;
             if (postImage) {
                 const compressed = await compressImage(postImage, { maxWidth: 1080, quality: 0.7 });
-                const path = `actus/${userId}/${Date.now()}_${postImage.name}`;
-                const { error: uploadErr } = await supabase.storage.from('campus_assets').upload(path, compressed);
+                const ext = postImage.name.split('.').pop() || 'jpg';
+                const path = `actus/${userId}/${Date.now()}.${ext}`;
+                const { error: uploadErr } = await supabase.storage.from('organization-assets').upload(path, compressed, { upsert: true });
                 if (uploadErr) throw uploadErr;
-                const { data: urlData } = supabase.storage.from('campus_assets').getPublicUrl(path);
+                const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
                 finalImageUrl = urlData.publicUrl;
             }
 

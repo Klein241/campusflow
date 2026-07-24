@@ -66,24 +66,49 @@ export function CursusExerciseModal({ exercise, studentId, onClose, onComplete }
         const details: any[] = [];
 
         questions.forEach((q: any, i: number) => {
-            const ans = String(answers[i] ?? '').trim().toLowerCase();
-            let expected = String(q.answer ?? q.correct_answer ?? q.correctAnswer ?? '').trim().toLowerCase();
-            if (!expected && Array.isArray(q.options) && typeof q.correct_option === 'number') {
-                expected = String(q.options[q.correct_option] ?? '').trim().toLowerCase();
+            const userAns = answers[i]; // peut être texte d'option ou index (string)
+            const userAnsStr = String(userAns ?? '').trim().toLowerCase();
+
+            // ── Déterminer la bonne réponse ──
+            let correctText = String(q.answer ?? q.correct_answer ?? q.correctAnswer ?? '').trim().toLowerCase();
+            let correctIndex: number | null = null;
+            if (typeof q.correct_option === 'number') correctIndex = q.correct_option;
+            else if (typeof q.correct_option === 'string' && !isNaN(Number(q.correct_option))) correctIndex = Number(q.correct_option);
+
+            // Si correct_option (index) disponible, récupère aussi le texte de la bonne option
+            if (correctIndex !== null && Array.isArray(q.options) && q.options[correctIndex] !== undefined) {
+                correctText = String(q.options[correctIndex]).trim().toLowerCase();
             }
-            
+
             let correct = false;
-            if (ans && expected && ans === expected) {
-                correct = true;
-            } else if (typeof q.correct_option === 'number' && String(answers[i]) === String(q.correct_option)) {
-                correct = true;
-            } else if (exercise.type !== 'qcm' && exercise.type !== 'quiz') {
-                // Pour les exercices texte/libre, s'il y a une réponse tapée, on accorde par défaut ou on vérifie si ça inclut le mot clé
-                correct = ans.length > 0 && (!expected || ans.includes(expected));
+
+            if (userAnsStr) {
+                // 1. Comparaison directe texte-texte (QCM: student selects option text)
+                if (correctText && userAnsStr === correctText) {
+                    correct = true;
+                }
+                // 2. L'étudiant a répondu par index numérique (string) — ex: "2"
+                else if (correctIndex !== null && String(userAns).trim() === String(correctIndex)) {
+                    correct = true;
+                }
+                // 3. L'étudiant a tapé un texte mais la réponse attendue est via index → compare texte de la bonne option
+                else if (correctIndex !== null && Array.isArray(q.options)) {
+                    const optionText = String(q.options[correctIndex] ?? '').trim().toLowerCase();
+                    if (optionText && userAnsStr === optionText) correct = true;
+                }
+                // 4. Exercices texte libre / ouverts : si l'étudiant a écrit quelque chose et qu'il n'y a pas de réponse attendue précise → accorder
+                else if (exercise.type !== 'qcm' && exercise.type !== 'quiz' && !correctText && userAnsStr.length > 2) {
+                    correct = true;
+                }
+                // 5. Exercices texte avec réponse attendue → inclusion partielle
+                else if (exercise.type !== 'qcm' && correctText && userAnsStr.includes(correctText)) {
+                    correct = true;
+                }
             }
 
             if (correct) score += ptsPerQ;
-            details.push({ question: q.question, answer: answers[i] || '', correctAnswer: expected || q.answer, correct, pts: correct ? ptsPerQ : 0 });
+            const correctDisplay = correctText || (correctIndex !== null && Array.isArray(q.options) ? q.options[correctIndex] : '') || q.answer || '';
+            details.push({ question: q.question, answer: userAns || '', correctAnswer: correctDisplay, correct, pts: correct ? ptsPerQ : 0 });
         });
 
         score = Math.min(Math.round(score * 10) / 10, exercise.max_score);

@@ -105,27 +105,6 @@ export function usePushNotifications({
             return false;
         }
 
-        if (!VAPID_PUBLIC_KEY) {
-            // Try to fetch VAPID key from worker
-            if (WORKER_URL) {
-                try {
-                    const res = await fetch(`${WORKER_URL}/api/push/vapid-key`);
-                    if (res.ok) {
-                        const data = await res.json() as { publicKey: string };
-                        if (!data.publicKey) {
-                            setError('Clé VAPID non configurée sur le serveur');
-                            return false;
-                        }
-                    }
-                } catch {
-                    setError('Impossible de contacter le serveur push');
-                    return false;
-                }
-            }
-            setError('Clé VAPID non configurée');
-            return false;
-        }
-
         setIsLoading(true);
         setError(null);
 
@@ -136,6 +115,7 @@ export function usePushNotifications({
 
             if (perm !== 'granted') {
                 setError('Permission de notification refusée');
+                setIsLoading(false);
                 return false;
             }
 
@@ -143,33 +123,57 @@ export function usePushNotifications({
             const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
             await navigator.serviceWorker.ready;
 
-            // 3. Create push subscription
+            // 3. Si pas de VAPID key, on s'arrête ici — les notifications locales fonctionnent quand même
+            if (!VAPID_PUBLIC_KEY) {
+                console.warn('[Push] Pas de VAPID key — notifications locales (SW) activées, push web désactivé');
+                setIsSubscribed(false); // pas de push distant
+                setIsLoading(false);
+                return true; // SW enregistré, permission accordée
+            }
+
+            // 4. Create push subscription
             const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
-            const subscription = await reg.pushManager.subscribe({
+            const existingSub = await reg.pushManager.getSubscription();
+            const subscription = existingSub || await reg.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: applicationServerKey.buffer as ArrayBuffer,
             });
 
-            // 4. Send subscription to the Cloudflare Worker
-            if (WORKER_URL) {
-                const subJSON = subscription.toJSON();
-                const res = await fetch(`${WORKER_URL}/api/push/register`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        userId,
-                        subscription: {
-                            endpoint: subJSON.endpoint,
-                            keys: subJSON.keys,
-                        },
-                        userRole,
-                        organizationId,
-                        orgSlug,
-                    }),
-                });
+            const subJSON = subscription.toJSON();
 
-                if (!res.ok) {
-                    throw new Error("Erreur lors de l'enregistrement push");
+            // 5a. Send to Cloudflare Worker (if configured)
+            if (WORKER_URL) {
+                try {
+                    await fetch(`${WORKER_URL}/api/push/register`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            userId,
+                            subscription: { endpoint: subJSON.endpoint, keys: subJSON.keys },
+                            userRole,
+                            organizationId,
+                            orgSlug,
+                        }),
+                    });
+                } catch {
+                    // Non-critical — fallback to Supabase below
+                }
+            }
+
+            // 5b. Save to Supabase as fallback (always)
+            if (userId && organizationId) {
+                try {
+                    const { supabase } = await import('@/lib/supabase');
+                    await supabase.from('push_subscriptions').upsert({
+                        user_id: userId,
+                        organization_id: organizationId,
+                        endpoint: subJSON.endpoint || '',
+                        auth: (subJSON.keys as any)?.auth || '',
+                        p256dh: (subJSON.keys as any)?.p256dh || '',
+                        updated_at: new Date().toISOString(),
+                    }, { onConflict: 'user_id,organization_id' });
+                } catch {
+                    // Non-critical
                 }
             }
 
