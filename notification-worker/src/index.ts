@@ -1127,14 +1127,16 @@ async function sendWebPush(
 // ══════════════════════════════════════════════════════════
 
 async function handleNotify(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const payload: NotifyPayload = await request.json();
-    const { action_type, actor_id, actor_name, actor_avatar } = payload;
+    try {
+        const payload: NotifyPayload = await request.json();
+        const { action_type, actor_id, actor_name, actor_avatar, extra_data } = payload;
 
-    if (!action_type || !actor_id || !actor_name) {
-        return json({ error: 'action_type, actor_id, actor_name required' }, 400);
-    }
+        if (!action_type || !actor_id || !actor_name) {
+            return json({ error: 'action_type, actor_id, actor_name required' }, 400);
+        }
 
-    const db = new SupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+        const db = new SupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+
     const recipientIds = payload.recipient_ids || (payload.recipient_id ? [payload.recipient_id] : []);
 
     if (recipientIds.length === 0) {
@@ -1268,7 +1270,11 @@ async function handleNotify(request: Request, env: Env, ctx: ExecutionContext): 
     }
 
     return json({ success: true, results });
+    } catch (e: any) {
+        return json({ error: e?.message || String(e), stack: e?.stack }, 500);
+    }
 }
+
 
 function mapActionTypeToLegacyType(actionType: NotificationActionType): string {
     switch (actionType) {
