@@ -127,17 +127,22 @@ async function sendFallback(payload: NotifyWorkerPayload): Promise<boolean> {
     const actionData = buildFallbackActionData(payload);
     const { title, message } = buildFallbackMessage(payload);
 
+    const orgId = payload.extra_data?.orgId || payload.extra_data?.organization_id || null;
+
     const notifications = recipientIds
         .filter(id => id !== payload.actor_id)
         .map(userId => ({
             user_id: userId,
+            organization_id: orgId,
             title,
             message,
+            body: message,
             type: mapActionTypeToLegacyType(payload.action_type),
             action_type: payload.action_type,
             action_data: JSON.stringify(actionData),
             is_read: false,
         }));
+
 
     if (notifications.length === 0) return true;
 

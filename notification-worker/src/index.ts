@@ -1199,6 +1199,7 @@ async function handleNotify(request: Request, env: Env, ctx: ExecutionContext): 
                     await db.update('notifications', {
                         title,
                         message,
+                        body: message,
                         actors: JSON.stringify(uniqueActors.slice(0, 5)), // Store up to 5 actors
                         actor_count: totalCount,
                         aggregation_key: aggKey,
@@ -1206,11 +1207,16 @@ async function handleNotify(request: Request, env: Env, ctx: ExecutionContext): 
                         updated_at: new Date().toISOString(),
                     }, `id=eq.${existingEntry.notification_id}`);
                 } else {
+                    // Extract organization_id if provided
+                    const orgId = extra_data?.orgId || extra_data?.organization_id || extra_data?.organizationId || null;
+
                     // Insert new notification
                     const inserted = await db.insert('notifications', {
                         user_id: recipientId,
+                        organization_id: orgId,
                         title,
                         message,
+                        body: message,
                         type: mapActionTypeToLegacyType(action_type),
                         action_type,
                         action_data: JSON.stringify(actionData),
@@ -1220,6 +1226,7 @@ async function handleNotify(request: Request, env: Env, ctx: ExecutionContext): 
                         priority,
                         is_read: false,
                     });
+
 
                     // Update aggregation cache
                     if (aggKey && window) {

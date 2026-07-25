@@ -6,7 +6,8 @@ import { supabase } from '@/lib/supabase';
 // ─── VAPID Public Key ───────────────────────────────────────────
 // Remplace ci-dessous par ta vraie clé VAPID publique (depuis Cloudflare Worker ou web-push-keygen)
 // Pour générer: npx web-push generate-vapid-keys
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_KEY || '';
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.NEXT_PUBLIC_VAPID_KEY || '';
+
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
     const padding = '='.repeat((4 - (base64String.length % 4)) % 4);

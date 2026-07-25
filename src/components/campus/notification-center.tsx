@@ -167,6 +167,24 @@ const FILTER_TABS: { id: string; label: string; categories: NotifCategory[] }[] 
     { id: 'admin', label: '🏫 Admin', categories: ['admin', 'discipline', 'system'] },
 ];
 
+// ── Category Mapper ─────────────────────────────────────────
+function mapActionTypeToCategory(actionType?: string, type?: string): NotifCategory {
+    if (!actionType && !type) return 'system';
+    const at = (actionType || type || '').toLowerCase();
+
+    if (at.startsWith('story_') || at.startsWith('actu_') || at === 'news') return 'news';
+    if (at.startsWith('new_subject') || at.startsWith('new_chapter') || at.startsWith('new_lesson') || at.startsWith('new_exercise')) return 'evaluation';
+    if (at.startsWith('dm_') || at === 'message') return 'chat_dm';
+    if (at.startsWith('group_')) return 'chat_group';
+    if (at.startsWith('grade_') || at === 'grade') return 'grade';
+    if (at.startsWith('evaluation_')) return 'evaluation';
+    if (at.startsWith('payment_')) return 'payment';
+    if (at.startsWith('discipline_')) return 'discipline';
+    if (at.startsWith('admin_') || at === 'admin_announcement') return 'admin';
+    if (at.startsWith('timetable_') || at === 'schedule') return 'schedule';
+    return 'system';
+}
+
 export function NotificationCenter({ orgId, userId, orgSlug, isOpen, onClose, onNavigate }: NotificationCenterProps) {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loading, setLoading] = useState(true);
@@ -180,17 +198,26 @@ export function NotificationCenter({ orgId, userId, orgSlug, isOpen, onClose, on
             const { data, error } = await supabase
                 .from('notifications')
                 .select('*')
-                .eq('organization_id', orgId)
                 .eq('user_id', userId)
                 .order('created_at', { ascending: false })
                 .limit(100);
 
             if (error) {
-                // If table doesn't exist, use mock data for demo
-                console.warn('Notifications table not available:', error.message);
+                console.warn('Notifications query warning:', error.message);
                 setNotifications([]);
-            } else {
-                setNotifications(data || []);
+            } else if (data) {
+                const mapped: Notification[] = data.map((n: any) => ({
+                    id: n.id,
+                    organization_id: n.organization_id || orgId,
+                    user_id: n.user_id,
+                    category: (n.category as NotifCategory) || mapActionTypeToCategory(n.action_type, n.type),
+                    title: n.title || 'Notification',
+                    body: n.body || n.message || '',
+                    is_read: n.is_read ?? false,
+                    created_at: n.created_at,
+                    metadata: typeof n.action_data === 'string' ? JSON.parse(n.action_data || '{}') : (n.action_data || {}),
+                }));
+                setNotifications(mapped);
             }
         } catch (e) {
             console.error('Error loading notifications:', e);
@@ -210,11 +237,24 @@ export function NotificationCenter({ orgId, userId, orgSlug, isOpen, onClose, on
             event: 'INSERT', schema: 'public', table: 'notifications',
             filter: `user_id=eq.${userId}`,
         }, (payload: any) => {
-            setNotifications(prev => [payload.new as Notification, ...prev]);
+            const n = payload.new as any;
+            const item: Notification = {
+                id: n.id,
+                organization_id: n.organization_id || orgId,
+                user_id: n.user_id,
+                category: (n.category as NotifCategory) || mapActionTypeToCategory(n.action_type, n.type),
+                title: n.title || 'Notification',
+                body: n.body || n.message || '',
+                is_read: n.is_read ?? false,
+                created_at: n.created_at,
+                metadata: typeof n.action_data === 'string' ? JSON.parse(n.action_data || '{}') : (n.action_data || {}),
+            };
+            setNotifications(prev => [item, ...prev]);
         }).subscribe();
 
         return () => { supabase.removeChannel(channel); };
-    }, [isOpen, userId]);
+    }, [isOpen, userId, orgId]);
+
 
     // Mark single as read
     const markAsRead = async (id: string) => {
