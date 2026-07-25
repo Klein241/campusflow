@@ -432,10 +432,11 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                 captionToSave = `Repost de @${repostData.senderName}: ${repostData.caption || repostData.content || ''}`;
             } else if (storyImage) {
                 const compressed = await compressImage(storyImage, { maxWidth: 1080, quality: 0.7 });
-                const path = `stories/${userId}/${Date.now()}_${storyImage.name}`;
-                const { error: uploadErr } = await supabase.storage.from('campus_assets').upload(path, compressed);
+                const ext = storyImage.name.split('.').pop() || 'jpg';
+                const path = `stories/${userId}/${Date.now()}.${ext}`;
+                const { error: uploadErr } = await supabase.storage.from('organization-assets').upload(path, compressed, { upsert: true });
                 if (uploadErr) throw uploadErr;
-                const { data: urlData } = supabase.storage.from('campus_assets').getPublicUrl(path);
+                const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
                 imageUrl = urlData.publicUrl;
                 captionToSave = caption.trim() || null;
             }
