@@ -260,6 +260,8 @@ export function NotificationCenter({ orgId, userId, orgSlug, isOpen, onClose, on
     const markAsRead = async (id: string) => {
         await supabase.from('notifications').update({ is_read: true }).eq('id', id);
         setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+        // Sync le badge Bell
+        window.dispatchEvent(new Event('notif:read'));
     };
 
     // Mark all as read
@@ -270,6 +272,8 @@ export function NotificationCenter({ orgId, userId, orgSlug, isOpen, onClose, on
         setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
         setMarkingAll(false);
         toast.success('Tout marqué comme lu ✅');
+        // Sync le badge Bell
+        window.dispatchEvent(new Event('notif:read'));
     };
 
     // Delete notification
@@ -517,25 +521,59 @@ interface NotifBellProps {
 export function NotificationBell({ orgId, userId, onClick }: NotifBellProps) {
     const [unreadCount, setUnreadCount] = useState(0);
 
+    // Fetch initial count
+    const fetchCount = async () => {
+        const { count } = await supabase
+            .from('notifications')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('is_read', false);
+        setUnreadCount(count || 0);
+    };
+
     useEffect(() => {
-        (async () => {
-            const { count } = await supabase
-                .from('notifications')
-                .select('id', { count: 'exact', head: true })
-                .eq('user_id', userId)
-                .eq('is_read', false);
-            setUnreadCount(count || 0);
-        })();
+        fetchCount();
 
-        // Realtime
-        const channel = supabase.channel(`notif-count-${userId}`).on('postgres_changes', {
-            event: 'INSERT', schema: 'public', table: 'notifications',
-            filter: `user_id=eq.${userId}`,
-        }, () => {
-            setUnreadCount(prev => prev + 1);
-        }).subscribe();
+        // Realtime: INSERT → +1
+        const channel = supabase
+            .channel(`notif-bell-${userId}-${Date.now()}`)
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'notifications',
+                filter: `user_id=eq.${userId}`,
+            }, (payload) => {
+                const n = payload.new as any;
+                if (!n.is_read) setUnreadCount(prev => prev + 1);
+            })
+            // UPDATE → recompter (marquer lu/tout marquer lu)
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'notifications',
+                filter: `user_id=eq.${userId}`,
+            }, () => {
+                // Recompte propre après UPDATE
+                fetchCount();
+            })
+            // DELETE → recompter
+            .on('postgres_changes', {
+                event: 'DELETE',
+                schema: 'public',
+                table: 'notifications',
+            }, () => {
+                fetchCount();
+            })
+            .subscribe();
 
-        return () => { supabase.removeChannel(channel); };
+        // Écouter l'événement custom émis par NotificationCenter
+        const handleRead = () => fetchCount();
+        window.addEventListener('notif:read', handleRead);
+
+        return () => {
+            supabase.removeChannel(channel);
+            window.removeEventListener('notif:read', handleRead);
+        };
     }, [userId]);
 
     return (
@@ -543,7 +581,7 @@ export function NotificationBell({ orgId, userId, onClick }: NotifBellProps) {
             <Bell className="w-5 h-5 text-slate-400 group-hover:text-amber-400 transition" />
             {unreadCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-gradient-to-br from-amber-500 to-red-500 text-[9px] font-bold text-white flex items-center justify-center shadow-lg shadow-red-500/30 animate-pulse">
-                    {unreadCount > 99 ? '99' : unreadCount}
+                    {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
             )}
         </button>

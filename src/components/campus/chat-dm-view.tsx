@@ -359,9 +359,9 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
                         conversationId: activeConv.id,
                         messagePreview: text.slice(0, 80),
                         orgSlug,
-                    }).catch(() => {});
+                    }).catch(e => console.warn('[Notif] dm_new_message:', e));
                 }
-            } catch {}
+            } catch (e) { console.warn('[Notif] dm participants fetch:', e); }
         } catch (e) {
             setMessages(prev => prev.filter(m => m.id !== tempId));
             setMsgText(text);
@@ -412,6 +412,22 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
                 });
 
                 if (insertError) throw insertError;
+
+                // 🔔 Notifier le destinataire
+                try {
+                    const { data: participants } = await supabase
+                        .from('chat_participants').select('user_id')
+                        .eq('conversation_id', activeConv.id).neq('user_id', userId);
+                    if (participants?.length) {
+                        notifyDirectMessage({
+                            senderId: userId, senderName: userName,
+                            recipientId: participants[0].user_id,
+                            conversationId: activeConv.id,
+                            messagePreview: content,
+                            orgSlug,
+                        }).catch(e => console.warn('[Notif] dm file:', e));
+                    }
+                } catch (e) { console.warn('[Notif] dm file participants:', e); }
 
                 setConvs(prev => prev.map(c =>
                     c.id === activeConv.id ? { ...c, lastMessage: content, lastMessageAt: new Date().toISOString() } : c
@@ -479,6 +495,23 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
                         media_url: urlData.publicUrl,
                     });
                     if (insertError) throw insertError;
+
+                    // 🔔 Notifier le destinataire
+                    try {
+                        const { data: participants } = await supabase
+                            .from('chat_participants').select('user_id')
+                            .eq('conversation_id', activeConv.id).neq('user_id', userId);
+                        if (participants?.length) {
+                            notifyDirectMessage({
+                                senderId: userId, senderName: userName,
+                                recipientId: participants[0].user_id,
+                                conversationId: activeConv.id,
+                                messagePreview: '🎤 Message vocal',
+                                orgSlug,
+                            }).catch(e => console.warn('[Notif] dm voice:', e));
+                        }
+                    } catch (e) { console.warn('[Notif] dm voice participants:', e); }
+
                     toast.success('Message vocal envoyé 🎤');
                 } catch (e: any) {
                     toast.error(e.message || 'Erreur envoi vocal');

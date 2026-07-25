@@ -235,9 +235,9 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
                         groupName,
                         messagePreview: text.slice(0, 80),
                         memberIds,
-                    }).catch(() => {});
+                    }).catch(e => console.warn('[Notif] group_new_message:', e));
                 }
-            } catch {}
+            } catch (e) { console.warn('[Notif] group participants fetch:', e); }
         } catch (e) {
             setMessages(prev => prev.filter(m => m.id !== tempId));
             setMsgText(text);
@@ -268,6 +268,23 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
                 await supabase.from('chat_messages').insert({
                     conversation_id: groupId, sender_id: userId, content, msg_type: msgType, media_url: urlData.publicUrl,
                 });
+
+                // 🔔 Notifier les membres du groupe
+                try {
+                    const { data: participants } = await supabase
+                        .from('chat_participants').select('user_id')
+                        .eq('conversation_id', groupId).neq('user_id', userId);
+                    if (participants?.length) {
+                        const memberIds = participants.map((p: any) => p.user_id);
+                        notifyGroupNewMessage({
+                            senderId: userId, senderName: userName,
+                            groupId, groupName,
+                            messagePreview: content,
+                            memberIds,
+                        }).catch(e => console.warn('[Notif] group file:', e));
+                    }
+                } catch (e) { console.warn('[Notif] group file participants:', e); }
+
                 toast.success(`${file.name} envoyé ✅`);
             } catch (e: any) { toast.error(e.message || file.name); }
         }
@@ -305,6 +322,23 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
                     await supabase.from('chat_messages').insert({
                         conversation_id: groupId, sender_id: userId, content: '🎤 Message vocal', msg_type: 'voice', media_url: urlData.publicUrl,
                     });
+
+                    // 🔔 Notifier les membres du groupe
+                    try {
+                        const { data: participants } = await supabase
+                            .from('chat_participants').select('user_id')
+                            .eq('conversation_id', groupId).neq('user_id', userId);
+                        if (participants?.length) {
+                            const memberIds = participants.map((p: any) => p.user_id);
+                            notifyGroupNewMessage({
+                                senderId: userId, senderName: userName,
+                                groupId, groupName,
+                                messagePreview: '🎤 Message vocal',
+                                memberIds,
+                            }).catch(e => console.warn('[Notif] group voice:', e));
+                        }
+                    } catch (e) { console.warn('[Notif] group voice participants:', e); }
+
                     toast.success('Message vocal envoyé 🎤');
                 } catch (e: any) { toast.error(e.message); }
                 setUploading(false);

@@ -316,12 +316,12 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
             };
 
             // Essayer avec organization_id, fallback sans si la colonne n'existe pas encore dans la DB
-            let { error } = await supabase.from('tutoring_requests').insert({ ...payload, organization_id: orgId });
-            if (error && (error.message?.includes('organization_id') || error.code === 'PGRST204')) {
-                const res = await supabase.from('tutoring_requests').insert(payload);
-                error = res.error;
+            let insertResult = await supabase.from('tutoring_requests').insert({ ...payload, organization_id: orgId }).select('id').single();
+            if (insertResult.error && (insertResult.error.message?.includes('organization_id') || insertResult.error.code === 'PGRST204')) {
+                insertResult = await supabase.from('tutoring_requests').insert(payload).select('id').single();
             }
-            if (error) throw error;
+            if (insertResult.error) throw insertResult.error;
+            const newPostId = insertResult.data?.id || '';
             toast.success('Publication ajoutée ! 🚀');
             setNewPostContent('');
             setPostImage(null);
@@ -339,9 +339,9 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
             ];
             notifyActuPublished({
                 authorId: userId, authorName: userName,
-                postId: '', postContent: newPostContent.trim(),
+                postId: newPostId, postContent: newPostContent.trim(),
                 recipientIds, orgSlug,
-            }).catch(() => {});
+            }).catch(e => console.warn('[Notif] actu_published:', e));
             loadPosts();
 
         } catch (e: any) { toast.error(e.message); }
@@ -388,7 +388,7 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                 likerId: userId, likerName: userName,
                 postAuthorId: post.user_id, postId: post.id,
                 postContent: post.content, orgSlug,
-            }).catch(() => {});
+            }).catch(e => console.warn('[Notif] actu_liked:', e));
         }
     };
 
@@ -485,7 +485,7 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
             const expiresAt = new Date();
             expiresAt.setHours(expiresAt.getHours() + 24);
 
-            const { error } = await supabase.from('stories').insert({
+            const storyInsertResult = await supabase.from('stories').insert({
                 organization_id: orgId,
                 user_id: userId,
                 content: isRepost ? (repostData?.content || 'Repost') : (storyImage ? '' : storyText.trim()),
@@ -496,8 +496,9 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                 expires_at: expiresAt.toISOString(),
                 likes: [],
                 viewed_by: []
-            });
-            if (error) throw error;
+            }).select('id').single();
+            if (storyInsertResult.error) throw storyInsertResult.error;
+            const newStoryId = storyInsertResult.data?.id || '';
 
             // 🔔 Notifications story
             if (isRepost && repostData && repostData.user_id !== userId) {
@@ -506,7 +507,7 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                     reposterId: userId, reposterName: userName,
                     originalAuthorId: repostData.user_id,
                     storyId: repostData.id, orgSlug,
-                }).catch(() => {});
+                }).catch(e => console.warn('[Notif] story_reposted:', e));
             } else if (!isRepost) {
                 // Notifier tous les membres de l'org
                 const { data: members } = await supabase
@@ -519,9 +520,9 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                 ];
                 notifyStoryPublished({
                     authorId: userId, authorName: userName,
-                    storyId: '', storyPreview: storyText.trim() || 'Story photo',
+                    storyId: newStoryId, storyPreview: storyText.trim() || 'Story photo',
                     recipientIds, orgSlug,
-                }).catch(() => {});
+                }).catch(e => console.warn('[Notif] story_published:', e));
             }
 
             // Deduct 1 Sky Point
@@ -596,7 +597,7 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
             notifyStoryLiked({
                 likerId: userId, likerName: userName,
                 storyAuthorId: story.user_id, storyId: story.id, orgSlug,
-            }).catch(() => {});
+            }).catch(e => console.warn('[Notif] story_liked:', e));
         }
     };
 
@@ -647,7 +648,7 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                     commenterId: userId, commenterName: userName,
                     storyAuthorId: story.user_id, storyId,
                     commentText: newStoryComment.trim(), orgSlug,
-                }).catch(() => {});
+                }).catch(e => console.warn('[Notif] story_commented:', e));
             }
             setNewStoryComment('');
             setReplyingTo(null);
