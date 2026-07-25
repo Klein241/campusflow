@@ -14,6 +14,8 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ChatMessageRenderer } from './chat-message-renderer';
+import { notifyDirectMessage } from '@/lib/notifications';
+
 
 // ═══════════════════════════════════════════════════════
 // CHAT DM VIEW — Espace dédié aux messages directs
@@ -345,6 +347,21 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
             setConvs(prev => prev.map(c =>
                 c.id === activeConv.id ? { ...c, lastMessage: text, lastMessageAt: new Date().toISOString() } : c
             ).sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime()));
+            // 🔔 Notifier le(s) destinataire(s)
+            try {
+                const { data: participants } = await supabase
+                    .from('chat_participants').select('user_id')
+                    .eq('conversation_id', activeConv.id).neq('user_id', userId);
+                if (participants?.length) {
+                    notifyDirectMessage({
+                        senderId: userId, senderName: userName,
+                        recipientId: participants[0].user_id,
+                        conversationId: activeConv.id,
+                        messagePreview: text.slice(0, 80),
+                        orgSlug,
+                    }).catch(() => {});
+                }
+            } catch {}
         } catch (e) {
             setMessages(prev => prev.filter(m => m.id !== tempId));
             setMsgText(text);
@@ -352,6 +369,7 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
         }
         setSending(false);
     }, [msgText, activeConv, userId]);
+
 
     // ═══ UPLOAD & SEND FILE ═══
     const handleFileUpload = async (files: FileList | null) => {

@@ -48,13 +48,15 @@ async function sendCursusNotification(params: {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                action_type: 'admin_announcement', actor_id: actorId, actor_name: actorName,
+                action_type: actionType, actor_id: actorId, actor_name: actorName,
                 recipient_ids: recipientIds, target_id: targetId, target_name: targetName,
-                extra_data: { push_title: titles[actionType], push_body: bodies[actionType], org_id: orgId, tab: 'cursus' },
+                message_preview: bodies[actionType],
+                extra_data: { push_title: titles[actionType], push_body: bodies[actionType], org_id: orgId, tab: 'myspace' },
             }),
         });
     } catch {}
 }
+
 
 // ─── Palette de couleurs par index de matière ──────────────────────────────
 const SUBJECT_COLORS = [
@@ -278,9 +280,31 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
             questions: exForm.questions, chapter_id: selectedChId,
         }).select().single();
         if (error) toast.error(error.message);
-        else { setExercises(prev => [...prev, data]); setShowNewEx(false); setExForm({ title: '', type: 'qcm', duration_minutes: 10, max_score: 20, questions: [] }); toast.success('Exercice créé ✅'); }
+        else {
+            setExercises(prev => [...prev, data]);
+            setShowNewEx(false);
+            setExForm({ title: '', type: 'qcm', duration_minutes: 10, max_score: 20, questions: [] });
+            toast.success('Exercice créé ✅');
+            // 🔔 Notifier les étudiants du nouvel exercice
+            const chapter = chapters.find((c: any) => c.id === selectedChId);
+            const subject = chapter ? subjects.find((s: any) => s.id === chapter.subject_id) : null;
+            if (subject?.classroom_id) {
+                const { data: students } = await supabase
+                    .from('student_profiles').select('id')
+                    .eq('classroom_id', subject.classroom_id).eq('organization_id', orgId);
+                if (students?.length) {
+                    await sendCursusNotification({
+                        actorId: userId, actorName: userName, orgId,
+                        actionType: 'new_lesson', // reuse with exercise title
+                        targetId: data.id, targetName: data.title,
+                        recipientIds: students.map((s: any) => s.id),
+                    });
+                }
+            }
+        }
         setSavingEx(false);
     };
+
 
     const saveEditExercise = async () => {
         if (!editEx) return;

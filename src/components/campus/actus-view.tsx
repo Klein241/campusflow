@@ -14,6 +14,11 @@ import { supabase } from '@/lib/supabase';
 import { compressImage } from '@/lib/compress';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import {
+    notifyStoryPublished, notifyStoryLiked, notifyStoryCommented, notifyStoryReposted,
+    notifyActuPublished, notifyActuLiked, notifyActuCommented,
+} from '@/lib/notifications';
+
 
 // ═══════════════════════════════════════════════════════
 // ACTUS VIEW — Actualités + Stories + Comments + Partage
@@ -321,7 +326,24 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
             setNewPostContent('');
             setPostImage(null);
             setShowNewPost(false);
+            // 🔔 Notifier les membres de l'org
+            const { data: members } = await supabase
+                .from('student_profiles').select('id').eq('organization_id', orgId)
+                .neq('id', userId);
+            const { data: teachers } = await supabase
+                .from('teacher_profiles').select('id').eq('organization_id', orgId)
+                .neq('id', userId);
+            const recipientIds = [
+                ...(members || []).map((m: any) => m.id),
+                ...(teachers || []).map((t: any) => t.id),
+            ];
+            notifyActuPublished({
+                authorId: userId, authorName: userName,
+                postId: '', postContent: newPostContent.trim(),
+                recipientIds, orgSlug,
+            }).catch(() => {});
             loadPosts();
+
         } catch (e: any) { toast.error(e.message); }
         setPublishing(false);
         setUploadingPost(false);
@@ -360,7 +382,16 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
         const newCount = prayed ? Math.max(0, post.prayer_count - 1) : post.prayer_count + 1;
         setPosts(prev => prev.map(p => p.id === post.id ? { ...p, prayer_count: newCount, prayed_by: newPrayedBy } : p));
         await supabase.from('tutoring_requests').update({ prayer_count: newCount, prayed_by: newPrayedBy }).eq('id', post.id);
+        // 🔔 Notifier l'auteur (seulement au like, pas au unlike)
+        if (!prayed && post.user_id && post.user_id !== userId) {
+            notifyActuLiked({
+                likerId: userId, likerName: userName,
+                postAuthorId: post.user_id, postId: post.id,
+                postContent: post.content, orgSlug,
+            }).catch(() => {});
+        }
     };
+
     const togglePrayer = likePost;
 
     const sharePost = async (post: PostItem) => {
@@ -397,10 +428,20 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                 post_id: postId, user_id: userId, content: newComment.trim(),
             });
             if (error) throw error;
+            // 🔔 Notifier l'auteur du post
+            const post = posts.find(p => p.id === postId);
+            if (post && post.user_id !== userId) {
+                notifyActuCommented({
+                    commenterId: userId, commenterName: userName,
+                    postAuthorId: post.user_id, postId,
+                    postContent: post.content, commentText: newComment.trim(), orgSlug,
+                }).catch(() => {});
+            }
             setNewComment(''); loadComments(postId);
         } catch (e: any) { toast.error(e.message); }
         setPostingComment(false);
     };
+
 
     const toggleComments = (postId: string) => {
         if (expandedComments === postId) { setExpandedComments(null); return; }
@@ -457,8 +498,34 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                 viewed_by: []
             });
             if (error) throw error;
-            
+
+            // 🔔 Notifications story
+            if (isRepost && repostData && repostData.user_id !== userId) {
+                // Notifier l'auteur original du repost
+                notifyStoryReposted({
+                    reposterId: userId, reposterName: userName,
+                    originalAuthorId: repostData.user_id,
+                    storyId: repostData.id, orgSlug,
+                }).catch(() => {});
+            } else if (!isRepost) {
+                // Notifier tous les membres de l'org
+                const { data: members } = await supabase
+                    .from('student_profiles').select('id').eq('organization_id', orgId).neq('id', userId);
+                const { data: teachers } = await supabase
+                    .from('teacher_profiles').select('id').eq('organization_id', orgId).neq('id', userId);
+                const recipientIds = [
+                    ...(members || []).map((m: any) => m.id),
+                    ...(teachers || []).map((t: any) => t.id),
+                ];
+                notifyStoryPublished({
+                    authorId: userId, authorName: userName,
+                    storyId: '', storyPreview: storyText.trim() || 'Story photo',
+                    recipientIds, orgSlug,
+                }).catch(() => {});
+            }
+
             // Deduct 1 Sky Point
+
             const newBal = Math.max(0, currentPoints - 1);
             await supabase.from(table).update({ sky_points: newBal }).eq('id', userId);
             await supabase.from('sky_transactions').insert({
@@ -524,7 +591,15 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
             setViewingStory(prev => prev ? { ...prev, likes: newLikes } : prev);
         }
         await supabase.from('stories').update({ likes: newLikes }).eq('id', story.id);
+        // 🔔 Notifier l'auteur (seulement au like)
+        if (!isLiked && story.user_id !== userId) {
+            notifyStoryLiked({
+                likerId: userId, likerName: userName,
+                storyAuthorId: story.user_id, storyId: story.id, orgSlug,
+            }).catch(() => {});
+        }
     };
+
 
     // Delete Story
     const deleteStory = async (storyId: string) => {
@@ -565,11 +640,21 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                 parent_id: replyingTo?.id || null
             });
             if (error) throw error;
+            // 🔔 Notifier l'auteur de la story
+            const story = stories.find(s => s.id === storyId);
+            if (story && story.user_id !== userId) {
+                notifyStoryCommented({
+                    commenterId: userId, commenterName: userName,
+                    storyAuthorId: story.user_id, storyId,
+                    commentText: newStoryComment.trim(), orgSlug,
+                }).catch(() => {});
+            }
             setNewStoryComment('');
             setReplyingTo(null);
             loadStoryComments(storyId);
         } catch (e: any) { toast.error(e.message); }
     };
+
 
     // Utils
     const timeAgo = (ts: string) => {

@@ -14,6 +14,8 @@ import { compressImage } from '@/lib/compress';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ChatMessageRenderer } from './chat-message-renderer';
+import { notifyGroupNewMessage } from '@/lib/notifications';
+
 
 // ═══════════════════════════════════════════════════════
 // GROUP CHAT VIEW — Chat de groupe enrichi
@@ -219,6 +221,23 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
             }).select().single();
             if (error) throw error;
             if (data) setMessages(prev => prev.map(m => m.id === tempId ? data as MsgInfo : m));
+            // 🔔 Notifier les membres du groupe
+            try {
+                const { data: participants } = await supabase
+                    .from('chat_participants').select('user_id')
+                    .eq('conversation_id', groupId).neq('user_id', userId);
+                if (participants?.length) {
+                    const memberIds = participants.map((p: any) => p.user_id);
+                    notifyGroupNewMessage({
+                        senderId: userId,
+                        senderName: userName,
+                        groupId,
+                        groupName,
+                        messagePreview: text.slice(0, 80),
+                        memberIds,
+                    }).catch(() => {});
+                }
+            } catch {}
         } catch (e) {
             setMessages(prev => prev.filter(m => m.id !== tempId));
             setMsgText(text);
@@ -226,6 +245,7 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
         }
         setSending(false);
     }, [msgText, groupId, userId, orgId]);
+
 
     // ═══ FILE UPLOAD ═══
     const handleFileUpload = async (files: FileList | null) => {

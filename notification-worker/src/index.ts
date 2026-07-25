@@ -47,6 +47,26 @@ type NotificationActionType =
     | 'new_prayer_published'
     | 'prayer_comment'
     | 'prayer_no_response'
+    // ── Aliases modernes (support_* = anciens prayer_*) ──
+    | 'support_received'
+    | 'friend_supported'
+    | 'new_support_published'
+    | 'support_comment'
+    | 'support_no_response'
+    // ── Stories ──
+    | 'story_published'
+    | 'story_liked'
+    | 'story_commented'
+    | 'story_reposted'
+    // ── Actus ──
+    | 'actu_published'
+    | 'actu_liked'
+    | 'actu_commented'
+    // ── Cursus ──
+    | 'new_subject'
+    | 'new_chapter'
+    | 'new_lesson'
+    | 'new_exercise'
     | 'group_access_request'
     | 'group_access_approved'
     | 'group_new_message'
@@ -98,11 +118,21 @@ const AGGREGATION_WINDOWS: Partial<Record<NotificationActionType, number>> = {
     prayer_prayed: 30 * 60,        // 30 min
     friend_prayed: 60 * 60,        // 1h
     prayer_comment: 15 * 60,       // 15 min
+    // Aliases modernes
+    support_received: 30 * 60,
+    friend_supported: 60 * 60,
+    support_comment: 15 * 60,
+    // Stories — agrégation likes (30 min)
+    story_liked: 30 * 60,
+    story_commented: 15 * 60,
+    // Actus
+    actu_liked: 30 * 60,
+    actu_commented: 15 * 60,
     group_access_request: 60 * 60, // 1h
     group_new_message: 5 * 60,     // 5 min
     dm_new_message: 3 * 60,        // 3 min
     group_invitation: 60 * 60,     // 1h
-    // School types — no aggregation (each event is unique)
+    // Cursus & School types — no aggregation (each event is unique)
 };
 
 const DEFAULT_PREFERENCES: Record<NotificationActionType, { in_app: boolean; push: boolean }> = {
@@ -111,6 +141,26 @@ const DEFAULT_PREFERENCES: Record<NotificationActionType, { in_app: boolean; pus
     new_prayer_published: { in_app: true, push: false },
     prayer_comment: { in_app: true, push: true },
     prayer_no_response: { in_app: false, push: true },
+    // Aliases modernes
+    support_received: { in_app: true, push: true },
+    friend_supported: { in_app: true, push: false },
+    new_support_published: { in_app: true, push: false },
+    support_comment: { in_app: true, push: true },
+    support_no_response: { in_app: false, push: true },
+    // Stories
+    story_published: { in_app: true, push: false },
+    story_liked: { in_app: true, push: false },
+    story_commented: { in_app: true, push: true },
+    story_reposted: { in_app: true, push: true },
+    // Actus
+    actu_published: { in_app: true, push: false },
+    actu_liked: { in_app: true, push: false },
+    actu_commented: { in_app: true, push: true },
+    // Cursus
+    new_subject: { in_app: true, push: true },
+    new_chapter: { in_app: true, push: true },
+    new_lesson: { in_app: true, push: true },
+    new_exercise: { in_app: true, push: true },
     group_access_request: { in_app: true, push: true },
     group_access_approved: { in_app: true, push: true },
     group_new_message: { in_app: true, push: true },
@@ -138,6 +188,26 @@ const PRIORITY_MAP: Record<NotificationActionType, Priority> = {
     new_prayer_published: 'medium',
     prayer_comment: 'high',
     prayer_no_response: 'low',
+    // Aliases modernes
+    support_received: 'high',
+    friend_supported: 'low',
+    new_support_published: 'medium',
+    support_comment: 'high',
+    support_no_response: 'low',
+    // Stories
+    story_published: 'low',
+    story_liked: 'low',
+    story_commented: 'medium',
+    story_reposted: 'medium',
+    // Actus
+    actu_published: 'low',
+    actu_liked: 'low',
+    actu_commented: 'medium',
+    // Cursus
+    new_subject: 'high',
+    new_chapter: 'medium',
+    new_lesson: 'medium',
+    new_exercise: 'high',
     group_access_request: 'high',
     group_access_approved: 'high',
     group_new_message: 'medium',
@@ -290,45 +360,50 @@ function buildNotificationMessage(
 
     switch (actionType) {
         case 'prayer_prayed':
+        case 'support_received':
             if (actorCount === 1) {
                 return {
-                    title: '📚 Quelqu\'un vous a aidé',
-                    message: `${first} a répondu à votre demande : "${short(targetName)}"`,
+                    title: '🤝 Quelqu\'un vous soutient',
+                    message: `${first} a soutenu votre demande : "${short(targetName)}"`,
                 };
             }
             return {
-                title: '📚 Plusieurs personnes vous ont aidé',
-                message: `${formatActors()} ont répondu à votre demande`,
+                title: '🤝 Plusieurs personnes vous soutiennent',
+                message: `${formatActors()} ont soutenu votre demande`,
             };
 
         case 'friend_prayed':
+        case 'friend_supported':
             return {
-                title: '📚 Votre ami vous a aidé',
-                message: `Votre ami ${first} a aussi aidé sur ce sujet`,
+                title: '🤝 Votre ami vous soutient',
+                message: `Votre ami ${first} a aussi soutenu ce sujet`,
             };
 
         case 'new_prayer_published':
+        case 'new_support_published':
             return {
-                title: '📢 Nouvelle demande de tutorat',
+                title: '📢 Nouvelle demande de soutien',
                 message: `${first} a publié : "${short(targetName)}"`,
             };
 
         case 'prayer_comment':
+        case 'support_comment':
             if (actorCount === 1) {
                 return {
                     title: '💬 Nouveau commentaire',
-                    message: `${first} a commenté votre demande de tutorat`,
+                    message: `${first} a commenté votre demande de soutien`,
                 };
             }
             return {
                 title: '💬 Nouveaux commentaires',
-                message: `${formatActors()} ont commenté votre demande de tutorat`,
+                message: `${formatActors()} ont commenté votre demande de soutien`,
             };
 
         case 'prayer_no_response':
+        case 'support_no_response':
             return {
                 title: '🔔 Votre demande attend',
-                message: 'Votre demande n\'a pas encore reçu de réponse. Le forum est là.',
+                message: 'Votre demande n\'a pas encore reçu de soutien. Le forum est là.',
             };
 
         case 'group_access_request':
@@ -416,6 +491,108 @@ function buildNotificationMessage(
             };
 
         // ══════════════════════════════════════════
+        // STORY NOTIFICATIONS
+        // ══════════════════════════════════════════
+
+        case 'story_published':
+            return {
+                title: '📸 Nouvelle story',
+                message: `${first} a publié une nouvelle story`,
+            };
+
+        case 'story_liked':
+            if (actorCount === 1) {
+                return {
+                    title: '❤️ Story aimée',
+                    message: `${first} a aimé votre story`,
+                };
+            }
+            return {
+                title: '❤️ Stories aimées',
+                message: `${formatActors()} ont aimé votre story`,
+            };
+
+        case 'story_commented':
+            if (actorCount === 1) {
+                return {
+                    title: '💬 Commentaire sur votre story',
+                    message: `${first} : ${short(preview, 70)}`,
+                };
+            }
+            return {
+                title: '💬 Commentaires sur votre story',
+                message: `${formatActors()} ont commenté votre story`,
+            };
+
+        case 'story_reposted':
+            return {
+                title: '🔁 Story repostée',
+                message: `${first} a reposté votre story`,
+            };
+
+        // ══════════════════════════════════════════
+        // ACTUS NOTIFICATIONS
+        // ══════════════════════════════════════════
+
+        case 'actu_published':
+            return {
+                title: '📰 Nouvelle publication',
+                message: `${first} : ${short(preview, 80)}`,
+            };
+
+        case 'actu_liked':
+            if (actorCount === 1) {
+                return {
+                    title: '❤️ Publication aimée',
+                    message: `${first} a aimé votre publication`,
+                };
+            }
+            return {
+                title: '❤️ Publications aimées',
+                message: `${formatActors()} ont aimé votre publication`,
+            };
+
+        case 'actu_commented':
+            if (actorCount === 1) {
+                return {
+                    title: '💬 Commentaire sur votre publication',
+                    message: `${first} : ${short(preview, 70)}`,
+                };
+            }
+            return {
+                title: '💬 Commentaires sur votre publication',
+                message: `${formatActors()} ont commenté votre publication`,
+            };
+
+        // ══════════════════════════════════════════
+        // CURSUS NOTIFICATIONS
+        // ══════════════════════════════════════════
+
+        case 'new_subject':
+            return {
+                title: '📚 Nouvelle matière',
+                message: `Nouvelle matière disponible : "${targetName}"`,
+            };
+
+        case 'new_chapter':
+            return {
+                title: '📖 Nouveau chapitre',
+                message: `${first} a ajouté un chapitre : "${targetName}"`,
+            };
+
+        case 'new_lesson':
+            return {
+                title: '📝 Nouvelle leçon',
+                message: `Nouvelle leçon disponible : "${targetName}"`,
+            };
+
+        case 'new_exercise':
+            return {
+                title: '🎯 Nouvel exercice',
+                message: `Nouvel exercice disponible : "${targetName}"`,
+            };
+
+        // ══════════════════════════════════════════
         // SCHOOL-SPECIFIC NOTIFICATION MESSAGES
         // ══════════════════════════════════════════
 
@@ -482,12 +659,17 @@ function buildActionData(actionType: NotificationActionType, payload: NotifyPayl
         case 'new_prayer_published':
         case 'prayer_comment':
         case 'prayer_no_response':
+        case 'support_received':
+        case 'friend_supported':
+        case 'new_support_published':
+        case 'support_comment':
+        case 'support_no_response':
             return {
                 ...base,
                 tab: 'community',
-                communityTab: 'prieres',
-                prayerId: payload.target_id,
-                ...(actionType === 'prayer_comment' ? { scrollToComments: true } : {}),
+                communityTab: 'support',
+                requestId: payload.target_id,
+                ...(actionType === 'prayer_comment' || actionType === 'support_comment' ? { scrollToComments: true } : {}),
             };
 
         case 'group_access_request':
@@ -608,13 +790,48 @@ function buildActionData(actionType: NotificationActionType, payload: NotifyPayl
         case 'admin_announcement':
             return {
                 ...base,
-                tab: 'forum',
-                subTab: 'actus',
+                tab: 'actus',
+                orgSlug: payload.extra_data?.orgSlug,
+            };
+
+        // ── Story deep-links ──
+        case 'story_published':
+        case 'story_liked':
+        case 'story_commented':
+        case 'story_reposted':
+            return {
+                ...base,
+                tab: 'actus',
+                viewState: 'stories',
+                storyId: payload.target_id,
+            };
+
+        // ── Actus deep-links ──
+        case 'actu_published':
+        case 'actu_liked':
+        case 'actu_commented':
+            return {
+                ...base,
+                tab: 'actus',
+                postId: payload.target_id,
+                ...(actionType === 'actu_commented' ? { scrollToComments: true } : {}),
+            };
+
+        // ── Cursus deep-links ──
+        case 'new_subject':
+        case 'new_chapter':
+        case 'new_lesson':
+        case 'new_exercise':
+            return {
+                ...base,
+                tab: 'myspace',
+                subTab: 'cursus',
+                targetId: payload.target_id,
                 orgSlug: payload.extra_data?.orgSlug,
             };
 
         default:
-            return { ...base, tab: 'community' };
+            return { ...base, tab: 'actus' };
     }
 }
 
@@ -1053,7 +1270,12 @@ function mapActionTypeToLegacyType(actionType: NotificationActionType): string {
         case 'new_prayer_published':
         case 'prayer_comment':
         case 'prayer_no_response':
-            return 'prayer';
+        case 'support_received':
+        case 'friend_supported':
+        case 'new_support_published':
+        case 'support_comment':
+        case 'support_no_response':
+            return 'support';
         case 'dm_new_message':
         case 'group_new_message':
         case 'group_mention':
@@ -1102,13 +1324,24 @@ async function handleMarkRead(request: Request, env: Env): Promise<Response> {
     const userId = getUserId(request);
     if (!userId) return json({ error: 'X-User-Id header required' }, 401);
 
-    const { notification_id } = await request.json() as { notification_id: string };
-    if (!notification_id) return json({ error: 'notification_id required' }, 400);
+    // Accept both { notification_id } and { notificationId } and { all: true }
+    const body = await request.json() as { notification_id?: string; notificationId?: string; all?: boolean };
+
+    // Handle mark-all-as-read via this endpoint (frontend compatibility)
+    if (body.all === true) {
+        const db = new SupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+        await db.update('notifications', { is_read: true }, `user_id=eq.${userId}&is_read=eq.false`);
+        await env.UNREAD_COUNTERS.put(`unread:${userId}`, '0');
+        return json({ success: true });
+    }
+
+    const notifId = body.notification_id || body.notificationId;
+    if (!notifId) return json({ error: 'notification_id or notificationId required' }, 400);
 
     const db = new SupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 
     // Mark as read in Supabase
-    await db.update('notifications', { is_read: true }, `id=eq.${notification_id}&user_id=eq.${userId}`);
+    await db.update('notifications', { is_read: true }, `id=eq.${notifId}&user_id=eq.${userId}`);
 
     // Decrement KV counter
     const unreadKey = `unread:${userId}`;

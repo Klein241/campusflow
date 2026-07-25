@@ -32,6 +32,20 @@ export type NotificationActionType =
     | 'friend_request_received'
     | 'friend_request_accepted'
     | 'new_book_published'
+    // ── Stories ──
+    | 'story_published'
+    | 'story_liked'
+    | 'story_commented'
+    | 'story_reposted'
+    // ── Actus ──
+    | 'actu_published'
+    | 'actu_liked'
+    | 'actu_commented'
+    // ── Cursus ──
+    | 'new_subject'
+    | 'new_chapter'
+    | 'new_lesson'
+    | 'new_exercise'
     // ── School notification types ──
     | 'grade_published'
     | 'evaluation_scheduled'
@@ -41,6 +55,7 @@ export type NotificationActionType =
     | 'admin_announcement'
     | 'evaluation_reminder'
     | 'general';
+
 
 export interface NotificationActionData {
     tab?: string;
@@ -461,6 +476,7 @@ export async function notifyGroupNewMessage({
     senderName,
     senderAvatar,
     messagePreview,
+    memberIds,
 }: {
     groupId: string;
     groupName: string;
@@ -468,17 +484,22 @@ export async function notifyGroupNewMessage({
     senderName: string;
     senderAvatar?: string;
     messagePreview: string;
+    memberIds?: string[]; // Optionnel — si déjà chargés, évite la requête DB
 }) {
     try {
-        const { data: members } = await supabase
-            .from('group_members')
-            .select('user_id')
-            .eq('group_id', groupId)
-            .neq('user_id', senderId);
+        let recipientIds = memberIds?.filter(id => id !== senderId);
 
-        if (!members || members.length === 0) return;
+        // Fallback: charger depuis group_members si non fournis
+        if (!recipientIds) {
+            const { data: members } = await supabase
+                .from('group_members')
+                .select('user_id')
+                .eq('group_id', groupId)
+                .neq('user_id', senderId);
+            recipientIds = (members || []).map((m: any) => m.user_id);
+        }
 
-        const recipientIds = members.map((m: any) => m.user_id);
+        if (!recipientIds || recipientIds.length === 0) return;
 
         await sendToWorker({
             action_type: 'group_new_message',
@@ -493,6 +514,7 @@ export async function notifyGroupNewMessage({
     } catch (e) {
         console.error('[Notification] Group message error:', e);
     }
+
 }
 
 /** Admin created official group */
@@ -599,6 +621,7 @@ export async function notifyDirectMessage({
     senderAvatar,
     messagePreview,
     conversationId,
+    orgSlug,
 }: {
     recipientId: string;
     senderId: string;
@@ -606,6 +629,7 @@ export async function notifyDirectMessage({
     senderAvatar?: string;
     messagePreview: string;
     conversationId: string;
+    orgSlug?: string;
 }) {
     if (recipientId === senderId) return;
 
@@ -617,8 +641,10 @@ export async function notifyDirectMessage({
         recipient_id: recipientId,
         target_id: conversationId,
         message_preview: messagePreview,
+        extra_data: orgSlug ? { orgSlug } : undefined,
     });
 }
+
 
 /** Friend request received */
 export async function notifyFriendRequestReceived({
@@ -919,3 +945,255 @@ export async function notifyAdminAnnouncement({
         extra_data: { orgSlug },
     });
 }
+
+// ══════════════════════════════════════════════════════════
+// STORY NOTIFICATIONS
+// ══════════════════════════════════════════════════════════
+
+/**
+ * Notify org members when someone publishes a new story.
+ */
+export async function notifyStoryPublished({
+    authorId, authorName, storyId, storyPreview, recipientIds, orgSlug,
+}: {
+    authorId: string; authorName: string; storyId: string;
+    storyPreview?: string; recipientIds: string[]; orgSlug: string;
+}) {
+    if (!recipientIds.length) return;
+    await sendToWorker({
+        action_type: 'story_published',
+        actor_id: authorId,
+        actor_name: authorName,
+        recipient_ids: recipientIds,
+        target_id: storyId,
+        target_name: storyPreview || 'Story',
+        message_preview: `${authorName} a publié une nouvelle story`,
+        extra_data: { orgSlug, tab: 'actus' },
+    });
+}
+
+/**
+ * Notify story author when someone likes their story.
+ */
+export async function notifyStoryLiked({
+    likerId, likerName, storyAuthorId, storyId, orgSlug,
+}: {
+    likerId: string; likerName: string; storyAuthorId: string;
+    storyId: string; orgSlug: string;
+}) {
+    if (likerId === storyAuthorId) return; // pas d'auto-notif
+    await sendToWorker({
+        action_type: 'story_liked',
+        actor_id: likerId,
+        actor_name: likerName,
+        recipient_id: storyAuthorId,
+        target_id: storyId,
+        message_preview: `${likerName} a aimé votre story`,
+        extra_data: { orgSlug, tab: 'actus' },
+    });
+}
+
+/**
+ * Notify story author when someone comments on their story.
+ */
+export async function notifyStoryCommented({
+    commenterId, commenterName, storyAuthorId, storyId, commentText, orgSlug,
+}: {
+    commenterId: string; commenterName: string; storyAuthorId: string;
+    storyId: string; commentText: string; orgSlug: string;
+}) {
+    if (commenterId === storyAuthorId) return;
+    await sendToWorker({
+        action_type: 'story_commented',
+        actor_id: commenterId,
+        actor_name: commenterName,
+        recipient_id: storyAuthorId,
+        target_id: storyId,
+        message_preview: commentText.slice(0, 80),
+        extra_data: { orgSlug, tab: 'actus', scrollToComments: true },
+    });
+}
+
+/**
+ * Notify original story author when someone reposts their story.
+ */
+export async function notifyStoryReposted({
+    reposterId, reposterName, originalAuthorId, storyId, orgSlug,
+}: {
+    reposterId: string; reposterName: string; originalAuthorId: string;
+    storyId: string; orgSlug: string;
+}) {
+    if (reposterId === originalAuthorId) return;
+    await sendToWorker({
+        action_type: 'story_reposted',
+        actor_id: reposterId,
+        actor_name: reposterName,
+        recipient_id: originalAuthorId,
+        target_id: storyId,
+        message_preview: `${reposterName} a reposté votre story`,
+        extra_data: { orgSlug, tab: 'actus' },
+    });
+}
+
+// ══════════════════════════════════════════════════════════
+// ACTUS NOTIFICATIONS
+// ══════════════════════════════════════════════════════════
+
+/**
+ * Notify org members when someone publishes an actus post.
+ */
+export async function notifyActuPublished({
+    authorId, authorName, postId, postContent, recipientIds, orgSlug,
+}: {
+    authorId: string; authorName: string; postId: string;
+    postContent: string; recipientIds: string[]; orgSlug: string;
+}) {
+    if (!recipientIds.length) return;
+    await sendToWorker({
+        action_type: 'actu_published',
+        actor_id: authorId,
+        actor_name: authorName,
+        recipient_ids: recipientIds,
+        target_id: postId,
+        target_name: postContent.slice(0, 60),
+        message_preview: postContent.slice(0, 100),
+        extra_data: { orgSlug, tab: 'actus' },
+    });
+}
+
+/**
+ * Notify post author when someone likes their actus post.
+ */
+export async function notifyActuLiked({
+    likerId, likerName, postAuthorId, postId, postContent, orgSlug,
+}: {
+    likerId: string; likerName: string; postAuthorId: string;
+    postId: string; postContent: string; orgSlug: string;
+}) {
+    if (likerId === postAuthorId) return;
+    await sendToWorker({
+        action_type: 'actu_liked',
+        actor_id: likerId,
+        actor_name: likerName,
+        recipient_id: postAuthorId,
+        target_id: postId,
+        target_name: postContent.slice(0, 50),
+        message_preview: `${likerName} a aimé votre publication`,
+        extra_data: { orgSlug, tab: 'actus' },
+    });
+}
+
+/**
+ * Notify post author when someone comments on their actus post.
+ */
+export async function notifyActuCommented({
+    commenterId, commenterName, postAuthorId, postId, postContent, commentText, orgSlug,
+}: {
+    commenterId: string; commenterName: string; postAuthorId: string;
+    postId: string; postContent: string; commentText: string; orgSlug: string;
+}) {
+    if (commenterId === postAuthorId) return;
+    await sendToWorker({
+        action_type: 'actu_commented',
+        actor_id: commenterId,
+        actor_name: commenterName,
+        recipient_id: postAuthorId,
+        target_id: postId,
+        target_name: postContent.slice(0, 50),
+        message_preview: commentText.slice(0, 80),
+        extra_data: { orgSlug, tab: 'actus', scrollToComments: true },
+    });
+}
+
+// ══════════════════════════════════════════════════════════
+// CURSUS NOTIFICATIONS
+// ══════════════════════════════════════════════════════════
+
+/**
+ * Notify students when a new subject is created.
+ */
+export async function notifyNewSubject({
+    teacherId, teacherName, subjectId, subjectName, studentIds, orgSlug,
+}: {
+    teacherId: string; teacherName: string; subjectId: string;
+    subjectName: string; studentIds: string[]; orgSlug: string;
+}) {
+    if (!studentIds.length) return;
+    await sendToWorker({
+        action_type: 'new_subject',
+        actor_id: teacherId,
+        actor_name: teacherName,
+        recipient_ids: studentIds,
+        target_id: subjectId,
+        target_name: subjectName,
+        message_preview: `Nouvelle matière disponible : "${subjectName}"`,
+        extra_data: { orgSlug, tab: 'myspace', subTab: 'cursus' },
+    });
+}
+
+/**
+ * Notify students when a new chapter is published.
+ */
+export async function notifyNewChapter({
+    teacherId, teacherName, chapterId, chapterTitle, subjectName, studentIds, orgSlug,
+}: {
+    teacherId: string; teacherName: string; chapterId: string;
+    chapterTitle: string; subjectName: string; studentIds: string[]; orgSlug: string;
+}) {
+    if (!studentIds.length) return;
+    await sendToWorker({
+        action_type: 'new_chapter',
+        actor_id: teacherId,
+        actor_name: teacherName,
+        recipient_ids: studentIds,
+        target_id: chapterId,
+        target_name: chapterTitle,
+        message_preview: `Nouveau chapitre dans ${subjectName} : "${chapterTitle}"`,
+        extra_data: { orgSlug, tab: 'myspace', subTab: 'cursus' },
+    });
+}
+
+/**
+ * Notify students when a new lesson is published.
+ */
+export async function notifyNewLesson({
+    teacherId, teacherName, lessonId, lessonTitle, chapterTitle, studentIds, orgSlug,
+}: {
+    teacherId: string; teacherName: string; lessonId: string;
+    lessonTitle: string; chapterTitle: string; studentIds: string[]; orgSlug: string;
+}) {
+    if (!studentIds.length) return;
+    await sendToWorker({
+        action_type: 'new_lesson',
+        actor_id: teacherId,
+        actor_name: teacherName,
+        recipient_ids: studentIds,
+        target_id: lessonId,
+        target_name: lessonTitle,
+        message_preview: `Nouvelle leçon dans "${chapterTitle}" : ${lessonTitle}`,
+        extra_data: { orgSlug, tab: 'myspace', subTab: 'cursus' },
+    });
+}
+
+/**
+ * Notify students when a new exercise is available.
+ */
+export async function notifyNewExercise({
+    teacherId, teacherName, exerciseId, exerciseTitle, chapterTitle, studentIds, orgSlug,
+}: {
+    teacherId: string; teacherName: string; exerciseId: string;
+    exerciseTitle: string; chapterTitle: string; studentIds: string[]; orgSlug: string;
+}) {
+    if (!studentIds.length) return;
+    await sendToWorker({
+        action_type: 'new_exercise',
+        actor_id: teacherId,
+        actor_name: teacherName,
+        recipient_ids: studentIds,
+        target_id: exerciseId,
+        target_name: exerciseTitle,
+        message_preview: `Nouvel exercice disponible : "${exerciseTitle}" (${chapterTitle})`,
+        extra_data: { orgSlug, tab: 'myspace', subTab: 'cursus' },
+    });
+}
+
