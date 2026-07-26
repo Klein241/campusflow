@@ -1,7 +1,10 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import type { R2Context, R2Purpose } from '@/lib/r2';
+import { uploadToR2 } from '@/lib/r2';
+
+type R2Context = string;
+type R2Purpose = string;
 
 /**
  * ═══════════════════════════════════════════════════════════
@@ -75,39 +78,11 @@ export function useR2Upload({
         setProgress(10);
 
         try {
-            // Build structured path
-            const { buildR2Path } = await import('@/lib/r2');
-            const r2Path = buildR2Path(context, id, purpose, file.name);
-            const folder = r2Path.substring(0, r2Path.lastIndexOf('/'));
-
-            // Upload directly to Worker (no Next.js API proxy)
-            const workerUrl = process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL
-                || process.env.NEXT_PUBLIC_WORKER_URL
-                || '';
-
-            if (!workerUrl) {
-                throw new Error('Worker URL non configuré');
-            }
-
-            const form = new FormData();
-            form.append('file', file);
-            form.append('folder', folder || context);
+            // Build structured folder path from context/id/purpose
+            const folder = [context, id, purpose].filter(Boolean).join('/');
 
             setProgress(30);
-
-            const res = await fetch(`${workerUrl}/api/r2/upload`, {
-                method: 'POST',
-                body: form,
-            });
-
-            setProgress(80);
-
-            if (!res.ok) {
-                const e = await res.json() as { error: string };
-                throw new Error(e.error || 'Upload échoué');
-            }
-
-            const result = await res.json() as UploadResult;
+            const result = await uploadToR2(file, folder, file.name);
             setProgress(100);
             onSuccess?.(result);
             return result;

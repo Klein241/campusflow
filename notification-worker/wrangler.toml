@@ -10,9 +10,7 @@ main = "src/index.ts"
 compatibility_date = "2025-06-01"
 
 # ── KV Namespaces ────────────────────────────────────────
-# Create each with:  npx wrangler kv namespace create <NAME>
-# Then paste the returned id below.
-
+# IDs récupérés depuis: npx wrangler kv namespace list
 [[kv_namespaces]]
 binding = "NOTIFICATION_CACHE"
 id = "7def3f26d118433499bc4e54a6ee7e8a"
@@ -57,8 +55,7 @@ BROADCAST_RATE_LIMIT_MS = "100"          # 10 req/s for broadcasts
 # npx wrangler secret put VAPID_PRIVATE_KEY
 # npx wrangler secret put ADMIN_KEY
 
-# ── R2 Bucket (10GB free) ────────────────────────────────
-# Create with: npx wrangler r2 bucket create campusflow-assets
+# ── R2 Bucket (10GB free Cloudflare R2) ──────────────────
 [[r2_buckets]]
 binding = "LIBRARY_BUCKET"
-bucket_name = "campusflow-assets"
+bucket_name = "campusflow-actifs"

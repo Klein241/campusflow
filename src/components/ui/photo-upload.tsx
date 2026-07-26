@@ -6,6 +6,7 @@ import { Camera, X, Upload, Image as ImageIcon, Loader2, Check, Trash2, ZoomIn }
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { uploadToR2 } from '@/lib/r2';
 import { toast } from 'sonner';
 
 interface PhotoUploadProps {
@@ -52,26 +53,8 @@ export function PhotoUpload({
                     throw new Error('La taille maximum est de 5MB');
                 }
 
-                // Generate unique filename
-                const ext = file.name.split('.').pop();
-                const filename = `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
-
-                // Upload to Supabase Storage
-                const { data, error } = await supabase.storage
-                    .from(bucket)
-                    .upload(filename, file, {
-                        cacheControl: '3600',
-                        upsert: false
-                    });
-
-                if (error) throw error;
-
-                // Get public URL
-                const { data: { publicUrl } } = supabase.storage
-                    .from(bucket)
-                    .getPublicUrl(filename);
-
-                return publicUrl;
+                const r2Res = await uploadToR2(file, bucket, file.name);
+                return r2Res.url;
             });
 
             const uploadedUrls = await Promise.all(uploadPromises);
@@ -93,15 +76,6 @@ export function PhotoUpload({
 
     const removePhoto = async (urlToRemove: string) => {
         try {
-            // Extract filename from URL
-            const filename = urlToRemove.split('/').pop();
-
-            if (filename) {
-                await supabase.storage
-                    .from(bucket)
-                    .remove([filename]);
-            }
-
             const newPhotos = photos.filter(url => url !== urlToRemove);
             setPhotos(newPhotos);
             onPhotosChange(newPhotos);
