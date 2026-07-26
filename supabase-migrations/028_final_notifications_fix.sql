@@ -70,6 +70,11 @@ DROP POLICY IF EXISTS "Users can update own notifications"  ON notifications;
 DROP POLICY IF EXISTS "Users can delete own notifications"  ON notifications;
 DROP POLICY IF EXISTS "Anyone can insert notifications"     ON notifications;
 DROP POLICY IF EXISTS "Service can insert notifications"    ON notifications;
+-- Supprimer aussi les nouvelles policies si elles existent déjà (idempotent)
+DROP POLICY IF EXISTS "notif_select"                        ON notifications;
+DROP POLICY IF EXISTS "notif_insert"                        ON notifications;
+DROP POLICY IF EXISTS "notif_update"                        ON notifications;
+DROP POLICY IF EXISTS "notif_delete"                        ON notifications;
 
 CREATE POLICY "notif_select" ON notifications FOR SELECT USING (true);
 CREATE POLICY "notif_insert" ON notifications FOR INSERT WITH CHECK (true);
