@@ -5,7 +5,7 @@
 # ══════════════════════════════════════════════════════════
 
 name = "campusflow-worker"
-account_id = "72c5a4eecc3e352a17345261257553e5"
+account_id = "29af63e0139b75f78259902d4ee51e07"
 main = "src/index.ts"
 compatibility_date = "2025-06-01"
 
@@ -13,19 +13,19 @@ compatibility_date = "2025-06-01"
 # IDs récupérés depuis: npx wrangler kv namespace list
 [[kv_namespaces]]
 binding = "NOTIFICATION_CACHE"
-id = "7def3f26d118433499bc4e54a6ee7e8a"
+id = "993474323b2f4d3ca34a03b56df98713"
 
 [[kv_namespaces]]
 binding = "PUSH_TOKEN_CACHE"
-id = "3055544c8a3041daac7b59a147fe0482"
+id = "8a56cb5cc94642cebf2ffbbdb3a2326c"
 
 [[kv_namespaces]]
 binding = "UNREAD_COUNTERS"
-id = "749841d0f1834403a014e3c4e729c332"
+id = "317732e686984fcaa7fce3ed7d61cc57"
 
 [[kv_namespaces]]
 binding = "USER_PREFERENCES"
-id = "08fbf58821fd4c10894e8da412f69d26"
+id = "a69d6d564ebf4137802f80d4bbb72a87"
 
 # ── Queue (disabled — free tier uses direct push) ────────
 # To use queue-based push on Workers Paid ($5/mo), uncomment:
