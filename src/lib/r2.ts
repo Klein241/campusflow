@@ -1,146 +1,91 @@
 /**
- * ═══════════════════════════════════════════════════════════
- * R2 Storage Utility — CampusFlow
- * ═══════════════════════════════════════════════════════════
- *
- * Cloudflare R2 integration:
- * - buildR2Path: structured file paths by context
- * - uploadToR2Server: server-side upload via Worker
- * - r2Url: convert path to public CDN URL
- * - r2PathFromUrl: extract path from full URL
- *
- * Architecture:
- *   Client → /api/r2/upload (Next.js API route)
- *          → Worker /api/r2/upload (Cloudflare)
- *          → R2 bucket (campusflow-assets)
- *
- * CDN URLs served directly from Worker:
- *   https://WORKER_URL/r2/{path}
+ * ══════════════════════════════════════════════════════════
+ * Cloudflare R2 Asset Storage Helper
+ * ══════════════════════════════════════════════════════════
+ * Replaces Supabase Storage (500MB limit) with Cloudflare R2 (10GB free limit)
  */
 
-const WORKER_URL = process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL
-    || process.env.NEXT_PUBLIC_WORKER_URL
-    || '';
-
-// ── Generate a structured R2 path ─────────────────────────
-
-export type R2Context = 'org' | 'student' | 'teacher' | 'library' | 'forum' | 'marketplace';
-export type R2Purpose = 'logo' | 'favicon' | 'hero' | 'about' | 'gallery' | 'photo' | 'file' | 'post' | 'product' | 'cover';
-
-export function buildR2Path(
-    context: R2Context,
-    id: string,
-    purpose: R2Purpose,
-    fileName: string
-): string {
-    const ext = fileName.split('.').pop()?.toLowerCase() || 'bin';
-    const ts = Date.now();
-    const clean = fileName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 50);
-
-    const map: Record<string, string> = {
-        'org-logo':            `orgs/${id}/logo_${ts}.${ext}`,
-        'org-favicon':         `orgs/${id}/favicon_${ts}.${ext}`,
-        'org-hero':            `orgs/${id}/landing/hero_${ts}.${ext}`,
-        'org-about':           `orgs/${id}/landing/about_${ts}.${ext}`,
-        'org-gallery':         `orgs/${id}/landing/gallery_${ts}.${ext}`,
-        'student-photo':       `students/${id}/photo_${ts}.${ext}`,
-        'teacher-photo':       `teachers/${id}/photo_${ts}.${ext}`,
-        'library-file':        `library/${id}/${clean}`,
-        'library-cover':       `library/${id}/cover_${ts}.${ext}`,
-        'forum-post':          `forum/${id}/photo_${ts}.${ext}`,
-        'marketplace-product': `marketplace/${id}/product_${ts}.${ext}`,
-    };
-
-    return map[`${context}-${purpose}`] || `misc/${id}/${clean}`;
+function getWorkerUrl(): string {
+    return process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL
+        || process.env.NEXT_PUBLIC_WORKER_URL
+        || 'https://campusflow-worker.kleintaptue1.workers.dev';
 }
 
-// ── Upload via the Worker (server-side — called from API Route) ──
+function getAdminKey(): string {
+    return process.env.ADMIN_KEY || 'cf-admin-k3y-campusflow-2026-s3cur3';
+}
 
-export async function uploadToR2Server(
+export interface R2UploadResult {
+    url: string;
+    key: string;
+}
+
+/**
+ * Upload any File or Blob to Cloudflare R2 bucket (`campusflow-actifs`)
+ * @param file - File or Blob object to upload
+ * @param folder - Destination folder (e.g., 'stories', 'chat-files', 'profiles', 'actus')
+ * @param fileName - Optional explicit file name
+ */
+export async function uploadToR2(
     file: File | Blob,
-    folder: string,
-    adminKey: string,
-    contentType?: string
-): Promise<{ url: string; key: string }> {
-    if (!WORKER_URL) throw new Error('R2 Worker URL non configuré');
-
-    const mime = contentType || (file instanceof File ? file.type : 'application/octet-stream');
+    folder: string = 'uploads',
+    fileName?: string
+): Promise<R2UploadResult> {
+    const workerUrl = getWorkerUrl();
+    const adminKey = getAdminKey();
 
     const formData = new FormData();
-    formData.append('file', file);
+    
+    // Ensure File object has a name
+    let fileToUpload: File;
+    if (file instanceof File) {
+        fileToUpload = fileName ? new File([file], fileName, { type: file.type }) : file;
+    } else {
+        const ext = file.type.split('/')[1] || 'bin';
+        const name = fileName || `file_${Date.now()}.${ext}`;
+        fileToUpload = new File([file], name, { type: file.type || 'application/octet-stream' });
+    }
+
+    formData.append('file', fileToUpload);
     formData.append('folder', folder);
 
-    const res = await fetch(`${WORKER_URL}/api/r2/upload`, {
+    const headers: Record<string, string> = {
+        'Authorization': `Bearer ${adminKey}`,
+    };
+
+    // Include logged-in user session ID if available
+    try {
+        if (typeof window !== 'undefined') {
+            const rawSession = localStorage.getItem('campusflow_session');
+            if (rawSession) {
+                const session = JSON.parse(rawSession);
+                if (session?.id) {
+                    headers['X-User-Id'] = session.id;
+                }
+            }
+        }
+    } catch {}
+
+    const response = await fetch(`${workerUrl}/api/r2/upload`, {
         method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${adminKey}`,
-        },
+        headers,
         body: formData,
     });
 
-    if (!res.ok) {
-        const e = await res.json() as { error: string };
-        throw new Error(e.error || 'Upload R2 échoué');
+    if (!response.ok) {
+        let errText = 'Erreur de téléchargement R2';
+        try {
+            const errJson = await response.json();
+            errText = errJson.error || errText;
+        } catch {
+            errText = await response.text();
+        }
+        throw new Error(`R2 Upload Error (${response.status}): ${errText}`);
     }
 
-    return res.json();
+    const data = await response.json();
+    return {
+        url: data.url,
+        key: data.key,
+    };
 }
-
-// ── Public URL from a R2 key/path ──────────────────────────
-
-export function r2Url(keyOrPath: string | null | undefined): string {
-    if (!keyOrPath) return '';
-    // If it's already a full URL, return as-is
-    if (keyOrPath.startsWith('http')) return keyOrPath;
-    // Build URL via worker
-    return `${WORKER_URL}/r2/${keyOrPath}`;
-}
-
-// ── Extract the R2 key from a full URL ─────────────────────
-
-export function r2KeyFromUrl(url: string): string {
-    if (!url || !WORKER_URL) return '';
-    // Worker-served: https://worker.dev/r2/library/123/file.pdf
-    const r2Prefix = `${WORKER_URL}/r2/`;
-    if (url.startsWith(r2Prefix)) {
-        return url.replace(r2Prefix, '');
-    }
-    return url;
-}
-
-// ── Delete a file from R2 ──────────────────────────────────
-
-export async function deleteFromR2(key: string, adminKey: string): Promise<boolean> {
-    if (!WORKER_URL) return false;
-
-    try {
-        const res = await fetch(`${WORKER_URL}/api/r2/delete`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${adminKey}`,
-            },
-            body: JSON.stringify({ key }),
-        });
-
-        return res.ok;
-    } catch {
-        return false;
-    }
-}
-
-// ── Allowed MIME types (matches Worker validation) ─────────
-
-export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
-export const ALLOWED_DOC_TYPES = [
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-];
-export const ALLOWED_MEDIA_TYPES = ['video/mp4', 'video/webm', 'audio/mpeg', 'audio/ogg', 'audio/wav'];
-export const ALL_ALLOWED_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_DOC_TYPES, ...ALLOWED_MEDIA_TYPES];
-
-export const MAX_FILE_SIZE_MB = 50;
-export const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
