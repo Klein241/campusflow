@@ -144,7 +144,9 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
         if ((post.viewed_by || []).includes(userId)) return;
         const newViewedBy = [...(post.viewed_by || []), userId];
         setPosts(prev => prev.map(p => p.id === post.id ? { ...p, viewed_by: newViewedBy } : p));
-        await supabase.from('tutoring_requests').update({ viewed_by: newViewedBy }).eq('id', post.id).catch(() => {});
+        try {
+            await supabase.from('tutoring_requests').update({ viewed_by: newViewedBy }).eq('id', post.id);
+        } catch { /* silent */ }
     };
 
     // Contacts for "selected" visibility
@@ -331,14 +333,16 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
             if (!isAdminOrOwner && requiredPoints > 0) {
                 const newBal = Math.max(0, currentPts - requiredPoints);
                 await supabase.from(table).update({ sky_points: newBal }).eq('id', userId);
-                await supabase.from('sky_transactions').insert({
-                    user_id: userId,
-                    student_id: userRole === 'student' ? userId : null,
-                    amount: -requiredPoints,
-                    transaction_type: 'actus_post',
-                    description: `Publication d'une actus (${hasText ? 'texte' : ''}${hasText && hasImage ? ' + ' : ''}${hasImage ? 'image' : ''})`,
-                    organization_id: orgId
-                }).catch(() => {});
+                try {
+                    await supabase.from('sky_transactions').insert({
+                        user_id: userId,
+                        student_id: userRole === 'student' ? userId : null,
+                        amount: -requiredPoints,
+                        transaction_type: 'actus_post',
+                        description: `Publication d'une actus (${hasText ? 'texte' : ''}${hasText && hasImage ? ' + ' : ''}${hasImage ? 'image' : ''})`,
+                        organization_id: orgId
+                    });
+                } catch { /* table may not exist yet */ }
                 window.dispatchEvent(new CustomEvent('sky_points_updated', { detail: { newBalance: newBal } }));
             }
 
@@ -357,11 +361,13 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                 ...(members || []).map((m: any) => m.id),
                 ...(teachers || []).map((t: any) => t.id),
             ];
-            notifyActuPublished({
-                authorId: userId, authorName: userName,
-                postId: newPostId, postContent: newPostContent.trim(),
-                recipientIds, orgSlug, orgId,
-            }).catch(e => console.warn('[Notif] actu_published:', e));
+            try {
+                await notifyActuPublished({
+                    authorId: userId, authorName: userName,
+                    postId: newPostId, postContent: newPostContent.trim(),
+                    recipientIds, orgSlug, orgId,
+                });
+            } catch (e) { console.warn('[Notif] actu_published:', e); }
             loadPosts();
 
         } catch (e: any) { toast.error(e.message); }
@@ -451,11 +457,13 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
             // 🔔 Notifier l'auteur du post
             const post = posts.find(p => p.id === postId);
             if (post && post.user_id !== userId) {
-                notifyActuCommented({
-                    commenterId: userId, commenterName: userName,
-                    postAuthorId: post.user_id, postId,
-                    postContent: post.content, commentText: newComment.trim(), orgSlug,
-                }).catch(() => {});
+                try {
+                    await notifyActuCommented({
+                        commenterId: userId, commenterName: userName,
+                        postAuthorId: post.user_id, postId,
+                        postContent: post.content, commentText: newComment.trim(), orgSlug,
+                    });
+                } catch (e) { console.warn('[Notif] actu_commented:', e); }
             }
             setNewComment(''); loadComments(postId);
         } catch (e: any) { toast.error(e.message); }
@@ -526,12 +534,13 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
 
             // 🔔 Notifications story
             if (isRepost && repostData && repostData.user_id !== userId) {
-                // Notifier l'auteur original du repost
-                notifyStoryReposted({
-                    reposterId: userId, reposterName: userName,
-                    originalAuthorId: repostData.user_id,
-                    storyId: repostData.id, orgSlug, orgId,
-                }).catch(e => console.warn('[Notif] story_reposted:', e));
+                try {
+                    await notifyStoryReposted({
+                        reposterId: userId, reposterName: userName,
+                        originalAuthorId: repostData.user_id,
+                        storyId: repostData.id, orgSlug, orgId,
+                    });
+                } catch (e) { console.warn('[Notif] story_reposted:', e); }
             } else if (!isRepost) {
                 // Notifier tous les membres de l'org
                 const { data: members } = await supabase
@@ -542,25 +551,29 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                     ...(members || []).map((m: any) => m.id),
                     ...(teachers || []).map((t: any) => t.id),
                 ];
-                notifyStoryPublished({
-                    authorId: userId, authorName: userName,
-                    storyId: newStoryId, storyPreview: storyText.trim() || 'Story photo',
-                    recipientIds, orgSlug, orgId,
-                }).catch(e => console.warn('[Notif] story_published:', e));
+                try {
+                    await notifyStoryPublished({
+                        authorId: userId, authorName: userName,
+                        storyId: newStoryId, storyPreview: storyText.trim() || 'Story photo',
+                        recipientIds, orgSlug, orgId,
+                    });
+                } catch (e) { console.warn('[Notif] story_published:', e); }
             }
 
             // Déduire les Sky Points
             if (!isAdminOrOwner && requiredPoints > 0) {
                 const newBal = Math.max(0, currentPoints - requiredPoints);
                 await supabase.from(table).update({ sky_points: newBal }).eq('id', userId);
-                await supabase.from('sky_transactions').insert({
-                    user_id: userId,
-                    student_id: userRole === 'student' ? userId : null,
-                    amount: -requiredPoints,
-                    transaction_type: 'story_post',
-                    description: isRepost ? 'Repost d\'une story' : `Publication story (${hasText ? 'texte' : ''}${hasText && hasImage ? ' + ' : ''}${hasImage ? 'image' : ''})`,
-                    organization_id: orgId
-                }).catch(() => {});
+                try {
+                    await supabase.from('sky_transactions').insert({
+                        user_id: userId,
+                        student_id: userRole === 'student' ? userId : null,
+                        amount: -requiredPoints,
+                        transaction_type: 'story_post',
+                        description: isRepost ? 'Repost d\'une story' : `Publication story (${hasText ? 'texte' : ''}${hasText && hasImage ? ' + ' : ''}${hasImage ? 'image' : ''})`,
+                        organization_id: orgId
+                    });
+                } catch { /* table may not exist yet */ }
                 window.dispatchEvent(new CustomEvent('sky_points_updated', { detail: { newBalance: newBal } }));
             }
             
@@ -620,10 +633,12 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
         await supabase.from('stories').update({ likes: newLikes }).eq('id', story.id);
         // 🔔 Notifier l'auteur (seulement au like)
         if (!isLiked && story.user_id !== userId) {
-            notifyStoryLiked({
-                likerId: userId, likerName: userName,
-                storyAuthorId: story.user_id, storyId: story.id, orgSlug,
-            }).catch(e => console.warn('[Notif] story_liked:', e));
+            try {
+                await notifyStoryLiked({
+                    likerId: userId, likerName: userName,
+                    storyAuthorId: story.user_id, storyId: story.id, orgSlug,
+                });
+            } catch (e) { console.warn('[Notif] story_liked:', e); }
         }
     };
 
@@ -670,11 +685,13 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
             // 🔔 Notifier l'auteur de la story
             const story = stories.find(s => s.id === storyId);
             if (story && story.user_id !== userId) {
-                notifyStoryCommented({
-                    commenterId: userId, commenterName: userName,
-                    storyAuthorId: story.user_id, storyId,
-                    commentText: newStoryComment.trim(), orgSlug,
-                }).catch(e => console.warn('[Notif] story_commented:', e));
+                try {
+                    await notifyStoryCommented({
+                        commenterId: userId, commenterName: userName,
+                        storyAuthorId: story.user_id, storyId,
+                        commentText: newStoryComment.trim(), orgSlug,
+                    });
+                } catch (e) { console.warn('[Notif] story_commented:', e); }
             }
             setNewStoryComment('');
             setReplyingTo(null);

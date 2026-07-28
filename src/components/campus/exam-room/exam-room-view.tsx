@@ -15,6 +15,7 @@ import { ExamSessionManager } from './exam-session-manager';
 import { ExamStudentView } from './exam-student-view';
 import { ExamReportView } from './exam-report-view';
 import { ExamGradingView } from './exam-grading-view';
+import { PdfExamBuilder } from './pdf-exam-builder';
 
 // ════════════════════════════════════════════════════════════
 // EXAM ROOM VIEW — Container principal Salle d'Évaluation
@@ -46,6 +47,10 @@ export interface ExamPaper {
     created_at: string;
     updated_at: string;
     creatorName?: string;
+    // PDF interactive mode
+    pdf_url?: string;
+    pdf_annotations?: any[];
+    exam_mode?: 'structured' | 'pdf';
 }
 
 export interface ExamSession {
@@ -70,7 +75,7 @@ interface ExamRoomViewProps {
     userRole: string;
 }
 
-type ViewMode = 'list' | 'builder' | 'session' | 'student' | 'report' | 'grading';
+type ViewMode = 'list' | 'builder' | 'pdf_builder' | 'session' | 'student' | 'report' | 'grading';
 
 export function ExamRoomView({ orgId, orgSlug, userId, userName, userRole }: ExamRoomViewProps) {
     const [view, setView] = useState<ViewMode>('list');
@@ -235,6 +240,17 @@ export function ExamRoomView({ orgId, orgSlug, userId, userName, userRole }: Exa
         );
     }
 
+    if (view === 'pdf_builder') {
+        return (
+            <PdfExamBuilder
+                orgId={orgId} userId={userId}
+                paper={selectedPaper}
+                onBack={() => { setSelectedPaper(null); setView('list'); }}
+                onSaved={() => { setSelectedPaper(null); setView('list'); loadData(); }}
+            />
+        );
+    }
+
     if (view === 'session' && selectedSession) {
         return (
             <ExamSessionManager
@@ -288,13 +304,22 @@ export function ExamRoomView({ orgId, orgSlug, userId, userName, userRole }: Exa
                         </div>
                     </div>
                     {isProf && (
-                        <button
-                            onClick={() => { setSelectedPaper(null); setView('builder'); }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-500 rounded-xl text-xs font-bold text-white transition-all shadow-lg shadow-violet-900/30"
-                        >
-                            <Plus className="w-3.5 h-3.5" />
-                            Nouvelle épreuve
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => { setSelectedPaper(null); setView('builder'); }}
+                                className="flex items-center gap-1 px-2.5 py-1.5 bg-violet-600 hover:bg-violet-500 rounded-xl text-xs font-bold text-white transition-all"
+                                title="Épreuve structurée (questions)"
+                            >
+                                <Plus className="w-3 h-3" /> Structurée
+                            </button>
+                            <button
+                                onClick={() => { setSelectedPaper(null); setView('pdf_builder'); }}
+                                className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-xs font-bold text-white transition-all"
+                                title="Uploader un PDF interactif"
+                            >
+                                <Plus className="w-3 h-3" /> PDF
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -375,7 +400,7 @@ export function ExamRoomView({ orgId, orgSlug, userId, userName, userRole }: Exa
                             <PaperSection
                                 title="Brouillons" papers={drafts} isProf={isProf}
                                 accentColor="amber"
-                                onEdit={p => { setSelectedPaper(p); setView('builder'); }}
+                                onEdit={p => { setSelectedPaper(p); setView(p.exam_mode === 'pdf' ? 'pdf_builder' : 'builder'); }}
                                 onLaunch={launchSession}
                                 onArchive={archivePaper}
                                 onDelete={deletePaper}
@@ -388,7 +413,7 @@ export function ExamRoomView({ orgId, orgSlug, userId, userName, userRole }: Exa
                             <PaperSection
                                 title="Épreuves publiées" papers={published} isProf={isProf}
                                 accentColor="emerald"
-                                onEdit={p => { setSelectedPaper(p); setView('builder'); }}
+                                onEdit={p => { setSelectedPaper(p); setView(p.exam_mode === 'pdf' ? 'pdf_builder' : 'builder'); }}
                                 onLaunch={launchSession}
                                 onArchive={archivePaper}
                                 onDelete={deletePaper}
@@ -401,7 +426,7 @@ export function ExamRoomView({ orgId, orgSlug, userId, userName, userRole }: Exa
                             <PaperSection
                                 title="Archives" papers={archived} isProf={isProf}
                                 accentColor="slate"
-                                onEdit={p => { setSelectedPaper(p); setView('builder'); }}
+                                onEdit={p => { setSelectedPaper(p); setView(p.exam_mode === 'pdf' ? 'pdf_builder' : 'builder'); }}
                                 onLaunch={launchSession}
                                 onArchive={archivePaper}
                                 onDelete={deletePaper}
@@ -458,12 +483,18 @@ export function ExamRoomView({ orgId, orgSlug, userId, userName, userRole }: Exa
                                     </p>
                                 </div>
                                 {isProf && (
-                                    <button
-                                        onClick={() => { setSelectedPaper(null); setView('builder'); }}
-                                        className="px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-xl text-sm font-bold text-white transition-all"
-                                    >
-                                        + Créer une épreuve
-                                    </button>
+                                    <div className="flex gap-2 flex-wrap justify-center">
+                                        <button
+                                            onClick={() => { setSelectedPaper(null); setView('builder'); }}
+                                            className="px-4 py-2.5 bg-violet-600 hover:bg-violet-500 rounded-xl text-sm font-bold text-white transition-all flex items-center gap-2">
+                                            ✏️ Épreuve structurée
+                                        </button>
+                                        <button
+                                            onClick={() => { setSelectedPaper(null); setView('pdf_builder'); }}
+                                            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-sm font-bold text-white transition-all flex items-center gap-2">
+                                            📄 Uploader un PDF
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                         )}

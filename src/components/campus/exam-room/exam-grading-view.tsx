@@ -76,7 +76,7 @@ export function ExamGradingView({ session, orgId, userId, onBack }: ExamGradingV
             nameMap[u.id] = `${u.first_name} ${u.last_name}`;
         });
 
-        setCopies(parts.map((p: any) => {
+        setCopies(parts.map((p: any): StudentCopy => {
             const ans = p.answers || {};
             // Auto-compute grades for QCM/VF
             const manualGrades: Record<string, { earned: number; note: string }> = p.manual_grades || {};

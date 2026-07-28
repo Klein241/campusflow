@@ -18,6 +18,7 @@ import { NotificationCenter, NotificationBell } from '@/components/campus/notifi
 import { SkyPoints } from '@/components/campus/sky-points';
 import { SkyPointsStore } from '@/components/campus/sky-points-store';
 import { PwaInstall } from '@/components/campus/pwa-install';
+import { ExamRoomView } from '@/components/campus/exam-room/exam-room-view';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 // ═══════════════════════════════════════════════════════
@@ -354,6 +355,17 @@ export default function CampusPage() {
                             <ProfileView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role} orgName={org.name} orgLogo={org.logo_url} userSkyPoints={skyPoints} onPhotoUpdate={handlePhotoUpdate} />
                         </motion.div>
                     )}
+
+                    {activeTab === 'exam_room' && (
+                        <ExamRoomView
+                            orgId={org.id}
+                            orgSlug={orgSlug}
+                            userId={session.id}
+                            userName={userName}
+                            userRole={session.role}
+                        />
+                    )}
+
                 </AnimatePresence>
             </div>
 

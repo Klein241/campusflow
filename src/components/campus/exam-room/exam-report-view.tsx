@@ -273,7 +273,9 @@ export function ExamReportView({ session, onBack }: ExamReportViewProps) {
                                                     )}
                                                     <span className="text-[10px] text-slate-500">{totalDuration(p)}</span>
                                                     {p.permissionGranted && (
-                                                        <Shield className="w-3 h-3 text-violet-400" title="Permission accordée" />
+                                                        <span title="Permission accordée">
+                                                            <Shield className="w-3 h-3 text-violet-400" aria-label="Permission accordée" />
+                                                        </span>
                                                     )}
                                                 </div>
                                             </div>

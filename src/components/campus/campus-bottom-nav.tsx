@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useOrgSlug } from '@/hooks/use-org-slug';
 import {
     Newspaper, Users, MessageSquare, Lock, User,
-    ShoppingBag, Plus, BookOpen, Store, ClipboardList
+    ShoppingBag, Plus, BookOpen, Store, ClipboardList, ClipboardCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 // Se cache automatiquement quand une story est ouverte
 // ═══════════════════════════════════════════════════════
 
-export type CampusTab = 'actus' | 'contacts' | 'chatdm' | 'myspace' | 'shop' | 'profile' | 'library' | 'marketplace' | 'forms';
+export type CampusTab = 'actus' | 'contacts' | 'chatdm' | 'myspace' | 'shop' | 'profile' | 'library' | 'marketplace' | 'forms' | 'exam_room';
 
 interface CampusBottomNavProps {
     activeTab: CampusTab;
@@ -39,8 +39,9 @@ const navItems: { id: CampusTab; icon: any; label: string; gradient: string; act
 // Items du menu FAB
 const fabItems: { id: CampusTab; icon: any; label: string; gradient: string; emoji: string }[] = [
     { id: 'library',     icon: BookOpen,      label: 'Bibliothèque', gradient: 'from-amber-500 to-yellow-500',  emoji: '📚' },
-    { id: 'marketplace', icon: Store,         label: 'Marketplace',  gradient: 'from-emerald-500 to-teal-600',  emoji: '🛍️' },
+    { id: 'marketplace', icon: Store,         label: 'Marketplace',  gradient: 'from-emerald-500 to-teal-600',  emoji: '🛒️' },
     { id: 'forms',       icon: ClipboardList, label: 'Formulaires',  gradient: 'from-violet-500 to-indigo-600', emoji: '📋' },
+    { id: 'exam_room',   icon: ClipboardCheck, label: 'Salle d\'Évaluation', gradient: 'from-blue-500 to-cyan-600',       emoji: '🏛️' },
 ];
 
 function NavButton({
