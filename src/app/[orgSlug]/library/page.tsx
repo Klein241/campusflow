@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
+import { uploadToR2 } from '@/lib/r2';
 import { toast } from 'sonner';
 
 // ═══════════════════════════════════════════════════════
@@ -184,12 +185,8 @@ export default function LibraryPage() {
             let fileSize = 0;
 
             if (uFile) {
-                const ext = uFile.name.split('.').pop();
-                const path = `orgs/${org.id}/library/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-                const { error: upErr } = await supabase.storage.from('organization-assets').upload(path, uFile);
-                if (upErr) throw upErr;
-                const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
-                fileUrl = urlData.publicUrl;
+                const r2Res = await uploadToR2(uFile, `orgs/${org.id}/library`, uFile.name);
+                fileUrl = r2Res.url;
                 fileSize = uFile.size;
             }
 

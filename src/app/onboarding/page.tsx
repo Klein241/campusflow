@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
+import { uploadToR2 } from '@/lib/r2';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 
@@ -230,18 +231,14 @@ export default function OnboardingPage() {
 
             // ═══ STEP 4: Upload logo ═══
             if (data.logoFile && org) {
-                const ext = data.logoFile.name.split('.').pop();
-                const path = `orgs/${org.id}/logo.${ext}`;
-                await supabase.storage.from('organization-assets').upload(path, data.logoFile, { upsert: true });
-                const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
-                await supabase.from('organizations').update({ logo_url: urlData.publicUrl }).eq('id', org.id);
+                const r2Res = await uploadToR2(data.logoFile, `orgs/${org.id}`, data.logoFile.name);
+                await supabase.from('organizations').update({ logo_url: r2Res.url }).eq('id', org.id);
             }
 
             // ═══ STEP 5: Upload documents ═══
             if (data.documents.length > 0 && org) {
                 for (const doc of data.documents) {
-                    const path = `orgs/${org.id}/docs/${Date.now()}_${doc.name}`;
-                    await supabase.storage.from('organization-assets').upload(path, doc);
+                    await uploadToR2(doc, `orgs/${org.id}/docs`, doc.name);
                 }
             }
 

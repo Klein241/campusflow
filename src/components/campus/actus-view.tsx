@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { compressImage } from '@/lib/compress';
+import { uploadToR2 } from '@/lib/r2';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
@@ -41,6 +42,7 @@ interface PostItem {
     is_anonymous: boolean;
     prayer_count: number;
     prayed_by: string[];
+    viewed_by?: string[];
     created_at: string;
     isAdmin?: boolean;
     avatarUrl?: string;
@@ -134,6 +136,16 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
     const [editContent, setEditContent] = useState('');
     const [savingEdit, setSavingEdit] = useState(false);
     const [postMenuOpen, setPostMenuOpen] = useState<string | null>(null);
+
+    // Post expansion & views
+    const [expandedPosts, setExpandedPosts] = useState<Record<string, boolean>>({});
+
+    const recordPostView = async (post: PostItem) => {
+        if ((post.viewed_by || []).includes(userId)) return;
+        const newViewedBy = [...(post.viewed_by || []), userId];
+        setPosts(prev => prev.map(p => p.id === post.id ? { ...p, viewed_by: newViewedBy } : p));
+        await supabase.from('tutoring_requests').update({ viewed_by: newViewedBy }).eq('id', post.id).catch(() => {});
+    };
 
     // Contacts for "selected" visibility
     const [contacts, setContacts] = useState<any[]>([]);
@@ -270,27 +282,22 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
     const publishPost = async () => {
         if (!newPostContent.trim() && !postImage) return;
 
-        // ── Sky Points : vérification & débit avec fallback direct ──
-        const table = (userRole === 'teacher' || userRole === 'admin' || userRole === 'owner') ? 'teacher_profiles' : 'student_profiles';
-        const { data: prof } = await supabase.from(table).select('sky_points').eq('id', userId).maybeSingle();
-        const currentPts = prof?.sky_points ?? 100;
-        if (currentPts < 1) {
-            toast.error('Solde insuffisant — 1 Sky Point requis pour publier');
-            return;
-        }
+        // ── Sky Points : 1 pt pour texte, 2 pts pour image, 3 pts pour les deux ──
+        const hasText = !!newPostContent.trim();
+        const hasImage = !!postImage;
+        const requiredPoints = (hasText ? 1 : 0) + (hasImage ? 2 : 0);
 
-        const { data: spendResult, error: spendErr } = await supabase.rpc('spend_sky_point', {
-            p_user_id: userId,
-            p_org_id: orgId,
-            p_amount: 1,
-            p_reason: 'actus_post',
-            p_description: "Publication d'une actus"
-        });
+        const isAdminOrOwner = userRole === 'admin' || userRole === 'owner';
+        const table = (userRole === 'teacher') ? 'teacher_profiles' : 'student_profiles';
 
-        if (spendErr || !spendResult || spendResult.success === false) {
-            // Fallback si RPC absente
-            const newBal = Math.max(0, currentPts - 1);
-            await supabase.from(table).update({ sky_points: newBal }).eq('id', userId);
+        let currentPts = 100;
+        if (!isAdminOrOwner) {
+            const { data: prof } = await supabase.from(table).select('sky_points').eq('id', userId).maybeSingle();
+            currentPts = prof?.sky_points ?? 100;
+            if (currentPts < requiredPoints) {
+                toast.error(`Solde insuffisant — ${requiredPoints} Sky Point${requiredPoints > 1 ? 's' : ''} requis pour cette publication`);
+                return;
+            }
         }
 
         setPublishing(true);
@@ -299,12 +306,8 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
             let finalImageUrl: string | null = null;
             if (postImage) {
                 const compressed = await compressImage(postImage, { maxWidth: 1080, quality: 0.7 });
-                const ext = postImage.name.split('.').pop() || 'jpg';
-                const path = `actus/${userId}/${Date.now()}.${ext}`;
-                const { error: uploadErr } = await supabase.storage.from('organization-assets').upload(path, compressed, { upsert: true });
-                if (uploadErr) throw uploadErr;
-                const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
-                finalImageUrl = urlData.publicUrl;
+                const r2Res = await uploadToR2(compressed, `actus/${userId}`, postImage.name);
+                finalImageUrl = r2Res.url;
             }
 
             const payload: any = {
@@ -322,7 +325,23 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
             }
             if (insertResult.error) throw insertResult.error;
             const newPostId = insertResult.data?.id || '';
-            toast.success('Publication ajoutée ! 🚀');
+
+            // Déduire les Sky Points après succès de la publication
+            if (!isAdminOrOwner && requiredPoints > 0) {
+                const newBal = Math.max(0, currentPts - requiredPoints);
+                await supabase.from(table).update({ sky_points: newBal }).eq('id', userId);
+                await supabase.from('sky_transactions').insert({
+                    user_id: userId,
+                    student_id: userRole === 'student' ? userId : null,
+                    amount: -requiredPoints,
+                    transaction_type: 'actus_post',
+                    description: `Publication d'une actus (${hasText ? 'texte' : ''}${hasText && hasImage ? ' + ' : ''}${hasImage ? 'image' : ''})`,
+                    organization_id: orgId
+                }).catch(() => {});
+                window.dispatchEvent(new CustomEvent('sky_points_updated', { detail: { newBalance: newBal } }));
+            }
+
+            toast.success(`Publication ajoutée ! ${isAdminOrOwner ? '(Admin)' : `(-${requiredPoints} Sky Points)`} 🚀`);
             setNewPostContent('');
             setPostImage(null);
             setShowNewPost(false);
@@ -340,7 +359,7 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
             notifyActuPublished({
                 authorId: userId, authorName: userName,
                 postId: newPostId, postContent: newPostContent.trim(),
-                recipientIds, orgSlug,
+                recipientIds, orgSlug, orgId,
             }).catch(e => console.warn('[Notif] actu_published:', e));
             loadPosts();
 
@@ -454,13 +473,21 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
         if (!isRepost && !storyText.trim() && !storyImage) { toast.error('Ajoutez du texte ou une image'); return; }
         if (isRepost && !repostData) return;
 
-        const table = userRole === 'teacher' ? 'teacher_profiles' : 'student_profiles';
-        const { data: profile } = await supabase.from(table).select('sky_points').eq('id', userId).maybeSingle();
-        const currentPoints = profile?.sky_points ?? 100;
+        const isAdminOrOwner = userRole === 'admin' || userRole === 'owner';
+        const table = (userRole === 'teacher') ? 'teacher_profiles' : 'student_profiles';
 
-        if (currentPoints < 1) {
-            toast.error('Solde insuffisant — 1 Sky Point requis pour publier');
-            return;
+        const hasText = !isRepost && !!storyText.trim();
+        const hasImage = !!storyImage || !!repostData?.image_url;
+        const requiredPoints = isRepost ? 1 : ((hasText ? 1 : 0) + (hasImage ? 2 : 0));
+
+        let currentPoints = 100;
+        if (!isAdminOrOwner) {
+            const { data: profile } = await supabase.from(table).select('sky_points').eq('id', userId).maybeSingle();
+            currentPoints = profile?.sky_points ?? 100;
+            if (currentPoints < requiredPoints) {
+                toast.error(`Solde insuffisant — ${requiredPoints} Sky Point${requiredPoints > 1 ? 's' : ''} requis pour publier cette story`);
+                return;
+            }
         }
 
         setPublishingStory(true);
@@ -473,12 +500,8 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                 captionToSave = `Repost de @${repostData.senderName}: ${repostData.caption || repostData.content || ''}`;
             } else if (storyImage) {
                 const compressed = await compressImage(storyImage, { maxWidth: 1080, quality: 0.7 });
-                const ext = storyImage.name.split('.').pop() || 'jpg';
-                const path = `stories/${userId}/${Date.now()}.${ext}`;
-                const { error: uploadErr } = await supabase.storage.from('organization-assets').upload(path, compressed, { upsert: true });
-                if (uploadErr) throw uploadErr;
-                const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
-                imageUrl = urlData.publicUrl;
+                const r2Res = await uploadToR2(compressed, `stories/${userId}`, storyImage.name);
+                imageUrl = r2Res.url;
                 captionToSave = caption.trim() || null;
             }
 
@@ -506,7 +529,7 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                 notifyStoryReposted({
                     reposterId: userId, reposterName: userName,
                     originalAuthorId: repostData.user_id,
-                    storyId: repostData.id, orgSlug,
+                    storyId: repostData.id, orgSlug, orgId,
                 }).catch(e => console.warn('[Notif] story_reposted:', e));
             } else if (!isRepost) {
                 // Notifier tous les membres de l'org
@@ -521,22 +544,24 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                 notifyStoryPublished({
                     authorId: userId, authorName: userName,
                     storyId: newStoryId, storyPreview: storyText.trim() || 'Story photo',
-                    recipientIds, orgSlug,
+                    recipientIds, orgSlug, orgId,
                 }).catch(e => console.warn('[Notif] story_published:', e));
             }
 
-            // Deduct 1 Sky Point
-
-            const newBal = Math.max(0, currentPoints - 1);
-            await supabase.from(table).update({ sky_points: newBal }).eq('id', userId);
-            await supabase.from('sky_transactions').insert({
-                user_id: userId,
-                student_id: userRole === 'student' ? userId : null,
-                amount: -1,
-                transaction_type: 'story_post',
-                description: isRepost ? 'Repost d\'une story' : 'Publication d\'une story',
-                organization_id: orgId
-            });
+            // Déduire les Sky Points
+            if (!isAdminOrOwner && requiredPoints > 0) {
+                const newBal = Math.max(0, currentPoints - requiredPoints);
+                await supabase.from(table).update({ sky_points: newBal }).eq('id', userId);
+                await supabase.from('sky_transactions').insert({
+                    user_id: userId,
+                    student_id: userRole === 'student' ? userId : null,
+                    amount: -requiredPoints,
+                    transaction_type: 'story_post',
+                    description: isRepost ? 'Repost d\'une story' : `Publication story (${hasText ? 'texte' : ''}${hasText && hasImage ? ' + ' : ''}${hasImage ? 'image' : ''})`,
+                    organization_id: orgId
+                }).catch(() => {});
+                window.dispatchEvent(new CustomEvent('sky_points_updated', { detail: { newBalance: newBal } }));
+            }
             
             toast.success(isRepost ? 'Story repostée ! ✨' : 'Story publiée ! ✨');
             if (!isRepost) {
@@ -1318,7 +1343,27 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                                 )}
                             </div>
 
-                            <p className="mt-3 text-sm text-slate-200 leading-relaxed whitespace-pre-line">{post.content}</p>
+                            {(() => {
+                                const isExpanded = expandedPosts[post.id];
+                                const isLong = post.content && post.content.length > 180;
+                                const displayText = isLong && !isExpanded ? post.content.slice(0, 180) + '…' : post.content;
+                                return (
+                                    <p className="mt-3 text-sm text-slate-200 leading-relaxed whitespace-pre-line">
+                                        {displayText}
+                                        {isLong && (
+                                            <button
+                                                onClick={() => {
+                                                    setExpandedPosts(prev => ({ ...prev, [post.id]: !prev[post.id] }));
+                                                    recordPostView(post);
+                                                }}
+                                                className="text-amber-400 font-bold text-xs ml-1.5 hover:underline focus:outline-none"
+                                            >
+                                                {isExpanded ? 'Voir moins' : 'Lire plus'}
+                                            </button>
+                                        )}
+                                    </p>
+                                );
+                            })()}
 
                             {/* Photos */}
                             {post.photos && post.photos.length > 0 && (
@@ -1346,6 +1391,12 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                                         expandedComments === post.id ? 'text-blue-400' : 'text-slate-500 hover:text-blue-400')}>
                                     <MessageCircle className="w-4 h-4" />
                                     <span>{comments[post.id]?.length || commentCounts[post.id] || 0}</span>
+                                </button>
+                                <button onClick={() => recordPostView(post)}
+                                    className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-teal-300 transition-colors"
+                                    title="Nombre de vues">
+                                    <Eye className="w-4 h-4 text-teal-400" />
+                                    <span>{(post.viewed_by || []).length || 0} vue{(post.viewed_by || []).length > 1 ? 's' : ''}</span>
                                 </button>
                                 <button onClick={() => sharePost(post)}
                                     className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-teal-400 transition-colors ml-auto">

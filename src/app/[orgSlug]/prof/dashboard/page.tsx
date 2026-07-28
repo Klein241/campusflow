@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
 import { compressImage } from '@/lib/compress';
+import { uploadToR2 } from '@/lib/r2';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -298,14 +299,10 @@ export default function TeacherDashboard() {
             if (file.type.startsWith('image/')) {
                 fileToUpload = await compressImage(file, { maxWidth: 1200, quality: 0.7 });
             }
-            const ext = file.name.split('.').pop();
-            const path = `chapters/${chapterId}/${type}s/${Date.now()}_${file.name}`;
-            const { error: upErr } = await supabase.storage.from('organization-assets').upload(path, fileToUpload, { contentType: fileToUpload.type, upsert: false });
-            if (upErr) throw upErr;
-            const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
+            const r2Res = await uploadToR2(fileToUpload, `chapters/${chapterId}/${type}s`, file.name);
             const ch = chapters.find(c => c.id === chapterId);
             const currentResources = ch?.resources || [];
-            const newResource = { name: file.name, url: urlData.publicUrl, type, size: fileToUpload.size, uploaded_at: new Date().toISOString() };
+            const newResource = { name: file.name, url: r2Res.url, type, size: fileToUpload.size, uploaded_at: new Date().toISOString() };
             const updatedResources = [...currentResources, newResource];
             const { error: dbErr } = await supabase.from('chapters').update({ resources: updatedResources }).eq('id', chapterId);
             if (dbErr) throw dbErr;
@@ -335,14 +332,10 @@ export default function TeacherDashboard() {
         setUploadingPhoto(true);
         try {
             const compressed = await compressImage(file, { maxWidth: 500, quality: 0.7 });
-            const ext = file.name.split('.').pop();
-            const path = `profile-photos/teachers/${teacher.id}_${Date.now()}.${ext}`;
-            const { error: upErr } = await supabase.storage.from('organization-assets').upload(path, compressed, { contentType: compressed.type, upsert: true });
-            if (upErr) throw upErr;
-            const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
-            const { error: dbErr } = await supabase.from('teacher_profiles').update({ photo_url: urlData.publicUrl }).eq('id', teacher.id);
+            const r2Res = await uploadToR2(compressed, `profile-photos/teachers/${teacher.id}`, file.name);
+            const { error: dbErr } = await supabase.from('teacher_profiles').update({ photo_url: r2Res.url }).eq('id', teacher.id);
             if (dbErr) throw dbErr;
-            setTeacher({ ...teacher, photo_url: urlData.publicUrl });
+            setTeacher({ ...teacher, photo_url: r2Res.url });
             toast.success('Photo mise à jour !');
         } catch (err: any) { toast.error(err.message || 'Erreur upload'); }
         setUploadingPhoto(false);

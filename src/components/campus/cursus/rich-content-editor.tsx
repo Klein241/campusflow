@@ -4,6 +4,7 @@ import { Plus, Image as ImageIcon, Type, X, MoveUp, MoveDown, Loader2 } from 'lu
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { compressImage } from '@/lib/compress';
+import { uploadToR2 } from '@/lib/r2';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -64,14 +65,9 @@ export function RichContentEditor({
     setUploadingAt(after);
     try {
       const compressed = await compressImage(file, { maxWidth: 1200, quality: 0.82 });
-      const path = `cursus-content/${userId || 'shared'}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-      const { error: upErr } = await supabase.storage
-        .from('organization-assets')
-        .upload(path, compressed, { contentType: compressed.type, upsert: true });
-      if (upErr) throw upErr;
-      const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
+      const r2Res = await uploadToR2(compressed, `cursus-content/${userId || 'shared'}`, file.name);
       const next = [...displayBlocks];
-      next.splice(after + 1, 0, { type: 'image', url: urlData.publicUrl, caption: '' });
+      next.splice(after + 1, 0, { type: 'image', url: r2Res.url, caption: '' });
       onChange(next);
       toast.success('Image insérée ✅');
     } catch (e: any) {

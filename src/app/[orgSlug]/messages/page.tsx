@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { compressImage } from '@/lib/compress';
+import { uploadToR2 } from '@/lib/r2';
 import { toast } from 'sonner';
 
 // ═══════════════════════════════════════════════════════
@@ -254,11 +255,8 @@ export default function MessagesPage() {
                 if (mediaFile.type.startsWith('image/')) {
                     fileToUpload = await compressImage(mediaFile, { maxWidth: 1200, quality: 0.6 });
                 }
-                const ext = mediaFile.name.split('.').pop();
-                const path = `orgs/${org.id}/chat/${activeConv.id}/${Date.now()}.${ext}`;
-                await supabase.storage.from('organization-assets').upload(path, fileToUpload);
-                const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
-                mediaUrl = urlData.publicUrl;
+                const r2Res = await uploadToR2(fileToUpload, `orgs/${org.id}/chat/${activeConv.id}`, mediaFile.name);
+                mediaUrl = r2Res.url;
                 setMediaFile(null);
             }
 

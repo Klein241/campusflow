@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { compressImage } from '@/lib/compress';
+import { uploadToR2 } from '@/lib/r2';
 import { cn } from '@/lib/utils';
 
 // ═══════════════════════════════════════════════════════
@@ -157,11 +158,8 @@ export default function ShopPage() {
             let imageUrl = '';
             if (pImg) {
                 const compressed = await compressImage(pImg, { maxWidth: 800, quality: 0.7 });
-                const ext = pImg.name.split('.').pop();
-                const path = `orgs/${org.id}/shop/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-                await supabase.storage.from('organization-assets').upload(path, compressed);
-                const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
-                imageUrl = urlData.publicUrl;
+                const r2Res = await uploadToR2(compressed, `orgs/${org.id}/shop`, pImg.name);
+                imageUrl = r2Res.url;
             }
             const productPayload = {
                 tenant_id: org.id, nom: pName.trim(), description: pDesc || null,

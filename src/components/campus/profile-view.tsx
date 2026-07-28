@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { supabase } from '@/lib/supabase';
 import { compressImage } from '@/lib/compress';
+import { uploadToR2 } from '@/lib/r2';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { PwaInstall } from './pwa-install';
@@ -130,11 +131,8 @@ export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgNam
         try {
             const compressed = await compressImage(file, { maxWidth: 512, quality: 0.8 });
             const table = userRole === 'teacher' ? 'teacher_profiles' : 'student_profiles';
-            const path = `profiles/${userId}/${Date.now()}_photo.jpg`;
-            const { error: upErr } = await supabase.storage.from('organization-assets').upload(path, compressed, { contentType: compressed.type, upsert: true });
-            if (upErr) throw upErr;
-            const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
-            const photoUrl = urlData.publicUrl;
+            const r2Res = await uploadToR2(compressed, `profiles/${userId}`, file.name);
+            const photoUrl = r2Res.url;
             const { error: dbErr } = await supabase.from(table).update({ photo_url: photoUrl }).eq('id', userId);
             if (dbErr) throw dbErr;
             setProfile((prev: any) => ({ ...prev, photo_url: photoUrl }));

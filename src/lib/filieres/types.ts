@@ -1,5 +1,11 @@
 // ============================================================
-// TYPES METIER — CENTRE DE FORMATION
+// TYPES METIER — CAMPUSFLOW (multi-tenant)
+// ============================================================
+// NOTE: Les champs `tenant_id` sont optionnels — héritage de
+// l'ancienne architecture mono-tenant. L'architecture active
+// utilise `organization_id` pour la résolution du tenant.
+// Ne pas supprimer tenant_id sans migration DB (shop_products
+// utilise encore cette colonne sous ce nom).
 // ============================================================
 
 export interface Filiere {
@@ -30,7 +36,8 @@ export interface Promotion {
   annee_fin: number
   effectif_max: number
   is_active: boolean
-  tenant_id: string
+  tenant_id?: string         // optionnel — legacy mono-tenant
+  organization_id?: string   // champ actif multi-tenant
   created_at: string
   filiere?: Filiere
 }
@@ -44,7 +51,8 @@ export interface Enrollment {
   statut: 'en_attente' | 'confirmee' | 'annulee' | 'terminee'
   montant_paye: number
   notes_admin?: string
-  tenant_id: string
+  tenant_id?: string         // optionnel — legacy mono-tenant
+  organization_id?: string   // champ actif multi-tenant
   created_at: string
   updated_at: string
   // Relations
@@ -64,7 +72,8 @@ export interface Matiere {
   type_matiere: 'cours' | 'td' | 'tp' | 'stage' | 'projet'
   teacher_id?: string
   is_active: boolean
-  tenant_id: string
+  tenant_id?: string         // optionnel — legacy mono-tenant
+  organization_id?: string   // champ actif multi-tenant
   created_at: string
   filiere?: Filiere
   teacher?: StudentProfile
@@ -81,7 +90,8 @@ export interface Note {
   periode: string
   commentaire?: string
   saisi_par?: string
-  tenant_id: string
+  tenant_id?: string         // optionnel — legacy mono-tenant
+  organization_id?: string   // champ actif multi-tenant
   created_at: string
   updated_at: string
   matiere?: Matiere
@@ -95,7 +105,8 @@ export interface Presence {
   date_seance: string
   statut: 'present' | 'absent' | 'retard' | 'justifie'
   justification?: string
-  tenant_id: string
+  tenant_id?: string         // optionnel — legacy mono-tenant
+  organization_id?: string   // champ actif multi-tenant
   created_at: string
 }
 
@@ -111,7 +122,8 @@ export interface Paiement {
   statut: 'en_attente' | 'confirme' | 'annule' | 'rembourse'
   periode?: string
   notes?: string
-  tenant_id: string
+  tenant_id?: string         // optionnel — legacy mono-tenant
+  organization_id?: string   // champ actif multi-tenant
   created_at: string
 }
 
@@ -128,7 +140,8 @@ export interface TimetableSlot {
   est_recurrent: boolean
   date_specifique?: string
   type_seance: 'cours' | 'td' | 'tp' | 'examen' | 'rattrapage'
-  tenant_id: string
+  tenant_id?: string         // optionnel — legacy mono-tenant
+  organization_id?: string   // champ actif multi-tenant
   created_at: string
   matiere?: Matiere
   teacher?: StudentProfile
@@ -161,7 +174,8 @@ export interface ForumThread {
   is_epingle: boolean
   is_resolu: boolean
   vues: number
-  tenant_id: string
+  tenant_id?: string         // optionnel — legacy mono-tenant
+  organization_id?: string   // champ actif multi-tenant
   created_at: string
   updated_at: string
   auteur?: StudentProfile
@@ -175,7 +189,8 @@ export interface ForumReply {
   auteur_id: string
   contenu: string
   is_solution: boolean
-  tenant_id: string
+  tenant_id?: string         // optionnel — legacy mono-tenant
+  organization_id?: string   // champ actif multi-tenant
   created_at: string
   auteur?: StudentProfile
 }

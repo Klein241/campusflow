@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ChatMessageRenderer } from './chat-message-renderer';
 import { notifyDirectMessage } from '@/lib/notifications';
+import { uploadToR2 } from '@/lib/r2';
 
 
 // ═══════════════════════════════════════════════════════
@@ -383,17 +384,8 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
             }
 
             try {
-                const ext = file.name.split('.').pop() || 'bin';
-                const path = `chat-files/${activeConv.id}/${Date.now()}_${file.name}`;
-
-                const { error: uploadError } = await supabase.storage
-                    .from('organization-assets')
-                    .upload(path, file, { contentType: file.type, upsert: false });
-
-                if (uploadError) throw uploadError;
-
-                const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
-                const fileUrl = urlData.publicUrl;
+                const r2Res = await uploadToR2(file, `chat-files/${activeConv.id}`, file.name);
+                const fileUrl = r2Res.url;
 
                 const msgType = file.type.startsWith('image/') ? 'image'
                     : file.type.startsWith('audio/') ? 'voice'
@@ -479,20 +471,15 @@ export function ChatDMView({ orgId, orgSlug, userId, userName, userRole, initial
                 // Upload
                 setUploading(true);
                 try {
-                    const path = `voice-messages/${userId}/${Date.now()}.webm`;
-                    const { error: uploadError } = await supabase.storage
-                        .from('organization-assets')
-                        .upload(path, audioBlob, { contentType: 'audio/webm', upsert: false });
-                    if (uploadError) throw uploadError;
-
-                    const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
+                    const r2Res = await uploadToR2(audioBlob, `voice-messages/${userId}`, `voice_${Date.now()}.webm`);
+                    const voiceUrl = r2Res.url;
 
                     const { error: insertError } = await supabase.from('chat_messages').insert({
                         conversation_id: activeConv.id,
                         sender_id: userId,
                         content: '🎤 Message vocal',
                         msg_type: 'voice',
-                        media_url: urlData.publicUrl,
+                        media_url: voiceUrl,
                     });
                     if (insertError) throw insertError;
 

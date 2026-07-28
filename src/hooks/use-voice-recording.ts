@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { uploadToR2 } from '@/lib/r2';
 import { sendGroupMessage as sendGroupMessageClient } from '@/lib/api-client';
 import { toast } from 'sonner';
 
@@ -107,22 +108,8 @@ export function useVoiceRecording() {
     const sendVoiceMessageDM = async (audioBlob: Blob, duration: number, userId: string, conversationId: string) => {
         setIsUploadingVoice(true);
         try {
-            const filename = `voice-messages/${userId}/${Date.now()}.webm`;
-
-            const { error: uploadError } = await supabase.storage
-                .from('chat-media')
-                .upload(filename, audioBlob, {
-                    contentType: 'audio/webm',
-                    upsert: false
-                });
-
-            if (uploadError) throw uploadError;
-
-            const { data: urlData } = supabase.storage
-                .from('chat-media')
-                .getPublicUrl(filename);
-
-            const voiceUrl = urlData.publicUrl;
+            const r2Res = await uploadToR2(audioBlob, `voice-messages/${userId}`, `voice_${Date.now()}.webm`);
+            const voiceUrl = r2Res.url;
 
             const { error: insertError } = await supabase
                 .from('direct_messages')
@@ -147,22 +134,8 @@ export function useVoiceRecording() {
     const sendVoiceMessageGroup = async (audioBlob: Blob, duration: number, userId: string, groupId: string) => {
         setIsUploadingVoice(true);
         try {
-            const filename = `voice-messages/${userId}/${Date.now()}.webm`;
-
-            const { error: uploadError } = await supabase.storage
-                .from('chat-media')
-                .upload(filename, audioBlob, {
-                    contentType: 'audio/webm',
-                    upsert: false
-                });
-
-            if (uploadError) throw uploadError;
-
-            const { data: urlData } = supabase.storage
-                .from('chat-media')
-                .getPublicUrl(filename);
-
-            const voiceUrl = urlData.publicUrl;
+            const r2Res = await uploadToR2(audioBlob, `voice-messages/${userId}`, `voice_${Date.now()}.webm`);
+            const voiceUrl = r2Res.url;
 
             const savedVoiceMsg = await sendGroupMessageClient({
                 groupId,

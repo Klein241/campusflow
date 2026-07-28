@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
 import { compressImage } from '@/lib/compress';
+import { uploadToR2 } from '@/lib/r2';
 import { toast } from 'sonner';
 import { ChatDMView } from '@/components/campus/chat-dm-view';
 import { GroupesView } from '@/components/campus/groupes-view';
@@ -628,16 +629,12 @@ function AdminPageContent() {
     };
 
     // ═══ IMAGE UPLOAD TO SUPABASE STORAGE ═══
-    const uploadLandingImage = async (file: File, path: string): Promise<string | null> => {
+    const uploadLandingImage = async (file: File, pathPrefix: string): Promise<string | null> => {
         setUploadingImage(true);
         try {
             const compressed = await compressImage(file, { maxWidth: 1400, quality: 0.7 });
-            const ext = file.name.split('.').pop();
-            const fullPath = `orgs/${org.id}/landing/${path}_${Date.now()}.${ext}`;
-            const { error } = await supabase.storage.from('organization-assets').upload(fullPath, compressed, { upsert: true });
-            if (error) throw error;
-            const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(fullPath);
-            return urlData.publicUrl;
+            const r2Res = await uploadToR2(compressed, `orgs/${org.id}/landing`, `${pathPrefix}_${file.name}`);
+            return r2Res.url;
         } catch (e: any) { toast.error('Erreur upload: ' + e.message); return null; }
         finally { setUploadingImage(false); }
     };
@@ -664,14 +661,11 @@ function AdminPageContent() {
         setUploadingImage(true);
         try {
             const compressed = await compressImage(file, { maxWidth: 800, quality: 0.7 });
-            const ext = file.name.split('.').pop();
-            const path = `orgs/${org.id}/logo.${ext}`;
-            await supabase.storage.from('organization-assets').upload(path, compressed, { upsert: true });
-            const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
-            setSLogoUrl(urlData.publicUrl);
+            const r2Res = await uploadToR2(compressed, `orgs/${org.id}`, file.name);
+            setSLogoUrl(r2Res.url);
             // Also update the org immediately
-            await supabase.from('organizations').update({ logo_url: urlData.publicUrl }).eq('id', org.id);
-            setOrg({ ...org, logo_url: urlData.publicUrl });
+            await supabase.from('organizations').update({ logo_url: r2Res.url }).eq('id', org.id);
+            setOrg({ ...org, logo_url: r2Res.url });
             toast.success('Logo uploadé !'); 
         } catch (e: any) { toast.error(e.message); }
         setUploadingImage(false);

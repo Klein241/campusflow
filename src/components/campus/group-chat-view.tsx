@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ChatMessageRenderer } from './chat-message-renderer';
 import { notifyGroupNewMessage } from '@/lib/notifications';
+import { uploadToR2 } from '@/lib/r2';
 
 
 // ═══════════════════════════════════════════════════════
@@ -258,15 +259,11 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
                 if (file.type.startsWith('image/')) {
                     fileToUpload = await compressImage(file, { maxWidth: 1200, quality: 0.6 });
                 }
-                const path = `chat-files/${groupId}/${Date.now()}_${file.name}`;
-                const { error: uploadError } = await supabase.storage
-                    .from('organization-assets').upload(path, fileToUpload, { contentType: fileToUpload.type, upsert: false });
-                if (uploadError) throw uploadError;
-                const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
+                const r2Res = await uploadToR2(fileToUpload, `chat-files/${groupId}`, file.name);
                 const msgType = file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'voice' : 'file';
                 const content = msgType === 'image' ? `📷 ${file.name}` : msgType === 'voice' ? '🎤 Message vocal' : `📎 ${file.name} (${formatFileSize(file.size)})`;
                 await supabase.from('chat_messages').insert({
-                    conversation_id: groupId, sender_id: userId, content, msg_type: msgType, media_url: urlData.publicUrl,
+                    conversation_id: groupId, sender_id: userId, content, msg_type: msgType, media_url: r2Res.url,
                 });
 
                 // 🔔 Notifier les membres du groupe
@@ -315,12 +312,9 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
                 setIsRecording(false); setRecordingTime(0);
                 setUploading(true);
                 try {
-                    const path = `voice-messages/${userId}/${Date.now()}.webm`;
-                    const { error: uploadError } = await supabase.storage.from('organization-assets').upload(path, blob, { contentType: 'audio/webm', upsert: false });
-                    if (uploadError) throw uploadError;
-                    const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
+                    const r2Res = await uploadToR2(blob, `voice-messages/${userId}`, `voice_${Date.now()}.webm`);
                     await supabase.from('chat_messages').insert({
-                        conversation_id: groupId, sender_id: userId, content: '🎤 Message vocal', msg_type: 'voice', media_url: urlData.publicUrl,
+                        conversation_id: groupId, sender_id: userId, content: '🎤 Message vocal', msg_type: 'voice', media_url: r2Res.url,
                     });
 
                     // 🔔 Notifier les membres du groupe

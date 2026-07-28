@@ -90,12 +90,9 @@ interface NotifyWorkerPayload {
 // ── Worker URL ───────────────────────────────────────────
 
 function getWorkerUrl(): string {
-    if (typeof window !== 'undefined') {
-        const envUrl = process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL
-            || process.env.NEXT_PUBLIC_WORKER_URL;
-        if (envUrl) return envUrl;
-    }
-    return '';
+    return process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL
+        || process.env.NEXT_PUBLIC_WORKER_URL
+        || 'https://campusflow-worker.kleintaptue1.workers.dev';
 }
 
 // ── Core: Send to Worker or Supabase Fallback ────────────
@@ -959,10 +956,10 @@ export async function notifyAdminAnnouncement({
  * Notify org members when someone publishes a new story.
  */
 export async function notifyStoryPublished({
-    authorId, authorName, storyId, storyPreview, recipientIds, orgSlug,
+    authorId, authorName, storyId, storyPreview, recipientIds, orgSlug, orgId,
 }: {
     authorId: string; authorName: string; storyId: string;
-    storyPreview?: string; recipientIds: string[]; orgSlug: string;
+    storyPreview?: string; recipientIds: string[]; orgSlug: string; orgId?: string;
 }) {
     if (!recipientIds.length) return;
     await sendToWorker({
@@ -973,7 +970,7 @@ export async function notifyStoryPublished({
         target_id: storyId,
         target_name: storyPreview || 'Story',
         message_preview: `${authorName} a publié une nouvelle story`,
-        extra_data: { orgSlug, tab: 'actus' },
+        extra_data: { orgSlug, orgId, tab: 'actus' },
     });
 }
 
@@ -981,10 +978,10 @@ export async function notifyStoryPublished({
  * Notify story author when someone likes their story.
  */
 export async function notifyStoryLiked({
-    likerId, likerName, storyAuthorId, storyId, orgSlug,
+    likerId, likerName, storyAuthorId, storyId, orgSlug, orgId,
 }: {
     likerId: string; likerName: string; storyAuthorId: string;
-    storyId: string; orgSlug: string;
+    storyId: string; orgSlug: string; orgId?: string;
 }) {
     if (likerId === storyAuthorId) return; // pas d'auto-notif
     await sendToWorker({
@@ -994,7 +991,7 @@ export async function notifyStoryLiked({
         recipient_id: storyAuthorId,
         target_id: storyId,
         message_preview: `${likerName} a aimé votre story`,
-        extra_data: { orgSlug, tab: 'actus' },
+        extra_data: { orgSlug, orgId, tab: 'actus' },
     });
 }
 
@@ -1002,10 +999,10 @@ export async function notifyStoryLiked({
  * Notify story author when someone comments on their story.
  */
 export async function notifyStoryCommented({
-    commenterId, commenterName, storyAuthorId, storyId, commentText, orgSlug,
+    commenterId, commenterName, storyAuthorId, storyId, commentText, orgSlug, orgId,
 }: {
     commenterId: string; commenterName: string; storyAuthorId: string;
-    storyId: string; commentText: string; orgSlug: string;
+    storyId: string; commentText: string; orgSlug: string; orgId?: string;
 }) {
     if (commenterId === storyAuthorId) return;
     await sendToWorker({
@@ -1015,7 +1012,7 @@ export async function notifyStoryCommented({
         recipient_id: storyAuthorId,
         target_id: storyId,
         message_preview: commentText.slice(0, 80),
-        extra_data: { orgSlug, tab: 'actus', scrollToComments: true },
+        extra_data: { orgSlug, orgId, tab: 'actus', scrollToComments: true },
     });
 }
 
@@ -1023,10 +1020,10 @@ export async function notifyStoryCommented({
  * Notify original story author when someone reposts their story.
  */
 export async function notifyStoryReposted({
-    reposterId, reposterName, originalAuthorId, storyId, orgSlug,
+    reposterId, reposterName, originalAuthorId, storyId, orgSlug, orgId,
 }: {
     reposterId: string; reposterName: string; originalAuthorId: string;
-    storyId: string; orgSlug: string;
+    storyId: string; orgSlug: string; orgId?: string;
 }) {
     if (reposterId === originalAuthorId) return;
     await sendToWorker({
@@ -1036,7 +1033,7 @@ export async function notifyStoryReposted({
         recipient_id: originalAuthorId,
         target_id: storyId,
         message_preview: `${reposterName} a reposté votre story`,
-        extra_data: { orgSlug, tab: 'actus' },
+        extra_data: { orgSlug, orgId, tab: 'actus' },
     });
 }
 
@@ -1048,10 +1045,10 @@ export async function notifyStoryReposted({
  * Notify org members when someone publishes an actus post.
  */
 export async function notifyActuPublished({
-    authorId, authorName, postId, postContent, recipientIds, orgSlug,
+    authorId, authorName, postId, postContent, recipientIds, orgSlug, orgId,
 }: {
     authorId: string; authorName: string; postId: string;
-    postContent: string; recipientIds: string[]; orgSlug: string;
+    postContent: string; recipientIds: string[]; orgSlug: string; orgId?: string;
 }) {
     if (!recipientIds.length) return;
     await sendToWorker({
@@ -1062,7 +1059,7 @@ export async function notifyActuPublished({
         target_id: postId,
         target_name: postContent.slice(0, 60),
         message_preview: postContent.slice(0, 100),
-        extra_data: { orgSlug, tab: 'actus' },
+        extra_data: { orgSlug, orgId, tab: 'actus' },
     });
 }
 
@@ -1070,10 +1067,10 @@ export async function notifyActuPublished({
  * Notify post author when someone likes their actus post.
  */
 export async function notifyActuLiked({
-    likerId, likerName, postAuthorId, postId, postContent, orgSlug,
+    likerId, likerName, postAuthorId, postId, postContent, orgSlug, orgId,
 }: {
     likerId: string; likerName: string; postAuthorId: string;
-    postId: string; postContent: string; orgSlug: string;
+    postId: string; postContent: string; orgSlug: string; orgId?: string;
 }) {
     if (likerId === postAuthorId) return;
     await sendToWorker({
@@ -1084,7 +1081,7 @@ export async function notifyActuLiked({
         target_id: postId,
         target_name: postContent.slice(0, 50),
         message_preview: `${likerName} a aimé votre publication`,
-        extra_data: { orgSlug, tab: 'actus' },
+        extra_data: { orgSlug, orgId, tab: 'actus' },
     });
 }
 
@@ -1092,10 +1089,10 @@ export async function notifyActuLiked({
  * Notify post author when someone comments on their actus post.
  */
 export async function notifyActuCommented({
-    commenterId, commenterName, postAuthorId, postId, postContent, commentText, orgSlug,
+    commenterId, commenterName, postAuthorId, postId, postContent, commentText, orgSlug, orgId,
 }: {
     commenterId: string; commenterName: string; postAuthorId: string;
-    postId: string; postContent: string; commentText: string; orgSlug: string;
+    postId: string; postContent: string; commentText: string; orgSlug: string; orgId?: string;
 }) {
     if (commenterId === postAuthorId) return;
     await sendToWorker({
@@ -1106,7 +1103,7 @@ export async function notifyActuCommented({
         target_id: postId,
         target_name: postContent.slice(0, 50),
         message_preview: commentText.slice(0, 80),
-        extra_data: { orgSlug, tab: 'actus', scrollToComments: true },
+        extra_data: { orgSlug, orgId, tab: 'actus', scrollToComments: true },
     });
 }
 

@@ -19,6 +19,7 @@ import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { supabase } from '@/lib/supabase';
 import { compressImage } from '@/lib/compress';
+import { uploadToR2 } from '@/lib/r2';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -738,14 +739,10 @@ export default function StudentDashboard() {
                                             setUploadingPhoto(true);
                                             try {
                                                 const compressed = await compressImage(file, { maxWidth: 500, quality: 0.7 });
-                                                const ext = file.name.split('.').pop();
-                                                const path = `profile-photos/students/${student.id}_${Date.now()}.${ext}`;
-                                                const { error: upErr } = await supabase.storage.from('organization-assets').upload(path, compressed, { contentType: compressed.type, upsert: true });
-                                                if (upErr) throw upErr;
-                                                const { data: urlData } = supabase.storage.from('organization-assets').getPublicUrl(path);
-                                                const { error: dbErr } = await supabase.from('student_profiles').update({ photo_url: urlData.publicUrl }).eq('id', student.id);
+                                                const r2Res = await uploadToR2(compressed, `profile-photos/students/${student.id}`, file.name);
+                                                const { error: dbErr } = await supabase.from('student_profiles').update({ photo_url: r2Res.url }).eq('id', student.id);
                                                 if (dbErr) throw dbErr;
-                                                setStudent({ ...student, photo_url: urlData.publicUrl });
+                                                setStudent({ ...student, photo_url: r2Res.url });
                                                 toast.success('Photo mise à jour !');
                                             } catch (err: any) { toast.error(err.message || 'Erreur upload'); }
                                             setUploadingPhoto(false);
