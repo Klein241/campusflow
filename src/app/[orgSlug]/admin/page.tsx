@@ -3,7 +3,8 @@
 import { useEffect, useState, useRef, Component, type ReactNode, type ErrorInfo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOrgSlug } from '@/hooks/use-org-slug';
-import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus, Building2, FileText, Receipt, PhoneCall } from 'lucide-react';
+import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus, Building2, FileText, Receipt, PhoneCall, ClipboardCheck } from 'lucide-react';
+import { ExamRoomView } from '@/components/campus/exam-room/exam-room-view';
 import { BULLETIN_TEMPLATES, generateBulletinPDF, type BulletinData } from '@/lib/bulletin-pdf';
 import { RECEIPT_TEMPLATES, generateReceiptPDF, generateReceiptNumber, type ReceiptData } from '@/lib/receipt-pdf';
 import { Button } from '@/components/ui/button';
@@ -64,7 +65,7 @@ const Sel = ({ v, onChange, opts, ph = '—' }: { v: string, onChange: (v: strin
     </select>
 );
 
-type Tab = 'general' | 'landing' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'modeles' | 'cursus' | 'settings' | 'chat' | 'stories' | 'actus' | 'groupes' | 'whatsapp';
+type Tab = 'general' | 'landing' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'modeles' | 'cursus' | 'settings' | 'chat' | 'stories' | 'actus' | 'groupes' | 'whatsapp' | 'exam_room';
 interface Cls { id?: string; name: string; cycle: string; filiere_id: string | null; level: number; capacity: number; }
 interface Sub { id?: string; name: string; code: string; coefficient: number; classroom_id: string; teacher_id: string | null; }
 interface Room { id?: string; name: string; }
@@ -82,6 +83,7 @@ const SIDES = [
     { id: 'chat' as Tab, icon: MessageSquare, label: 'Chat DM' },
     { id: 'groupes' as Tab, icon: Users, label: 'Groupes' },
     { id: 'actus' as Tab, icon: Bell, label: 'Actus' },
+    { id: 'exam_room' as Tab, icon: ClipboardCheck, label: '🏛️ Salle d\'Évaluation' },
     { id: 'settings' as Tab, icon: Palette, label: 'Paramètres' },
 ];
 const COLLEGE = ['6ème', '5ème', '4ème', '3ème'], LYCEE = ['Seconde', 'Première', 'Terminale'], SECS = ['A', 'B', 'C'];
@@ -1925,6 +1927,19 @@ ${bodyHtml}
                     {tab === 'actus' && session && org && (
                         <div className="h-[calc(100vh-120px)] overflow-y-auto">
                             <ActusView
+                                orgId={org.id}
+                                orgSlug={org.slug}
+                                userId={session.id}
+                                userName={`${session.first_name || ''} ${session.last_name || ''}`.trim()}
+                                userRole="admin"
+                            />
+                        </div>
+                    )}
+
+                    {/* ── SALLE D'ÉVALUATION ── */}
+                    {tab === 'exam_room' && session && org && (
+                        <div className="h-[calc(100vh-120px)]">
+                            <ExamRoomView
                                 orgId={org.id}
                                 orgSlug={org.slug}
                                 userId={session.id}

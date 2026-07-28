@@ -8,8 +8,9 @@ import {
     BookOpen, Calendar, Users, GraduationCap, ClipboardList, Trophy,
     Home, MessageSquare, Loader2, Clock, CheckCircle2,
     Save, X, BarChart3, FileText, PenSquare, LogOut, User, AlertCircle,
-    Layers, Plus, ChevronDown, ChevronUp, Trash2, Eye, EyeOff, Lock, Camera
+    Layers, Plus, ChevronDown, ChevronUp, Trash2, Eye, EyeOff, Lock, Camera, ClipboardCheck
 } from 'lucide-react';
+import { ExamRoomView } from '@/components/campus/exam-room/exam-room-view';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -26,7 +27,7 @@ import { cn } from '@/lib/utils';
 // CAMPUSFLOW — DASHBOARD PROFESSEUR (holographic-ring design)
 // ═══════════════════════════════════════════════════════
 
-type Tab = 'dashboard' | 'timetable' | 'cursus' | 'grades' | 'profile';
+type Tab = 'dashboard' | 'timetable' | 'cursus' | 'grades' | 'exam_room' | 'profile';
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
 // ═══ BOTTOM NAV ═══
@@ -36,6 +37,7 @@ function BottomNav({ activeTab, onTabChange }: { activeTab: Tab; onTabChange: (t
         { id: 'timetable', icon: Calendar, label: 'Horaires', color: 'teal' },
         { id: 'cursus', icon: Layers, label: 'Cursus', color: 'indigo' },
         { id: 'grades', icon: ClipboardList, label: 'Notes', color: 'amber' },
+        { id: 'exam_room', icon: ClipboardCheck, label: 'Salle', color: 'violet' },
         { id: 'profile', icon: User, label: 'Profil' },
     ];
 
@@ -987,6 +989,19 @@ export default function TeacherDashboard() {
                     )}
                 </AnimatePresence>
             </div>
+
+            {/* ── SALLE D'ÉVALUATION ── */}
+            {tab === 'exam_room' && teacher && (
+                <div className="fixed inset-0 pt-0 pb-20 z-40 bg-[#0B0E14]">
+                    <ExamRoomView
+                        orgId={teacher.organization_id}
+                        orgSlug={orgSlug}
+                        userId={teacher.id}
+                        userName={`${teacher.first_name || ''} ${teacher.last_name || ''}`.trim()}
+                        userRole="teacher"
+                    />
+                </div>
+            )}
 
             <BottomNav activeTab={tab} onTabChange={setTab} />
         </main>

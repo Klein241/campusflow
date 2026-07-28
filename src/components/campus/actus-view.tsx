@@ -214,6 +214,7 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
         setLoading(true);
         try {
             const { data } = await supabase.from('tutoring_requests').select('*')
+                .eq('organization_id', orgId)
                 .order('created_at', { ascending: false }).limit(50);
             if (data && data.length > 0) {
                 const { data: orgData } = await supabase.from('organizations')

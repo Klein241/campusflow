@@ -10,8 +10,9 @@ import {
     FileText, Target, Star, CircleDollarSign, CheckCircle2, AlertCircle,
     ShoppingBag, BookMarked, Settings, ChevronRight, ArrowLeft,
     Users, Flame, Award, User, Layers, Lock, Eye, EyeOff, Camera,
-    ChevronDown, ChevronUp
+    ChevronDown, ChevronUp, ClipboardCheck
 } from 'lucide-react';
+import { ExamRoomView } from '@/components/campus/exam-room/exam-room-view';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -27,7 +28,7 @@ import { cn } from '@/lib/utils';
 // CAMPUSFLOW — DASHBOARD ÉTUDIANT (holographic-ring design)
 // ═══════════════════════════════════════════════════════
 
-type Tab = 'dashboard' | 'timetable' | 'cursus' | 'grades' | 'payments' | 'profile';
+type Tab = 'dashboard' | 'timetable' | 'cursus' | 'grades' | 'payments' | 'exam_room' | 'profile';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n);
@@ -40,6 +41,7 @@ function BottomNav({ activeTab, onTabChange }: { activeTab: Tab; onTabChange: (t
         { id: 'cursus', icon: Layers, label: 'Cursus', color: 'teal' },
         { id: 'grades', icon: BarChart3, label: 'Notes', color: 'emerald' },
         { id: 'payments', icon: CreditCard, label: 'Paiements', color: 'amber' },
+        { id: 'exam_room', icon: ClipboardCheck, label: 'Épreuves', color: 'violet' },
         { id: 'profile', icon: User, label: 'Profil' },
     ];
 
@@ -823,6 +825,17 @@ export default function StudentDashboard() {
             </div>
 
             {/* Bottom Nav (holographic-ring style) */}
+            {tab === 'exam_room' && student && (
+                <div className="fixed inset-0 pt-0 pb-20 z-40 bg-[#0B0E14]">
+                    <ExamRoomView
+                        orgId={student.organization_id}
+                        orgSlug={orgSlug}
+                        userId={student.id}
+                        userName={`${student.first_name || ''} ${student.last_name || ''}`.trim()}
+                        userRole="student"
+                    />
+                </div>
+            )}
             <BottomNav activeTab={tab} onTabChange={setTab} />
         </main>
     );
