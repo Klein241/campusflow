@@ -116,6 +116,12 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
     const [editNewQ,      setEditNewQ]      = useState({ question: '', answer: '', options: ['', '', '', ''] });
     const [savingEditEx,  setSavingEditEx]  = useState(false);
 
+    // ── Correction (correction des soumissions) ──
+    const [gradingEx,     setGradingEx]     = useState<any | null>(null);
+    const [gradeInputs,   setGradeInputs]   = useState<Record<string, string>>({});
+    const [gradeFeedback, setGradeFeedback] = useState<Record<string, string>>({});
+    const [savingGrade,   setSavingGrade]   = useState<Record<string, boolean>>({});
+
     const loadData = async () => {
         setLoading(true);
         const { data: subs } = await supabase.from('subjects')
@@ -318,6 +324,32 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
         setSavingEditEx(false);
     };
 
+    const saveGrade = async (submissionId: string, exId: string) => {
+        const score = parseFloat(gradeInputs[submissionId] ?? '');
+        if (isNaN(score)) return toast.error('Note invalide');
+        const ex = exercises.find(e => e.id === exId);
+        if (ex && score > (ex.max_score || 20)) return toast.error(`Note max: ${ex.max_score}`);
+        setSavingGrade(prev => ({ ...prev, [submissionId]: true }));
+        try {
+            const { error } = await supabase.from('exercise_submissions')
+                .update({ score, feedback: gradeFeedback[submissionId] || null, graded_at: new Date().toISOString() })
+                .eq('id', submissionId);
+            if (error) throw error;
+            setSubmissions(prev => prev.map(s => s.id === submissionId ? { ...s, score, feedback: gradeFeedback[submissionId] || null } : s));
+            toast.success('Note enregistrée ✅');
+        } catch (e: any) { toast.error(e.message); }
+        setSavingGrade(prev => ({ ...prev, [submissionId]: false }));
+    };
+
+    const resolveDispute = async (dId: string, status: 'accepted' | 'rejected') => {
+        const { error } = await supabase.from('grade_disputes')
+            .update({ status, resolved_at: new Date().toISOString() })
+            .eq('id', dId);
+        if (error) { toast.error(error.message); return; }
+        setDisputes(prev => prev.map(d => d.id === dId ? { ...d, status } : d));
+        toast.success(status === 'accepted' ? 'Réclamation acceptée ✅' : 'Réclamation refusée');
+    };
+
     const deleteExercise = async (exId: string) => {
         if (!confirm('Supprimer cet exercice ?')) return;
         await supabase.from('exercises').delete().eq('id', exId);
@@ -325,11 +357,7 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
         toast.success('Exercice supprimé');
     };
 
-    const resolveDispute = async (dId: string, status: 'accepted' | 'rejected') => {
-        await supabase.from('grade_disputes').update({ status, response: status === 'accepted' ? 'Note révisée' : 'Note maintenue' }).eq('id', dId);
-        setDisputes(prev => prev.map(d => d.id === dId ? { ...d, status } : d));
-        toast.success(`Réclamation ${status === 'accepted' ? 'acceptée' : 'rejetée'}`);
-    };
+
 
     if (loading) return (
         <div className="flex items-center justify-center py-24">
@@ -735,6 +763,24 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
                                                 </div>
                                                 <p className="text-[10px] text-slate-500">{ex.duration_minutes}min · max {ex.max_score}pts · {exSubs.length} soumission{exSubs.length > 1 ? 's' : ''}{avgScore !== null ? ` · moy. ${avgScore.toFixed(1)}` : ''}</p>
                                             </div>
+                                            {/* Corriger button */}
+                                            {exSubs.length > 0 && (
+                                                <button onClick={() => {
+                                                    setGradingEx(ex);
+                                                    // Pre-fill inputs with existing scores
+                                                    const inputs: Record<string, string> = {};
+                                                    const feedbacks: Record<string, string> = {};
+                                                    exSubs.forEach(s => {
+                                                        if (s.score !== null && s.score !== undefined) inputs[s.id] = String(s.score);
+                                                        if (s.feedback) feedbacks[s.id] = s.feedback;
+                                                    });
+                                                    setGradeInputs(inputs);
+                                                    setGradeFeedback(feedbacks);
+                                                }}
+                                                    className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/25 transition-all shrink-0">
+                                                    <CheckCircle2 className="w-3 h-3" /> Corriger
+                                                </button>
+                                            )}
                                             <button onClick={() => { setEditEx(ex); setEditExForm({ title: ex.title, type: ex.type || 'qcm', duration_minutes: ex.duration_minutes || 10, max_score: ex.max_score || 20, questions: ex.questions || [] }); }}
                                                 className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-violet-500/20 text-slate-400 hover:text-violet-400 transition-all shrink-0">
                                                 <Edit2 className="w-3.5 h-3.5" />
@@ -751,6 +797,116 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
                     </motion.div>
                 )}
             </div>
+
+            {/* ═══ MODAL: Correction des soumissions ═══ */}
+            <AnimatePresence>
+                {gradingEx && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 bg-black/85 flex items-end sm:items-center justify-center p-4"
+                        onClick={() => setGradingEx(null)}>
+                        <motion.div initial={{ y: 60 }} animate={{ y: 0 }} exit={{ y: 60 }}
+                            className="bg-[#0a0c14] border border-emerald-500/20 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"
+                            onClick={e => e.stopPropagation()}>
+                            {/* Header */}
+                            <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.07] shrink-0">
+                                <div>
+                                    <h3 className="font-black text-white text-base flex items-center gap-2">
+                                        <CheckCircle2 className="w-5 h-5 text-emerald-400" /> Correction
+                                    </h3>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">{gradingEx.title} · max {gradingEx.max_score} pts</p>
+                                </div>
+                                <button onClick={() => setGradingEx(null)} className="p-2 rounded-xl hover:bg-white/10 text-slate-400 transition-all">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                            {/* Submissions list */}
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                                {submissions.filter(s => s.exercise_id === gradingEx.id).length === 0 && (
+                                    <p className="text-center text-slate-500 py-8 text-sm">Aucune soumission pour cet exercice</p>
+                                )}
+                                {submissions.filter(s => s.exercise_id === gradingEx.id).map((sub: any) => {
+                                    const student = sub.student_profiles;
+                                    const studentName = student ? `${student.first_name} ${student.last_name}` : sub.student_id.slice(0,8);
+                                    const isGraded = sub.score !== null && sub.score !== undefined;
+                                    return (
+                                        <div key={sub.id} className={cn(
+                                            'rounded-2xl border p-4 space-y-3 transition-all',
+                                            isGraded ? 'border-emerald-500/25 bg-emerald-900/10' : 'border-white/[0.08] bg-white/[0.03]'
+                                        )}>
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500/30 to-indigo-500/20 flex items-center justify-center text-sm font-black text-violet-300">
+                                                        {studentName.charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-white">{studentName}</p>
+                                                        <p className="text-[10px] text-slate-500">{new Date(sub.submitted_at || sub.created_at).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}</p>
+                                                    </div>
+                                                </div>
+                                                {isGraded && (
+                                                    <span className="text-sm font-black text-emerald-400 bg-emerald-500/15 px-3 py-1 rounded-full">
+                                                        {sub.score}/{gradingEx.max_score}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {/* Student answers */}
+                                            {sub.answers && Object.keys(sub.answers).length > 0 && (
+                                                <div className="bg-white/[0.04] rounded-xl p-3 space-y-2 max-h-48 overflow-y-auto">
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase">Réponses de l’étudiant</p>
+                                                    {(gradingEx.questions || []).map((q: any, qi: number) => {
+                                                        const answer = sub.answers[q.id] ?? sub.answers[qi] ?? sub.answers[String(qi)];
+                                                        return answer !== undefined ? (
+                                                            <div key={qi} className="text-xs">
+                                                                <span className="text-slate-400 font-medium">Q{qi+1}: </span>
+                                                                <span className="text-white">{typeof answer === 'boolean' ? (answer ? 'Vrai' : 'Faux') : String(answer)}</span>
+                                                                {q.answer && (
+                                                                    <span className="ml-2 text-emerald-400">✓ {q.answer}</span>
+                                                                )}
+                                                            </div>
+                                                        ) : null;
+                                                    })}
+                                                </div>
+                                            )}
+
+                                            {/* Grading inputs */}
+                                            <div className="grid grid-cols-5 gap-2 items-end">
+                                                <div className="col-span-2">
+                                                    <label className="text-[10px] text-slate-400 block mb-1">Note / {gradingEx.max_score}</label>
+                                                    <input
+                                                        type="number"
+                                                        value={gradeInputs[sub.id] ?? ''}
+                                                        onChange={e => setGradeInputs(prev => ({ ...prev, [sub.id]: e.target.value }))}
+                                                        min={0} max={gradingEx.max_score} step={0.5}
+                                                        placeholder="Ex: 15"
+                                                        className="w-full bg-white/[0.07] border border-white/10 rounded-xl px-3 py-2 text-sm text-amber-400 font-bold text-center focus:outline-none focus:border-emerald-500/40"
+                                                    />
+                                                </div>
+                                                <div className="col-span-2">
+                                                    <label className="text-[10px] text-slate-400 block mb-1">Appréciation (optionnel)</label>
+                                                    <input
+                                                        value={gradeFeedback[sub.id] ?? ''}
+                                                        onChange={e => setGradeFeedback(prev => ({ ...prev, [sub.id]: e.target.value }))}
+                                                        placeholder="Très bien..."
+                                                        className="w-full bg-white/[0.07] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/40"
+                                                    />
+                                                </div>
+                                                <button
+                                                    onClick={() => saveGrade(sub.id, gradingEx.id)}
+                                                    disabled={savingGrade[sub.id]}
+                                                    className="py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold transition-all flex items-center justify-center gap-1">
+                                                    {savingGrade[sub.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                                                    Valider
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* ═══ MODALS: Créer exercice ═══ */}
             <AnimatePresence>

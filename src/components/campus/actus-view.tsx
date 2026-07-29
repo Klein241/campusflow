@@ -21,6 +21,8 @@ import {
 } from '@/lib/notifications';
 
 
+import { updateSkyPoints } from '@/lib/sky-points-service';
+
 // ═══════════════════════════════════════════════════════
 // ACTUS VIEW — Actualités + Stories + Comments + Partage
 // ═══════════════════════════════════════════════════════
@@ -123,6 +125,9 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
     const [showComments, setShowComments] = useState(false); // slide-up drawer
     const touchStartX = useRef<number>(0);
     const storyTimerRef = useRef<NodeJS.Timeout | null>(null);
+    // Story image display mode — reset each time a new story is opened
+    const [imgCover, setImgCover] = useState(false);
+    const [imgRatio, setImgRatio] = useState<number | null>(null);
 
     // Post Comments
     const [comments, setComments] = useState<Record<string, CommentItem[]>>({});
@@ -332,18 +337,18 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
             // Déduire les Sky Points après succès de la publication
             if (!isAdminOrOwner && requiredPoints > 0) {
                 const newBal = Math.max(0, currentPts - requiredPoints);
-                await supabase.from(table).update({ sky_points: newBal }).eq('id', userId);
+                await updateSkyPoints(userId, newBal, userRole as any, orgId);
                 try {
                     await supabase.from('sky_transactions').insert({
                         user_id: userId,
                         student_id: userRole === 'student' ? userId : null,
                         amount: -requiredPoints,
+                        type: 'actus_post',            // required – original column
                         transaction_type: 'actus_post',
                         description: `Publication d'une actus (${hasText ? 'texte' : ''}${hasText && hasImage ? ' + ' : ''}${hasImage ? 'image' : ''})`,
                         organization_id: orgId
                     });
-                } catch { /* table may not exist yet */ }
-                window.dispatchEvent(new CustomEvent('sky_points_updated', { detail: { newBalance: newBal } }));
+                } catch { /* fallback silent */ }
             }
 
             toast.success(`Publication ajoutée ! ${isAdminOrOwner ? '(Admin)' : `(-${requiredPoints} Sky Points)`} 🚀`);
@@ -563,18 +568,18 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
             // Déduire les Sky Points
             if (!isAdminOrOwner && requiredPoints > 0) {
                 const newBal = Math.max(0, currentPoints - requiredPoints);
-                await supabase.from(table).update({ sky_points: newBal }).eq('id', userId);
+                await updateSkyPoints(userId, newBal, userRole as any, orgId);
                 try {
                     await supabase.from('sky_transactions').insert({
                         user_id: userId,
                         student_id: userRole === 'student' ? userId : null,
                         amount: -requiredPoints,
+                        type: 'story_post',            // required – original column
                         transaction_type: 'story_post',
                         description: isRepost ? 'Repost d\'une story' : `Publication story (${hasText ? 'texte' : ''}${hasText && hasImage ? ' + ' : ''}${hasImage ? 'image' : ''})`,
                         organization_id: orgId
                     });
-                } catch { /* table may not exist yet */ }
-                window.dispatchEvent(new CustomEvent('sky_points_updated', { detail: { newBalance: newBal } }));
+                } catch { /* fallback silent */ }
             }
             
             toast.success(isRepost ? 'Story repostée ! ✨' : 'Story publiée ! ✨');
@@ -598,6 +603,9 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
     };
 
     useEffect(() => {
+        // Reset image display state for each new story
+        setImgCover(false);
+        setImgRatio(null);
         if (viewingStory) {
             if (viewingStory.user_id !== userId && !(viewingStory.viewed_by || []).includes(userId)) {
                 markStoryViewed(viewingStory);
@@ -830,6 +838,15 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                     };
 
 
+                    // Container style adapts to the image native ratio (set via onLoad)
+                    const containerStyle: React.CSSProperties = imgRatio
+                        ? imgRatio < 1
+                            // Portrait (9:16, 3:4, etc.): fill full height, cap width to ratio
+                            ? { height: 'min(100dvh, calc(430px * 16 / 9))', width: 'auto', aspectRatio: `${imgRatio}` }
+                            // Landscape / square: full width, height auto, cap to screen
+                            : { width: '100%', aspectRatio: `${imgRatio}`, maxHeight: '100dvh' }
+                        : { height: 'min(100dvh, calc(430px * 16 / 9))' }; // default: 9:16
+
                     return (
                         <motion.div key={current.id}
                             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -840,10 +857,10 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                                 if (Math.abs(delta) > 50) navigateStory(delta < 0 ? 1 : -1);
                             }}>
 
-                            {/* ── 9:16 Centered Story Container ── */}
+                            {/* ── Adaptive Story Container — all aspect ratios supported ── */}
                             <div
-                                className="relative w-full max-w-[430px] flex flex-col overflow-hidden bg-black sm:rounded-[28px] shadow-2xl"
-                                style={{ height: 'min(100dvh, calc(430px * 16 / 9))' }}>
+                                className="relative max-w-[430px] w-full flex flex-col overflow-hidden bg-black sm:rounded-[28px] shadow-2xl"
+                                style={containerStyle}>
 
                             {/* ── Progress bars ── */}
                             <div className="absolute top-0 left-0 right-0 px-3 pt-3 pb-2 flex gap-1 z-30 pointer-events-none">
@@ -892,12 +909,31 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                             {/* ── Media or text content ── */}
                             <div className="flex-1 relative overflow-hidden flex items-center justify-center">
                                 {current.image_url ? (
-                                    <img
-                                        src={current.image_url}
-                                        alt={current.caption || ''}
-                                        className="w-full h-full object-cover"
-                                        draggable={false}
-                                    />
+                                    <>
+                                        <img
+                                            key={current.image_url}
+                                            src={current.image_url}
+                                            alt={current.caption || ''}
+                                            className={`w-full h-full transition-all duration-300 ${imgCover ? 'object-cover' : 'object-contain'}`}
+                                            draggable={false}
+                                            onLoad={e => {
+                                                const img = e.currentTarget;
+                                                if (img.naturalWidth && img.naturalHeight) {
+                                                    setImgRatio(img.naturalWidth / img.naturalHeight);
+                                                }
+                                            }}
+                                        />
+                                        {/* Cover/Contain toggle — only shown when image is not portrait-native */}
+                                        {imgRatio !== null && (
+                                            <button
+                                                className="absolute top-12 right-3 z-40 bg-black/50 hover:bg-black/70 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm transition pointer-events-auto border border-white/20"
+                                                onClick={() => setImgCover(v => !v)}
+                                                title={imgCover ? 'Afficher sans zoom' : 'Afficher en plein écran'}
+                                            >
+                                                {imgCover ? '⊡ Ajuster' : '⊞ Plein'}
+                                            </button>
+                                        )}
+                                    </>
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 px-8">
                                         <p className="text-white text-2xl font-bold text-center leading-relaxed drop-shadow-lg">

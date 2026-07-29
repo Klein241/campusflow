@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOrgSlug } from '@/hooks/use-org-slug';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2 } from 'lucide-react';
+import { Loader2, BookOpen, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { CampusBottomNav, type CampusTab } from '@/components/campus/campus-bottom-nav';
 import { ActusView } from '@/components/campus/actus-view';
@@ -82,6 +82,9 @@ export default function CampusPage() {
     const [storeOpen, setStoreOpen] = useState(false);
     const [skyPoints, setSkyPoints] = useState<number>(100);
 
+    // Exam session alert (persistent popup for students)
+    const [examAlertSession, setExamAlertSession] = useState<{ id: string; title: string; sessionId: string } | null>(null);
+
     // Push notifications — auto-subscribe after login
     const [showPushBanner, setShowPushBanner] = useState(false);
     const pushAutoTriggered = useRef(false);
@@ -136,6 +139,65 @@ export default function CampusPage() {
         const t = setTimeout(() => setShowPushBanner(true), 3000);
         return () => clearTimeout(t);
     }, [session, isSupported, isSubscribed, permission]);
+
+    // Sky Points — listen for deduction events from actus-view
+    useEffect(() => {
+        const handler = (e: Event) => {
+            const ev = e as CustomEvent<{ newBalance: number }>;
+            if (typeof ev.detail?.newBalance === 'number') {
+                setSkyPoints(ev.detail.newBalance);
+            }
+        };
+        window.addEventListener('sky_points_updated', handler);
+        return () => window.removeEventListener('sky_points_updated', handler);
+    }, []);
+
+    // Exam session alert — realtime: student gets persistent popup when exam is launched
+    useEffect(() => {
+        if (!session || !org) return;
+        const userId = session.id;
+        const isStudent = session.role === 'student';
+        if (!isStudent) return;
+
+        const ch = supabase.channel(`exam_alert_${userId}`)
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'exam_sessions',
+                filter: `org_id=eq.${org.id}`,
+            }, async (payload) => {
+                const s = payload.new as any;
+                if (s.status === 'waiting' || s.status === 'active') {
+                    // Check if this student is in participant_ids
+                    if (!s.participant_ids || s.participant_ids.includes(userId) || s.participant_ids.length === 0) {
+                        // Fetch paper title — correct column name is exam_paper_id
+                        const { data: paper } = await supabase
+                            .from('exam_papers').select('title').eq('id', s.exam_paper_id).single();
+                        setExamAlertSession({
+                            id: s.exam_paper_id,
+                            title: paper?.title || 'Épreuve',
+                            sessionId: s.id,
+                        });
+                    }
+                }
+            })
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'exam_sessions',
+                filter: `org_id=eq.${org.id}`,
+            }, (payload) => {
+                const s = payload.new as any;
+                if (s.status === 'active' && examAlertSession?.sessionId === s.id) {
+                    // Keep alert active
+                } else if (s.status === 'ended' || s.status === 'cancelled') {
+                    setExamAlertSession(null);
+                }
+            })
+            .subscribe();
+        return () => { supabase.removeChannel(ch); };
+    }, [session, org]);
+
 
     // Called by ProfileView when user changes their photo
     const handlePhotoUpdate = (newUrl: string) => {
@@ -226,6 +288,53 @@ export default function CampusPage() {
             </div>
 
             <div className="relative z-10 max-w-2xl mx-auto w-full px-4">
+
+            {/* ── Exam Alert Popup (persistent) ───────────────────── */}
+            <AnimatePresence>
+                {examAlertSession && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
+                    >
+                        <motion.div
+                            animate={{ y: [0, -6, 0] }}
+                            transition={{ repeat: Infinity, duration: 2 }}
+                            className="w-full max-w-sm bg-gradient-to-b from-violet-900/90 to-purple-950/90 border border-violet-500/40 rounded-3xl p-7 shadow-2xl shadow-violet-900/50 text-center"
+                        >
+                            <div className="w-16 h-16 rounded-2xl bg-violet-500/20 flex items-center justify-center mx-auto mb-4">
+                                <BookOpen className="w-8 h-8 text-violet-300" />
+                            </div>
+                            <div className="flex items-center justify-center gap-2 mb-2">
+                                <span className="relative flex h-2.5 w-2.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+                                </span>
+                                <span className="text-xs font-bold text-red-400 uppercase tracking-widest">Épreuve en cours</span>
+                            </div>
+                            <h2 className="text-xl font-black text-white mb-1">{examAlertSession.title}</h2>
+                            <p className="text-slate-400 text-sm mb-6">Votre professeur a lancé une épreuve. Rejoignez la salle maintenant.</p>
+                            <button
+                                onClick={() => {
+                                    setExamAlertSession(null);
+                                    setActiveTab('exam_room');
+                                }}
+                                className="w-full py-3.5 bg-violet-600 hover:bg-violet-500 active:bg-violet-700 rounded-2xl text-white font-bold text-base transition-all shadow-lg shadow-violet-900/40"
+                            >
+                                🏛️ Rejoindre la salle
+                            </button>
+                            <button
+                                onClick={() => setExamAlertSession(null)}
+                                className="mt-3 text-xs text-slate-500 hover:text-slate-400 transition-colors"
+                            >
+                                Ignorer (non recommandé)
+                            </button>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
                 {/* Header with notification bell */}
                 <header className="flex items-center justify-between pt-6 pb-4">
                     <div className="flex items-center gap-3">

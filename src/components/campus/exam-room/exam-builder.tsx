@@ -445,22 +445,52 @@ function QuestionEditor({
 
             {/* Rédaction */}
             {question.type === 'redaction' && (
-                <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400">Lignes de réponse :</span>
-                    <input type="number" value={question.lines || 4} onChange={e => onChange({ lines: +e.target.value })}
-                        min={1} max={30}
-                        className="w-16 bg-white/10 border border-white/10 rounded-lg px-2 py-1 text-xs text-white text-center focus:outline-none" />
-                    <span className="text-xs text-slate-500 italic">
-                        (les lignes de réponse s'afficheront dans l'aperçu)
-                    </span>
+                <div className="space-y-2.5">
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-400">Lignes de réponse :</span>
+                        <input type="number" value={question.lines || 4} onChange={e => onChange({ lines: +e.target.value })}
+                            min={1} max={30}
+                            className="w-16 bg-white/10 border border-white/10 rounded-lg px-2 py-1 text-xs text-white text-center focus:outline-none" />
+                        <span className="text-xs text-slate-500 italic">
+                            (les lignes s'afficheront dans l'aperçu)
+                        </span>
+                    </div>
+                    {/* Barème / éléments de réponse */}
+                    <div className="bg-emerald-900/10 border border-emerald-500/20 rounded-xl p-3 space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">🔑 Barème / Éléments de réponse</span>
+                            <span className="text-[10px] text-slate-500">(invisible pour l'étudiant)</span>
+                        </div>
+                        <textarea
+                            value={typeof question.correct === 'string' ? question.correct : ''}
+                            onChange={e => onChange({ correct: e.target.value })}
+                            rows={3}
+                            placeholder="Ex: L'étudiant doit mentionner: 1) le principe de... 2) la définition de... 3) l'exemple de..."
+                            className="w-full bg-white/5 border border-emerald-500/20 rounded-lg px-3 py-2 text-xs text-emerald-200 placeholder:text-slate-600 resize-none focus:outline-none focus:border-emerald-500/40"
+                        />
+                    </div>
                 </div>
             )}
 
-            {/* Texte à trou — instructions */}
+            {/* Texte à trou */}
             {question.type === 'texte_a_trou' && (
-                <p className="text-[11px] text-slate-500 italic">
-                    Tapez le texte dans l'énoncé avec des séries de points pour marquer les espaces de réponse, ex: "La capitale est ..........."
-                </p>
+                <div className="space-y-2.5">
+                    <p className="text-[11px] text-slate-500 italic">
+                        Tapez le texte dans l'énoncé avec des séries de points pour marquer les espaces, ex: "La capitale est ..........."
+                    </p>
+                    <div className="bg-emerald-900/10 border border-emerald-500/20 rounded-xl p-3 space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">🔑 Réponse(s) attendue(s)</span>
+                            <span className="text-[10px] text-slate-500">(invisible pour l'étudiant)</span>
+                        </div>
+                        <input
+                            value={typeof question.correct === 'string' ? question.correct : ''}
+                            onChange={e => onChange({ correct: e.target.value })}
+                            placeholder="Ex: Paris / la France / photosynthèse"
+                            className="w-full bg-white/5 border border-emerald-500/20 rounded-lg px-3 py-2 text-xs text-emerald-200 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/40"
+                        />
+                    </div>
+                </div>
             )}
         </div>
     );

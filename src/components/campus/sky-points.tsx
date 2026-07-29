@@ -18,6 +18,8 @@ interface SkyPointsProps {
     onOpenStore?: () => void;
 }
 
+import { fetchSkyPoints, updateSkyPoints } from '@/lib/sky-points-service';
+
 export function SkyPoints({ userId, orgId, compact = false, onOpenStore }: SkyPointsProps) {
     const [balance, setBalance] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
@@ -29,28 +31,29 @@ export function SkyPoints({ userId, orgId, compact = false, onOpenStore }: SkyPo
     const loadBalance = useCallback(async () => {
         setLoading(true);
         try {
+            // First fetch unified current balance from profile or sky_points table
+            const currentUnified = await fetchSkyPoints(userId);
+            setBalance(currentUnified);
+
             // Call server-side RPC for atomic daily point credit
             const { data: claimResult } = await supabase.rpc('claim_daily_sky_point', {
                 p_user_id: userId,
                 p_org_id: orgId,
             });
 
-            if (claimResult) {
-                setBalance(claimResult.balance ?? 0);
-                // If just claimed, show a subtle toast
-                if (claimResult.success) {
-                    // Silent auto-claim — no toast to avoid noise on every page load
-                }
+            if (claimResult && claimResult.balance !== undefined) {
+                const finalBal = claimResult.balance;
+                setBalance(finalBal);
+                // Atomic sync to student_profiles / teacher_profiles
+                await updateSkyPoints(userId, finalBal, 'student', orgId);
                 setAlreadyClaimed(!claimResult.success);
             } else {
-                // Fallback: read balance directly
                 const { data: row } = await supabase
                     .from('sky_points')
                     .select('balance, last_daily_claim')
                     .eq('user_id', userId)
-                    .single();
+                    .maybeSingle();
                 if (row) {
-                    setBalance(row.balance ?? 0);
                     const today = new Date().toISOString().split('T')[0];
                     const lastDay = row.last_daily_claim?.split('T')[0];
                     setAlreadyClaimed(lastDay === today);
@@ -71,8 +74,10 @@ export function SkyPoints({ userId, orgId, compact = false, onOpenStore }: SkyPo
                 p_org_id: orgId,
             });
             if (result?.success) {
-                setBalance(result.balance ?? 0);
+                const newBal = result.balance ?? (currentBalance + 1);
+                setBalance(newBal);
                 setAlreadyClaimed(true);
+                await updateSkyPoints(userId, newBal, 'student', orgId);
                 if (!silent) toast.success('🌟 +1 Sky Point quotidien crédité !');
             } else if (!silent) {
                 toast.info('Point quotidien déjà réclamé aujourd\'hui');
@@ -91,6 +96,18 @@ export function SkyPoints({ userId, orgId, compact = false, onOpenStore }: SkyPo
     };
 
     useEffect(() => { loadBalance(); }, [loadBalance]);
+
+    // Listen for sky_points_updated events from actus-view
+    useEffect(() => {
+        const handler = (e: Event) => {
+            const ev = e as CustomEvent<{ newBalance: number }>;
+            if (typeof ev.detail?.newBalance === 'number') {
+                setBalance(ev.detail.newBalance);
+            }
+        };
+        window.addEventListener('sky_points_updated', handler);
+        return () => window.removeEventListener('sky_points_updated', handler);
+    }, []);
 
     const handleOpenDetails = () => {
         setShowDetails(true);

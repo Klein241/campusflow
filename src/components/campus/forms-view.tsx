@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Plus, X, Trash2, Copy, ExternalLink, Eye, BarChart3, FileText,
@@ -453,10 +454,29 @@ function FormBuilder({
 function AnalyticsView({ form, onClose }: { form: CampusForm; onClose: () => void }) {
     const [responses, setResponses] = useState<FormResponse[]>([]);
     const [loading, setLoading] = useState(true);
+    const [liveCount, setLiveCount] = useState(0); // pour animer le badge
+
+    const reload = useCallback(async () => {
+        const r = await formsService.getResponses(form.id!);
+        setResponses(r);
+        setLoading(false);
+        setLiveCount(c => c + 1);
+    }, [form.id]);
 
     useEffect(() => {
-        formsService.getResponses(form.id!).then(r => { setResponses(r); setLoading(false); });
-    }, [form.id]);
+        reload();
+        // Realtime: refresh dès qu'une nouvelle réponse arrive
+        const channel = supabase
+            .channel(`analytics-${form.id}`)
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'form_responses',
+                filter: `form_id=eq.${form.id}`,
+            }, () => reload())
+            .subscribe();
+        return () => { supabase.removeChannel(channel); };
+    }, [form.id, reload]);
 
     const fields = (form.form_fields || []).filter(f => f.field_type !== 'section_header');
 
@@ -496,9 +516,15 @@ function AnalyticsView({ form, onClose }: { form: CampusForm; onClose: () => voi
                 </button>
                 <div className="flex-1">
                     <h2 className="font-bold text-sm truncate">📈 Réponses — {form.title}</h2>
-                    <p className="text-[10px] text-slate-500">{responses.length} réponse{responses.length !== 1 ? 's' : ''}</p>
+                    <div className="flex items-center gap-2">
+                        <p className="text-[10px] text-slate-500">{responses.length} réponse{responses.length !== 1 ? 's' : ''}</p>
+                        <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            Live
+                        </span>
+                    </div>
                 </div>
-                <button onClick={() => formsService.getResponses(form.id!).then(setResponses)}
+                <button onClick={reload}
                     className="p-2 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white transition">
                     <RefreshCw className="w-4 h-4" />
                 </button>

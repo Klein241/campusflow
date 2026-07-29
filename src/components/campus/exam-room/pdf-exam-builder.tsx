@@ -96,7 +96,7 @@ export function PdfExamBuilder({ orgId, userId, paper, onBack, onSaved }: PdfExa
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
                 const ctx = canvas.getContext('2d')!;
-                await page.render({ canvasContext: ctx as any, viewport }).promise;
+                await (page.render as any)({ canvasContext: ctx, viewport }).promise;
                 pages.push(canvas.toDataURL('image/png'));
             }
             setPdfPages(pages);
@@ -519,7 +519,7 @@ export function PdfStudentViewer({ pdfUrl, annotations, answers, onChange, readO
                 const canvas = document.createElement('canvas');
                 canvas.width = viewport.width; canvas.height = viewport.height;
                 const ctx = canvas.getContext('2d')!;
-                await page.render({ canvasContext: ctx as any, viewport }).promise;
+                await (page.render as any)({ canvasContext: ctx, viewport }).promise;
                 pages.push(canvas.toDataURL('image/png'));
             }
             setPdfPages(pages);

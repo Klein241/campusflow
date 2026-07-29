@@ -105,7 +105,7 @@ export function ExamGradingView({ session, orgId, userId, onBack }: ExamGradingV
             else if (q.type === 'vrai_faux' && ans === q.correct) earned += q.points;
             else if (manualG[q.id]) earned += manualG[q.id].earned;
         });
-        if (total === 0) return null;
+        if (total === 0) return undefined;
         return Math.round((earned / total) * 20 * 100) / 100;
     }
 

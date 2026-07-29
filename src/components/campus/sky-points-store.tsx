@@ -112,6 +112,7 @@ export function SkyPointsStore({
         const { data: p } = await supabase.from(table).select('sky_points').eq('id', userId).single();
         if (p && p.sky_points !== undefined && p.sky_points !== currentBalance) {
             onBalanceUpdate?.(p.sky_points);
+            window.dispatchEvent(new CustomEvent('sky_points_updated', { detail: { newBalance: p.sky_points } }));
         }
 
         if (data) {

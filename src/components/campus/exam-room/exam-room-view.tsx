@@ -27,7 +27,7 @@ export interface ExamQuestion {
     points: number;
     text: string;
     options?: string[];       // Pour QCM
-    correct?: number | boolean; // Pour QCM (index) ou Vrai/Faux
+    correct?: number | boolean | string; // QCM (index), Vrai/Faux (bool), or barème/réponse (string)
     lines?: number;            // Pour Rédaction
     blanks?: string[];         // Pour Texte à trou
     studentAnswer?: any;

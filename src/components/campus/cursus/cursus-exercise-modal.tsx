@@ -122,21 +122,31 @@ export function CursusExerciseModal({ exercise, studentId, onClose, onComplete }
                 student_id: studentId,
                 answers,
                 score,
+                submitted_at: new Date().toISOString(),
                 completed_at: new Date().toISOString(),
                 graded: true
             });
+        } else {
+            // Already submitted — update answers/score if needed (e.g. retry allowed)
+            await supabase.from('exercise_submissions').update({
+                answers,
+                score,
+                submitted_at: new Date().toISOString(),
+                graded: true
+            }).eq('id', existing.id);
         }
 
-        // Sky points calculation
         const skyGain = calculateSkyPoints(score, exercise.max_score);
         if (skyGain > 0) {
             const { data: prof } = await supabase.from('student_profiles').select('sky_points').eq('id', studentId).single();
             if (prof) {
                 await supabase.from('student_profiles').update({ sky_points: (prof.sky_points || 0) + skyGain }).eq('id', studentId);
                 await supabase.from('sky_transactions').insert({
-                    student_id: studentId,
+                    user_id: studentId,        // required – original column
+                    student_id: studentId,     // extended column (fix_sky_transactions.sql)
                     amount: skyGain,
-                    transaction_type: 'exercise_score',
+                    type: 'exercise_score',    // required – original column
+                    transaction_type: 'exercise_score', // extended column
                     description: `Score: ${score}/${exercise.max_score} (+${skyGain} Sky) — ${exercise.title}`
                 });
             }

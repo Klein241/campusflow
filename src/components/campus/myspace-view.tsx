@@ -307,9 +307,11 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                     if (prof) {
                         await supabase.from('student_profiles').update({ sky_points: (prof.sky_points || 0) + skyGain }).eq('id', entry.student_id);
                         await supabase.from('sky_transactions').insert({
-                            student_id: entry.student_id,
+                            user_id: entry.student_id,        // required – original column
+                            student_id: entry.student_id,     // extended column
                             amount: skyGain,
-                            transaction_type: 'evaluation_grade',
+                            type: 'evaluation_grade',          // required – original column
+                            transaction_type: 'evaluation_grade', // extended column
                             description: `Note éval: ${entry.score}/${selEval.max_score || 20} (+${skyGain} Sky) — ${selEval.title}`
                         });
                     }

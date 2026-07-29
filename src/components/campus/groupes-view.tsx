@@ -212,6 +212,7 @@ export function GroupesView({ orgId, orgSlug, userId, userName, userRole, onOpen
                 userName={userName}
                 orgId={orgId}
                 onBack={() => { setActiveGroupId(null); setActiveGroupName(''); loadGroups(); }}
+                onGroupDeleted={() => { setActiveGroupId(null); setActiveGroupName(''); loadGroups(); }}
             />
         );
     }

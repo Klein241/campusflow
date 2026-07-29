@@ -891,7 +891,7 @@ async function checkRateLimit(
 
 async function recordRateLimit(kv: KVNamespace, userId: string): Promise<void> {
     const lastPushKey = `rate:push:${userId}`;
-    await kv.put(lastPushKey, String(Date.now()), { expirationTtl: 30 });
+    await kv.put(lastPushKey, String(Date.now()), { expirationTtl: 60 }); // Cloudflare min TTL = 60s
 
     const hourKey = `rate:hour:${userId}:${Math.floor(Date.now() / 3600000)}`;
     const current = parseInt(await kv.get(hourKey) || '0');
@@ -947,7 +947,7 @@ async function checkPushDedup(kv: KVNamespace, userId: string, aggKey: string): 
     const dedupKey = `push_sent:${userId}:${aggKey}`;
     const existing = await kv.get(dedupKey);
     if (existing) return true; // Already sent
-    await kv.put(dedupKey, '1', { expirationTtl: 5 });
+    await kv.put(dedupKey, '1', { expirationTtl: 60 }); // Cloudflare min TTL = 60s (prevents duplicate push within 1 minute)
     return false;
 }
 

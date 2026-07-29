@@ -4,8 +4,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     ChevronLeft, Send, Loader2, Users, Paperclip,
-    Mic, MicOff, X, StopCircle, Play, Pause, Volume2,
-    Download, FileText, Image as ImageIcon, File
+    Mic, X, StopCircle, Play, Pause, Volume2,
+    Download, Trash2, SmilePlus, ShieldCheck,
+    UserMinus, Crown, MoreVertical, LogOut, Settings,
+    Pin, PinOff, Reply, Check
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,7 +22,7 @@ import { uploadToR2 } from '@/lib/r2';
 
 // ═══════════════════════════════════════════════════════
 // GROUP CHAT VIEW — Chat de groupe enrichi
-// Texte, fichiers, images, vocaux
+// Texte, fichiers, images, vocaux, réactions, admin tools
 // ═══════════════════════════════════════════════════════
 
 interface GroupChatViewProps {
@@ -30,6 +32,7 @@ interface GroupChatViewProps {
     userName: string;
     orgId: string;
     onBack: () => void;
+    onGroupDeleted?: () => void;
 }
 
 interface MsgInfo {
@@ -41,6 +44,20 @@ interface MsgInfo {
     media_url: string | null;
     is_read: boolean;
     created_at: string;
+    deleted_at?: string | null;
+}
+
+interface Reaction {
+    emoji: string;
+    count: number;
+    userReacted: boolean;
+}
+
+interface MemberInfo {
+    userId: string;
+    name: string;
+    initials: string;
+    role: 'admin' | 'member';
 }
 
 // ═══ HELPERS ═══
@@ -50,22 +67,7 @@ function formatFileSize(bytes: number): string {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function isImageType(type: string): boolean {
-    return type.startsWith('image/');
-}
-
-const FILE_ICONS: Record<string, string> = {
-    'application/pdf': '📄', 'application/msword': '📝',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '📝',
-    'text/plain': '📃', 'text/html': '🌐',
-};
-
-function getFileIcon(mime: string): string {
-    if (mime.startsWith('image/')) return '🖼️';
-    if (mime.startsWith('audio/')) return '🎵';
-    if (mime.startsWith('video/')) return '🎬';
-    return FILE_ICONS[mime] || '📎';
-}
+const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '✅'];
 
 // ═══ VOICE PLAYER ═══
 function VoicePlayer({ url }: { url: string }) {
@@ -100,13 +102,47 @@ function VoicePlayer({ url }: { url: string }) {
     );
 }
 
-export function GroupChatView({ groupId, groupName, userId, userName, orgId, onBack }: GroupChatViewProps) {
+// ═══ EMOJI PICKER ═══
+function EmojiPicker({ onSelect, onClose }: { onSelect: (emoji: string) => void; onClose: () => void }) {
+    return (
+        <motion.div
+            initial={{ opacity: 0, scale: 0.8, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 10 }}
+            className="absolute bottom-full mb-2 left-0 bg-[#0F172A] border border-white/10 rounded-2xl p-2 shadow-2xl z-50 flex gap-1"
+        >
+            {QUICK_EMOJIS.map(e => (
+                <button key={e} onClick={() => { onSelect(e); onClose(); }}
+                    className="w-9 h-9 rounded-xl hover:bg-white/10 flex items-center justify-center text-xl transition active:scale-90">
+                    {e}
+                </button>
+            ))}
+        </motion.div>
+    );
+}
+
+export function GroupChatView({ groupId, groupName, userId, userName, orgId, onBack, onGroupDeleted }: GroupChatViewProps) {
     const [messages, setMessages] = useState<MsgInfo[]>([]);
-    const [memberNames, setMemberNames] = useState<Record<string, { name: string; initials: string }>>({});
+    const [members, setMembers] = useState<MemberInfo[]>([]);
+    const [memberCount, setMemberCount] = useState(0);
     const [msgText, setMsgText] = useState('');
     const [sending, setSending] = useState(false);
     const [uploading, setUploading] = useState(false);
-    const [memberCount, setMemberCount] = useState(0);
+
+    // Current user's role in this group
+    const [myRole, setMyRole] = useState<'admin' | 'member'>('member');
+    const isAdmin = myRole === 'admin';
+
+    // Réactions: { messageId: Reaction[] }
+    const [reactions, setReactions] = useState<Record<string, Reaction[]>>({});
+    const [showEmojiFor, setShowEmojiFor] = useState<string | null>(null);
+
+    // Admin panel
+    const [showAdminPanel, setShowAdminPanel] = useState(false);
+    const [deletingGroup, setDeletingGroup] = useState(false);
+
+    // Message context menu
+    const [contextMsg, setContextMsg] = useState<string | null>(null);
 
     // Sky Points chat credits
     const [freeRemaining, setFreeRemaining] = useState<number | null>(null);
@@ -123,58 +159,124 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
     const msgEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Load messages + members
+    // ═══ LOAD MESSAGES + MEMBERS + ROLES ═══
     useEffect(() => {
         let channel: any;
+        let reactChannel: any;
         (async () => {
-            // Load messages
+            // Messages
             const { data: msgs } = await supabase.from('chat_messages').select('*')
                 .eq('conversation_id', groupId)
+                .is('deleted_at', null)
                 .order('created_at', { ascending: true }).limit(300);
             setMessages(msgs || []);
 
-            // Load members
+            // Members + roles
             const { data: parts, count } = await supabase.from('chat_participants')
-                .select('user_id', { count: 'exact' }).eq('conversation_id', groupId);
+                .select('user_id, role', { count: 'exact' }).eq('conversation_id', groupId);
             setMemberCount(count || 0);
             const memberIds = (parts || []).map((p: any) => p.user_id);
 
-            // Get names
-            const names: Record<string, { name: string; initials: string }> = {};
+            // My role
+            const myPart = (parts || []).find((p: any) => p.user_id === userId);
+            setMyRole(myPart?.role === 'admin' ? 'admin' : 'member');
+
+            // Resolve names
             if (memberIds.length > 0) {
                 const [{ data: teachers }, { data: students }] = await Promise.all([
                     supabase.from('teacher_profiles').select('id, first_name, last_name').in('id', memberIds),
                     supabase.from('student_profiles').select('id, first_name, last_name').in('id', memberIds),
                 ]);
+                const nameMap: Record<string, string> = {};
                 [...(teachers || []), ...(students || [])].forEach((u: any) => {
-                    names[u.id] = {
-                        name: `${u.first_name} ${u.last_name}`,
-                        initials: `${u.first_name?.[0] || ''}${u.last_name?.[0] || ''}`,
+                    nameMap[u.id] = `${u.first_name} ${u.last_name}`;
+                });
+                const membersData: MemberInfo[] = (parts || []).map((p: any) => {
+                    const name = nameMap[p.user_id] || 'Membre';
+                    return {
+                        userId: p.user_id,
+                        name,
+                        initials: name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase(),
+                        role: p.role === 'admin' ? 'admin' : 'member',
                     };
                 });
+                setMembers(membersData);
             }
-            setMemberNames(names);
+
+            // Load reactions for visible messages
+            if (msgs && msgs.length > 0) {
+                const msgIds = msgs.map((m: any) => m.id);
+                const { data: reacts } = await supabase.from('message_reactions')
+                    .select('*').in('message_id', msgIds);
+                buildReactions(reacts || [], msgIds);
+            }
+
             setTimeout(() => msgEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
 
-            // Realtime
-            channel = supabase.channel(`group-msgs-${groupId}`).on('postgres_changes', {
-                event: 'INSERT', schema: 'public', table: 'chat_messages',
-                filter: `conversation_id=eq.${groupId}`,
-            }, (payload: any) => {
-                setMessages(prev => {
-                    if (prev.find(m => m.id === payload.new.id)) return prev;
-                    return [...prev, payload.new as MsgInfo];
-                });
-                setTimeout(() => msgEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
-            }).subscribe();
-        })();
-        return () => { if (channel) supabase.removeChannel(channel); };
-    }, [groupId]);
+            // Realtime: messages
+            channel = supabase.channel(`group-msgs-${groupId}`)
+                .on('postgres_changes', {
+                    event: 'INSERT', schema: 'public', table: 'chat_messages',
+                    filter: `conversation_id=eq.${groupId}`,
+                }, (payload: any) => {
+                    if (payload.new.deleted_at) return;
+                    setMessages(prev => {
+                        if (prev.find(m => m.id === payload.new.id)) return prev;
+                        return [...prev, payload.new as MsgInfo];
+                    });
+                    setTimeout(() => msgEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+                })
+                .on('postgres_changes', {
+                    event: 'UPDATE', schema: 'public', table: 'chat_messages',
+                    filter: `conversation_id=eq.${groupId}`,
+                }, (payload: any) => {
+                    if (payload.new.deleted_at) {
+                        setMessages(prev => prev.filter(m => m.id !== payload.new.id));
+                    }
+                })
+                .subscribe();
 
-    const getSenderName = (id: string) => id === userId ? 'Vous' : memberNames[id]?.name || 'Membre';
-    const getSenderInitials = (id: string) => {
-        if (id === userId) return userName.split(' ').map(w => w[0]).join('').slice(0, 2);
-        return memberNames[id]?.initials || '?';
+            // Realtime: reactions
+            reactChannel = supabase.channel(`group-reactions-${groupId}`)
+                .on('postgres_changes', {
+                    event: '*', schema: 'public', table: 'message_reactions',
+                }, async () => {
+                    // Reload reactions
+                    const { data: msgs2 } = await supabase.from('chat_messages')
+                        .select('id').eq('conversation_id', groupId).is('deleted_at', null);
+                    const ids = (msgs2 || []).map((m: any) => m.id);
+                    if (ids.length > 0) {
+                        const { data: r } = await supabase.from('message_reactions').select('*').in('message_id', ids);
+                        buildReactions(r || [], ids);
+                    }
+                })
+                .subscribe();
+        })();
+        return () => {
+            if (channel) supabase.removeChannel(channel);
+            if (reactChannel) supabase.removeChannel(reactChannel);
+        };
+    }, [groupId, userId]);
+
+    const buildReactions = (reacts: any[], msgIds: string[]) => {
+        const map: Record<string, Reaction[]> = {};
+        for (const id of msgIds) {
+            const msgReacts = reacts.filter(r => r.message_id === id);
+            const emojiMap: Record<string, { count: number; userReacted: boolean }> = {};
+            for (const r of msgReacts) {
+                if (!emojiMap[r.emoji]) emojiMap[r.emoji] = { count: 0, userReacted: false };
+                emojiMap[r.emoji].count++;
+                if (r.user_id === userId) emojiMap[r.emoji].userReacted = true;
+            }
+            map[id] = Object.entries(emojiMap).map(([emoji, data]) => ({ emoji, ...data }));
+        }
+        setReactions(map);
+    };
+
+    const getSenderInfo = (id: string) => {
+        if (id === userId) return { name: 'Vous', initials: userName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() };
+        const m = members.find(m => m.userId === id);
+        return { name: m?.name || 'Membre', initials: m?.initials || '?' };
     };
 
     const formatTime = (ts: string) => {
@@ -185,13 +287,109 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
     };
     const formatRecTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
 
+    // ═══ RÉACTION EMOJI ═══
+    const toggleReaction = async (messageId: string, emoji: string) => {
+        const msgReacts = reactions[messageId] || [];
+        const existing = msgReacts.find(r => r.emoji === emoji);
+        if (existing?.userReacted) {
+            // Remove reaction
+            await supabase.from('message_reactions')
+                .delete().eq('message_id', messageId).eq('user_id', userId).eq('emoji', emoji);
+        } else {
+            // Add reaction
+            await supabase.from('message_reactions').upsert({
+                message_id: messageId, user_id: userId, emoji,
+            }, { onConflict: 'message_id,user_id,emoji' });
+        }
+        // Optimistic update
+        setReactions(prev => {
+            const msgR = prev[messageId] || [];
+            const idx = msgR.findIndex(r => r.emoji === emoji);
+            if (idx >= 0) {
+                const updated = [...msgR];
+                if (updated[idx].userReacted) {
+                    updated[idx] = { ...updated[idx], count: updated[idx].count - 1, userReacted: false };
+                    if (updated[idx].count === 0) updated.splice(idx, 1);
+                } else {
+                    updated[idx] = { ...updated[idx], count: updated[idx].count + 1, userReacted: true };
+                }
+                return { ...prev, [messageId]: updated };
+            } else {
+                return { ...prev, [messageId]: [...msgR, { emoji, count: 1, userReacted: true }] };
+            }
+        });
+    };
+
+    // ═══ SUPPRIMER MESSAGE ═══
+    const deleteMessage = async (msgId: string, senderId: string) => {
+        if (senderId !== userId && !isAdmin) return;
+        const { error } = await supabase.from('chat_messages')
+            .update({ deleted_at: new Date().toISOString() }).eq('id', msgId);
+        if (error) { toast.error('Erreur'); return; }
+        setMessages(prev => prev.filter(m => m.id !== msgId));
+        setContextMsg(null);
+        toast.success('Message supprimé');
+    };
+
+    // ═══ ADMIN: RETIRER UN MEMBRE ═══
+    const removeMember = async (targetUserId: string) => {
+        if (!isAdmin || targetUserId === userId) return;
+        const { error } = await supabase.from('chat_participants')
+            .delete().eq('conversation_id', groupId).eq('user_id', targetUserId);
+        if (error) { toast.error('Erreur'); return; }
+        await supabase.from('chat_messages').insert({
+            conversation_id: groupId, sender_id: userId,
+            content: `${members.find(m => m.userId === targetUserId)?.name || 'Membre'} a été retiré du groupe`,
+            msg_type: 'system',
+        });
+        setMembers(prev => prev.filter(m => m.userId !== targetUserId));
+        setMemberCount(c => c - 1);
+        toast.success('Membre retiré');
+    };
+
+    // ═══ ADMIN: PROMOUVOIR UN MEMBRE ═══
+    const promoteMember = async (targetUserId: string) => {
+        if (!isAdmin || targetUserId === userId) return;
+        const { error } = await supabase.from('chat_participants')
+            .update({ role: 'admin' }).eq('conversation_id', groupId).eq('user_id', targetUserId);
+        if (error) { toast.error('Erreur'); return; }
+        setMembers(prev => prev.map(m => m.userId === targetUserId ? { ...m, role: 'admin' } : m));
+        toast.success(`${members.find(m => m.userId === targetUserId)?.name} est maintenant admin 👑`);
+    };
+
+    // ═══ ADMIN: SUPPRIMER LE GROUPE ═══
+    const deleteGroup = async () => {
+        if (!isAdmin) return;
+        if (!confirm(`Supprimer définitivement le groupe "${groupName}" ?`)) return;
+        setDeletingGroup(true);
+        await supabase.from('chat_messages').delete().eq('conversation_id', groupId);
+        await supabase.from('chat_participants').delete().eq('conversation_id', groupId);
+        const { error } = await supabase.from('chat_conversations').delete().eq('id', groupId);
+        if (error) { toast.error('Erreur'); setDeletingGroup(false); return; }
+        toast.success('Groupe supprimé');
+        onGroupDeleted?.();
+        onBack();
+    };
+
+    // ═══ QUITTER LE GROUPE ═══
+    const leaveGroup = async () => {
+        if (!confirm('Quitter ce groupe ?')) return;
+        await supabase.from('chat_messages').insert({
+            conversation_id: groupId, sender_id: userId,
+            content: `${userName} a quitté le groupe`, msg_type: 'system',
+        });
+        await supabase.from('chat_participants').delete()
+            .eq('conversation_id', groupId).eq('user_id', userId);
+        toast.success('Vous avez quitté le groupe');
+        onBack();
+    };
+
     // ═══ SEND TEXT ═══
     const sendMessage = useCallback(async () => {
         if (!msgText.trim()) return;
         setSending(true);
         const text = msgText.trim();
 
-        // Check / consume sky credit
         const { data: creditResult } = await supabase.rpc('use_chat_credit', {
             p_user_id: userId,
             p_org_id: orgId,
@@ -222,7 +420,6 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
             }).select().single();
             if (error) throw error;
             if (data) setMessages(prev => prev.map(m => m.id === tempId ? data as MsgInfo : m));
-            // 🔔 Notifier les membres du groupe
             try {
                 const { data: participants } = await supabase
                     .from('chat_participants').select('user_id')
@@ -245,7 +442,7 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
             toast.error("Erreur d'envoi");
         }
         setSending(false);
-    }, [msgText, groupId, userId, orgId]);
+    }, [msgText, groupId, userId, orgId, userName, groupName]);
 
 
     // ═══ FILE UPLOAD ═══
@@ -265,8 +462,6 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
                 await supabase.from('chat_messages').insert({
                     conversation_id: groupId, sender_id: userId, content, msg_type: msgType, media_url: r2Res.url,
                 });
-
-                // 🔔 Notifier les membres du groupe
                 try {
                     const { data: participants } = await supabase
                         .from('chat_participants').select('user_id')
@@ -281,7 +476,6 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
                         }).catch(e => console.warn('[Notif] group file:', e));
                     }
                 } catch (e) { console.warn('[Notif] group file participants:', e); }
-
                 toast.success(`${file.name} envoyé ✅`);
             } catch (e: any) { toast.error(e.message || file.name); }
         }
@@ -316,23 +510,6 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
                     await supabase.from('chat_messages').insert({
                         conversation_id: groupId, sender_id: userId, content: '🎤 Message vocal', msg_type: 'voice', media_url: r2Res.url,
                     });
-
-                    // 🔔 Notifier les membres du groupe
-                    try {
-                        const { data: participants } = await supabase
-                            .from('chat_participants').select('user_id')
-                            .eq('conversation_id', groupId).neq('user_id', userId);
-                        if (participants?.length) {
-                            const memberIds = participants.map((p: any) => p.user_id);
-                            notifyGroupNewMessage({
-                                senderId: userId, senderName: userName,
-                                groupId, groupName,
-                                messagePreview: '🎤 Message vocal',
-                                memberIds,
-                            }).catch(e => console.warn('[Notif] group voice:', e));
-                        }
-                    } catch (e) { console.warn('[Notif] group voice participants:', e); }
-
                     toast.success('Message vocal envoyé 🎤');
                 } catch (e: any) { toast.error(e.message); }
                 setUploading(false);
@@ -378,6 +555,68 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
         return <ChatMessageRenderer content={m.content} isMe={isMe} />;
     };
 
+    // ═══ ADMIN PANEL ═══
+    if (showAdminPanel) {
+        return (
+            <div className="flex flex-col h-[calc(100vh-140px)]">
+                <div className="flex items-center gap-3 px-4 py-3 border-b border-white/5 bg-white/[0.02] backdrop-blur-sm rounded-t-2xl">
+                    <button onClick={() => setShowAdminPanel(false)} className="p-1.5 hover:bg-white/5 rounded-xl">
+                        <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <div className="flex-1">
+                        <p className="font-bold text-sm">⚙️ Gestion du groupe</p>
+                        <p className="text-[10px] text-slate-500">{groupName} • {memberCount} membres</p>
+                    </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Membres</p>
+                    {members.map(m => (
+                        <div key={m.userId} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-600/30 to-emerald-600/30 flex items-center justify-center text-xs font-bold text-teal-300 shrink-0">
+                                {m.initials}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{m.name} {m.userId === userId ? '(vous)' : ''}</p>
+                                <p className="text-[10px] text-slate-500">{m.role === 'admin' ? '👑 Admin' : 'Membre'}</p>
+                            </div>
+                            {m.userId !== userId && isAdmin && (
+                                <div className="flex gap-1">
+                                    {m.role !== 'admin' && (
+                                        <button onClick={() => promoteMember(m.userId)}
+                                            className="p-1.5 rounded-lg text-amber-400 hover:bg-amber-500/10 transition" title="Promouvoir admin">
+                                            <Crown className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                    <button onClick={() => removeMember(m.userId)}
+                                        className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition" title="Retirer du groupe">
+                                        <UserMinus className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+
+                    {/* Danger zone */}
+                    <div className="mt-4 space-y-2">
+                        <p className="text-xs font-semibold text-red-400 uppercase tracking-wider">Zone dangereuse</p>
+                        <button onClick={leaveGroup}
+                            className="w-full flex items-center gap-2 px-4 py-3 rounded-xl border border-red-500/20 text-red-400 hover:bg-red-500/10 transition text-sm">
+                            <LogOut className="w-4 h-4" />
+                            Quitter le groupe
+                        </button>
+                        {isAdmin && (
+                            <button onClick={deleteGroup} disabled={deletingGroup}
+                                className="w-full flex items-center gap-2 px-4 py-3 rounded-xl bg-red-600/10 border border-red-500/30 text-red-400 hover:bg-red-600/20 transition text-sm font-medium">
+                                {deletingGroup ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                Supprimer le groupe
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="flex flex-col h-[calc(100vh-140px)]">
             {/* Header */}
@@ -390,15 +629,24 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
                 </div>
                 <div className="flex-1 min-w-0">
                     <p className="font-bold text-sm truncate">{groupName}</p>
-                    <p className="text-[10px] text-slate-500">{memberCount} membre{memberCount > 1 ? 's' : ''}</p>
+                    <p className="text-[10px] text-slate-500">{memberCount} membre{memberCount > 1 ? 's' : ''}{isAdmin ? ' • 👑 Admin' : ''}</p>
                 </div>
+                <button onClick={() => setShowAdminPanel(true)}
+                    className="p-2 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white transition">
+                    <Settings className="w-5 h-5" />
+                </button>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 space-y-1.5 scrollbar-thin">
+            <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 space-y-1.5 scrollbar-thin"
+                onClick={() => { setContextMsg(null); setShowEmojiFor(null); }}>
                 {messages.map((m) => {
                     const isMe = m.sender_id === userId;
                     const isSystem = m.msg_type === 'system';
+                    const sender = getSenderInfo(m.sender_id);
+                    const msgReactions = reactions[m.id] || [];
+                    const canDelete = isMe || isAdmin;
+
                     if (isSystem) {
                         return (
                             <div key={m.id} className="text-center my-3">
@@ -407,20 +655,83 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
                         );
                     }
                     return (
-                        <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                        <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} group`}>
                             {!isMe && (
                                 <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-600 to-teal-600 flex items-center justify-center text-[9px] font-bold text-white shrink-0 mr-2 mt-auto mb-5">
-                                    {getSenderInitials(m.sender_id)}
+                                    {sender.initials}
                                 </div>
                             )}
                             <div className="max-w-[75%]">
-                                {!isMe && <p className="text-[10px] text-teal-400 ml-1 mb-0.5 font-medium">{getSenderName(m.sender_id)}</p>}
-                                <div className={cn("px-3 py-2 rounded-2xl text-sm leading-relaxed",
-                                    isMe ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-br-md shadow-lg shadow-emerald-600/10'
-                                        : 'bg-white/[0.06] text-white rounded-bl-md'
-                                )}>
-                                    {renderContent(m, isMe)}
+                                {!isMe && <p className="text-[10px] text-teal-400 ml-1 mb-0.5 font-medium">{sender.name}</p>}
+                                {/* Message bubble */}
+                                <div className="relative">
+                                    <div
+                                        className={cn("px-3 py-2 rounded-2xl text-sm leading-relaxed cursor-pointer",
+                                            isMe ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-br-md shadow-lg shadow-emerald-600/10'
+                                                : 'bg-white/[0.06] text-white rounded-bl-md'
+                                        )}
+                                        onContextMenu={e => { e.preventDefault(); setContextMsg(m.id); setShowEmojiFor(null); }}
+                                        onClick={e => { e.stopPropagation(); setContextMsg(contextMsg === m.id ? null : m.id); setShowEmojiFor(null); }}
+                                    >
+                                        {renderContent(m, isMe)}
+                                    </div>
+
+                                    {/* Context menu */}
+                                    <AnimatePresence>
+                                        {contextMsg === m.id && (
+                                            <motion.div
+                                                initial={{ opacity: 0, scale: 0.85 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                exit={{ opacity: 0, scale: 0.85 }}
+                                                className={cn(
+                                                    "absolute z-40 bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl p-1 flex gap-1 min-w-[120px]",
+                                                    isMe ? 'right-0 bottom-full mb-2' : 'left-0 bottom-full mb-2'
+                                                )}
+                                                onClick={e => e.stopPropagation()}
+                                            >
+                                                {/* Quick emoji */}
+                                                {QUICK_EMOJIS.slice(0, 5).map(emoji => (
+                                                    <button key={emoji}
+                                                        onClick={() => { toggleReaction(m.id, emoji); setContextMsg(null); }}
+                                                        className="w-8 h-8 rounded-xl hover:bg-white/10 flex items-center justify-center text-base transition">
+                                                        {emoji}
+                                                    </button>
+                                                ))}
+                                                {canDelete && (
+                                                    <button
+                                                        onClick={() => deleteMessage(m.id, m.sender_id)}
+                                                        className="w-8 h-8 rounded-xl hover:bg-red-500/10 flex items-center justify-center text-red-400 transition ml-auto">
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
                                 </div>
+
+                                {/* Réactions */}
+                                {msgReactions.length > 0 && (
+                                    <div className={cn("flex flex-wrap gap-1 mt-1", isMe ? 'justify-end' : 'justify-start')}>
+                                        {msgReactions.map(r => (
+                                            <button key={r.emoji}
+                                                onClick={e => { e.stopPropagation(); toggleReaction(m.id, r.emoji); }}
+                                                className={cn(
+                                                    "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[11px] border transition",
+                                                    r.userReacted
+                                                        ? 'bg-teal-500/20 border-teal-500/40 text-teal-300'
+                                                        : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'
+                                                )}>
+                                                {r.emoji} <span>{r.count}</span>
+                                            </button>
+                                        ))}
+                                        <button
+                                            onClick={e => { e.stopPropagation(); setShowEmojiFor(showEmojiFor === m.id ? null : m.id); setContextMsg(null); }}
+                                            className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] border border-white/10 bg-white/5 text-slate-500 hover:text-slate-300 transition">
+                                            <SmilePlus className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                )}
+
                                 <span className={`text-[10px] text-slate-600 mt-0.5 block ${isMe ? 'text-right mr-1' : 'ml-1'}`}>{formatTime(m.created_at)}</span>
                             </div>
                         </div>
@@ -460,10 +771,6 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
                             <p className="text-xs font-bold text-amber-300">Crédits épuisés</p>
                             <p className="text-[10px] text-slate-400">Solde: {skyBalance ?? 0} pts — 1 Sky Point par message</p>
                         </div>
-                        <a href="#store" onClick={() => setShowSkyAlert(false)}
-                            className="text-[10px] px-3 py-1.5 rounded-lg bg-amber-500 text-black font-bold hover:bg-amber-400 transition">
-                            Acheter
-                        </a>
                         <button onClick={() => setShowSkyAlert(false)} className="text-slate-500 hover:text-white"><X className="w-3.5 h-3.5" /></button>
                     </div>
                 )}
@@ -477,7 +784,6 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
                             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                             placeholder="Écrire un message..." disabled={isRecording}
                             className="bg-white/5 border-white/10 text-white h-10 rounded-full text-sm w-full pr-20" />
-                        {/* Credit indicator */}
                         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px]">
                             {freeRemaining !== null && freeRemaining > 0 ? (
                                 <span className="text-teal-500">{freeRemaining} gratuits</span>

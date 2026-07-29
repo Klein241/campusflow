@@ -5,13 +5,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     ChevronLeft, ChevronRight, AlertTriangle, Clock, Send,
     CheckCircle2, Loader2, MessageSquare, Users, Timer,
-    Lock, ShieldAlert, BookOpen, Circle, CheckSquare, Type
+    Lock, ShieldAlert, BookOpen, Circle, CheckSquare, Type,
+    Maximize2, Minimize2, ZoomIn, ZoomOut
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { ExamSession, ExamQuestion } from './exam-room-view';
 import { PdfStudentViewer } from './pdf-exam-builder';
+import { ExamReviewView } from './exam-review-view';
 
 // ════════════════════════════════════════════════════════════
 // EXAM STUDENT VIEW — Interface étudiant style Calameo
@@ -45,6 +47,9 @@ export function ExamStudentView({ session, orgId, userId, userName, onEnd }: Exa
     const [autoSaving, setAutoSaving] = useState(false);
     const [participantCount, setParticipantCount] = useState(0);
     const [hasFailed, setHasFailed] = useState(false);
+    const [zoom, setZoom] = useState(1);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+    const examContainerRef = useRef<HTMLDivElement>(null);
 
     const duration = paper.duration_minutes * 60; // total seconds
     const timerRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -209,28 +214,77 @@ export function ExamStudentView({ session, orgId, userId, userName, onEnd }: Exa
         if (!auto && !confirm('Êtes-vous sûr de vouloir soumettre votre copie ? Vous ne pourrez plus modifier vos réponses.')) return;
         setSubmitting(true);
 
-        // Calculate score
+        // ── Auto-calculate score for QCM & Vrai/Faux ──────────
         let score = 0;
         let total = 0;
+        const hasManualQuestions = questions.some(q => q.type === 'redaction' || q.type === 'texte_a_trou');
         questions.forEach(q => {
             total += q.points;
             const a = answers[q.id];
             if (q.type === 'qcm' && a === q.correct) score += q.points;
             else if (q.type === 'vrai_faux' && a === q.correct) score += q.points;
-            // redaction & texte_a_trou need manual grading
+            // redaction & texte_a_trou need manual grading — excluded from auto-score
         });
+
+        const autoScore = total > 0 ? Math.round((score / total) * 20 * 100) / 100 : null;
 
         await supabase.from('exam_participants').update({
             answers,
             status: 'submitted',
             submitted_at: new Date().toISOString(),
-            score: total > 0 ? Math.round((score / total) * 20 * 100) / 100 : null,
+            score: hasManualQuestions ? null : autoScore, // null if manual grading needed
         }).eq('session_id', session.id).eq('student_id', userId);
+
+        // ── Sky Points reward for exam participation ───────────
+        try {
+            const { data: prof } = await supabase
+                .from('student_profiles')
+                .select('sky_points')
+                .eq('id', userId)
+                .maybeSingle();
+
+            if (prof !== null) {
+                // Points: 10 if ≥15/20, 5 if ≥10/20, 2 for participation
+                let skyGain = 2; // participation reward
+                if (!hasManualQuestions && autoScore !== null) {
+                    if (autoScore >= 15) skyGain = 10;
+                    else if (autoScore >= 10) skyGain = 5;
+                }
+
+                const newBalance = (prof?.sky_points || 0) + skyGain;
+                await supabase.from('student_profiles')
+                    .update({ sky_points: newBalance })
+                    .eq('id', userId);
+                await supabase.from('sky_transactions').insert({
+                    user_id: userId,           // required – original column
+                    student_id: userId,        // extended column
+                    amount: skyGain,
+                    type: 'exam_submit',       // required – original column
+                    transaction_type: 'exam_submit', // extended column
+                    description: `Épreuve soumise : ${paper.title} (+${skyGain} Sky ⭐)`,
+                });
+                // Notify sky-points badge
+                window.dispatchEvent(new CustomEvent('sky_points_updated', { detail: { newBalance } }));
+
+                if (!hasManualQuestions && autoScore !== null) {
+                    toast.success(
+                        `✅ Copie soumise ! Score auto : ${autoScore}/20 — +${skyGain} Sky ⭐`,
+                        { duration: 4000 }
+                    );
+                } else {
+                    toast.success(`✅ Copie soumise ! +${skyGain} Sky ⭐ (correction manuelle en attente)`, { duration: 4000 });
+                }
+            } else {
+                toast.success('✅ Copie soumise avec succès !');
+            }
+        } catch {
+            toast.success('✅ Copie soumise avec succès !');
+        }
 
         setSubmitted(true);
         setSubmitting(false);
-        toast.success('✅ Copie soumise avec succès !');
     };
+
 
     const requestPermission = async () => {
         if (permPending) return;
@@ -271,30 +325,17 @@ export function ExamStudentView({ session, orgId, userId, userName, onEnd }: Exa
         );
     }
 
-    // ── SUBMITTED STATE ────────────────────────────────────
+    // ── SUBMITTED STATE ── Show full review with PDF download
     if (submitted) {
+        const totalPoints = questions.reduce((s, q) => s + (q.points || 0), 0);
         return (
-            <div className="flex flex-col items-center justify-center h-full bg-[#0B0E14] text-white px-6 text-center gap-5">
-                <motion.div
-                    initial={{ scale: 0.5, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    className="w-24 h-24 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                    <CheckCircle2 className="w-12 h-12 text-emerald-400" />
-                </motion.div>
-                <div>
-                    <h2 className="text-xl font-black text-emerald-400 mb-2">Copie soumise !</h2>
-                    <p className="text-slate-400 text-sm leading-relaxed">
-                        Vos réponses ont été enregistrées avec succès.<br />
-                        Le résultat sera disponible après la correction.
-                    </p>
-                    <div className="mt-4 bg-white/5 rounded-xl px-4 py-3 text-sm text-slate-300">
-                        <span className="font-bold text-white">{answeredCount}</span>/{questions.length} questions répondues
-                    </div>
-                </div>
-                <button onClick={onEnd} className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-bold text-white transition-all">
-                    Terminer
-                </button>
-            </div>
+            <ExamReviewView
+                paper={paper}
+                answers={answers}
+                totalPoints={totalPoints}
+                studentName={userName}
+                onClose={onEnd}
+            />
         );
     }
 
@@ -376,16 +417,16 @@ export function ExamStudentView({ session, orgId, userId, userName, onEnd }: Exa
         );
     }
 
-    // ── ACTIVE EXAM VIEW (Calameo-like) ───────────────────
+    // ── ACTIVE EXAM VIEW (Calameo-like) ────────────────────
     return (
-        <div className="flex flex-col h-full bg-[#1a1a2e] text-white overflow-hidden select-none">
+        <div ref={examContainerRef} className="flex flex-col h-full bg-[#1a1a2e] text-white overflow-hidden select-none">
             {/* Top bar */}
             <div className="shrink-0 flex items-center justify-between px-4 py-2.5 bg-[#0d0d1a] border-b border-white/10">
                 <div className="flex items-center gap-2">
                     <BookOpen className="w-3.5 h-3.5 text-violet-400" />
                     <span className="text-xs font-semibold text-white truncate max-w-[140px]">{paper.title}</span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                     {autoSaving && <span className="text-[10px] text-slate-500 italic">Sauvegarde…</span>}
                     <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1 rounded-lg">
                         <Users className="w-3 h-3 text-slate-400" />
@@ -401,6 +442,27 @@ export function ExamStudentView({ session, orgId, userId, userName, onEnd }: Exa
                         <Timer className="w-3 h-3" />
                         {String(remainingMin).padStart(2, '0')}:{String(remainingSec).padStart(2, '0')}
                     </div>
+                    {/* Zoom controls */}
+                    <button onClick={() => setZoom(z => Math.max(0.7, z - 0.1))}
+                        className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-all" title="Zoom -">
+                        <ZoomOut className="w-3 h-3 text-slate-400" />
+                    </button>
+                    <button onClick={() => setZoom(z => Math.min(1.8, z + 0.1))}
+                        className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-all" title="Zoom +">
+                        <ZoomIn className="w-3 h-3 text-slate-400" />
+                    </button>
+                    {/* Fullscreen */}
+                    <button onClick={async () => {
+                        if (!document.fullscreenElement) {
+                            await examContainerRef.current?.requestFullscreen?.();
+                            setIsFullscreen(true);
+                        } else {
+                            await document.exitFullscreen?.();
+                            setIsFullscreen(false);
+                        }
+                    }} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-all" title="Plein écran">
+                        {isFullscreen ? <Minimize2 className="w-3 h-3 text-slate-400" /> : <Maximize2 className="w-3 h-3 text-slate-400" />}
+                    </button>
                 </div>
             </div>
 
@@ -440,7 +502,8 @@ export function ExamStudentView({ session, orgId, userId, userName, onEnd }: Exa
             </div>
 
             {/* A4 Paper area */}
-            <div className="flex-1 overflow-y-auto bg-gray-300 p-4 flex justify-center">
+            <div className="flex-1 overflow-y-auto bg-gray-300 p-4 flex justify-center"
+                style={{ fontSize: `${zoom}em` }}>
                 <AnimatePresence mode="wait">
                     <motion.div
                         key={currentPage}
