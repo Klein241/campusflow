@@ -81,11 +81,17 @@ export function PdfExamBuilder({ orgId, userId, paper, onBack, onSaved }: PdfExa
     const renderPdf = useCallback(async (url: string) => {
         setLoading(true);
         try {
-            // Dynamically import pdfjs
             const pdfjsLib = await import('pdfjs-dist');
-            pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+            // Utiliser le worker local (compatible avec la version installée)
+            pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
-            const pdf = await pdfjsLib.getDocument({ url }).promise;
+            const loadingTask = pdfjsLib.getDocument({
+                url,
+                // Support des PDFs simples (non-interactifs)
+                disableAutoFetch: false,
+                disableStream: false,
+            });
+            const pdf = await loadingTask.promise;
             const pages: string[] = [];
 
             for (let i = 1; i <= pdf.numPages; i++) {
@@ -96,13 +102,13 @@ export function PdfExamBuilder({ orgId, userId, paper, onBack, onSaved }: PdfExa
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
                 const ctx = canvas.getContext('2d')!;
-                await (page.render as any)({ canvasContext: ctx, viewport }).promise;
+                await page.render({ canvasContext: ctx as any, viewport }).promise;
                 pages.push(canvas.toDataURL('image/png'));
             }
             setPdfPages(pages);
         } catch (e) {
             console.error('PDF render error:', e);
-            toast.error('Impossible de lire le PDF. Vérifiez le format.');
+            toast.error('Impossible de lire le PDF. Assurez-vous que le fichier est un PDF valide (non protégé, non vide).');
         }
         setLoading(false);
     }, []);
@@ -510,8 +516,9 @@ export function PdfStudentViewer({ pdfUrl, annotations, answers, onChange, readO
         setLoading(true);
         try {
             const pdfjsLib = await import('pdfjs-dist');
-            pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-            const pdf = await pdfjsLib.getDocument({ url }).promise;
+            pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+            const loadingTask = pdfjsLib.getDocument({ url, disableAutoFetch: false, disableStream: false });
+            const pdf = await loadingTask.promise;
             const pages: string[] = [];
             for (let i = 1; i <= pdf.numPages; i++) {
                 const page = await pdf.getPage(i);
@@ -519,7 +526,7 @@ export function PdfStudentViewer({ pdfUrl, annotations, answers, onChange, readO
                 const canvas = document.createElement('canvas');
                 canvas.width = viewport.width; canvas.height = viewport.height;
                 const ctx = canvas.getContext('2d')!;
-                await (page.render as any)({ canvasContext: ctx, viewport }).promise;
+                await page.render({ canvasContext: ctx as any, viewport }).promise;
                 pages.push(canvas.toDataURL('image/png'));
             }
             setPdfPages(pages);

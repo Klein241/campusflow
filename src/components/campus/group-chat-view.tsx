@@ -16,7 +16,7 @@ import { compressImage } from '@/lib/compress';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ChatMessageRenderer } from './chat-message-renderer';
-import { notifyGroupNewMessage } from '@/lib/notifications';
+import { notifyGroupNewMessage, notifyGroupMention } from '@/lib/notifications';
 import { uploadToR2 } from '@/lib/r2';
 
 // ═══════════════════════════════════════════════════════
@@ -203,6 +203,22 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
                 .is('deleted_at', null)
                 .order('created_at', { ascending: true }).limit(300);
             setMessages(msgs || []);
+
+            // ─── Fix Sky Points : charger le vrai solde au montage ───
+            try {
+                const FREE_LIMIT = 10;
+                const { data: sp } = await supabase
+                    .from('sky_points')
+                    .select('balance, free_messages_used')
+                    .eq('user_id', userId)
+                    .maybeSingle();
+                if (sp) {
+                    const remaining = Math.max(0, FREE_LIMIT - (sp.free_messages_used || 0));
+                    setFreeRemaining(remaining);
+                    setSkyBalance(sp.balance ?? 0);
+                }
+            } catch { /* sky_points table may not exist */ }
+
 
             // Members + roles
             const { data: parts, count } = await supabase.from('chat_participants')
@@ -641,6 +657,31 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
                     .eq('conversation_id', groupId).neq('user_id', userId);
                 if (participants?.length) {
                     const memberIds = participants.map((p: any) => p.user_id);
+
+                    // Item 13: Envoyer notification push aux membres @mentionnés
+                    const mentionRegex = /@(\w+)/g;
+                    const mentionedFirstNames: string[] = [];
+                    let match;
+                    while ((match = mentionRegex.exec(text)) !== null) {
+                        mentionedFirstNames.push(match[1].toLowerCase());
+                    }
+                    if (mentionedFirstNames.length > 0) {
+                        const mentionedMembers = members.filter(m =>
+                            mentionedFirstNames.some(fn => m.name.toLowerCase().startsWith(fn))
+                        );
+                        for (const mentionedMember of mentionedMembers) {
+                            notifyGroupMention({
+                                mentionedUserId: mentionedMember.userId,
+                                mentionerId: userId,
+                                mentionerName: userName,
+                                groupId,
+                                groupName,
+                                messagePreview: text.slice(0, 80),
+                            }).catch(e => console.warn('[Notif] mention:', e));
+                        }
+                    }
+
+                    // Notification globale au groupe
                     notifyGroupNewMessage({
                         senderId: userId, senderName: userName, groupId, groupName,
                         messagePreview: text.slice(0, 80), memberIds,
