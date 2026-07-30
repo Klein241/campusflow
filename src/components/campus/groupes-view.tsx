@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Users, Plus, Search, Loader2, X, Check, ChevronRight
@@ -61,6 +61,9 @@ export function GroupesView({ orgId, orgSlug, userId, userName, userRole, onOpen
     // Active group chat (inline)
     const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
     const [activeGroupName, setActiveGroupName] = useState<string>('');
+
+    // Item 9: Unread counts per group
+    const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
 
     // Load all school users
     useEffect(() => {
@@ -124,11 +127,32 @@ export function GroupesView({ orgId, orgSlug, userId, userName, userRole, onOpen
             }));
 
             setGroups(enriched);
+            // Item 9: Load unread counts
+            const memberGroupIds = enriched.filter(g => g.isMember).map(g => g.id);
+            if (memberGroupIds.length > 0) {
+                loadUnreadCounts(memberGroupIds);
+            }
         } catch (e) {
             console.error('Error loading groups:', e);
         }
         setLoading(false);
     };
+
+    // Item 9: Load unread message counts
+    const loadUnreadCounts = useCallback(async (groupIds: string[]) => {
+        if (groupIds.length === 0) return;
+        const counts: Record<string, number> = {};
+        await Promise.all(groupIds.map(async (gId) => {
+            const lastRead = localStorage.getItem(`last_read_${gId}`) || new Date(0).toISOString();
+            const { count } = await supabase.from('chat_messages')
+                .select('id', { count: 'exact', head: true })
+                .eq('conversation_id', gId)
+                .is('deleted_at', null)
+                .gt('created_at', lastRead);
+            counts[gId] = count || 0;
+        }));
+        setUnreadCounts(counts);
+    }, []);
 
     // Join a group
     const joinGroup = async (groupId: string) => {
@@ -182,11 +206,13 @@ export function GroupesView({ orgId, orgSlug, userId, userName, userRole, onOpen
         setCreating(false);
     };
 
-    // Open group chat
+    // Open group chat — marque comme lu
     const handleOpenGroup = (groupId: string, groupName: string) => {
+        // Item 9: Mark as read when opening
+        localStorage.setItem(`last_read_${groupId}`, new Date().toISOString());
+        setUnreadCounts(prev => ({ ...prev, [groupId]: 0 }));
         setActiveGroupId(groupId);
         setActiveGroupName(groupName);
-        // Also notify parent if callback exists
         onOpenGroupChat?.(groupId, groupName);
     };
 
@@ -315,8 +341,18 @@ export function GroupesView({ orgId, orgSlug, userId, userName, userRole, onOpen
                 <motion.div key={group.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
                     className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:border-white/10 transition-all">
 
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-teal-600/30 to-emerald-600/30 flex items-center justify-center shrink-0">
-                        <Users className="w-5 h-5 text-teal-300" />
+                    <div className="relative shrink-0">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-teal-600/30 to-emerald-600/30 flex items-center justify-center">
+                            <Users className="w-5 h-5 text-teal-300" />
+                        </div>
+                        {/* Item 9: Unread badge */}
+                        {group.isMember && (unreadCounts[group.id] || 0) > 0 && (
+                            <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-red-500 border-2 border-[#0B0E14] flex items-center justify-center">
+                                <span className="text-[9px] font-bold text-white px-0.5">
+                                    {(unreadCounts[group.id] || 0) > 99 ? '99+' : unreadCounts[group.id]}
+                                </span>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex-1 min-w-0">
