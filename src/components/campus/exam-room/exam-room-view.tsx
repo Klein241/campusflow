@@ -224,8 +224,11 @@ export function ExamRoomView({ orgId, orgSlug, userId, userName, userRole }: Exa
         (p.subject || '').toLowerCase().includes(searchQ.toLowerCase())
     );
     const drafts = filtered.filter(p => p.status === 'draft');
-    const published = filtered.filter(p => p.status === 'published');
+    // Exclure les épreuves qui ont une session active (elles sont dans "En cours")
+    const activePaperIds = new Set(activeSessions.map(s => s.exam_paper_id));
+    const published = filtered.filter(p => p.status === 'published' && !activePaperIds.has(p.id));
     const archived = filtered.filter(p => p.status === 'archived');
+
 
     const totalPoints = (p: ExamPaper) => (p.questions || []).reduce((s, q) => s + (q.points || 0), 0);
 

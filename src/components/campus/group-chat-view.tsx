@@ -204,20 +204,15 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
                 .order('created_at', { ascending: true }).limit(300);
             setMessages(msgs || []);
 
-            // ─── Fix Sky Points : charger le vrai solde au montage ───
+
+            // ─── Sky Points : solde réel via RPC (auth.uid() interne) ───
             try {
-                const FREE_LIMIT = 10;
-                const { data: sp } = await supabase
-                    .from('sky_points')
-                    .select('balance, free_messages_used')
-                    .eq('user_id', userId)
-                    .maybeSingle();
-                if (sp) {
-                    const remaining = Math.max(0, FREE_LIMIT - (sp.free_messages_used || 0));
-                    setFreeRemaining(remaining);
-                    setSkyBalance(sp.balance ?? 0);
+                const { data: bal } = await supabase.rpc('get_chat_balance');
+                if (bal) {
+                    setFreeRemaining(bal.free_remaining ?? 10);
+                    setSkyBalance(bal.balance ?? 0);
                 }
-            } catch { /* sky_points table may not exist */ }
+            } catch { /* RPC not deployed yet */ }
 
 
             // Members + roles
