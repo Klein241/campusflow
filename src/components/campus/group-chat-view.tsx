@@ -205,9 +205,9 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
             setMessages(msgs || []);
 
 
-            // ─── Sky Points : solde réel via RPC (auth.uid() interne) ───
+            // ─── Sky Points : solde réel via RPC ───
             try {
-                const { data: bal } = await supabase.rpc('get_chat_balance');
+                const { data: bal } = await supabase.rpc('get_chat_balance', { p_user_id: userId });
                 if (bal) {
                     setFreeRemaining(bal.free_remaining ?? 10);
                     setSkyBalance(bal.balance ?? 0);
