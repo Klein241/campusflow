@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 
 interface SkyPointsProps {
     userId: string;
+    userRole?: string;
     orgId: string;
     compact?: boolean;               // true = badge, false = full card
     onOpenStore?: () => void;
@@ -20,7 +21,7 @@ interface SkyPointsProps {
 
 import { fetchSkyPoints, updateSkyPoints } from '@/lib/sky-points-service';
 
-export function SkyPoints({ userId, orgId, compact = false, onOpenStore }: SkyPointsProps) {
+export function SkyPoints({ userId, userRole, orgId, compact = false, onOpenStore }: SkyPointsProps) {
     const [balance, setBalance] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
     const [claiming, setClaiming] = useState(false);
@@ -32,7 +33,7 @@ export function SkyPoints({ userId, orgId, compact = false, onOpenStore }: SkyPo
         setLoading(true);
         try {
             // First fetch unified current balance from profile or sky_points table
-            const currentUnified = await fetchSkyPoints(userId);
+            const currentUnified = await fetchSkyPoints(userId, userRole);
             setBalance(currentUnified);
 
             // Call server-side RPC for atomic daily point credit
@@ -45,9 +46,10 @@ export function SkyPoints({ userId, orgId, compact = false, onOpenStore }: SkyPo
                 const finalBal = claimResult.balance;
                 setBalance(finalBal);
                 // Atomic sync to student_profiles / teacher_profiles
-                await updateSkyPoints(userId, finalBal, 'student', orgId);
+                await updateSkyPoints(userId, finalBal, (userRole as any) || 'student', orgId);
                 setAlreadyClaimed(!claimResult.success);
             } else {
+
                 const { data: row } = await supabase
                     .from('sky_points')
                     .select('balance, last_daily_claim')
@@ -63,7 +65,27 @@ export function SkyPoints({ userId, orgId, compact = false, onOpenStore }: SkyPo
             console.error('Sky points load error:', e);
         }
         setLoading(false);
-    }, [userId, orgId]);
+    }, [userId, orgId, userRole]);
+
+    useEffect(() => {
+        loadBalance();
+        const handler = (e: Event) => {
+            const ev = e as CustomEvent<{ newBalance: number }>;
+            if (typeof ev.detail?.newBalance === 'number') {
+                setBalance(ev.detail.newBalance);
+            }
+        };
+        if (typeof window !== 'undefined') {
+            window.addEventListener('sky_points_updated', handler);
+        }
+        return () => {
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('sky_points_updated', handler);
+            }
+        };
+    }, [loadBalance]);
+
+
 
     const claimDailyPoint = async (currentBalance: number = balance ?? 0, silent = false) => {
         if (claiming || alreadyClaimed) return;

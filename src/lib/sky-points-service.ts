@@ -8,19 +8,18 @@ import { supabase } from '@/lib/supabase';
 export async function updateSkyPoints(
     userId: string,
     newBalance: number,
-    userRole: 'student' | 'teacher' | 'admin' = 'student',
+    userRole: 'student' | 'teacher' | 'admin' | 'owner' | 'prof' = 'student',
     orgId?: string
 ) {
-    const table = userRole === 'teacher' ? 'teacher_profiles' : 'student_profiles';
-
-    // 1. Update profile table (student_profiles or teacher_profiles)
+    // 1. Update BOTH profile tables to guarantee consistency regardless of role mismatch
     try {
-        await supabase.from(table).update({ sky_points: newBalance }).eq('id', userId);
-    } catch (e) {
-        console.error('Error updating profile sky_points:', e);
-    }
+        await supabase.from('teacher_profiles').update({ sky_points: newBalance }).eq('id', userId);
+    } catch {}
+    try {
+        await supabase.from('student_profiles').update({ sky_points: newBalance }).eq('id', userId);
+    } catch {}
 
-    // 2. Upsert into sky_points table (where balance is tracked for RPCs/daily claims)
+    // 2. Upsert into sky_points table (for RPCs/daily claims)
     try {
         await supabase.from('sky_points').upsert({
             user_id: userId,
@@ -29,11 +28,10 @@ export async function updateSkyPoints(
             updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' });
     } catch (e) {
-        // sky_points table may not have been created yet — non-blocking
-        console.warn('sky_points upsert skipped (table may not exist):', e);
+        console.warn('sky_points upsert skipped:', e);
     }
 
-    // 3. Sync localStorage session so the balance is correct on next page load
+    // 3. Sync localStorage session cache
     try {
         if (typeof window !== 'undefined') {
             const raw = localStorage.getItem('campusflow_session');
@@ -54,18 +52,26 @@ export async function updateSkyPoints(
 }
 
 /**
- * Fetches the unified current balance from student/teacher profiles or sky_points table.
+ * Fetches the unified current balance from teacher_profiles, student_profiles, or sky_points table.
  */
 export async function fetchSkyPoints(
     userId: string,
-    userRole: 'student' | 'teacher' | 'admin' = 'student'
+    userRole?: string
 ): Promise<number> {
-    const table = userRole === 'teacher' ? 'teacher_profiles' : 'student_profiles';
     try {
-        const { data: prof } = await supabase.from(table).select('sky_points').eq('id', userId).maybeSingle();
-        if (prof?.sky_points !== undefined && prof?.sky_points !== null) {
-            return prof.sky_points;
+        // Try teacher_profiles first
+        const { data: teacher } = await supabase.from('teacher_profiles').select('sky_points').eq('id', userId).maybeSingle();
+        if (teacher?.sky_points !== undefined && teacher?.sky_points !== null) {
+            return teacher.sky_points;
         }
+
+        // Try student_profiles next
+        const { data: student } = await supabase.from('student_profiles').select('sky_points').eq('id', userId).maybeSingle();
+        if (student?.sky_points !== undefined && student?.sky_points !== null) {
+            return student.sky_points;
+        }
+
+        // Try sky_points table
         const { data: sp } = await supabase.from('sky_points').select('balance').eq('user_id', userId).maybeSingle();
         if (sp?.balance !== undefined && sp?.balance !== null) {
             return sp.balance;
@@ -73,8 +79,9 @@ export async function fetchSkyPoints(
     } catch (e) {
         console.error('Error fetching sky points:', e);
     }
-    return 0;
+    return 100;
 }
+
 
 /**
  * Deducts Sky Points from a user's balance, records the transaction,

@@ -21,7 +21,7 @@ import {
 } from '@/lib/notifications';
 
 
-import { updateSkyPoints } from '@/lib/sky-points-service';
+import { updateSkyPoints, fetchSkyPoints, deductSkyPoints } from '@/lib/sky-points-service';
 
 // ═══════════════════════════════════════════════════════
 // ACTUS VIEW — Actualités + Stories + Comments + Partage
@@ -300,8 +300,7 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
 
         let currentPts = 100;
         if (!isAdminOrOwner) {
-            const { data: prof } = await supabase.from(table).select('sky_points').eq('id', userId).maybeSingle();
-            currentPts = prof?.sky_points ?? 100;
+            currentPts = await fetchSkyPoints(userId, userRole as any);
             if (currentPts < requiredPoints) {
                 toast.error(`Solde insuffisant — ${requiredPoints} Sky Point${requiredPoints > 1 ? 's' : ''} requis pour cette publication`);
                 return;
@@ -334,22 +333,18 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
             if (insertResult.error) throw insertResult.error;
             const newPostId = insertResult.data?.id || '';
 
-            // Déduire les Sky Points après succès de la publication
+            // Déduire les Sky Points après succès de la publication via le service unifié
             if (!isAdminOrOwner && requiredPoints > 0) {
-                const newBal = Math.max(0, currentPts - requiredPoints);
-                await updateSkyPoints(userId, newBal, userRole as any, orgId);
-                try {
-                    await supabase.from('sky_transactions').insert({
-                        user_id: userId,
-                        student_id: userRole === 'student' ? userId : null,
-                        amount: -requiredPoints,
-                        type: 'actus_post',            // required – original column
-                        transaction_type: 'actus_post',
-                        description: `Publication d'une actus (${hasText ? 'texte' : ''}${hasText && hasImage ? ' + ' : ''}${hasImage ? 'image' : ''})`,
-                        organization_id: orgId
-                    });
-                } catch { /* fallback silent */ }
+                await deductSkyPoints(
+                    userId,
+                    requiredPoints,
+                    'actus_post',
+                    `Publication d'une actus (${hasText ? 'texte' : ''}${hasText && hasImage ? ' + ' : ''}${hasImage ? 'image' : ''})`,
+                    userRole as any,
+                    orgId
+                );
             }
+
 
             toast.success(`Publication ajoutée ! ${isAdminOrOwner ? '(Admin)' : `(-${requiredPoints} Sky Points)`} 🚀`);
             setNewPostContent('');
@@ -496,13 +491,13 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
 
         let currentPoints = 100;
         if (!isAdminOrOwner) {
-            const { data: profile } = await supabase.from(table).select('sky_points').eq('id', userId).maybeSingle();
-            currentPoints = profile?.sky_points ?? 100;
+            currentPoints = await fetchSkyPoints(userId, userRole as any);
             if (currentPoints < requiredPoints) {
                 toast.error(`Solde insuffisant — ${requiredPoints} Sky Point${requiredPoints > 1 ? 's' : ''} requis pour publier cette story`);
                 return;
             }
         }
+
 
         setPublishingStory(true);
         try {
@@ -565,22 +560,18 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                 } catch (e) { console.warn('[Notif] story_published:', e); }
             }
 
-            // Déduire les Sky Points
+            // Déduire les Sky Points via le service unifié
             if (!isAdminOrOwner && requiredPoints > 0) {
-                const newBal = Math.max(0, currentPoints - requiredPoints);
-                await updateSkyPoints(userId, newBal, userRole as any, orgId);
-                try {
-                    await supabase.from('sky_transactions').insert({
-                        user_id: userId,
-                        student_id: userRole === 'student' ? userId : null,
-                        amount: -requiredPoints,
-                        type: 'story_post',            // required – original column
-                        transaction_type: 'story_post',
-                        description: isRepost ? 'Repost d\'une story' : `Publication story (${hasText ? 'texte' : ''}${hasText && hasImage ? ' + ' : ''}${hasImage ? 'image' : ''})`,
-                        organization_id: orgId
-                    });
-                } catch { /* fallback silent */ }
+                await deductSkyPoints(
+                    userId,
+                    requiredPoints,
+                    'story_post',
+                    isRepost ? 'Repost d\'une story' : `Publication story (${hasText ? 'texte' : ''}${hasText && hasImage ? ' + ' : ''}${hasImage ? 'image' : ''})`,
+                    userRole as any,
+                    orgId
+                );
             }
+
             
             toast.success(isRepost ? 'Story repostée ! ✨' : 'Story publiée ! ✨');
             if (!isRepost) {

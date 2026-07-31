@@ -372,7 +372,8 @@ export default function CampusPage() {
                         {/* PWA Install — compact */}
                         <PwaInstall orgSlug={orgSlug} orgName={org.name} orgLogo={org.logo_url} compact />
                         {/* Sky Points */}
-                        <SkyPoints userId={session.id} orgId={org.id} compact onOpenStore={() => setStoreOpen(true)} />
+                        <SkyPoints userId={session.id} userRole={session.role} orgId={org.id} compact onOpenStore={() => setStoreOpen(true)} />
+
                         {/* Notification Bell */}
                         <NotificationBell orgId={org.id} userId={session.id} onClick={() => setNotifOpen(true)} />
                         <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium ${
