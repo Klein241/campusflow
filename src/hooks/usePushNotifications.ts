@@ -141,7 +141,7 @@ export function usePushNotifications({
 
             const subJSON = subscription.toJSON();
 
-            // 5a. Send to Cloudflare Worker (if configured)
+            // 5a. Send to Cloudflare Worker KV (primary store — fast push delivery)
             if (WORKER_URL) {
                 try {
                     await fetch(`${WORKER_URL}/api/push/register`, {
@@ -160,20 +160,19 @@ export function usePushNotifications({
                 }
             }
 
-            // 5b. Save to Supabase as fallback (always)
-            if (userId && organizationId) {
+            // 5b. Save to Supabase push_tokens as persistent fallback
+            // Note: table must be 'push_tokens' (same as Worker reads from Supabase)
+            if (userId) {
                 try {
                     const { supabase } = await import('@/lib/supabase');
-                    await supabase.from('push_subscriptions').upsert({
+                    await supabase.from('push_tokens').upsert({
                         user_id: userId,
-                        organization_id: organizationId,
-                        endpoint: subJSON.endpoint || '',
-                        auth: (subJSON.keys as any)?.auth || '',
-                        p256dh: (subJSON.keys as any)?.p256dh || '',
+                        subscription_json: JSON.stringify({ endpoint: subJSON.endpoint, keys: subJSON.keys }),
+                        platform: 'web',
                         updated_at: new Date().toISOString(),
-                    }, { onConflict: 'user_id,organization_id' });
+                    }, { onConflict: 'user_id' });
                 } catch {
-                    // Non-critical
+                    // Non-critical — Worker KV is the primary store
                 }
             }
 

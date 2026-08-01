@@ -1,13 +1,17 @@
 'use client';
 
 import { useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
 
-// ─── VAPID Public Key ───────────────────────────────────────────
-// Remplace ci-dessous par ta vraie clé VAPID publique (depuis Cloudflare Worker ou web-push-keygen)
-// Pour générer: npx web-push generate-vapid-keys
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.NEXT_PUBLIC_VAPID_KEY || '';
+// ─── Config ──────────────────────────────────────────────────────
+const VAPID_PUBLIC_KEY =
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
+    process.env.NEXT_PUBLIC_VAPID_KEY ||
+    '';
 
+const WORKER_URL =
+    process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL ||
+    process.env.NEXT_PUBLIC_WORKER_URL ||
+    '';
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
     const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -45,8 +49,7 @@ export function usePushNotifications({ userId, orgId, enabled = true }: UsePushN
 
             // 3. S'abonner aux push (si VAPID key disponible)
             if (!VAPID_PUBLIC_KEY) {
-                console.warn('[Push] NEXT_PUBLIC_VAPID_KEY non définie — push désactivé');
-                // Même sans VAPID, le SW est enregistré pour les notifications locales
+                console.warn('[Push] NEXT_PUBLIC_VAPID_PUBLIC_KEY non définie — push web désactivé, notifications locales actives');
                 return;
             }
 
@@ -61,20 +64,43 @@ export function usePushNotifications({ userId, orgId, enabled = true }: UsePushN
                 });
             }
 
-            // 4. Sauvegarder la subscription dans Supabase
-            if (userId && orgId && subscription) {
-                const subJson = subscription.toJSON();
-                await supabase.from('push_subscriptions').upsert({
-                    user_id: userId,
-                    organization_id: orgId,
-                    endpoint: subJson.endpoint,
-                    auth: (subJson.keys as any)?.auth || '',
-                    p256dh: (subJson.keys as any)?.p256dh || '',
-                    updated_at: new Date().toISOString(),
-                }, { onConflict: 'user_id,organization_id' });
+            if (!subscription) return;
+            const subJson = subscription.toJSON();
+
+            // 4a. Envoyer au Worker Cloudflare KV (source principale de vérité)
+            if (WORKER_URL && userId) {
+                try {
+                    const res = await fetch(`${WORKER_URL}/api/push/register`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            userId,
+                            subscription: { endpoint: subJson.endpoint, keys: subJson.keys },
+                            organizationId: orgId,
+                        }),
+                    });
+                    if (!res.ok) console.warn('[Push] Worker register failed:', res.status);
+                } catch (e) {
+                    console.warn('[Push] Worker register error:', e);
+                }
             }
 
-            console.log('[Push] ✅ Service Worker + push enregistrés');
+            // 4b. Fallback persistant — Supabase push_tokens (même table que le Worker lit)
+            if (userId) {
+                try {
+                    const { supabase } = await import('@/lib/supabase');
+                    await supabase.from('push_tokens').upsert({
+                        user_id: userId,
+                        subscription_json: JSON.stringify({ endpoint: subJson.endpoint, keys: subJson.keys }),
+                        platform: 'web',
+                        updated_at: new Date().toISOString(),
+                    }, { onConflict: 'user_id' });
+                } catch {
+                    // Non-critique — le Worker KV reste la source principale
+                }
+            }
+
+            console.log('[Push] ✅ Service Worker + push enregistrés (Worker KV + Supabase)');
         } catch (err) {
             console.warn('[Push] Erreur enregistrement:', err);
         }
@@ -87,10 +113,9 @@ export function usePushNotifications({ userId, orgId, enabled = true }: UsePushN
         return () => clearTimeout(timer);
     }, [enabled, registerServiceWorker]);
 
-    // Envoi de notification locale (sans serveur)
+    // Envoi de notification locale (sans serveur, via SW)
     const sendLocalNotification = useCallback((title: string, options?: NotificationOptions) => {
         if (!('serviceWorker' in navigator)) {
-            // Fallback simple
             if (Notification.permission === 'granted') {
                 new Notification(title, { icon: '/icon-192.png', ...options });
             }

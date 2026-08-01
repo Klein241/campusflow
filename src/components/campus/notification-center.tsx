@@ -260,7 +260,14 @@ export function NotificationCenter({ orgId, userId, orgSlug, isOpen, onClose, on
     const markAsRead = async (id: string) => {
         await supabase.from('notifications').update({ is_read: true }).eq('id', id);
         setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-        // Sync le badge Bell
+        // Sync le badge Bell via KV Worker
+        if (NOTIFICATION_WORKER_URL && userId) {
+            fetch(`${NOTIFICATION_WORKER_URL}/notify/read`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'X-User-Id': userId },
+                body: JSON.stringify({ notificationId: id }),
+            }).catch(() => {});
+        }
         window.dispatchEvent(new Event('notif:read'));
     };
 
@@ -272,7 +279,14 @@ export function NotificationCenter({ orgId, userId, orgSlug, isOpen, onClose, on
         setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
         setMarkingAll(false);
         toast.success('Tout marqué comme lu ✅');
-        // Sync le badge Bell
+        // Reset le compteur KV du Worker
+        if (NOTIFICATION_WORKER_URL && userId) {
+            fetch(`${NOTIFICATION_WORKER_URL}/notify/read-all`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'X-User-Id': userId },
+                body: JSON.stringify({ all: true }),
+            }).catch(() => {});
+        }
         window.dispatchEvent(new Event('notif:read'));
     };
 
@@ -512,6 +526,11 @@ export function NotificationCenter({ orgId, userId, orgSlug, isOpen, onClose, on
 // ═══ NOTIFICATION BELL BUTTON ═══
 // Use this in headers/navbars to show notification count
 
+const NOTIFICATION_WORKER_URL =
+    process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL ||
+    process.env.NEXT_PUBLIC_WORKER_URL ||
+    '';
+
 interface NotifBellProps {
     orgId: string;
     userId: string;
@@ -521,8 +540,22 @@ interface NotifBellProps {
 export function NotificationBell({ orgId, userId, onClick }: NotifBellProps) {
     const [unreadCount, setUnreadCount] = useState(0);
 
-    // Fetch initial count
+    // Fetch initial count — Worker KV first (fast), Supabase fallback
     const fetchCount = async () => {
+        // 1. Try Worker KV (no SQL, instant)
+        if (NOTIFICATION_WORKER_URL && userId) {
+            try {
+                const res = await fetch(`${NOTIFICATION_WORKER_URL}/notify/count`, {
+                    headers: { 'X-User-Id': userId },
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setUnreadCount(data.unread_count ?? 0);
+                    return;
+                }
+            } catch { /* fallback below */ }
+        }
+        // 2. Fallback: count from Supabase
         const { count } = await supabase
             .from('notifications')
             .select('id', { count: 'exact', head: true })
