@@ -137,6 +137,7 @@ async function sendFallback(payload: NotifyWorkerPayload): Promise<boolean> {
             type: mapActionTypeToLegacyType(payload.action_type),
             action_type: payload.action_type,
             action_data: JSON.stringify(actionData),
+            category: mapActionTypeToCategory(payload.action_type),
             is_read: false,
         }));
 
@@ -168,6 +169,25 @@ function mapActionTypeToLegacyType(actionType: NotificationActionType): string {
             return 'message';
         case 'group_access_approved':
             return 'success';
+        case 'grade_published':
+        case 'evaluation_scheduled':
+        case 'evaluation_reminder':
+            return 'info';
+        case 'payment_confirmed':
+            return 'success';
+        case 'discipline_sanction':
+            return 'warning';
+        case 'actu_published':
+        case 'actu_liked':
+        case 'actu_commented':
+        case 'story_published':
+        case 'story_liked':
+        case 'story_commented':
+        case 'story_reposted':
+            return 'info';
+        case 'admin_announcement':
+        case 'timetable_change':
+            return 'system';
         case 'friend_request_received':
         case 'friend_request_accepted':
         case 'new_book_published':
@@ -177,8 +197,26 @@ function mapActionTypeToLegacyType(actionType: NotificationActionType): string {
     }
 }
 
+// Map action_type → NotificationCenter category
+function mapActionTypeToCategory(actionType: NotificationActionType): string {
+    const at = actionType.toLowerCase();
+    if (at.startsWith('story_') || at.startsWith('actu_')) return 'news';
+    if (at === 'new_book_published') return 'library';
+    if (at.startsWith('dm_') || at === 'message') return 'chat_dm';
+    if (at.startsWith('group_')) return 'chat_group';
+    if (at.startsWith('grade_')) return 'grade';
+    if (at.startsWith('evaluation_')) return 'evaluation';
+    if (at.startsWith('payment_')) return 'payment';
+    if (at.startsWith('discipline_')) return 'discipline';
+    if (at.startsWith('admin_') || at === 'admin_announcement') return 'admin';
+    if (at.startsWith('timetable_')) return 'schedule';
+    if (at.startsWith('support_') || at === 'friend_supported' || at === 'new_support_published') return 'system';
+    return 'system';
+}
+
 function buildFallbackActionData(payload: NotifyWorkerPayload): NotificationActionData {
     const actionType = payload.action_type;
+    const orgSlug = payload.extra_data?.orgSlug || '';
     switch (actionType) {
         case 'support_received':
         case 'friend_supported':
@@ -190,23 +228,46 @@ function buildFallbackActionData(payload: NotifyWorkerPayload): NotificationActi
             return { tab: 'community', viewState: 'group-detail', groupId: payload.target_id, groupName: payload.target_name };
         case 'group_access_approved':
         case 'group_new_message':
-            return { tab: 'community', viewState: 'group-detail', groupId: payload.target_id, groupName: payload.target_name, communityTab: 'chat' };
+            return { tab: 'chatdm', viewState: 'group-detail', groupId: payload.target_id, groupName: payload.target_name };
         case 'admin_new_group':
-            return { tab: 'community', viewState: 'groups' };
+            return { tab: 'chatdm', viewState: 'groups' };
         case 'group_invitation':
-            return { tab: 'community', viewState: 'group-detail', groupId: payload.target_id, groupName: payload.target_name };
+            return { tab: 'chatdm', viewState: 'group-detail', groupId: payload.target_id, groupName: payload.target_name };
         case 'group_mention':
-            return { tab: 'community', viewState: 'group-detail', groupId: payload.target_id, communityTab: 'chat' };
+            return { tab: 'chatdm', viewState: 'group-detail', groupId: payload.target_id };
         case 'dm_new_message':
-            return { tab: 'community', communityTab: 'chat', viewState: 'conversation', conversationId: payload.target_id };
+            return { tab: 'chatdm', viewState: 'conversation', conversationId: payload.target_id };
         case 'friend_request_received':
-            return { tab: 'profil', viewState: 'friend-requests' };
+            return { tab: 'contacts', viewState: 'friend-requests' };
         case 'friend_request_accepted':
-            return { tab: 'community', communityTab: 'chat', viewState: 'conversation', conversationId: payload.extra_data?.conversationId };
+            return { tab: 'chatdm', viewState: 'conversation', conversationId: payload.extra_data?.conversationId };
         case 'new_book_published':
             return { tab: 'library', bookId: payload.target_id };
+        // ── Actus & Stories ──
+        case 'actu_published':
+        case 'actu_liked':
+        case 'actu_commented':
+        case 'story_published':
+        case 'story_liked':
+        case 'story_commented':
+        case 'story_reposted':
+            return { tab: 'actus', orgSlug };
+        // ── Academic ──
+        case 'grade_published':
+            return { tab: 'myspace', subTab: 'bulletin', orgSlug };
+        case 'evaluation_scheduled':
+        case 'evaluation_reminder':
+            return { tab: 'exam_room', orgSlug };
+        case 'payment_confirmed':
+            return { tab: 'myspace', subTab: 'paiement', orgSlug };
+        case 'discipline_sanction':
+            return { tab: 'myspace', orgSlug };
+        case 'timetable_change':
+            return { tab: 'myspace', subTab: 'edt', orgSlug };
+        case 'admin_announcement':
+            return { tab: 'actus', orgSlug };
         default:
-            return { tab: 'community' };
+            return { tab: 'actus', orgSlug };
     }
 }
 
@@ -215,6 +276,7 @@ function buildFallbackMessage(payload: NotifyWorkerPayload): { title: string; me
     const short = (s?: string, len = 60) => s ? (s.length > len ? s.substring(0, len) + '…' : s) : '';
 
     switch (payload.action_type) {
+        // ── Soutien ──
         case 'support_received':
             return { title: '🤝 Quelqu\'un vous soutient', message: `${name} a soutenu votre demande : "${short(payload.target_name)}"` };
         case 'friend_supported':
@@ -225,6 +287,7 @@ function buildFallbackMessage(payload: NotifyWorkerPayload): { title: string; me
             return { title: '💬 Nouveau commentaire', message: `${name} a commenté votre demande de soutien` };
         case 'support_no_response':
             return { title: '📋 Votre demande attend', message: 'Votre demande n\'a pas encore reçu de soutien. Le forum est là.' };
+        // ── Groupes ──
         case 'group_access_request':
             return { title: '👥 Nouvelle demande d\'accès', message: `${name} souhaite rejoindre votre groupe "${payload.target_name}"` };
         case 'group_access_approved':
@@ -237,16 +300,52 @@ function buildFallbackMessage(payload: NotifyWorkerPayload): { title: string; me
             return { title: '👥 Invitation à un groupe', message: `${name} vous invite à rejoindre "${payload.target_name}"` };
         case 'group_mention':
             return { title: '🔔 Mention dans un groupe', message: `${name} vous a mentionné dans ${payload.target_name}` };
+        // ── Messages ──
         case 'dm_new_message':
             return { title: `💬 ${name}`, message: short(payload.message_preview, 80) };
+        // ── Amis ──
         case 'friend_request_received':
             return { title: '👋 Demande d\'ami', message: `${name} vous a envoyé une demande d'ami` };
         case 'friend_request_accepted':
             return { title: '👋 Ami ajouté !', message: `${name} a accepté votre demande d'ami` };
+        // ── Bibliothèque ──
         case 'new_book_published':
             return { title: '📚 Nouveau livre disponible', message: `"${payload.target_name}" vient d'être ajouté aux ressources` };
+        // ── Actus ──
+        case 'actu_published':
+            return { title: '📰 Nouvelle actualité', message: `${name} a publié : "${short(payload.target_name || payload.message_preview, 70)}"` };
+        case 'actu_liked':
+            return { title: '❤️ Réaction sur votre actus', message: `${name} a réagi à votre publication` };
+        case 'actu_commented':
+            return { title: '💬 Commentaire sur votre actus', message: `${name} : ${short(payload.message_preview, 70)}` };
+        // ── Stories ──
+        case 'story_published':
+            return { title: '✨ Nouvelle story', message: `${name} a partagé une story` };
+        case 'story_liked':
+            return { title: '❤️ Votre story a été aimée', message: `${name} a aimé votre story` };
+        case 'story_commented':
+            return { title: '💬 Commentaire sur votre story', message: `${name} : ${short(payload.message_preview, 70)}` };
+        case 'story_reposted':
+            return { title: '🔁 Votre story repartagée', message: `${name} a repartagé votre story` };
+        // ── Académique ──
+        case 'grade_published':
+            return { title: '📊 Nouvelle note publiée', message: `${name} a publié une note en ${payload.target_name} — ${payload.message_preview || ''}` };
+        case 'evaluation_scheduled':
+            return { title: '📝 Évaluation programmée', message: `${name} a programmé une évaluation en ${payload.target_name} — ${payload.message_preview || ''}` };
+        case 'evaluation_reminder':
+            return { title: '⏰ Rappel : évaluation bientôt', message: `Évaluation en ${payload.target_name} ${payload.message_preview || 'demain'}` };
+        case 'payment_confirmed':
+            return { title: '✅ Paiement confirmé', message: `Votre paiement a été enregistré — ${payload.message_preview || ''}` };
+        case 'discipline_sanction':
+            return { title: '⚠️ Sanction disciplinaire', message: payload.message_preview || 'Une sanction a été enregistrée à votre dossier' };
+        case 'timetable_change':
+            return { title: '📅 Changement d\'emploi du temps', message: payload.message_preview || 'Votre emploi du temps a été modifié' };
+        case 'admin_announcement':
+            return { title: `📢 ${payload.target_name || 'Annonce'}`, message: payload.message_preview || 'Nouvelle annonce de l\'administration' };
+        case 'general':
+            return { title: payload.target_name || 'Notification', message: payload.message_preview || 'Nouvelle notification' };
         default:
-            return { title: 'Notification', message: payload.message_preview || 'Nouvelle notification' };
+            return { title: payload.target_name || 'Notification', message: payload.message_preview || 'Nouvelle notification' };
     }
 }
 
