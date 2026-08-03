@@ -63,6 +63,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
     const [disputeTarget, setDisputeTarget] = useState<any | null>(null);
     const [disputeMsg,    setDisputeMsg]    = useState('');
     const [sendingDispute,setSendingDispute]= useState(false);
+    const [myDisputes,    setMyDisputes]    = useState<any[]>([]); // réclamations envoyées par cet étudiant
 
     // ── Bloc Notes ──
     const [notedLessonIds, setNotedLessonIds] = useState<string[]>([]);
@@ -119,6 +120,13 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
 
             const { data: prog } = await supabase.from('lesson_progress').select('*').eq('student_id', userId);
             setProgress(prog || []);
+
+            // Charger les réclamations de l'étudiant + réponses
+            const { data: myDisp } = await supabase.from('grade_disputes')
+                .select('id, exercise_id, submission_id, message, status, response, resolved_at, created_at')
+                .eq('student_id', userId)
+                .order('created_at', { ascending: false });
+            setMyDisputes(myDisp || []);
         } catch (e: any) { console.error(e); toast.error('Erreur de chargement'); }
         setLoading(false);
     };
@@ -184,14 +192,26 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
 
     const sendDispute = async () => {
         if (!disputeMsg.trim() || !disputeTarget) return;
+        // Vérifier si une réclamation est déjà en cours pour cet exercice
+        const existing = myDisputes.find(d => d.exercise_id === disputeTarget.exercise_id && d.status === 'pending');
+        if (existing) {
+            toast.info('Une réclamation est déjà en attente pour cet exercice');
+            return;
+        }
         setSendingDispute(true);
-        const { error } = await supabase.from('grade_disputes').insert({
+        const { data: inserted, error } = await supabase.from('grade_disputes').insert({
             student_id: userId, exercise_id: disputeTarget.exercise_id,
             submission_id: disputeTarget.submission_id, subject_id: disputeTarget.subject_id,
-            message: disputeMsg.trim(), organization_id: orgId
-        });
+            message: disputeMsg.trim(), organization_id: orgId,
+            status: 'pending',
+        }).select('id, exercise_id, submission_id, message, status, response, resolved_at, created_at').single();
         if (error) toast.error(error.message);
-        else { toast.success('Réclamation envoyée ✅'); setDisputeTarget(null); setDisputeMsg(''); }
+        else {
+            toast.success('Réclamation envoyée ✅');
+            if (inserted) setMyDisputes(prev => [inserted, ...prev]);
+            setDisputeTarget(null);
+            setDisputeMsg('');
+        }
         setSendingDispute(false);
     };
 
@@ -641,17 +661,40 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                                             {passed ? '✓ Réussi' : '✗ Raté'}
                                                         </span>
                                                     )}
+                                                    {scored && (
                                                     <div className="flex gap-1">
                                                         <DiscussButton context={{ type: 'exercise', id: ex.id, title: ex.title, parentTitle: selectedCh?.title }}
                                                             orgId={orgId} userId={userId} userName={userName}
                                                             onOpenChat={onOpenGroupChat || (() => {})} size="xs" />
-                                                        {scored && (
-                                                            <button onClick={() => setDisputeTarget({ exercise_id: ex.id, submission_id: sub2.id, subject_id: selectedSubId, title: ex.title })}
-                                                                className="p-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 transition-all" title="Réclamer">
-                                                                <Flag className="w-3 h-3" />
-                                                            </button>
-                                                        )}
+                                                        {(() => {
+                                                            const existingDisp = myDisputes.find(d => d.exercise_id === ex.id);
+                                                            if (existingDisp) {
+                                                                const badgeStyle = existingDisp.status === 'pending'
+                                                                    ? 'bg-orange-500/20 text-orange-300 border-orange-500/30'
+                                                                    : existingDisp.status === 'accepted'
+                                                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                                                    : 'bg-red-500/20 text-red-300 border-red-500/30';
+                                                                const badgeLabel = existingDisp.status === 'pending' ? '🕐 En attente'
+                                                                    : existingDisp.status === 'accepted' ? '✅ Acceptée'
+                                                                    : '❌ Rejetée';
+                                                                return (
+                                                                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-semibold ${badgeStyle}`}>
+                                                                        {badgeLabel}
+                                                                    </span>
+                                                                );
+                                                            }
+                                                            return (
+                                                                <button
+                                                                    onClick={() => setDisputeTarget({ exercise_id: ex.id, submission_id: sub2.id, subject_id: selectedSubId, title: ex.title })}
+                                                                    className="p-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 transition-all"
+                                                                    title="Contester la note"
+                                                                >
+                                                                    <Flag className="w-3 h-3" />
+                                                                </button>
+                                                            );
+                                                        })()}
                                                     </div>
+                                                )}
                                                 </div>
                                             </div>
                                         </motion.div>

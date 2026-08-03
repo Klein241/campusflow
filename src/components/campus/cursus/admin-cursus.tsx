@@ -113,9 +113,29 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
                 }
             }
 
+            // Charger les réclamations avec les infos de base
             const { data: disp } = await supabase.from('grade_disputes')
-                .select('*').eq('organization_id', orgId).order('created_at', { ascending: false });
-            setDisputes(disp || []);
+                .select('*')
+                .eq('organization_id', orgId)
+                .order('created_at', { ascending: false });
+            const rawDisp = disp || [];
+
+            // Enrichir avec student_profiles, subjects, exercises
+            const enrichedDisp = await Promise.all(rawDisp.map(async (d: any) => {
+                const [{ data: stu }, { data: subj }, { data: exo }] = await Promise.all([
+                    d.student_id
+                        ? supabase.from('student_profiles').select('first_name,last_name').eq('id', d.student_id).single()
+                        : Promise.resolve({ data: null }),
+                    d.subject_id
+                        ? supabase.from('subjects').select('name').eq('id', d.subject_id).single()
+                        : Promise.resolve({ data: null }),
+                    d.exercise_id
+                        ? supabase.from('exercises').select('title').eq('id', d.exercise_id).single()
+                        : Promise.resolve({ data: null }),
+                ]);
+                return { ...d, student: stu, subject: subj, exercise: exo };
+            }));
+            setDisputes(enrichedDisp);
         } catch (e: any) { console.error(e); toast.error('Erreur de chargement'); }
         setLoading(false);
     };
@@ -236,9 +256,15 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
     };
 
     const resolveDispute = async (dId: string, status: 'accepted' | 'rejected') => {
-        await supabase.from('grade_disputes').update({ status, response: status === 'accepted' ? 'Note révisée par l\'administration' : 'Note maintenue' }).eq('id', dId);
+        const { error } = await supabase.from('grade_disputes').update({
+            status,
+            response: status === 'accepted' ? 'Note révisée par l\'administration' : 'Note maintenue',
+            resolved_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        }).eq('id', dId);
+        if (error) { toast.error('Erreur lors de la résolution'); return; }
         setDisputes(p => p.map(d => d.id === dId ? { ...d, status } : d));
-        toast.success(`Réclamation ${status === 'accepted' ? 'acceptée' : 'rejetée'}`);
+        toast.success(`Réclamation ${status === 'accepted' ? '✅ acceptée' : '❌ rejetée'}`);
     };
 
     if (loading) return (
@@ -277,18 +303,48 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
                         <span className="font-bold text-sm text-orange-300">{pendingDisputes.length} réclamation(s) en attente</span>
                     </div>
                     <div className="space-y-2">
-                        {pendingDisputes.map((d: any) => (
-                            <div key={d.id} className="bg-white/[0.04] rounded-xl p-3 flex items-start gap-2">
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-xs text-white">{d.message}</p>
-                                    <p className="text-[10px] text-slate-500">{new Date(d.created_at).toLocaleDateString('fr-FR')}</p>
+                        {pendingDisputes.map((d: any) => {
+                            const studentName = d.student ? `${d.student.first_name} ${d.student.last_name}` : 'Étudiant inconnu';
+                            const subjectName = d.subject?.name || '';
+                            const exerciseTitle = d.exercise?.title || '';
+                            return (
+                                <div key={d.id} className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 space-y-2">
+                                    {/* En-tête : qui + quoi */}
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                <span className="text-[11px] font-bold text-orange-300">{studentName}</span>
+                                                {subjectName && (
+                                                    <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded-full">{subjectName}</span>
+                                                )}
+                                                {exerciseTitle && (
+                                                    <span className="text-[9px] bg-white/10 text-slate-400 px-1.5 py-0.5 rounded-full truncate max-w-[120px]">{exerciseTitle}</span>
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-white mt-1 leading-relaxed">{d.message}</p>
+                                            <p className="text-[10px] text-slate-500 mt-1">
+                                                {new Date(d.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            </p>
+                                        </div>
+                                        {/* Boutons */}
+                                        <div className="flex gap-1.5 shrink-0">
+                                            <button
+                                                onClick={() => resolveDispute(d.id, 'accepted')}
+                                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[10px] font-semibold hover:bg-emerald-500/30 transition"
+                                            >
+                                                <CheckCircle2 className="w-3 h-3" /> Accepter
+                                            </button>
+                                            <button
+                                                onClick={() => resolveDispute(d.id, 'rejected')}
+                                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 text-[10px] font-semibold hover:bg-red-500/30 transition"
+                                            >
+                                                <X className="w-3 h-3" /> Rejeter
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="flex gap-1 shrink-0">
-                                    <button onClick={() => resolveDispute(d.id, 'accepted')} className="px-2 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 text-[10px] hover:bg-emerald-500/30">✓</button>
-                                    <button onClick={() => resolveDispute(d.id, 'rejected')} className="px-2 py-1 rounded-lg bg-red-500/20 text-red-400 text-[10px] hover:bg-red-500/30">✗</button>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </motion.div>
             )}
