@@ -113,14 +113,18 @@ async function sendToWorker(payload: NotifyWorkerPayload): Promise<boolean> {
     // ── Étape 1 : INSERT dans Supabase (canal principal garanti) ──
     const supabaseOk = await insertToSupabase(payload);
 
-    // ── Étape 2 : Worker désactivé temporairement ──
-    // Le Worker Cloudflare faisait aussi des inserts dans Supabase
-    // → causait des DOUBLONS. Sera réactivé quand le Worker sera
-    // configuré en push-only (sans insert Supabase côté Worker).
-    // const workerUrl = getWorkerUrl();
-    // if (workerUrl) {
-    //     fetch(`${workerUrl}/notify`, { ... }).catch(() => {});
-    // }
+    // ── Étape 2 : Worker en arrière-plan pour Web Push mobile (navigateur fermé) ──
+    // Le Worker vérifie maintenant l'existence de la notif avant d'insérer → plus de doublons
+    const workerUrl = getWorkerUrl();
+    if (workerUrl) {
+        fetch(`${workerUrl}/notify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }).catch(() => {
+            // Worker indisponible = pas de push mobile, Supabase a déjà inséré
+        });
+    }
 
     return supabaseOk;
 }

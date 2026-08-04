@@ -1195,6 +1195,9 @@ async function handleNotify(request: Request, env: Env, ctx: ExecutionContext): 
             const priority = PRIORITY_MAP[action_type] || 'medium';
 
             // 4. Insert or update in Supabase
+            // ⚠️ ANTI-DOUBLON : Le client (notifications.ts) a déjà inséré directement.
+            // Le Worker fait un UPSERT : si la notif existe déjà (même user_id + action_type + fenêtre 30s),
+            // on met à jour les actors/count au lieu de créer un doublon.
             if (prefs.in_app) {
                 if (isAggregated && existingEntry?.notification_id) {
                     // Update existing aggregated notification
@@ -1202,37 +1205,56 @@ async function handleNotify(request: Request, env: Env, ctx: ExecutionContext): 
                         title,
                         message,
                         body: message,
-                        actors: JSON.stringify(uniqueActors.slice(0, 5)), // Store up to 5 actors
+                        actors: JSON.stringify(uniqueActors.slice(0, 5)),
                         actor_count: totalCount,
                         aggregation_key: aggKey,
                         is_read: false,
                         updated_at: new Date().toISOString(),
                     }, `id=eq.${existingEntry.notification_id}`);
                 } else {
-                    // Extract organization_id if provided
                     const orgId = extra_data?.orgId || extra_data?.organization_id || extra_data?.organizationId || null;
 
-                    // Insert new notification (full payload)
+                    // Vérifier si le client a déjà inséré cette notif dans les 30 dernières secondes
+                    // (évite les doublons client-insert + worker-insert)
+                    const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString();
                     let inserted: any = null;
                     try {
-                        inserted = await db.insert('notifications', {
-                            user_id: recipientId,
-                            organization_id: orgId,
-                            title,
-                            message,
-                            body: message,
-                            type: mapActionTypeToLegacyType(action_type),
-                            action_type,
-                            action_data: JSON.stringify(actionData),
-                            actors: JSON.stringify(uniqueActors.slice(0, 5)),
-                            actor_count: totalCount,
-                            aggregation_key: aggKey,
-                            priority,
-                            is_read: false,
+                        const existing = await db.select('notifications', {
+                            filter: `user_id=eq.${recipientId}&action_type=eq.${action_type}&created_at=gte.${thirtySecondsAgo}`,
+                            limit: 1,
                         });
+                        const existingNotif = Array.isArray(existing) ? existing[0] : null;
+
+                        if (existingNotif) {
+                            // La notif existe déjà (insérée par le client) → UPDATE uniquement
+                            inserted = [existingNotif];
+                            if (uniqueActors.length > 1 || totalCount > 1) {
+                                await db.update('notifications', {
+                                    actors: JSON.stringify(uniqueActors.slice(0, 5)),
+                                    actor_count: totalCount,
+                                    updated_at: new Date().toISOString(),
+                                }, `id=eq.${existingNotif.id}`);
+                            }
+                        } else {
+                            // Pas encore insérée → INSERT
+                            inserted = await db.insert('notifications', {
+                                user_id: recipientId,
+                                organization_id: orgId,
+                                title,
+                                message,
+                                body: message,
+                                type: mapActionTypeToLegacyType(action_type),
+                                action_type,
+                                action_data: JSON.stringify(actionData),
+                                actors: JSON.stringify(uniqueActors.slice(0, 5)),
+                                actor_count: totalCount,
+                                aggregation_key: aggKey,
+                                priority,
+                                is_read: false,
+                            });
+                        }
                     } catch (insertErr: any) {
-                        // Fallback: colonnes manquantes (migration non appliquée) → payload minimal
-                        console.warn('[Worker] Full INSERT failed, trying minimal payload:', insertErr.message);
+                        console.warn('[Worker] INSERT/CHECK failed:', insertErr.message);
                         try {
                             inserted = await db.insert('notifications', {
                                 user_id: recipientId,
@@ -1242,7 +1264,6 @@ async function handleNotify(request: Request, env: Env, ctx: ExecutionContext): 
                                 is_read: false,
                             });
                         } catch (minimalErr: any) {
-                            // Log and continue — don't throw, push may still work
                             console.error('[Worker] Minimal INSERT also failed:', minimalErr.message);
                         }
                     }
