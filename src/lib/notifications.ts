@@ -92,38 +92,50 @@ interface NotifyWorkerPayload {
 function getWorkerUrl(): string {
     return process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL
         || process.env.NEXT_PUBLIC_WORKER_URL
-        || 'https://campusflow-worker.kleintaptue1.workers.dev';
+        || '';
 }
 
-// ── Core: Send to Worker or Supabase Fallback ────────────
+// ══════════════════════════════════════════════════════════
+// CORE: Architecture Supabase-first + Worker en bonus
+// ══════════════════════════════════════════════════════════
+//
+// 1. INSERT dans Supabase `notifications` GARANTI (toujours)
+//    → Supabase Realtime (WebSocket) diffuse instantanément
+//      aux clients connectés via postgres_changes
+//
+// 2. Worker Cloudflare appelé en fire-and-forget APRÈS
+//    → Uniquement pour le Web Push (navigateur fermé)
+//    → Si Worker indisponible : aucun impact sur l'affichage in-app
+//
+// ══════════════════════════════════════════════════════════
 
 async function sendToWorker(payload: NotifyWorkerPayload): Promise<boolean> {
-    const workerUrl = getWorkerUrl();
+    // ── Étape 1 : INSERT dans Supabase (canal principal garanti) ──
+    const supabaseOk = await insertToSupabase(payload);
 
+    // ── Étape 2 : Worker en arrière-plan pour Web Push (bonus) ──
+    const workerUrl = getWorkerUrl();
     if (workerUrl) {
-        try {
-            const res = await fetch(`${workerUrl}/notify`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            if (res.ok) return true;
-            console.warn('[Notification] Worker returned error, falling back to Supabase');
-        } catch (e) {
-            console.warn('[Notification] Worker unreachable, falling back to Supabase:', e);
-        }
+        // fire-and-forget : ne bloque pas, n'affecte pas le résultat
+        fetch(`${workerUrl}/notify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }).catch(() => {
+            // Worker indisponible = pas de push web, mais Supabase a déjà inséré
+        });
     }
 
-    return sendFallback(payload);
+    return supabaseOk;
 }
 
-async function sendFallback(payload: NotifyWorkerPayload): Promise<boolean> {
+// INSERT dans la table `notifications` via Supabase (canal primaire)
+async function insertToSupabase(payload: NotifyWorkerPayload): Promise<boolean> {
     const recipientIds = payload.recipient_ids || (payload.recipient_id ? [payload.recipient_id] : []);
     if (recipientIds.length === 0) return false;
 
     const actionData = buildFallbackActionData(payload);
     const { title, message } = buildFallbackMessage(payload);
-
     const orgId = payload.extra_data?.orgId || payload.extra_data?.organization_id || null;
 
     const notifications = recipientIds
@@ -141,18 +153,23 @@ async function sendFallback(payload: NotifyWorkerPayload): Promise<boolean> {
             is_read: false,
         }));
 
-
     if (notifications.length === 0) return true;
 
+    // Insérer par batch de 50 pour éviter les timeouts
     for (let i = 0; i < notifications.length; i += 50) {
         const batch = notifications.slice(i, i + 50);
         const { error } = await supabase.from('notifications').insert(batch);
         if (error) {
-            console.error('[Notification] Supabase fallback insert error:', error);
+            console.error('[Notification] Supabase insert error:', error.message, error.details);
             return false;
         }
     }
     return true;
+}
+
+// sendFallback conservé pour rétrocompatibilité (alias de insertToSupabase)
+async function sendFallback(payload: NotifyWorkerPayload): Promise<boolean> {
+    return insertToSupabase(payload);
 }
 
 function mapActionTypeToLegacyType(actionType: NotificationActionType): string {
