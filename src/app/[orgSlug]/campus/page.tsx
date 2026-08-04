@@ -131,14 +131,22 @@ export default function CampusPage() {
         })();
     }, [orgSlug, router]);
 
-    // Auto-prompt push after 3s if not yet subscribed
+    // Auto-subscribe push : si permission déjà accordée → subscribe silencieusement
+    // Si permission 'default' → montrer le banner après 5s
     useEffect(() => {
         if (!session || !isSupported || isSubscribed || pushAutoTriggered.current) return;
         if (permission === 'denied') return;
         pushAutoTriggered.current = true;
-        const t = setTimeout(() => setShowPushBanner(true), 3000);
-        return () => clearTimeout(t);
-    }, [session, isSupported, isSubscribed, permission]);
+
+        if (permission === 'granted') {
+            // Permission déjà accordée → subscribe silencieusement
+            setTimeout(() => subscribe(), 2000);
+        } else {
+            // Permission pas encore demandée → banner après 5s
+            const t = setTimeout(() => setShowPushBanner(true), 5000);
+            return () => clearTimeout(t);
+        }
+    }, [session, isSupported, isSubscribed, permission, subscribe]);
 
     // Sky Points — listen for deduction events from actus-view
     useEffect(() => {
@@ -508,6 +516,44 @@ export default function CampusPage() {
                 userRole={session.role as any}
                 onBalanceUpdate={setSkyPoints}
             />
+
+            {/* Push Notification Banner — s'affiche si permission pas encore accordée */}
+            {showPushBanner && !isSubscribed && permission !== 'denied' && (
+                <div className="fixed bottom-20 left-4 right-4 z-50 bg-slate-800/95 backdrop-blur-md border border-amber-500/30 rounded-2xl p-4 shadow-xl shadow-black/40 animate-fade-in">
+                    <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0">
+                            <span className="text-xl">🔔</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-white">Activer les notifications</p>
+                            <p className="text-xs text-slate-400 mt-0.5">Reçois les alertes même quand l'appli est fermée</p>
+                        </div>
+                        <button
+                            onClick={() => setShowPushBanner(false)}
+                            className="text-slate-500 hover:text-slate-300 shrink-0 p-1"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                    <div className="flex gap-2 mt-3">
+                        <button
+                            onClick={async () => {
+                                setShowPushBanner(false);
+                                await subscribe();
+                            }}
+                            className="flex-1 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-sm font-bold transition"
+                        >
+                            Activer
+                        </button>
+                        <button
+                            onClick={() => setShowPushBanner(false)}
+                            className="px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm transition"
+                        >
+                            Plus tard
+                        </button>
+                    </div>
+                </div>
+            )}
         </main>
     );
 }
