@@ -138,8 +138,8 @@ async function insertToSupabase(payload: NotifyWorkerPayload): Promise<boolean> 
     const { title, message } = buildFallbackMessage(payload);
     const orgId = payload.extra_data?.orgId || payload.extra_data?.organization_id || null;
 
-    const notifications = recipientIds
-        .filter(id => id !== payload.actor_id)
+    const rows = recipientIds
+        .filter(id => id && id !== payload.actor_id)
         .map(userId => ({
             user_id: userId,
             organization_id: orgId,
@@ -148,22 +148,32 @@ async function insertToSupabase(payload: NotifyWorkerPayload): Promise<boolean> 
             body: message,
             type: mapActionTypeToLegacyType(payload.action_type),
             action_type: payload.action_type,
-            action_data: JSON.stringify(actionData),
+            action_data: actionData,          // ← JSONB direct (pas JSON.stringify)
             category: mapActionTypeToCategory(payload.action_type),
             is_read: false,
         }));
 
-    if (notifications.length === 0) return true;
+    if (rows.length === 0) return true;
 
     // Insérer par batch de 50 pour éviter les timeouts
-    for (let i = 0; i < notifications.length; i += 50) {
-        const batch = notifications.slice(i, i + 50);
+    for (let i = 0; i < rows.length; i += 50) {
+        const batch = rows.slice(i, i + 50);
         const { error } = await supabase.from('notifications').insert(batch);
         if (error) {
-            console.error('[Notification] Supabase insert error:', error.message, error.details);
+            console.error('[Notification] INSERT error:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code,
+                batchSize: batch.length,
+                action_type: payload.action_type,
+                firstRecipient: batch[0]?.user_id,
+            });
             return false;
         }
     }
+
+    console.log(`[Notification] ✅ Inserted ${rows.length} notification(s) for action: ${payload.action_type}`);
     return true;
 }
 
