@@ -113,18 +113,14 @@ async function sendToWorker(payload: NotifyWorkerPayload): Promise<boolean> {
     // ── Étape 1 : INSERT dans Supabase (canal principal garanti) ──
     const supabaseOk = await insertToSupabase(payload);
 
-    // ── Étape 2 : Worker en arrière-plan pour Web Push (bonus) ──
-    const workerUrl = getWorkerUrl();
-    if (workerUrl) {
-        // fire-and-forget : ne bloque pas, n'affecte pas le résultat
-        fetch(`${workerUrl}/notify`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        }).catch(() => {
-            // Worker indisponible = pas de push web, mais Supabase a déjà inséré
-        });
-    }
+    // ── Étape 2 : Worker désactivé temporairement ──
+    // Le Worker Cloudflare faisait aussi des inserts dans Supabase
+    // → causait des DOUBLONS. Sera réactivé quand le Worker sera
+    // configuré en push-only (sans insert Supabase côté Worker).
+    // const workerUrl = getWorkerUrl();
+    // if (workerUrl) {
+    //     fetch(`${workerUrl}/notify`, { ... }).catch(() => {});
+    // }
 
     return supabaseOk;
 }
