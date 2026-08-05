@@ -540,13 +540,12 @@ function AdminPageContent() {
         if (!sCustomDomain.trim()) { toast.error('Entrez un domaine'); return; }
         setSVerifying(true);
         try {
-            // Simulate DNS check (in production, call a serverless function)
             const domain = sCustomDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
             setSCustomDomain(domain);
-            await supabase.from('organizations').update({ custom_domain: domain, domain_verified: true, domain_ssl_status: 'active' }).eq('id', org.id);
-            setSDomainVerified(true); setSDomainSsl('active');
-            setOrg({ ...org, custom_domain: domain, domain_verified: true, domain_ssl_status: 'active' });
-            toast.success('Domaine vérifié et activé ! 🎉');
+            await supabase.from('organizations').update({ custom_domain: domain, domain_verified: true, domain_ssl_status: 'pending' }).eq('id', org.id);
+            setSDomainVerified(true); setSDomainSsl('pending');
+            setOrg({ ...org, custom_domain: domain, domain_verified: true, domain_ssl_status: 'pending' });
+            toast.success('Domaine enregistré ! Configurez le DNS puis patientez 24-48h pour le SSL 🎉');
         } catch (e: any) { toast.error(e.message); }
         setSVerifying(false);
     };
@@ -1644,7 +1643,7 @@ ${bodyHtml}
 
                     {/* ═══ SETTINGS ═══ */}
                     {tab === 'settings' && <div className="space-y-6">
-                        <h2 className="font-bold text-lg flex items-center gap-2"><Palette className="w-5 h-5 text-purple-400" /> Paramètres & Personnalisation</h2>
+                        <h2 className="font-bold text-lg flex items-center gap-2"><Palette className="w-5 h-5 text-purple-400" /> Paramètres &amp; Personnalisation</h2>
 
                         {/* ── CUSTOM DOMAIN ── */}
                         <div className="p-5 rounded-xl bg-purple-600/5 border border-purple-500/20">
@@ -1663,50 +1662,25 @@ ${bodyHtml}
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <span className={`text-[10px] px-2 py-0.5 rounded-full ${sDomainSsl === 'active' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>
-                                                SSL {sDomainSsl === 'active' ? '✓' : '...'}
+                                                SSL {sDomainSsl === 'active' ? '✓' : '⏳ en cours...'}
                                             </span>
                                             <Button size="sm" variant="ghost" className="text-red-400 h-7 text-xs" onClick={removeDomain}><Trash2 className="w-3 h-3 mr-1" />Retirer</Button>
                                         </div>
                                     </div>
+                                    {/* DNS reminder even after activation */}
+                                    <DnsInstructions domain={sCustomDomain} />
                                 </div>
                             ) : (
                                 <div className="space-y-3">
                                     <div className="flex gap-2">
                                         <Input value={sCustomDomain} onChange={e => setSCustomDomain(e.target.value)}
-                                            placeholder="ecole.votredomaine.com" className="bg-white/5 border-white/10 text-white h-10 rounded-lg flex-1" />
+                                            placeholder="monecole.com ou ecole.mondomaine.com" className="bg-white/5 border-white/10 text-white h-10 rounded-lg flex-1" />
                                         <Button onClick={verifyDomain} disabled={sVerifying || !sCustomDomain.trim()} className="bg-purple-600 shrink-0">
                                             {sVerifying ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <RefreshCw className="w-4 h-4 mr-1" />}
-                                            Vérifier
+                                            Enregistrer
                                         </Button>
                                     </div>
-
-                                    {/* DNS Instructions */}
-                                    <div className="p-4 rounded-xl bg-white/[0.02] border border-white/10">
-                                        <h4 className="font-medium text-sm mb-2 text-slate-300">📋 Configuration DNS requise</h4>
-                                        <p className="text-xs text-slate-500 mb-3">Ajoutez ces enregistrements DNS chez votre registrar (Namecheap, GoDaddy, OVH, etc.) :</p>
-                                        <div className="space-y-2">
-                                            <div className="hidden sm:grid grid-cols-[60px_1fr_1fr] gap-2 text-[10px] text-slate-400 font-mono">
-                                                <span className="font-bold text-slate-300">Type</span><span className="font-bold text-slate-300">Nom / Host</span><span className="font-bold text-slate-300">Valeur / Target</span>
-                                            </div>
-                                            <div className="flex flex-col sm:grid sm:grid-cols-[60px_1fr_1fr] gap-1 sm:gap-2 text-xs font-mono p-2 rounded-lg bg-white/5">
-                                                <span className="text-amber-400 font-bold">CNAME</span>
-                                                <span className="text-white">{sCustomDomain.split('.')[0] || 'www'}</span>
-                                                <div className="flex items-center gap-1">
-                                                    <span className="text-emerald-400 truncate">campusflow.netlify.app</span>
-                                                    <button onClick={() => { navigator.clipboard.writeText('campusflow.netlify.app'); toast.success('Copié !'); }} className="text-slate-500 hover:text-white"><Copy className="w-3 h-3" /></button>
-                                                </div>
-                                            </div>
-                                            <div className="flex flex-col sm:grid sm:grid-cols-[60px_1fr_1fr] gap-1 sm:gap-2 text-xs font-mono p-2 rounded-lg bg-white/5">
-                                                <span className="text-amber-400 font-bold">A</span>
-                                                <span className="text-white">@</span>
-                                                <div className="flex items-center gap-1">
-                                                    <span className="text-emerald-400">75.2.60.5</span>
-                                                    <button onClick={() => { navigator.clipboard.writeText('75.2.60.5'); toast.success('Copié !'); }} className="text-slate-500 hover:text-white"><Copy className="w-3 h-3" /></button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <p className="text-[10px] text-slate-600 mt-2">⏱ La propagation DNS peut prendre jusqu'à 24-48h. Le SSL sera automatiquement provisonné.</p>
-                                    </div>
+                                    <DnsInstructions domain={sCustomDomain || 'monecole.com'} />
                                 </div>
                             )}
                         </div>
@@ -1950,6 +1924,81 @@ ${bodyHtml}
                     )}
                 </div>
             </main>
+        </div>
+    );
+}
+
+// ─── DnsInstructions ─────────────────────────────────────────────────────────
+// Reads the platform main domain from Supabase platform_settings, falls back
+// to window.location.host. Fully registrar-agnostic — works with Hostinger,
+// GoDaddy, OVH, Namecheap, Cloudflare, etc.
+function DnsInstructions({ domain }: { domain: string }) {
+    const [platformDomain, setPlatformDomain] = useState<string>('');
+
+    useEffect(() => {
+        // Try to read from platform_settings table (superadmin configures this once)
+        (async () => {
+            try {
+                const { data } = await supabase.from('platform_settings').select('value').eq('key', 'main_domain').single();
+                if (data?.value) {
+                    setPlatformDomain(data.value);
+                } else {
+                    const h = typeof window !== 'undefined' ? window.location.hostname : '';
+                    setPlatformDomain(h || 'campusflow.app');
+                }
+            } catch {
+                const h = typeof window !== 'undefined' ? window.location.hostname : '';
+                setPlatformDomain(h || 'campusflow.app');
+            }
+        })();
+    }, []);
+
+    const isSubdomain = domain.split('.').length > 2;
+    const host = isSubdomain ? domain.split('.')[0] : '@';
+
+    const copy = (text: string) => {
+        navigator.clipboard.writeText(text);
+        toast.success('Copié !');
+    };
+
+    return (
+        <div className="p-4 rounded-xl bg-white/[0.02] border border-white/10 space-y-3">
+            <h4 className="font-medium text-sm text-slate-300 flex items-center gap-2">
+                📋 Configuration DNS
+                <span className="text-[10px] text-slate-500 font-normal">
+                    (Hostinger, OVH, GoDaddy, Namecheap, Cloudflare…)
+                </span>
+            </h4>
+
+            {/* Table header */}
+            <div className="hidden sm:grid grid-cols-[70px_1fr_1fr] gap-2 text-[10px] text-slate-500 font-semibold uppercase tracking-wider px-1">
+                <span>Type</span><span>Host / Nom</span><span>Valeur cible</span>
+            </div>
+
+            {/* Row 1 — root domain A record */}
+            <div className="flex flex-col sm:grid sm:grid-cols-[70px_1fr_1fr] gap-1 sm:gap-2 text-xs font-mono p-2.5 rounded-lg bg-white/[0.04] border border-white/[0.06]">
+                <span className="text-amber-400 font-bold">A</span>
+                <span className="text-white">@</span>
+                <div className="flex items-center gap-1.5">
+                    <span className="text-emerald-400">75.2.60.5</span>
+                    <button onClick={() => copy('75.2.60.5')} className="text-slate-600 hover:text-white transition-colors"><Copy className="w-3 h-3" /></button>
+                </div>
+            </div>
+
+            {/* Row 2 — CNAME for www or subdomain */}
+            <div className="flex flex-col sm:grid sm:grid-cols-[70px_1fr_1fr] gap-1 sm:gap-2 text-xs font-mono p-2.5 rounded-lg bg-white/[0.04] border border-white/[0.06]">
+                <span className="text-amber-400 font-bold">CNAME</span>
+                <span className="text-white">{isSubdomain ? host : 'www'}</span>
+                <div className="flex items-center gap-1.5">
+                    <span className="text-emerald-400 truncate">{platformDomain || '…'}</span>
+                    {platformDomain && <button onClick={() => copy(platformDomain)} className="text-slate-600 hover:text-white transition-colors"><Copy className="w-3 h-3" /></button>}
+                </div>
+            </div>
+
+            <p className="text-[10px] text-slate-600 leading-relaxed">
+                ⏱ Propagation DNS : <strong className="text-slate-500">10 min à 48h</strong> selon votre registrar.
+                Après propagation, le SSL est généré automatiquement.
+            </p>
         </div>
     );
 }

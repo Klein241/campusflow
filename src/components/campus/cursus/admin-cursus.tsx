@@ -4,8 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Plus, X, Save, Trash2, Eye, EyeOff,
     BookOpen, Layers, Users, BarChart3, GraduationCap, Edit2,
-    Flag, Search, Timer, FileText, Star,
-    ChevronRight, ChevronLeft, CheckCircle2, Filter
+    Flag, Search, Timer, FileText, Star, Video, Send,
+    ChevronRight, ChevronLeft, CheckCircle2, Filter, MessageSquare, RotateCcw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,6 +45,11 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
     const [submissions, setSubmissions] = useState<any[]>([]);
     const [disputes,    setDisputes]    = useState<any[]>([]);
     const [loading,     setLoading]     = useState(true);
+    // ── Dispute modal ──
+    const [disputeModal, setDisputeModal] = useState<any | null>(null);
+    const [disputeResponse, setDisputeResponse] = useState('');
+    const [resolvingDispute, setResolvingDispute] = useState(false);
+    const [showAllDisputes, setShowAllDisputes] = useState(false);
 
     // ── Filtres ──
     const [filterClass,   setFilterClass]   = useState<string>('all');
@@ -81,6 +86,11 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
     const [exForm,    setExForm]    = useState({ title: '', type: 'qcm', duration_minutes: 10, max_score: 20, questions: [] as any[] });
     const [newQ,      setNewQ]      = useState({ question: '', answer: '', options: ['', '', '', ''] });
     const [savingEx,  setSavingEx]  = useState(false);
+    // ── Video modal ──
+    const [videoModal, setVideoModal] = useState<{ type: 'chapter' | 'lesson'; id: string; title: string; currentUrl?: string } | null>(null);
+    const [videoUrl, setVideoUrl] = useState('');
+    const [videoViews, setVideoViews] = useState<any[]>([]);
+    const [savingVideo, setSavingVideo] = useState(false);
 
     const loadData = async () => {
         setLoading(true);
@@ -256,15 +266,23 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
     };
 
     const resolveDispute = async (dId: string, status: 'accepted' | 'rejected') => {
+        if (!disputeResponse.trim()) {
+            toast.error('Veuillez écrire une réponse pour l\'étudiant');
+            return;
+        }
+        setResolvingDispute(true);
         const { error } = await supabase.from('grade_disputes').update({
             status,
-            response: status === 'accepted' ? 'Note révisée par l\'administration' : 'Note maintenue',
+            response: disputeResponse.trim(),
             resolved_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
         }).eq('id', dId);
-        if (error) { toast.error('Erreur lors de la résolution'); return; }
-        setDisputes(p => p.map(d => d.id === dId ? { ...d, status } : d));
+        if (error) { toast.error('Erreur lors de la résolution'); setResolvingDispute(false); return; }
+        setDisputes(p => p.map(d => d.id === dId ? { ...d, status, response: disputeResponse.trim() } : d));
         toast.success(`Réclamation ${status === 'accepted' ? '✅ acceptée' : '❌ rejetée'}`);
+        setDisputeModal(null);
+        setDisputeResponse('');
+        setResolvingDispute(false);
     };
 
     if (loading) return (
@@ -294,53 +312,68 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
                 ))}
             </div>
 
-            {/* ── Disputes ── */}
-            {pendingDisputes.length > 0 && (
+            {/* ── Disputes panel ── */}
+            {disputes.length > 0 && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                    className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                        <Flag className="w-4 h-4 text-orange-400" />
-                        <span className="font-bold text-sm text-orange-300">{pendingDisputes.length} réclamation(s) en attente</span>
+                    className={cn('border rounded-2xl p-4',
+                        pendingDisputes.length > 0
+                            ? 'bg-orange-500/10 border-orange-500/20'
+                            : 'bg-white/[0.03] border-white/[0.07]')}>
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                            <Flag className="w-4 h-4 text-orange-400" />
+                            <span className="font-bold text-sm text-orange-300">
+                                {pendingDisputes.length > 0 ? `${pendingDisputes.length} réclamation(s) en attente` : 'Réclamations'}
+                            </span>
+                        </div>
+                        <button onClick={() => setShowAllDisputes(v => !v)}
+                            className="text-[10px] text-slate-400 hover:text-white transition">
+                            {showAllDisputes ? 'Masquer résolues' : `Voir toutes (${disputes.length})`}
+                        </button>
                     </div>
                     <div className="space-y-2">
-                        {pendingDisputes.map((d: any) => {
+                        {(showAllDisputes ? disputes : pendingDisputes).map((d: any) => {
                             const studentName = d.student ? `${d.student.first_name} ${d.student.last_name}` : 'Étudiant inconnu';
                             const subjectName = d.subject?.name || '';
                             const exerciseTitle = d.exercise?.title || '';
+                            const isPending = d.status === 'pending';
                             return (
-                                <div key={d.id} className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 space-y-2">
-                                    {/* En-tête : qui + quoi */}
+                                <div key={d.id} className={cn('border rounded-xl p-3 space-y-2',
+                                    isPending
+                                        ? 'bg-white/[0.04] border-orange-500/20'
+                                        : d.status === 'accepted'
+                                            ? 'bg-emerald-500/5 border-emerald-500/15'
+                                            : 'bg-red-500/5 border-red-500/15')}>
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-1.5 flex-wrap">
                                                 <span className="text-[11px] font-bold text-orange-300">{studentName}</span>
-                                                {subjectName && (
-                                                    <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded-full">{subjectName}</span>
-                                                )}
-                                                {exerciseTitle && (
-                                                    <span className="text-[9px] bg-white/10 text-slate-400 px-1.5 py-0.5 rounded-full truncate max-w-[120px]">{exerciseTitle}</span>
-                                                )}
+                                                {subjectName && <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded-full">{subjectName}</span>}
+                                                {exerciseTitle && <span className="text-[9px] bg-white/10 text-slate-400 px-1.5 py-0.5 rounded-full truncate max-w-[120px]">{exerciseTitle}</span>}
+                                                <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full font-semibold',
+                                                    isPending ? 'bg-amber-500/20 text-amber-300' :
+                                                    d.status === 'accepted' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300')}>
+                                                    {isPending ? '⏳ En attente' : d.status === 'accepted' ? '✅ Acceptée' : '❌ Rejetée'}
+                                                </span>
                                             </div>
-                                            <p className="text-xs text-white mt-1 leading-relaxed">{d.message}</p>
+                                            <p className="text-xs text-white mt-1 leading-relaxed italic">« {d.message} »</p>
+                                            {d.response && (
+                                                <div className="mt-2 pl-2 border-l-2 border-white/10">
+                                                    <p className="text-[10px] text-slate-400">Réponse : <span className="text-slate-200">{d.response}</span></p>
+                                                </div>
+                                            )}
                                             <p className="text-[10px] text-slate-500 mt-1">
                                                 {new Date(d.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
                                             </p>
                                         </div>
-                                        {/* Boutons */}
-                                        <div className="flex gap-1.5 shrink-0">
+                                        {isPending && (
                                             <button
-                                                onClick={() => resolveDispute(d.id, 'accepted')}
-                                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[10px] font-semibold hover:bg-emerald-500/30 transition"
+                                                onClick={() => { setDisputeModal(d); setDisputeResponse(''); }}
+                                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-300 text-[10px] font-semibold hover:bg-orange-500/30 transition shrink-0"
                                             >
-                                                <CheckCircle2 className="w-3 h-3" /> Accepter
+                                                <MessageSquare className="w-3 h-3" /> Répondre
                                             </button>
-                                            <button
-                                                onClick={() => resolveDispute(d.id, 'rejected')}
-                                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 text-[10px] font-semibold hover:bg-red-500/30 transition"
-                                            >
-                                                <X className="w-3 h-3" /> Rejeter
-                                            </button>
-                                        </div>
+                                        )}
                                     </div>
                                 </div>
                             );
@@ -348,6 +381,62 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
                     </div>
                 </motion.div>
             )}
+
+            {/* ── Dispute response modal ── */}
+            <AnimatePresence>
+                {disputeModal && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4"
+                        onClick={() => setDisputeModal(null)}>
+                        <motion.div initial={{ scale: 0.92 }} animate={{ scale: 1 }} exit={{ scale: 0.92 }}
+                            className="bg-[#0f1117] border border-orange-500/25 rounded-2xl w-full max-w-md p-6"
+                            onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center shrink-0">
+                                    <Flag className="w-5 h-5 text-orange-400" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="font-bold text-white text-sm">Répondre à la réclamation</h3>
+                                    <p className="text-[11px] text-slate-400 truncate">
+                                        {disputeModal.student ? `${disputeModal.student.first_name} ${disputeModal.student.last_name}` : ''}
+                                        {disputeModal.exercise?.title ? ` — ${disputeModal.exercise.title}` : ''}
+                                    </p>
+                                </div>
+                                <button onClick={() => setDisputeModal(null)} className="text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
+                            </div>
+                            {/* Message étudiant */}
+                            <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl p-3 mb-4">
+                                <p className="text-[10px] text-slate-500 mb-1">Message de l'étudiant :</p>
+                                <p className="text-xs text-white italic">« {disputeModal.message} »</p>
+                            </div>
+                            {/* Réponse admin */}
+                            <Textarea
+                                value={disputeResponse}
+                                onChange={e => setDisputeResponse(e.target.value)}
+                                placeholder="Votre réponse à l'étudiant (obligatoire)..."
+                                className="bg-white/[0.04] border-white/10 text-white placeholder:text-slate-600 resize-none rounded-xl mb-4"
+                                rows={4}
+                            />
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => resolveDispute(disputeModal.id, 'accepted')}
+                                    disabled={resolvingDispute || !disputeResponse.trim()}
+                                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-sm font-semibold hover:bg-emerald-500/30 disabled:opacity-40 transition"
+                                >
+                                    <CheckCircle2 className="w-4 h-4" /> Accepter
+                                </button>
+                                <button
+                                    onClick={() => resolveDispute(disputeModal.id, 'rejected')}
+                                    disabled={resolvingDispute || !disputeResponse.trim()}
+                                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-red-500/20 border border-red-500/30 text-red-300 text-sm font-semibold hover:bg-red-500/30 disabled:opacity-40 transition"
+                                >
+                                    <X className="w-4 h-4" /> Rejeter
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* ══════════════ MILLER COLUMNS ══════════════ */}
             <div className="rounded-2xl overflow-hidden border border-white/[0.07] bg-[#0c0e16]">
@@ -607,6 +696,14 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
                                                         className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-400 transition-all">
                                                         <Edit2 className="w-3.5 h-3.5" />
                                                     </button>
+                                                    <button onClick={async () => {
+                                                        const { data: views } = await supabase.from('lesson_video_views').select('*,student_profiles(first_name,last_name)').eq('content_type', 'chapter').eq('content_id', ch.id);
+                                                        setVideoViews(views || []);
+                                                        setVideoModal({ type: 'chapter', id: ch.id, title: ch.title, currentUrl: ch.video_url });
+                                                        setVideoUrl(ch.video_url || '');
+                                                    }} className={cn('p-1.5 rounded-lg transition-all', ch.video_url ? 'bg-violet-500/20 text-violet-400 hover:bg-violet-500/30' : 'bg-white/[0.05] text-slate-400 hover:bg-violet-500/20 hover:text-violet-400')}>
+                                                        <Video className="w-3.5 h-3.5" />
+                                                    </button>
                                                     <button onClick={() => deleteChapter(ch.id)}
                                                         className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400/70 hover:text-red-400 transition-all">
                                                         <Trash2 className="w-3.5 h-3.5" />
@@ -704,6 +801,14 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
                                                 className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-400 transition-all">
                                                 <Edit2 className="w-3 h-3" />
                                             </button>
+                                            <button onClick={async () => {
+                                                const { data: views } = await supabase.from('lesson_video_views').select('*,student_profiles(first_name,last_name)').eq('content_type', 'lesson').eq('content_id', l.id);
+                                                setVideoViews(views || []);
+                                                setVideoModal({ type: 'lesson', id: l.id, title: l.title, currentUrl: l.video_url });
+                                                setVideoUrl(l.video_url || '');
+                                            }} className={cn('p-1.5 rounded-lg transition-all', l.video_url ? 'bg-violet-500/20 text-violet-400 hover:bg-violet-500/30' : 'bg-white/[0.05] text-slate-400 hover:bg-violet-500/20 hover:text-violet-400')}>
+                                                <Video className="w-3 h-3" />
+                                            </button>
                                             <button onClick={async () => { await supabase.from('lessons').delete().eq('id', l.id); setLessons(p => p.filter(x => x.id !== l.id)); }}
                                                 className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400/70 hover:text-red-400 transition-all">
                                                 <Trash2 className="w-3 h-3" />
@@ -773,6 +878,9 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-1.5 mb-0.5">
                                                     <Badge className="text-[9px] bg-violet-500/20 text-violet-400 border-none">{ex.type?.toUpperCase()}</Badge>
+                                                    {ex.rattrapage_enabled && (
+                                                        <Badge className="text-[9px] bg-orange-500/20 text-orange-400 border-none">🔄 Rattrapage</Badge>
+                                                    )}
                                                     <span className="text-xs font-semibold text-white truncate">{ex.title}</span>
                                                 </div>
                                                 <p className="text-[10px] text-slate-500">
@@ -780,6 +888,19 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
                                                     {avgScore !== null ? ` · moy. ${avgScore.toFixed(1)}` : ''}
                                                 </p>
                                             </div>
+                                            {/* Toggle Rattrapage */}
+                                            <button
+                                                onClick={async () => {
+                                                    const newVal = !ex.rattrapage_enabled;
+                                                    await supabase.from('exercises').update({ rattrapage_enabled: newVal }).eq('id', ex.id);
+                                                    setExercises((p: any[]) => p.map(e => e.id === ex.id ? { ...e, rattrapage_enabled: newVal } : e));
+                                                }}
+                                                title={ex.rattrapage_enabled ? 'Désactiver le rattrapage' : 'Activer le rattrapage'}
+                                                className={`p-1.5 rounded-lg transition-all shrink-0 ${ex.rattrapage_enabled
+                                                    ? 'bg-orange-500/20 hover:bg-orange-500/30 text-orange-400'
+                                                    : 'bg-white/[0.05] hover:bg-white/[0.10] text-slate-500 hover:text-orange-400'}`}>
+                                                <RotateCcw className="w-3.5 h-3.5" />
+                                            </button>
                                             <button onClick={async () => { await supabase.from('exercises').delete().eq('id', ex.id); setExercises(p => p.filter(e => e.id !== ex.id)); }}
                                                 className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400/70 hover:text-red-400 transition-all shrink-0">
                                                 <Trash2 className="w-3.5 h-3.5" />
@@ -856,6 +977,116 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
                                     className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl h-10">
                                     {savingEx ? 'Création...' : 'Créer l\'exercice'}
                                 </Button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ═══ VIDEO MODAL ═══ */}
+            <AnimatePresence>
+                {videoModal && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] bg-black/85 flex items-end sm:items-center justify-center p-4"
+                        onClick={() => setVideoModal(null)}>
+                        <motion.div initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
+                            className="bg-[#0f1117] border border-violet-500/20 rounded-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto"
+                            onClick={e => e.stopPropagation()}>
+                            {/* Header */}
+                            <div className="flex items-center gap-3 mb-5">
+                                <div className="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center shrink-0">
+                                    <Video className="w-5 h-5 text-violet-400" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="font-bold text-white text-sm">Vidéo</h3>
+                                    <p className="text-[11px] text-slate-400 truncate">{videoModal.title}</p>
+                                </div>
+                                <button onClick={() => setVideoModal(null)} className="text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
+                            </div>
+
+                            {/* URL Input */}
+                            <div className="space-y-3 mb-5">
+                                <label className="text-xs text-slate-400 font-semibold">URL de la vidéo (YouTube, Vimeo, lien direct...)</label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        value={videoUrl}
+                                        onChange={e => setVideoUrl(e.target.value)}
+                                        placeholder="https://youtube.com/watch?v=..."
+                                        className="flex-1 bg-white/[0.05] border-white/10 text-white h-10 rounded-xl text-sm"
+                                    />
+                                    <Button
+                                        onClick={async () => {
+                                            setSavingVideo(true);
+                                            const table = videoModal.type === 'chapter' ? 'chapters' : 'lessons';
+                                            const { error } = await supabase.from(table).update({ video_url: videoUrl.trim() || null }).eq('id', videoModal.id);
+                                            if (!error) {
+                                                if (videoModal.type === 'chapter') setChapters(p => p.map(c => c.id === videoModal.id ? { ...c, video_url: videoUrl.trim() || null } : c));
+                                                else setLessons(p => p.map(l => l.id === videoModal.id ? { ...l, video_url: videoUrl.trim() || null } : l));
+                                                toast.success('URL vidéo enregistrée ✅');
+                                                setVideoModal(v => v ? { ...v, currentUrl: videoUrl.trim() } : null);
+                                            } else toast.error('Erreur');
+                                            setSavingVideo(false);
+                                        }}
+                                        disabled={savingVideo}
+                                        className="bg-violet-600 hover:bg-violet-500 text-white rounded-xl px-4 h-10 shrink-0"
+                                    >
+                                        {savingVideo ? '...' : <><Save className="w-3.5 h-3.5 mr-1" />OK</>}
+                                    </Button>
+                                    {videoUrl && (
+                                        <Button variant="ghost" onClick={async () => {
+                                            setVideoUrl('');
+                                            const table = videoModal.type === 'chapter' ? 'chapters' : 'lessons';
+                                            await supabase.from(table).update({ video_url: null }).eq('id', videoModal.id);
+                                            if (videoModal.type === 'chapter') setChapters(p => p.map(c => c.id === videoModal.id ? { ...c, video_url: null } : c));
+                                            else setLessons(p => p.map(l => l.id === videoModal.id ? { ...l, video_url: null } : l));
+                                            setVideoModal(v => v ? { ...v, currentUrl: undefined } : null);
+                                            toast.success('Vidéo supprimée');
+                                        }} className="text-red-400 hover:text-red-300 h-10 px-2 shrink-0">
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </Button>
+                                    )}
+                                </div>
+                                {videoModal.currentUrl && (
+                                    <p className="text-[10px] text-violet-400">✅ URL actuelle : <span className="text-slate-300 truncate">{videoModal.currentUrl}</span></p>
+                                )}
+                            </div>
+
+                            {/* Views Stats */}
+                            <div>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <BarChart3 className="w-3.5 h-3.5 text-slate-400" />
+                                    <span className="text-xs font-semibold text-slate-300">Statistiques de visionnage ({videoViews.length})</span>
+                                </div>
+                                {videoViews.length === 0 ? (
+                                    <p className="text-[11px] text-slate-500 text-center py-3">Aucune vue enregistrée</p>
+                                ) : (
+                                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                                        {videoViews.map((v: any) => {
+                                            const name = v.student_profiles ? `${v.student_profiles.first_name} ${v.student_profiles.last_name}` : v.user_id.slice(0, 8);
+                                            const mins = Math.floor((v.duration_seconds || 0) / 60);
+                                            const secs = (v.duration_seconds || 0) % 60;
+                                            return (
+                                                <div key={v.id} className="flex items-center justify-between bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-6 h-6 rounded-full bg-violet-500/20 flex items-center justify-center">
+                                                            <span className="text-[8px] font-bold text-violet-400">{name[0]}</span>
+                                                        </div>
+                                                        <span className="text-xs text-white">{name}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-[10px] text-slate-400">
+                                                            <Timer className="w-2.5 h-2.5 inline mr-0.5" />{mins}m{secs}s
+                                                        </span>
+                                                        {v.completed && <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">✓ Terminé</span>}
+                                                        <span className="text-[9px] text-slate-600">
+                                                            {new Date(v.opened_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         </motion.div>
                     </motion.div>

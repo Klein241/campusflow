@@ -200,7 +200,7 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
 
     // Zoom
     const [zoom, setZoom] = useState(100);
-    // Highlight mode
+    // Highlight
     const [highlightMode, setHighlightMode] = useState(false);
     const [activeColor, setActiveColor] = useState(HIGHLIGHT_COLORS[0]);
     // Notes panel
@@ -209,8 +209,9 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
     const [newNote, setNewNote] = useState('');
     const [savingNote, setSavingNote] = useState(false);
     const [loadingNotes, setLoadingNotes] = useState(false);
-    // Selected text popup
+    // Selected text popup — on sauvegarde le texte dans un ref pour ne pas le perdre au clic
     const [selection, setSelection] = useState<{ text: string; x: number; y: number } | null>(null);
+    const savedSelectionText = useRef<string>('');  // ← clé du fix: texte sauvegardé avant mousedown
     const [copied, setCopied] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
 
@@ -240,72 +241,101 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
         }
     }, [isOpen, loadNotes]);
 
-    // ── Text selection handler ────────────────────────────
+    // ── Text selection handler ─────────────────────────────────
+    // FIX: on utilise un timer pour laisser la sélection se stabiliser
+    const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     const handleMouseUp = useCallback(() => {
-        const sel = window.getSelection();
-        if (!sel || sel.isCollapsed || !sel.toString().trim()) {
-            setSelection(null);
-            return;
-        }
-        const text = sel.toString().trim();
-        const range = sel.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        const containerRect = contentRef.current?.getBoundingClientRect();
-        if (!containerRect) return;
+        // Annuler le timer précédent
+        if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
 
-        setSelection({
-            text,
-            x: rect.left - containerRect.left + rect.width / 2,
-            y: rect.top - containerRect.top - 10,
-        });
+        selectionTimerRef.current = setTimeout(() => {
+            const sel = window.getSelection();
+            if (!sel || sel.isCollapsed || !sel.toString().trim()) {
+                setSelection(null);
+                return;
+            }
+            const text = sel.toString().trim();
+            if (text.length < 2) return;
 
-        // If highlight mode is on — apply highlight automatically
-        if (highlightMode) {
-            applyHighlight(text);
-            sel.removeAllRanges();
-            setSelection(null);
-        }
+            // Sauvegarder le texte dans le ref AVANT que la sélection soit perdue
+            savedSelectionText.current = text;
+
+            const range = sel.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            const containerRect = contentRef.current?.getBoundingClientRect();
+            if (!containerRect) return;
+
+            // Position au-dessus du milieu de la sélection
+            const x = rect.left - containerRect.left + rect.width / 2;
+            const y = rect.top - containerRect.top - 8;
+
+            // En mode highlight : appliquer directement avec la couleur active
+            if (highlightMode) {
+                applyHighlightFromRef();
+                sel.removeAllRanges();
+                return;
+            }
+
+            // Sinon : afficher le popup de sélection
+            setSelection({ text, x, y });
+        }, 100); // 100ms pour laisser le navigateur finaliser la sélection
     }, [highlightMode, activeColor]);
 
-    const applyHighlight = (text: string) => {
-        // Save as a note with highlight
-        saveNote(text, text);
+    // Appliquer le surlignage depuis le ref (texte déjà sauvegardé)
+    const applyHighlightFromRef = useCallback((colorOverride?: typeof HIGHLIGHT_COLORS[0]) => {
+        const text = savedSelectionText.current;
+        if (!text) return;
+        saveNote(text, text, colorOverride);
+        setSelection(null);
+        savedSelectionText.current = '';
+        window.getSelection()?.removeAllRanges();
+    }, [activeColor]);
+
+    const applyHighlight = (text: string, colorOverride?: typeof HIGHLIGHT_COLORS[0]) => {
+        savedSelectionText.current = text;
+        saveNote(text, text, colorOverride);
+        setSelection(null);
+        savedSelectionText.current = '';
+        window.getSelection()?.removeAllRanges();
     };
 
     const copySelection = async () => {
-        if (!selection) return;
-        await navigator.clipboard.writeText(selection.text);
+        const text = savedSelectionText.current || selection?.text;
+        if (!text) return;
+        await navigator.clipboard.writeText(text);
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
     };
 
     const saveSelectionAsNote = () => {
-        if (!selection) return;
-        setNewNote(prev => prev ? `${prev}\n\n> ${selection.text}` : `> ${selection.text}`);
+        const text = savedSelectionText.current || selection?.text;
+        if (!text) return;
+        setNewNote(prev => prev ? `${prev}\n\n> ${text}` : `> ${text}`);
         setShowNotes(true);
         setSelection(null);
+        savedSelectionText.current = '';
         window.getSelection()?.removeAllRanges();
     };
 
     // ── Save note ─────────────────────────────────────────
-    const saveNote = async (content: string, highlightText?: string) => {
+    const saveNote = async (content: string, highlightText?: string, colorOverride?: typeof HIGHLIGHT_COLORS[0]) => {
         if (!content.trim()) return;
         setSavingNote(true);
+        const color = colorOverride || activeColor;
         const { error } = await supabase.from('lesson_reader_notes').insert({
             lesson_id:      lesson.id,
             user_id:        userId,
             content:        content.trim(),
             highlight_text: highlightText || null,
-            color:          activeColor.id,
+            color:          color.id,
         });
         if (!error) {
-            toast.success(highlightText ? '✨ Surlignage sauvegardé' : '📝 Note sauvegardée');
+            toast.success(highlightText ? `✨ Surligné en ${color.label}` : '📝 Note sauvegardée');
             setNewNote('');
             loadNotes();
-            // Met à jour le state global des notes (pour la carte Bloc Notes)
         } else {
             toast.error('Erreur sauvegarde: ' + error.message);
-            console.error('[BlocNotes] insert error:', error);
         }
         setSavingNote(false);
     };
@@ -395,31 +425,44 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
                     </button>
                 </div>
 
-                {/* ── Color picker (visible when highlight mode) ── */}
+                {/* ── Highlight mode bar (couleurs + instruction) ── */}
                 <AnimatePresence>
                     {highlightMode && (
                         <motion.div
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
-                            className="flex-none flex items-center gap-2 px-4 py-2 border-b border-white/[0.06] bg-[#0A0D18]/60 overflow-hidden"
+                            className="flex-none overflow-hidden border-b border-yellow-500/20 bg-yellow-500/[0.06]"
                         >
-                            <span className="text-[10px] text-slate-500 mr-1">Couleur :</span>
-                            {HIGHLIGHT_COLORS.map(color => (
-                                <button
-                                    key={color.id}
-                                    onClick={() => setActiveColor(color)}
-                                    className={cn(
-                                        "w-6 h-6 rounded-full border-2 transition-all",
-                                        color.bg,
-                                        activeColor.id === color.id ? `border-white scale-125` : 'border-transparent hover:scale-110'
-                                    )}
-                                    title={color.label}
-                                />
-                            ))}
-                            <span className="ml-2 text-[10px] text-slate-400">
-                                {highlightMode ? '✨ Sélectionnez du texte pour le surligner' : ''}
-                            </span>
+                            <div className="flex items-center gap-3 px-4 py-2.5 flex-wrap">
+                                <span className="text-[11px] text-yellow-300/80 font-medium flex items-center gap-1">
+                                    ✨ Sélectionnez du texte puis choisissez une couleur :
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    {HIGHLIGHT_COLORS.map(color => (
+                                        <button
+                                            key={color.id}
+                                            onMouseDown={e => e.preventDefault()}
+                                            onClick={() => setActiveColor(color)}
+                                            className={cn(
+                                                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-semibold transition-all',
+                                                color.bg, color.text,
+                                                activeColor.id === color.id
+                                                    ? `${color.border} ring-1 ring-offset-1 ring-offset-[#0A0D18] scale-105`
+                                                    : 'border-transparent opacity-70 hover:opacity-100'
+                                            )}
+                                            title={color.label}
+                                        >
+                                            <span className="w-3 h-3 rounded-full" style={{ background: color.css }} />
+                                            {color.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="ml-auto flex items-center gap-2">
+                                    <span className="text-[10px] text-slate-400">Couleur active :</span>
+                                    <span className={cn('px-2 py-0.5 rounded-md text-[10px] font-bold', activeColor.bg, activeColor.text)}>{activeColor.label}</span>
+                                </div>
+                            </div>
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -435,45 +478,77 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
                             onMouseUp={handleMouseUp}
                             onTouchEnd={handleMouseUp}
                         >
-                            {/* Text selection popup */}
+                            {/* ── Text selection popup (FIX: onMouseDown préventif) ── */}
                             <AnimatePresence>
                                 {selection && (
                                     <motion.div
-                                        initial={{ opacity: 0, y: 5, scale: 0.95 }}
+                                        initial={{ opacity: 0, y: 8, scale: 0.92 }}
                                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                                        exit={{ opacity: 0, scale: 0.9 }}
-                                        className="absolute z-50 flex items-center gap-1 px-2 py-1.5 rounded-xl bg-[#1a2035] border border-white/15 shadow-2xl shadow-black/60"
-                                        style={{ left: `${selection.x}px`, top: `${selection.y}px`, transform: 'translate(-50%, -100%)' }}
+                                        exit={{ opacity: 0, scale: 0.88 }}
+                                        transition={{ duration: 0.12 }}
+                                        onMouseDown={e => e.preventDefault()}
+                                        className="absolute z-50 bg-[#141928] border border-white/20 rounded-2xl shadow-2xl shadow-black/70 overflow-hidden"
+                                        style={{
+                                            left: `${Math.max(80, Math.min(selection.x, (contentRef.current?.offsetWidth ?? 400) - 80))}px`,
+                                            top: `${Math.max(60, selection.y)}px`,
+                                            transform: 'translate(-50%, -100%)',
+                                            minWidth: '280px',
+                                        }}
                                     >
-                                        <button
-                                            onClick={copySelection}
-                                            className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white text-[10px] transition-colors"
-                                        >
-                                            {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                                            {copied ? 'Copié' : 'Copier'}
-                                        </button>
-                                        <div className="w-px h-4 bg-white/10" />
-                                        <button
-                                            onClick={saveSelectionAsNote}
-                                            className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-indigo-500/20 text-indigo-300 text-[10px] transition-colors"
-                                        >
-                                            <StickyNote className="w-3 h-3" />
-                                            Note
-                                        </button>
-                                        {HIGHLIGHT_COLORS.slice(0, 3).map(color => (
+                                        {/* Texte sélectionné preview */}
+                                        <div className="px-3 pt-2.5 pb-1.5 border-b border-white/[0.07]">
+                                            <p className="text-[10px] text-slate-500 mb-0.5">Sélectionné :</p>
+                                            <p className="text-xs text-white font-medium line-clamp-2 leading-relaxed">
+                                                « {selection.text.slice(0, 80)}{selection.text.length > 80 ? '...' : ''} »
+                                            </p>
+                                        </div>
+
+                                        {/* Actions rapides */}
+                                        <div className="flex items-center gap-1 px-2 py-1.5 border-b border-white/[0.05]">
                                             <button
-                                                key={color.id}
-                                                onClick={() => { setActiveColor(color); applyHighlight(selection.text); setSelection(null); window.getSelection()?.removeAllRanges(); }}
-                                                className={cn("w-5 h-5 rounded-full border border-white/20 transition-all hover:scale-110", color.bg)}
-                                                title={`Surligner en ${color.label}`}
-                                            />
-                                        ))}
-                                        <button
-                                            onClick={() => { setSelection(null); window.getSelection()?.removeAllRanges(); }}
-                                            className="p-1 rounded hover:bg-white/10 text-slate-500"
-                                        >
-                                            <X className="w-3 h-3" />
-                                        </button>
+                                                onClick={copySelection}
+                                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white text-[10px] font-medium transition-colors flex-1 justify-center"
+                                            >
+                                                {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                                                {copied ? 'Copié !' : 'Copier'}
+                                            </button>
+                                            <div className="w-px h-5 bg-white/10" />
+                                            <button
+                                                onClick={saveSelectionAsNote}
+                                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-indigo-500/20 text-indigo-300 hover:text-indigo-200 text-[10px] font-medium transition-colors flex-1 justify-center"
+                                            >
+                                                <StickyNote className="w-3.5 h-3.5" />
+                                                Ajouter en note
+                                            </button>
+                                            <div className="w-px h-5 bg-white/10" />
+                                            <button
+                                                onClick={() => { setSelection(null); savedSelectionText.current = ''; window.getSelection()?.removeAllRanges(); }}
+                                                className="p-1.5 rounded-lg hover:bg-white/10 text-slate-500 hover:text-slate-300 transition-colors"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+
+                                        {/* Couleurs surlignage — TOUTES les 5 avec labels */}
+                                        <div className="px-2 py-2">
+                                            <p className="text-[9px] text-slate-500 mb-1.5 px-1">Surligner en :</p>
+                                            <div className="grid grid-cols-5 gap-1">
+                                                {HIGHLIGHT_COLORS.map(color => (
+                                                    <button
+                                                        key={color.id}
+                                                        onClick={() => applyHighlight(selection.text, color)}
+                                                        className={cn(
+                                                            'flex flex-col items-center gap-1 py-2 px-1 rounded-xl border transition-all hover:scale-105 active:scale-95',
+                                                            color.bg, color.border
+                                                        )}
+                                                        title={`Surligner en ${color.label}`}
+                                                    >
+                                                        <span className="w-5 h-5 rounded-full border-2 border-white/30" style={{ background: color.css }} />
+                                                        <span className={cn('text-[8px] font-bold', color.text)}>{color.label}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
                                     </motion.div>
                                 )}
                             </AnimatePresence>

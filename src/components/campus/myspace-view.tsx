@@ -26,6 +26,7 @@ import { TeacherCursus } from './cursus/teacher-cursus';
 import { StudentCursus } from './cursus/student-cursus';
 import { AdminCursus } from './cursus/admin-cursus';
 import { calculateSkyPoints } from './cursus/cursus-exercise-modal';
+import { AdsBanner } from './ads-banner';
 import { queueGradeNotification } from '@/lib/whatsapp-queue';
 
 // ═══════════════════════════════════════════════════════
@@ -675,16 +676,24 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                                 onOpenGroupChat={onOpenGroupChat}
                             />
                         ) : (
-                            <StudentCursus
-                                orgId={orgId}
-                                userId={userId}
-                                userName={userName}
-                                classroomId={classroom?.id || null}
-                                skyPoints={skyPoints}
-                                onSkyUpdate={(delta) => setSkyPoints(p => p + delta)}
-                                onOpenGroupChat={onOpenGroupChat}
-                                onStartDM={onStartDM}
-                            />
+                            <>
+                                {/* ── Publicités étudiants (Feature 6) ── */}
+                                <AdsBanner
+                                    userId={userId}
+                                    orgId={orgId}
+                                    onSkyUpdate={(delta) => setSkyPoints(p => p + delta)}
+                                />
+                                <StudentCursus
+                                    orgId={orgId}
+                                    userId={userId}
+                                    userName={userName}
+                                    classroomId={classroom?.id || null}
+                                    skyPoints={skyPoints}
+                                    onSkyUpdate={(delta) => setSkyPoints(p => p + delta)}
+                                    onOpenGroupChat={onOpenGroupChat}
+                                    onStartDM={onStartDM}
+                                />
+                            </>
                         )}
                     </motion.div>
                 )}

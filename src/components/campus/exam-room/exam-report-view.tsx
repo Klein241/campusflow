@@ -113,6 +113,153 @@ export function ExamReportView({ session, onBack }: ExamReportViewProps) {
         return { auto, total };
     };
 
+    // ── Export PDF ───────────────────────────────────────
+    const exportPDF = () => {
+        const sorted = [...participants].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+        const avgScore = submitted.length > 0
+            ? submitted.reduce((s, p) => s + (p.score ?? 0), 0) / submitted.length
+            : 0;
+
+        // Canvas setup
+        const W = 794; // A4 @ 96dpi
+        const MARGIN = 40;
+        const COL = W - MARGIN * 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = W;
+        // First pass: calculate total height
+        const baseH = 160 + 60 + (sorted.length + 1) * 28 + questions.length * 22 + 120;
+        const detailH = sorted.length * (questions.length * 18 + 50);
+        canvas.height = Math.max(1100, baseH + detailH);
+        const ctx = canvas.getContext('2d')!;
+
+        // Background
+        ctx.fillStyle = '#0f1117';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        let y = MARGIN;
+
+        const drawText = (text: string, x: number, yy: number, opts: { size?: number; color?: string; bold?: boolean; align?: CanvasTextAlign } = {}) => {
+            ctx.font = `${opts.bold ? '700' : '400'} ${opts.size || 12}px Arial`;
+            ctx.fillStyle = opts.color || '#e2e8f0';
+            ctx.textAlign = opts.align || 'left';
+            ctx.fillText(text, x, yy);
+            ctx.textAlign = 'left';
+        };
+
+        const drawLine = (yy: number, color = '#334155') => {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(MARGIN, yy);
+            ctx.lineTo(W - MARGIN, yy);
+            ctx.stroke();
+        };
+
+        const drawRect = (x: number, yy: number, w: number, h: number, color: string, radius = 6) => {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.roundRect(x, yy, w, h, radius);
+            ctx.fill();
+        };
+
+        // ── HEADER ──
+        drawRect(MARGIN, y, COL, 70, '#1e293b', 10);
+        drawText('📋 RAPPORT D\'ÉVALUATION', MARGIN + 16, y + 22, { size: 16, bold: true, color: '#f8fafc' });
+        drawText(paper.title, MARGIN + 16, y + 42, { size: 12, color: '#94a3b8' });
+        drawText(`Généré le ${new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}`, W - MARGIN - 16, y + 22, { size: 10, color: '#64748b', align: 'right' });
+        drawText(`${participants.length} participant(s) · Moy: ${avgScore.toFixed(1)}/20`, W - MARGIN - 16, y + 42, { size: 10, color: '#64748b', align: 'right' });
+        y += 86;
+
+        // ── STATS SUMMARY ──
+        const statCols = [['Participants', String(participants.length), '#60a5fa'], ['Soumis', String(submitted.length), '#34d399'], ['Éliminés', String(failed.length), '#f87171'], ['Moy. générale', `${avgScore.toFixed(1)}/20`, '#a78bfa']];
+        const statW = (COL - 12) / 4;
+        statCols.forEach((s, i) => {
+            const sx = MARGIN + i * (statW + 4);
+            drawRect(sx, y, statW, 50, '#1e293b', 8);
+            drawText(s[0], sx + 8, y + 16, { size: 9, color: '#94a3b8' });
+            drawText(s[1], sx + 8, y + 36, { size: 18, bold: true, color: s[2] });
+        });
+        y += 66;
+
+        // ── RESULTS TABLE ──
+        drawText('RÉSULTATS PAR ÉTUDIANT', MARGIN, y + 14, { size: 10, bold: true, color: '#94a3b8' });
+        y += 24;
+
+        // Header row
+        drawRect(MARGIN, y, COL, 24, '#334155', 4);
+        const cols = [{ label: 'Rang', w: 40 }, { label: 'Nom', w: 180 }, { label: 'Statut', w: 80 }, { label: 'Score /20', w: 80 }, { label: 'Auto /20', w: 80 }, { label: 'Durée', w: 80 }];
+        let cx = MARGIN + 8;
+        cols.forEach(c => {
+            drawText(c.label, cx, y + 16, { size: 9, bold: true, color: '#f8fafc' });
+            cx += c.w;
+        });
+        y += 26;
+
+        sorted.forEach((p, idx) => {
+            const { auto, total } = autoGrade(p);
+            const autoScore = total > 0 ? ((auto / total) * 20).toFixed(1) : '—';
+            const rowColor = idx % 2 === 0 ? '#0f172a' : '#131c2f';
+            drawRect(MARGIN, y, COL, 22, rowColor, 0);
+            const vals = [
+                String(idx + 1),
+                p.studentName.slice(0, 25),
+                p.status === 'submitted' ? 'Soumis' : p.status === 'failed' ? 'Éliminé' : (p.status || ''),
+                p.score !== undefined && p.score !== null ? p.score.toFixed(1) : '—',
+                autoScore,
+                totalDuration(p),
+            ];
+            cx = MARGIN + 8;
+            cols.forEach((c, ci) => {
+                const color = ci === 3 && p.score !== null && p.score !== undefined
+                    ? (p.score >= 10 ? '#34d399' : '#f87171')
+                    : ci === 2 && p.status === 'failed' ? '#f87171'
+                    : '#e2e8f0';
+                drawText(vals[ci], cx, y + 15, { size: 9, color });
+                cx += c.w;
+            });
+            y += 24;
+        });
+        drawLine(y);
+        y += 20;
+
+        // ── DETAIL PAR QUESTION ──
+        drawText('DÉTAIL DES RÉPONSES PAR ÉTUDIANT', MARGIN, y + 14, { size: 10, bold: true, color: '#94a3b8' });
+        y += 28;
+
+        sorted.forEach(p => {
+            drawRect(MARGIN, y, COL, 22, '#1e3a5f', 4);
+            drawText(`${p.studentName}  —  ${p.score !== undefined && p.score !== null ? p.score.toFixed(1) + '/20' : '—'}`, MARGIN + 10, y + 15, { size: 10, bold: true, color: '#93c5fd' });
+            y += 26;
+            questions.forEach((q, qi) => {
+                const ans = p.answers[q.id];
+                const correct = q.type === 'qcm' || q.type === 'vrai_faux';
+                const isOk = correct && ans === q.correct;
+                const ansText = ans === undefined || ans === null ? 'Non répondu' : String(ans).slice(0, 80);
+                drawText(`Q${qi + 1}. ${q.text.slice(0, 60)}`, MARGIN + 14, y + 12, { size: 8, color: '#94a3b8' });
+                drawText(correct ? (isOk ? '✓ ' + ansText : '✗ ' + ansText) : ansText, MARGIN + 320, y + 12, { size: 8, color: correct ? (isOk ? '#34d399' : '#f87171') : '#e2e8f0' });
+                y += 18;
+            });
+            y += 8;
+        });
+
+        // Export PNG → PDF via print trick
+        canvas.height = y + MARGIN;
+        // Redraw with correct height
+        const img = canvas.toDataURL('image/png', 1.0);
+        const win = window.open('', '_blank');
+        if (!win) return;
+        win.document.write(`<html><head><title>Rapport — ${paper.title}</title>
+        <style>
+            @media print { @page { margin: 0; size: A4; } body { margin: 0; } }
+            body { margin: 0; background: #0f1117; display: flex; justify-content: center; }
+            img { max-width: 100%; display: block; }
+            .btn { position: fixed; top: 10px; right: 10px; background: #4f46e5; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; z-index: 999; }
+        </style></head><body>
+        <button class="btn" onclick="window.print(); setTimeout(() => window.close(), 500)">⬇ Télécharger PDF</button>
+        <img src="${img}" /></body></html>`);
+        win.document.close();
+    };
+
     const printReport = () => {
         const content = printRef.current?.innerHTML;
         if (!content) return;
@@ -144,6 +291,10 @@ export function ExamReportView({ session, onBack }: ExamReportViewProps) {
                     <p className="text-[11px] text-slate-500">Rapport d'épreuve</p>
                     <p className="text-sm font-bold text-white truncate">{paper.title}</p>
                 </div>
+                <button onClick={exportPDF}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 rounded-xl text-xs text-rose-300 transition-all border border-rose-500/20">
+                    <Download className="w-3.5 h-3.5" /> Exporter PDF
+                </button>
                 <button onClick={printReport}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-xs text-slate-300 transition-all">
                     <Printer className="w-3.5 h-3.5" /> Imprimer

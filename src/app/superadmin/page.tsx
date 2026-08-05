@@ -9,7 +9,8 @@ import {
     ChevronRight, AlertTriangle, Ban, RotateCcw, ExternalLink,
     Mail, Lock, School, UserCheck, Activity,
     BarChart3, Zap, Clock, CheckSquare, Star, Plus, Minus, Menu, X,
-    MessageSquare, Send, Crown, CreditCard
+    MessageSquare, Send, Crown, CreditCard,
+    Image as ImageIcon, Video as VideoIcon, Link as LinkIcon, Target, Gift
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -23,7 +24,7 @@ import { Input } from '@/components/ui/input';
 // Protected by platform_admins table (Supabase Auth + RLS)
 // ═══════════════════════════════════════════════════════════════════════
 
-type Tab = 'overview' | 'orgs' | 'users' | 'domains' | 'announcements' | 'points' | 'requests';
+type Tab = 'overview' | 'orgs' | 'users' | 'domains' | 'announcements' | 'points' | 'requests' | 'ads' | 'compte';
 
 interface Stats {
     total_orgs: number;
@@ -73,8 +74,10 @@ const SIDEBAR: { id: Tab; label: string; icon: any; emoji?: string }[] = [
     { id: 'users',          label: 'Utilisateurs',     icon: Users,           emoji: '👥' },
     { id: 'points',         label: 'Sky Points',       icon: Star,            emoji: '⭐' },
     { id: 'requests',       label: 'Demandes',         icon: MessageSquare,   emoji: '💬' },
+    { id: 'ads',            label: 'Publicités',       icon: Target,          emoji: '📺' },
     { id: 'domains',        label: 'Domaines',         icon: Globe,           emoji: '🌐' },
     { id: 'announcements',  label: 'Annonces',         icon: Megaphone,       emoji: '📢' },
+    { id: 'compte',         label: 'Mon Compte',        icon: Lock,            emoji: '🔑' },
 ];
 
 function timeAgo(iso: string) {
@@ -1065,6 +1068,47 @@ export default function SuperAdminPage() {
                         )}
 
                         {/* ══════════════════════════════════════════
+                            PUBLICITÉS (Feature 6)
+                        ══════════════════════════════════════════ */}
+                        {tab === 'ads' && (
+                            <AdsTab supabase={supabase} />
+                        )}
+
+                        {/* ══════════════════════════════════════════
+                            MON COMPTE — Changement de mot de passe
+                        ══════════════════════════════════════════ */}
+                        {tab === 'compte' && (
+                            <motion.div key="compte" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                                className="max-w-lg space-y-6">
+                                <div>
+                                    <h2 className="text-lg font-black text-white flex items-center gap-2">🔑 Mon Compte</h2>
+                                    <p className="text-sm text-slate-500 mt-0.5">Sécurité et configuration globale de la plateforme</p>
+                                </div>
+
+                                {/* ── Domaine principal de la plateforme ── */}
+                                <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 space-y-3">
+                                    <div>
+                                        <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider">🌐 Domaine principal CampusFlow</p>
+                                        <p className="text-xs text-slate-600 mt-1">
+                                            Ce domaine est affiché à tous vos clients comme cible CNAME. Changez-le une fois et tous vos clients voient automatiquement le bon enregistrement DNS.
+                                        </p>
+                                    </div>
+                                    <PlatformDomainForm supabase={supabase} />
+                                </div>
+
+                                {/* ── Changement de mot de passe ── */}
+                                <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 space-y-4">
+                                    <div>
+                                        <label className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider">Email</label>
+                                        <div className="mt-1 px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.07] text-sm text-slate-400">
+                                            <CompteEmail supabase={supabase} />
+                                        </div>
+                                    </div>
+                                    <ComptePasswordForm supabase={supabase} />
+                                </div>
+                            </motion.div>
+                        )}
+                        {/* ══════════════════════════════════════════
                             ANNONCES GLOBALES
                         ══════════════════════════════════════════ */}
                         {tab === 'announcements' && (
@@ -1518,6 +1562,471 @@ export default function SuperAdminPage() {
                     </motion.div>
                 )}
             </AnimatePresence>
+        </div>
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ADS TAB COMPONENT — Gestion des publicités
+// ═══════════════════════════════════════════════════════════════
+function AdsTab({ supabase }: { supabase: any }) {
+    const [ads, setAds] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [showForm, setShowForm] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [selectedAd, setSelectedAd] = useState<any>(null);
+    const [adViews, setAdViews] = useState<any[]>([]);
+
+    const [form, setForm] = useState({
+        title: '',
+        description: '',
+        media_url: '',
+        media_type: 'image' as 'image' | 'video' | 'story',
+        link_url: '',
+        sky_points_reward: 1,
+        min_watch_seconds: 5,
+        is_active: true,
+        ends_at: '',
+    });
+
+    const loadAds = async () => {
+        setLoading(true);
+        const { data } = await supabase.from('advertisements').select('*').order('created_at', { ascending: false });
+        setAds(data || []);
+        setLoading(false);
+    };
+
+    useEffect(() => { loadAds(); }, []);
+
+    const createAd = async () => {
+        if (!form.title || !form.media_url) { toast.error('Titre et URL média requis'); return; }
+        setSaving(true);
+        const { error } = await supabase.from('advertisements').insert({
+            title: form.title.trim(),
+            description: form.description.trim() || null,
+            media_url: form.media_url.trim(),
+            media_type: form.media_type,
+            link_url: form.link_url.trim() || null,
+            sky_points_reward: form.sky_points_reward,
+            min_watch_seconds: form.min_watch_seconds,
+            is_active: form.is_active,
+            ends_at: form.ends_at || null,
+            created_by: 'superadmin',
+        });
+        if (!error) {
+            toast.success('📺 Publicité créée !');
+            setShowForm(false);
+            setForm({ title: '', description: '', media_url: '', media_type: 'image', link_url: '', sky_points_reward: 1, min_watch_seconds: 5, is_active: true, ends_at: '' });
+            loadAds();
+        } else toast.error('Erreur: ' + error.message);
+        setSaving(false);
+    };
+
+    const toggleActive = async (id: string, current: boolean) => {
+        await supabase.from('advertisements').update({ is_active: !current }).eq('id', id);
+        setAds(prev => prev.map(a => a.id === id ? { ...a, is_active: !current } : a));
+        toast.success(current ? 'Publicité désactivée' : 'Publicité activée ✅');
+    };
+
+    const deleteAd = async (id: string) => {
+        await supabase.from('advertisements').delete().eq('id', id);
+        setAds(prev => prev.filter(a => a.id !== id));
+        toast.success('Publicité supprimée');
+    };
+
+    const openStats = async (ad: any) => {
+        setSelectedAd(ad);
+        const { data } = await supabase.from('ad_views').select('*').eq('ad_id', ad.id).order('viewed_at', { ascending: false });
+        setAdViews(data || []);
+    };
+
+    const MEDIA_TYPES = [
+        { id: 'image', label: 'Image', icon: '🖼️' },
+        { id: 'video', label: 'Vidéo', icon: '🎬' },
+        { id: 'story', label: 'Story', icon: '📱' },
+    ];
+
+    return (
+        <motion.div key="ads" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
+
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                        📺 Gestion des Publicités
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                        Les étudiants gagnent <span className="text-amber-400 font-bold">1 Sky Point</span> après 5s de visionnage minimum.
+                    </p>
+                </div>
+                <Button onClick={() => setShowForm(v => !v)}
+                    className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl gap-2">
+                    <Plus className="w-4 h-4" />Nouvelle pub
+                </Button>
+            </div>
+
+            {/* Infos */}
+            <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/15 text-xs text-amber-200 space-y-1">
+                <p className="font-bold flex items-center gap-2"><Gift className="w-3.5 h-3.5" /> Fonctionnement</p>
+                <p className="text-slate-400 leading-relaxed">
+                    Les publicités s'affichent dans le feed des étudiants. Après avoir regardé au moins <strong className="text-white">5 secondes</strong>,
+                    l'étudiant reçoit automatiquement <strong className="text-amber-400">1 Sky Point</strong> (configurable). 
+                    Maximum 1 récompense par publicité par utilisateur.
+                </p>
+            </div>
+
+            {/* Create Form */}
+            <AnimatePresence>
+                {showForm && (
+                    <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                        className="p-5 rounded-2xl bg-white/[0.03] border border-violet-500/20 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                                <Target className="w-4 h-4 text-violet-400" />Créer une publicité
+                            </h3>
+                            <button onClick={() => setShowForm(false)} className="text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
+                        </div>
+
+                        {/* Type */}
+                        <div>
+                            <label className="text-xs text-slate-400 mb-2 block">Type de média</label>
+                            <div className="flex gap-2">
+                                {MEDIA_TYPES.map(t => (
+                                    <button key={t.id} onClick={() => setForm(p => ({ ...p, media_type: t.id as any }))}
+                                        className={cn('flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition-all',
+                                            form.media_type === t.id ? 'bg-violet-500/20 border-violet-500/40 text-violet-300' : 'bg-white/[0.04] border-white/10 text-slate-400 hover:text-white')}>
+                                        {t.icon} {t.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Title & Description */}
+                        <div className="grid grid-cols-1 gap-3">
+                            <Input value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
+                                placeholder="Titre de la publicité *" className="bg-white/[0.05] border-white/10 text-white rounded-xl" />
+                            <Input value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                                placeholder="Description (optionnel)" className="bg-white/[0.05] border-white/10 text-white rounded-xl" />
+                        </div>
+
+                        {/* URLs */}
+                        <div className="grid grid-cols-1 gap-3">
+                            <div className="relative">
+                                <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                                <Input value={form.media_url} onChange={e => setForm(p => ({ ...p, media_url: e.target.value }))}
+                                    placeholder="URL du média (image/vidéo) *" className="bg-white/[0.05] border-white/10 text-white rounded-xl pl-9" />
+                            </div>
+                            <div className="relative">
+                                <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                                <Input value={form.link_url} onChange={e => setForm(p => ({ ...p, link_url: e.target.value }))}
+                                    placeholder="Lien de redirection au clic (optionnel)" className="bg-white/[0.05] border-white/10 text-white rounded-xl pl-9" />
+                            </div>
+                        </div>
+
+                        {/* Sky Points & Duration */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs text-slate-400 mb-1 block flex items-center gap-1"><Star className="w-3 h-3 text-amber-400" /> Sky Points offerts</label>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => setForm(p => ({ ...p, sky_points_reward: Math.max(0, p.sky_points_reward - 1) }))} className="w-8 h-8 rounded-lg bg-white/[0.05] text-slate-300 hover:bg-white/10"><Minus className="w-3 h-3 mx-auto" /></button>
+                                    <span className="flex-1 text-center font-bold text-amber-400 text-lg">{form.sky_points_reward}</span>
+                                    <button onClick={() => setForm(p => ({ ...p, sky_points_reward: p.sky_points_reward + 1 }))} className="w-8 h-8 rounded-lg bg-white/[0.05] text-slate-300 hover:bg-white/10"><Plus className="w-3 h-3 mx-auto" /></button>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-400 mb-1 block flex items-center gap-1"><Clock className="w-3 h-3" /> Durée min. (secondes)</label>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => setForm(p => ({ ...p, min_watch_seconds: Math.max(1, p.min_watch_seconds - 1) }))} className="w-8 h-8 rounded-lg bg-white/[0.05] text-slate-300 hover:bg-white/10"><Minus className="w-3 h-3 mx-auto" /></button>
+                                    <span className="flex-1 text-center font-bold text-white text-lg">{form.min_watch_seconds}s</span>
+                                    <button onClick={() => setForm(p => ({ ...p, min_watch_seconds: p.min_watch_seconds + 1 }))} className="w-8 h-8 rounded-lg bg-white/[0.05] text-slate-300 hover:bg-white/10"><Plus className="w-3 h-3 mx-auto" /></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Expire date */}
+                        <div>
+                            <label className="text-xs text-slate-400 mb-1 block">Date d'expiration (optionnel)</label>
+                            <Input type="datetime-local" value={form.ends_at} onChange={e => setForm(p => ({ ...p, ends_at: e.target.value }))}
+                                className="bg-white/[0.05] border-white/10 text-white rounded-xl" />
+                        </div>
+
+                        <Button onClick={createAd} disabled={saving || !form.title || !form.media_url}
+                            className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl h-11">
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+                            {saving ? 'Création...' : 'Créer la publicité'}
+                        </Button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Ads List */}
+            {loading ? (
+                <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-violet-400" /></div>
+            ) : ads.length === 0 ? (
+                <div className="text-center py-16 text-slate-500">
+                    <span className="text-4xl mb-3 block">📺</span>
+                    <p className="font-medium">Aucune publicité créée</p>
+                    <p className="text-xs mt-1">Créez votre première publicité pour commencer</p>
+                </div>
+            ) : (
+                <div className="grid gap-4">
+                    {ads.map(ad => (
+                        <motion.div key={ad.id} layout className="bg-white/[0.03] border border-white/[0.08] rounded-2xl overflow-hidden">
+                            <div className="flex gap-4 p-4">
+                                {/* Media preview */}
+                                <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-white/[0.06] flex items-center justify-center">
+                                    {ad.media_url ? (
+                                        <img src={ad.media_url} alt={ad.title} className="w-full h-full object-cover" onError={e => { (e.target as any).style.display = 'none'; }} />
+                                    ) : (
+                                        <span className="text-2xl">{ad.media_type === 'video' ? '🎬' : ad.media_type === 'story' ? '📱' : '🖼️'}</span>
+                                    )}
+                                </div>
+
+                                {/* Info */}
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <h3 className="font-bold text-white text-sm truncate">{ad.title}</h3>
+                                                <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full font-bold',
+                                                    ad.is_active ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400')}>
+                                                    {ad.is_active ? '● Actif' : '● Inactif'}
+                                                </span>
+                                                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-400 font-medium">
+                                                    {ad.media_type}
+                                                </span>
+                                            </div>
+                                            {ad.description && <p className="text-xs text-slate-400 mt-0.5 truncate">{ad.description}</p>}
+                                        </div>
+                                    </div>
+
+                                    {/* Stats row */}
+                                    <div className="flex items-center gap-4 mt-2 flex-wrap">
+                                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                                            <Eye className="w-3 h-3" />{ad.total_views || 0} vues
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                                            <ExternalLink className="w-3 h-3" />{ad.total_clicks || 0} clics
+                                        </span>
+                                        <span className="text-[10px] text-amber-400 flex items-center gap-1">
+                                            <Star className="w-3 h-3" />{ad.sky_points_reward} pts après {ad.min_watch_seconds}s
+                                        </span>
+                                        {ad.ends_at && (
+                                            <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                                                <Clock className="w-3 h-3" />expire {new Date(ad.ends_at).toLocaleDateString('fr-FR')}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex items-center gap-2 px-4 py-2 border-t border-white/[0.05] bg-white/[0.02]">
+                                <button onClick={() => openStats(ad)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.05] hover:bg-indigo-500/20 text-slate-300 hover:text-indigo-300 text-[11px] transition-all">
+                                    <BarChart3 className="w-3 h-3" />Stats
+                                </button>
+                                <button onClick={() => toggleActive(ad.id, ad.is_active)}
+                                    className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] transition-all',
+                                        ad.is_active ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400' : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400')}>
+                                    {ad.is_active ? <><EyeOff className="w-3 h-3" />Désactiver</> : <><Eye className="w-3 h-3" />Activer</>}
+                                </button>
+                                <button onClick={() => deleteAd(ad.id)}
+                                    className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[11px] transition-all">
+                                    <Trash2 className="w-3 h-3" />Supprimer
+                                </button>
+                            </div>
+                        </motion.div>
+                    ))}
+                </div>
+            )}
+
+            {/* Stats Modal */}
+            <AnimatePresence>
+                {selectedAd && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[300] bg-black/80 flex items-center justify-center p-4"
+                        onClick={() => setSelectedAd(null)}>
+                        <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }}
+                            className="bg-[#0f1117] border border-indigo-500/20 rounded-2xl w-full max-w-lg p-6 max-h-[85vh] overflow-y-auto"
+                            onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center gap-3 mb-5">
+                                <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center"><BarChart3 className="w-5 h-5 text-indigo-400" /></div>
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="font-bold text-white">Statistiques</h3>
+                                    <p className="text-xs text-slate-400 truncate">{selectedAd.title}</p>
+                                </div>
+                                <button onClick={() => setSelectedAd(null)} className="text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
+                            </div>
+
+                            {/* Summary */}
+                            <div className="grid grid-cols-3 gap-3 mb-5">
+                                {[
+                                    { label: 'Vues totales', value: adViews.length, color: 'indigo' },
+                                    { label: 'Complétées', value: adViews.filter(v => v.completed).length, color: 'emerald' },
+                                    { label: 'Points donnés', value: adViews.filter(v => v.points_awarded).length, color: 'amber' },
+                                ].map(s => (
+                                    <div key={s.label} className={cn('rounded-xl p-3 text-center border',
+                                        s.color === 'indigo' ? 'bg-indigo-500/10 border-indigo-500/20' :
+                                        s.color === 'emerald' ? 'bg-emerald-500/10 border-emerald-500/20' :
+                                        'bg-amber-500/10 border-amber-500/20')}>
+                                        <p className="text-xl font-bold text-white">{s.value}</p>
+                                        <p className="text-[10px] text-slate-400">{s.label}</p>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Views list */}
+                            <div className="space-y-2">
+                                <p className="text-xs font-semibold text-slate-300 mb-2">Détail des vues</p>
+                                {adViews.length === 0 ? (
+                                    <p className="text-center text-slate-500 text-xs py-6">Aucune vue enregistrée</p>
+                                ) : adViews.map(v => (
+                                    <div key={v.id} className="flex items-center justify-between bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2">
+                                        <div>
+                                            <p className="text-xs text-white font-medium">{v.user_id.slice(0, 12)}...</p>
+                                            <p className="text-[10px] text-slate-500">{new Date(v.viewed_at).toLocaleString('fr-FR')}</p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] text-slate-400">{v.watched_seconds}s</span>
+                                            {v.completed && <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">✓ Vu</span>}
+                                            {v.points_awarded && <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full">⭐ +{selectedAd.sky_points_reward}</span>}
+                                            {v.clicked && <span className="text-[9px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded-full">↗ Cliqué</span>}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </motion.div>
+    );
+}
+
+// ─── CompteEmail ─────────────────────────────────────────────────────────────
+function CompteEmail({ supabase }: { supabase: any }) {
+    const [email, setEmail] = useState('');
+    useEffect(() => {
+        supabase.auth.getUser().then(({ data }: any) => {
+            if (data?.user?.email) setEmail(data.user.email);
+        });
+    }, []);
+    return <span>{email || '…'}</span>;
+}
+
+// ─── ComptePasswordForm ───────────────────────────────────────────────────────
+function ComptePasswordForm({ supabase }: { supabase: any }) {
+    const [newPwd,     setNewPwd]     = useState('');
+    const [confirmPwd, setConfirmPwd] = useState('');
+    const [loading,    setLoading]    = useState(false);
+    const [showNew,    setShowNew]    = useState(false);
+    const [showConf,   setShowConf]   = useState(false);
+
+    const strength = newPwd.length === 0 ? 0 : newPwd.length < 6 ? 1 : newPwd.length < 10 ? 2 : /[A-Z]/.test(newPwd) && /[0-9]/.test(newPwd) ? 4 : 3;
+    const strengthLabel = ['', 'Trop court', 'Faible', 'Moyen', 'Fort'][strength];
+    const strengthColor = ['', '#ef4444', '#f97316', '#eab308', '#22c55e'][strength];
+
+    const handleChange = async () => {
+        if (newPwd.length < 6) { toast.error('Mot de passe trop court (min. 6 caractères)'); return; }
+        if (newPwd !== confirmPwd) { toast.error('Les mots de passe ne correspondent pas'); return; }
+        setLoading(true);
+        const { error } = await supabase.auth.updateUser({ password: newPwd });
+        if (error) toast.error(error.message);
+        else { toast.success('✅ Mot de passe modifié avec succès !'); setNewPwd(''); setConfirmPwd(''); }
+        setLoading(false);
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="border-t border-white/[0.06] pt-4">
+                <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider mb-3">Nouveau mot de passe</p>
+                <div className="space-y-3">
+                    <div className="relative">
+                        <input type={showNew ? 'text' : 'password'} value={newPwd} onChange={e => setNewPwd(e.target.value)}
+                            placeholder="Nouveau mot de passe"
+                            className="w-full px-3 py-2.5 pr-10 rounded-xl bg-white/[0.05] border border-white/[0.10] text-sm text-white placeholder-slate-600 focus:outline-none focus:border-violet-500/50 transition-all" />
+                        <button type="button" onClick={() => setShowNew(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">{showNew ? '🙈' : '👁️'}</button>
+                    </div>
+                    {newPwd.length > 0 && (
+                        <div className="space-y-1">
+                            <div className="flex gap-1">
+                                {[1,2,3,4].map(lvl => <div key={lvl} className="flex-1 h-1.5 rounded-full transition-all" style={{ background: strength >= lvl ? strengthColor : '#1e293b' }} />)}
+                            </div>
+                            <p className="text-[10px] font-semibold" style={{ color: strengthColor }}>{strengthLabel}</p>
+                        </div>
+                    )}
+                    <div className="relative">
+                        <input type={showConf ? 'text' : 'password'} value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)}
+                            placeholder="Confirmer le mot de passe"
+                            className={`w-full px-3 py-2.5 pr-10 rounded-xl bg-white/[0.05] border text-sm text-white placeholder-slate-600 focus:outline-none transition-all ${confirmPwd && confirmPwd !== newPwd ? 'border-red-500/50' : confirmPwd && confirmPwd === newPwd ? 'border-emerald-500/50' : 'border-white/[0.10] focus:border-violet-500/50'}`} />
+                        <button type="button" onClick={() => setShowConf(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">{showConf ? '🙈' : '👁️'}</button>
+                    </div>
+                    {confirmPwd && confirmPwd !== newPwd && <p className="text-[10px] text-red-400">❌ Les mots de passe ne correspondent pas</p>}
+                    {confirmPwd && confirmPwd === newPwd && <p className="text-[10px] text-emerald-400">✅ Correspondent</p>}
+                </div>
+                <button onClick={handleChange} disabled={loading || newPwd.length < 6 || newPwd !== confirmPwd}
+                    className="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-bold transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                    {loading ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Modification...</> : '🔑 Modifier le mot de passe'}
+                </button>
+            </div>
+        </div>
+    );
+}
+
+// ─── PlatformDomainForm ───────────────────────────────────────────────────────
+// Superadmin configure son domaine principal UNE SEULE FOIS.
+// Tous les admins d'école voient automatiquement le bon CNAME à pointer.
+// Fonctionne avec n'importe quel TLD (.com, .site, .shop...) et n'importe
+// quel registrar (Hostinger, OVH, GoDaddy, Namecheap, Cloudflare...).
+function PlatformDomainForm({ supabase }: { supabase: any }) {
+    const [domain,  setDomain]  = useState('');
+    const [saved,   setSaved]   = useState('');
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        (async () => {
+            const { data } = await supabase.from('platform_settings').select('value').eq('key', 'main_domain').single();
+            if (data?.value) { setDomain(data.value); setSaved(data.value); }
+        })();
+    }, []);
+
+    const save = async () => {
+        const val = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+        if (!val) { toast.error('Entrez un domaine'); return; }
+        setLoading(true);
+        const { error } = await supabase.from('platform_settings')
+            .upsert({ key: 'main_domain', value: val, description: 'Domaine principal CampusFlow', updated_at: new Date().toISOString() });
+        if (error) toast.error(error.message);
+        else { setSaved(val); setDomain(val); toast.success(`✅ Domaine principal mis à jour : ${val}`); }
+        setLoading(false);
+    };
+
+    return (
+        <div className="space-y-3">
+            <div className="flex gap-2">
+                <input
+                    type="text"
+                    value={domain}
+                    onChange={e => setDomain(e.target.value)}
+                    placeholder="campusflw.site ou monapp.com"
+                    className="flex-1 px-3 py-2.5 rounded-xl bg-white/[0.05] border border-white/[0.10] text-sm text-white placeholder-slate-600 focus:outline-none focus:border-violet-500/50 transition-all"
+                />
+                <button onClick={save} disabled={loading || !domain.trim() || domain.trim() === saved}
+                    className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-bold transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 shrink-0">
+                    {loading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : '💾'} Sauvegarder
+                </button>
+            </div>
+            {saved && (
+                <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-500/10 px-3 py-2 rounded-lg">
+                    <span className="text-emerald-500">✓</span>
+                    Domaine actif : <strong className="font-mono">{saved}</strong>
+                    <span className="text-slate-500 ml-1">— Les clients pointent leur CNAME vers cette valeur</span>
+                </div>
+            )}
+            <p className="text-[10px] text-slate-600">
+                Exemples valides : <code className="text-slate-500">campusflw.site</code>, <code className="text-slate-500">monapp.com</code>, <code className="text-slate-500">campus.mongroupe.fr</code>
+            </p>
         </div>
     );
 }

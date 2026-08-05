@@ -5,7 +5,7 @@ import {
     BookOpen, Play, CheckCircle2, Award, Star, Timer, FileText,
     Send, X, Trophy, BarChart3, GraduationCap, MessageSquare,
     Clock, Zap, TrendingUp, Flag, Maximize2, ChevronRight,
-    Lock, Target, Layers, StickyNote
+    Lock, Target, Layers, StickyNote, Save, RotateCcw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -67,6 +67,13 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
 
     // ── Bloc Notes ──
     const [notedLessonIds, setNotedLessonIds] = useState<string[]>([]);
+    // ── Video popup (Feature 3) ──
+    const [videoPopup, setVideoPopup] = useState<{ url: string; title: string; contentId: string; contentType: 'chapter' | 'lesson' } | null>(null);
+    const [videoNote, setVideoNote] = useState('');
+    const [videoStartTime, setVideoStartTime] = useState<number>(0);
+    // ── Vues dédiées (Feature 4 shortcuts) ──
+    const [showProgressionView, setShowProgressionView] = useState(false);
+    const [showExercisesView,   setShowExercisesView]   = useState(false);
 
     const loadData = async () => {
         setLoading(true);
@@ -260,16 +267,305 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                 />
             )}
 
+            {/* ══════════════════════════════════════════════════════
+                VUE PROGRESSION — Toutes les leçons de toutes matières
+            ══════════════════════════════════════════════════════ */}
+            <AnimatePresence>
+                {showProgressionView && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] bg-[#08090f]/95 backdrop-blur-sm flex flex-col"
+                    >
+                        {/* Header */}
+                        <div className="flex items-center gap-3 px-4 py-4 border-b border-white/[0.08] shrink-0">
+                            <button onClick={() => setShowProgressionView(false)}
+                                className="w-9 h-9 rounded-xl bg-white/[0.06] flex items-center justify-center text-slate-400 hover:text-white">
+                                <X className="w-4 h-4" />
+                            </button>
+                            <div className="flex-1">
+                                <h2 className="font-black text-white text-base flex items-center gap-2">
+                                    <TrendingUp className="w-4 h-4 text-teal-400" />
+                                    Ma Progression
+                                </h2>
+                                <p className="text-[10px] text-slate-500">
+                                    {completedLessons}/{totalLessons} leçons terminées
+                                </p>
+                            </div>
+                            {/* Progress bar global */}
+                            <div className="flex items-center gap-2">
+                                <div className="w-20 h-2 rounded-full bg-white/[0.08] overflow-hidden">
+                                    <div
+                                        className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all"
+                                        style={{ width: `${totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0}%` }}
+                                    />
+                                </div>
+                                <span className="text-xs font-bold text-teal-400">
+                                    {totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0}%
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Content — groupé par matière */}
+                        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+                            {subjects.map((sub, subIdx) => {
+                                const color = getColor(subIdx);
+                                const subChaps = chapters.filter(c => c.subject_id === sub.id);
+                                const subLessons = lessons.filter(l => subChaps.some(c => c.id === l.chapter_id));
+                                const subDone = subLessons.filter(l => isLessonCompleted(l.id)).length;
+                                const subPct = subLessons.length > 0 ? (subDone / subLessons.length) * 100 : 0;
+                                if (subLessons.length === 0) return null;
+                                return (
+                                    <div key={sub.id} className={`rounded-2xl border ${color.border} ${color.bg} overflow-hidden`}>
+                                        {/* Matière header */}
+                                        <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.05]">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`text-sm font-black ${color.text}`}>{sub.name}</span>
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${color.pill}`}>
+                                                    {subDone}/{subLessons.length}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-16 h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
+                                                    <div className="h-full rounded-full bg-current transition-all" style={{ width: `${subPct}%`, color: color.text.replace('text-', '') }} />
+                                                </div>
+                                                <span className={`text-[10px] font-bold ${color.text}`}>{Math.round(subPct)}%</span>
+                                            </div>
+                                        </div>
+                                        {/* Leçons groupées par chapitre */}
+                                        {subChaps.map(ch => {
+                                            const chLsns = lessons.filter(l => l.chapter_id === ch.id);
+                                            if (chLsns.length === 0) return null;
+                                            return (
+                                                <div key={ch.id} className="px-3 py-2">
+                                                    <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1.5 pl-1">
+                                                        📂 {ch.title}
+                                                    </p>
+                                                    <div className="space-y-1">
+                                                        {chLsns.map(lesson => {
+                                                            const done = isLessonCompleted(lesson.id);
+                                                            return (
+                                                                <div key={lesson.id}
+                                                                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.05]">
+                                                                    {/* Icône statut */}
+                                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${done ? 'bg-emerald-500/20' : 'bg-white/[0.06]'}`}>
+                                                                        {done
+                                                                            ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                                                            : <BookOpen className="w-3.5 h-3.5 text-slate-500" />
+                                                                        }
+                                                                    </div>
+                                                                    {/* Titre */}
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <p className={`text-xs font-semibold truncate ${done ? 'text-emerald-300' : 'text-slate-300'}`}>
+                                                                            {lesson.title}
+                                                                        </p>
+                                                                        {done && (
+                                                                            <p className="text-[9px] text-emerald-500">✓ Terminée</p>
+                                                                        )}
+                                                                    </div>
+                                                                    {/* Actions */}
+                                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                                        {!done && (
+                                                                            <button
+                                                                                onClick={() => markLessonDone(lesson.id)}
+                                                                                className="text-[9px] px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/25 transition-all">
+                                                                                Marquer ✓
+                                                                            </button>
+                                                                        )}
+                                                                        <button
+                                                                            onClick={() => { setShowProgressionView(false); setReaderLesson(lesson); }}
+                                                                            className="text-[9px] px-2 py-1 rounded-lg bg-white/[0.06] text-slate-400 hover:text-white border border-white/[0.08] transition-all">
+                                                                            Lire
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })}
+                            {totalLessons === 0 && (
+                                <div className="text-center py-16 text-slate-500">
+                                    <span className="text-4xl mb-2 block">📚</span>
+                                    <p>Aucune leçon disponible</p>
+                                </div>
+                            )}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ══════════════════════════════════════════════════════
+                VUE EXERCICES — Tous les exercices + rattrapage
+            ══════════════════════════════════════════════════════ */}
+            <AnimatePresence>
+                {showExercisesView && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] bg-[#08090f]/95 backdrop-blur-sm flex flex-col"
+                    >
+                        {/* Header */}
+                        <div className="flex items-center gap-3 px-4 py-4 border-b border-white/[0.08] shrink-0">
+                            <button onClick={() => setShowExercisesView(false)}
+                                className="w-9 h-9 rounded-xl bg-white/[0.06] flex items-center justify-center text-slate-400 hover:text-white">
+                                <X className="w-4 h-4" />
+                            </button>
+                            <div className="flex-1">
+                                <h2 className="font-black text-white text-base flex items-center gap-2">
+                                    <Zap className="w-4 h-4 text-violet-400" />
+                                    Mes Exercices
+                                </h2>
+                                <p className="text-[10px] text-slate-500">
+                                    {doneExercises}/{totalExercises} exercices complétés
+                                </p>
+                            </div>
+                            {/* Légende rattrapage */}
+                            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-orange-500/10 border border-orange-500/20">
+                                <RotateCcw className="w-3 h-3 text-orange-400" />
+                                <span className="text-[10px] text-orange-300 font-semibold">Rattrapage disponible</span>
+                            </div>
+                        </div>
+
+                        {/* Content — groupé par matière */}
+                        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+                            {subjects.map((sub, subIdx) => {
+                                const color = getColor(subIdx);
+                                const subChaps = chapters.filter(c => c.subject_id === sub.id);
+                                const subExs = exercises.filter(e =>
+                                    e.subject_id === sub.id ||
+                                    subChaps.some(c => c.id === e.chapter_id)
+                                );
+                                if (subExs.length === 0) return null;
+                                const subDone  = subExs.filter(e => getSubmission(e.id)).length;
+                                const hasRattrapage = subExs.some(e => e.rattrapage_enabled || e.allow_retry);
+                                return (
+                                    <div key={sub.id} className={`rounded-2xl border ${color.border} ${color.bg} overflow-hidden`}>
+                                        {/* Matière header */}
+                                        <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.05]">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`text-sm font-black ${color.text}`}>{sub.name}</span>
+                                                {hasRattrapage && (
+                                                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 font-bold">
+                                                        🔄 Rattrapage
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${color.pill}`}>
+                                                {subDone}/{subExs.length}
+                                            </span>
+                                        </div>
+
+                                        {/* Liste exercices */}
+                                        <div className="px-3 py-2 space-y-1.5">
+                                            {subExs.map(ex => {
+                                                const sub2 = getSubmission(ex.id);
+                                                const isRattrapage = ex.rattrapage_enabled || ex.allow_retry;
+                                                const score20 = sub2 && ex.max_score
+                                                    ? ((sub2.score / ex.max_score) * 20).toFixed(1)
+                                                    : null;
+                                                const dispute = myDisputes.find(d => d.exercise_id === ex.id);
+                                                return (
+                                                    <div key={ex.id}
+                                                        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all ${
+                                                            isRattrapage
+                                                                ? 'bg-orange-500/[0.06] border-orange-500/20'
+                                                                : 'bg-white/[0.04] border-white/[0.05]'
+                                                        }`}>
+                                                        {/* Statut */}
+                                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
+                                                            sub2 ? 'bg-emerald-500/20' : isRattrapage ? 'bg-orange-500/20' : 'bg-white/[0.06]'
+                                                        }`}>
+                                                            {sub2
+                                                                ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                                                : isRattrapage
+                                                                    ? <RotateCcw className="w-3.5 h-3.5 text-orange-400" />
+                                                                    : <FileText className="w-3.5 h-3.5 text-slate-500" />
+                                                            }
+                                                        </div>
+
+                                                        {/* Info */}
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <p className="text-xs font-semibold text-slate-200 truncate">{ex.title}</p>
+                                                                {isRattrapage && (
+                                                                    <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-orange-500/25 text-orange-300 font-bold shrink-0">
+                                                                        🔄 Rattrapage
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                                                {sub2 ? (
+                                                                    <span className="text-[10px] text-emerald-400 font-semibold">
+                                                                        ✓ {score20 ? `${score20}/20` : 'Soumis'}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-[10px] text-slate-500">Non soumis</span>
+                                                                )}
+                                                                {dispute && (
+                                                                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${
+                                                                        dispute.status === 'pending'  ? 'bg-yellow-500/20 text-yellow-400' :
+                                                                        dispute.status === 'accepted' ? 'bg-emerald-500/20 text-emerald-400' :
+                                                                        'bg-red-500/20 text-red-400'
+                                                                    }`}>
+                                                                        {dispute.status === 'pending' ? '⏳ Réclamation' :
+                                                                         dispute.status === 'accepted' ? '✅ Acceptée' : '❌ Rejetée'}
+                                                                    </span>
+                                                                )}
+                                                                {ex.max_score && (
+                                                                    <span className="text-[9px] text-slate-600">/{ex.max_score} pts</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Action */}
+                                                        {(!sub2 || isRattrapage) && (
+                                                            <button
+                                                                onClick={() => { setShowExercisesView(false); setActiveExercise(ex); }}
+                                                                className={`shrink-0 text-[9px] px-2.5 py-1.5 rounded-lg border transition-all font-semibold ${
+                                                                    isRattrapage
+                                                                        ? 'bg-orange-500/20 border-orange-500/30 text-orange-300 hover:bg-orange-500/30'
+                                                                        : 'bg-violet-500/20 border-violet-500/30 text-violet-300 hover:bg-violet-500/30'
+                                                                }`}>
+                                                                {sub2 ? '🔄 Refaire' : '▶ Commencer'}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            {totalExercises === 0 && (
+                                <div className="text-center py-16 text-slate-500">
+                                    <span className="text-4xl mb-2 block">📝</span>
+                                    <p>Aucun exercice disponible</p>
+                                </div>
+                            )}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* ── Overview cards ── */}
             <div className="grid grid-cols-2 gap-2.5">
                 {[
-                    { label: 'Moyenne', value: overall !== null ? `${overall.toFixed(1)}/20` : '—', sub: 'toutes matières', color: 'indigo', icon: BarChart3 },
-                    { label: 'Sky Points', value: skyPoints, sub: 'points accumulés', color: 'amber', icon: Star },
-                    { label: 'Progression', value: `${completedLessons}/${totalLessons}`, sub: 'leçons terminées', color: 'teal', pct: totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0, icon: TrendingUp },
-                    { label: 'Exercices', value: `${doneExercises}/${totalExercises}`, sub: 'complétés', color: 'violet', pct: totalExercises > 0 ? (doneExercises / totalExercises) * 100 : 0, icon: Zap },
+                    { label: 'Moyenne',    value: overall !== null ? `${overall.toFixed(1)}/20` : '—', sub: 'toutes matières',   color: 'indigo', icon: BarChart3,  action: () => { const ev = new CustomEvent('campus-navigate', { detail: 'bulletin' }); window.dispatchEvent(ev); } },
+                    { label: 'Sky Points', value: skyPoints,                                             sub: 'points accumulés',  color: 'amber',  icon: Star,      action: undefined },
+                    { label: 'Progression',value: `${completedLessons}/${totalLessons}`,                sub: 'leçons terminées',  color: 'teal',   pct: totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0, icon: TrendingUp, action: () => setShowProgressionView(true) },
+                    { label: 'Exercices',  value: `${doneExercises}/${totalExercises}`,                 sub: 'complétés',         color: 'violet', pct: totalExercises > 0 ? (doneExercises / totalExercises) * 100 : 0, icon: Zap,        action: () => setShowExercisesView(true) },
                 ].map((card, i) => (
                     <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
+                        onClick={card.action}
                         className={cn('rounded-2xl border p-4',
+                            card.action ? 'cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-transform' : '',
                             card.color === 'indigo' ? 'bg-gradient-to-br from-indigo-500/15 to-violet-500/10 border-indigo-500/20' :
                             card.color === 'amber'  ? 'bg-gradient-to-br from-amber-500/15 to-orange-500/10 border-amber-500/20' :
                             card.color === 'teal'   ? 'bg-gradient-to-br from-teal-500/15 to-emerald-500/10 border-teal-500/20' :
@@ -601,6 +897,21 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                                             <Maximize2 className="w-3 h-3" />Lire
                                                         </button>
                                                     )}
+                                                    {lesson.video_url && (
+                                                        <button onClick={async () => {
+                                                            setVideoPopup({ url: lesson.video_url, title: lesson.title, contentId: lesson.id, contentType: 'lesson' });
+                                                            setVideoNote('');
+                                                            setVideoStartTime(Date.now());
+                                                            // Track view
+                                                            await supabase.from('lesson_video_views').upsert(
+                                                                { user_id: userId, content_type: 'lesson', content_id: lesson.id, organization_id: orgId, opened_at: new Date().toISOString() },
+                                                                { onConflict: 'user_id,content_type,content_id', ignoreDuplicates: false }
+                                                            );
+                                                        }}
+                                                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-violet-500/15 border border-violet-500/25 text-violet-400 text-[10px] font-semibold hover:bg-violet-500/25 transition-all">
+                                                            🎦 Vidéo
+                                                        </button>
+                                                    )}
                                                     {!done && (
                                                         <button onClick={() => markLessonDone(lesson.id)}
                                                             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 text-[10px] font-semibold hover:bg-emerald-500/25 transition-all">
@@ -740,20 +1051,162 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                                 <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center">
                                     <Flag className="w-5 h-5 text-orange-400" />
                                 </div>
-                                <div>
+                                <div className="flex-1 min-w-0">
                                     <h3 className="font-bold text-white">Réclamation de note</h3>
-                                    <p className="text-xs text-slate-500">{disputeTarget.title}</p>
+                                    <p className="text-xs text-slate-500 truncate">{disputeTarget.title}</p>
                                 </div>
-                                <button onClick={() => setDisputeTarget(null)} className="ml-auto text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
+                                <button onClick={() => setDisputeTarget(null)} className="text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
                             </div>
-                            <Textarea value={disputeMsg} onChange={e => setDisputeMsg(e.target.value)}
-                                placeholder="Expliquez pourquoi vous contestez cette note..."
-                                className="bg-white/[0.04] border-white/10 text-white placeholder:text-slate-600 resize-none rounded-xl mb-4" rows={4} />
-                            <Button onClick={sendDispute} disabled={sendingDispute || !disputeMsg.trim()}
-                                className="w-full bg-orange-600 hover:bg-orange-500 text-white rounded-xl">
-                                {sendingDispute ? 'Envoi...' : <><Send className="w-4 h-4 mr-2" />Envoyer la réclamation</>}
-                            </Button>
+
+                            {/* Historique des réclamations pour cet exercice */}
+                            {(() => {
+                                const existing = myDisputes.filter(d => d.exercise_id === disputeTarget.exercise_id);
+                                if (existing.length > 0) {
+                                    return (
+                                        <div className="space-y-2 mb-4">
+                                            {existing.map((d: any) => (
+                                                <div key={d.id} className={cn('rounded-xl p-3 border text-xs',
+                                                    d.status === 'pending' ? 'bg-amber-500/10 border-amber-500/20' :
+                                                    d.status === 'accepted' ? 'bg-emerald-500/10 border-emerald-500/20' :
+                                                    'bg-red-500/10 border-red-500/20')}>
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className="font-semibold text-white">Votre message :</span>
+                                                        <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full font-bold',
+                                                            d.status === 'pending' ? 'bg-amber-500/20 text-amber-300' :
+                                                            d.status === 'accepted' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300')}>
+                                                            {d.status === 'pending' ? '⏳ En attente' : d.status === 'accepted' ? '✅ Acceptée' : '❌ Rejetée'}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-slate-300 italic">« {d.message} »</p>
+                                                    {d.response && (
+                                                        <div className="mt-2 pt-2 border-t border-white/10">
+                                                            <p className="text-slate-400">Réponse de l'admin : <span className="text-white">{d.response}</span></p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
+
+                            {/* Nouvelle réclamation si pas encore pending */}
+                            {!myDisputes.find(d => d.exercise_id === disputeTarget.exercise_id && d.status === 'pending') && (
+                                <>
+                                    <Textarea value={disputeMsg} onChange={e => setDisputeMsg(e.target.value)}
+                                        placeholder="Expliquez pourquoi vous contestez cette note..."
+                                        className="bg-white/[0.04] border-white/10 text-white placeholder:text-slate-600 resize-none rounded-xl mb-4" rows={4} />
+                                    <Button onClick={sendDispute} disabled={sendingDispute || !disputeMsg.trim()}
+                                        className="w-full bg-orange-600 hover:bg-orange-500 text-white rounded-xl">
+                                        {sendingDispute ? 'Envoi...' : <><Send className="w-4 h-4 mr-2" />Envoyer la réclamation</>}
+                                    </Button>
+                                </>
+                            )}
                         </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ═══ VIDEO POPUP MODAL (Feature 3) ═══ */}
+            <AnimatePresence>
+                {videoPopup && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[150] bg-black/90 flex flex-col"
+                        onClick={() => {
+                            // Save duration when closing
+                            const duration = Math.floor((Date.now() - videoStartTime) / 1000);
+                            if (duration > 2) {
+                                supabase.from('lesson_video_views').upsert({
+                                    user_id: userId,
+                                    content_type: videoPopup.contentType,
+                                    content_id: videoPopup.contentId,
+                                    organization_id: orgId,
+                                    duration_seconds: duration,
+                                    last_position_seconds: duration,
+                                    updated_at: new Date().toISOString(),
+                                }, { onConflict: 'user_id,content_type,content_id' });
+                            }
+                            setVideoPopup(null);
+                        }}>
+                        {/* Header */}
+                        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10 bg-[#0B0E14]"
+                            onClick={e => e.stopPropagation()}>
+                            <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center">
+                                <span className="text-base">🎦</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-white truncate">{videoPopup.title}</p>
+                                <p className="text-[10px] text-slate-500">Vidéo de cours</p>
+                            </div>
+                            <button onClick={() => {
+                                const duration = Math.floor((Date.now() - videoStartTime) / 1000);
+                                if (duration > 2) {
+                                    supabase.from('lesson_video_views').upsert({
+                                        user_id: userId, content_type: videoPopup.contentType, content_id: videoPopup.contentId,
+                                        organization_id: orgId, duration_seconds: duration, updated_at: new Date().toISOString(),
+                                    }, { onConflict: 'user_id,content_type,content_id' });
+                                }
+                                setVideoPopup(null);
+                            }} className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/10">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Video Player */}
+                        <div className="flex-1 overflow-y-auto" onClick={e => e.stopPropagation()}>
+                            <div className="relative w-full bg-black" style={{ paddingBottom: '56.25%' }}>
+                                <iframe
+                                    className="absolute inset-0 w-full h-full"
+                                    src={(() => {
+                                        const url = videoPopup.url;
+                                        // Convert YouTube watch?v= to embed
+                                        const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);
+                                        if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1`;
+                                        // Convert Vimeo
+                                        const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+                                        if (vimeoMatch) return `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1`;
+                                        return url;
+                                    })()}
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowFullScreen
+                                    title={videoPopup.title}
+                                />
+                            </div>
+
+                            {/* Notes Section */}
+                            <div className="p-4 space-y-3 bg-[#0B0E14]">
+                                <div className="flex items-center gap-2">
+                                    <StickyNote className="w-4 h-4 text-indigo-400" />
+                                    <span className="text-sm font-semibold text-white">Prendre des notes</span>
+                                </div>
+                                <Textarea
+                                    value={videoNote}
+                                    onChange={e => setVideoNote(e.target.value)}
+                                    placeholder="Écris tes notes sur cette vidéo..."
+                                    className="bg-white/[0.04] border-white/10 text-white placeholder:text-slate-600 resize-none rounded-xl min-h-[120px]"
+                                    rows={5}
+                                />
+                                <Button
+                                    onClick={async () => {
+                                        if (!videoNote.trim()) return;
+                                        await supabase.from('lesson_notes').upsert({
+                                            user_id: userId,
+                                            lesson_id: videoPopup.contentId,
+                                            organization_id: orgId,
+                                            note_text: `[Vidéo] ${videoNote.trim()}`,
+                                            updated_at: new Date().toISOString(),
+                                        }, { onConflict: 'user_id,lesson_id' });
+                                        toast.success('Notes sauvegardées ✅');
+                                        setVideoNote('');
+                                    }}
+                                    disabled={!videoNote.trim()}
+                                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl"
+                                >
+                                    <Save className="w-4 h-4 mr-2" /> Sauvegarder les notes
+                                </Button>
+                            </div>
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>
