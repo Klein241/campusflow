@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { SessionManager } from '@/lib/session';
 import { compressImage } from '@/lib/compress';
 import { uploadToR2 } from '@/lib/r2';
 import { cn } from '@/lib/utils';
@@ -96,7 +97,7 @@ export default function ShopPage() {
             setOrg(o);
 
             // Session from localStorage
-            const raw = localStorage.getItem('campusflow_session');
+            // Session via SessionManager
             if (raw) {
                 const s = JSON.parse(raw);
                 setSession(s);
@@ -649,3 +650,4 @@ export default function ShopPage() {
         </div>
     );
 }
+

@@ -9,37 +9,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
+import { SessionManager, buildSessionFromRpc } from '@/lib/session';
 import { toast } from 'sonner';
 
 type LoginMode = 'choose' | 'admin' | 'access_code' | 'pin_create' | 'pin_verify' | 'dashboard_redirect' | 'forgot_password' | 'reset_password' | 'reset_success';
 
-// Session TTL: 24 hours in milliseconds
-const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
-
 /** Check if an existing session is still valid (not expired) */
 export function isSessionValid(): boolean {
-    try {
-        const raw = localStorage.getItem('campusflow_session');
-        if (!raw) return false;
-        const session = JSON.parse(raw);
-        if (!session.logged_in_at || !session.expires_at) return false;
-        return new Date(session.expires_at).getTime() > Date.now();
-    } catch {
-        return false;
-    }
+    return !SessionManager.isExpired();
 }
 
 /** Get the current session or null if expired */
 export function getSession() {
-    if (!isSessionValid()) {
-        localStorage.removeItem('campusflow_session');
-        return null;
-    }
-    try {
-        return JSON.parse(localStorage.getItem('campusflow_session') || 'null');
-    } catch {
-        return null;
-    }
+    return SessionManager.get();
 }
 
 interface UserProfile {
@@ -357,16 +339,16 @@ export default function LoginPage() {
 
         setSaving(true);
         try {
-            const { data: isValid, error } = await supabase.rpc('verify_pin', {
+            const { data: sessionData, error } = await supabase.rpc('verify_pin_and_create_session', {
                 p_profile_id: userProfile!.id,
                 p_role: userProfile!.role,
                 p_pin: pinStr,
             });
             if (error) throw error;
 
-            if (isValid) {
+            if (sessionData) {
                 toast.success(`Bienvenue, ${userProfile!.first_name} !`);
-                redirectToDashboard();
+                await redirectToDashboard(sessionData);
             } else {
                 toast.error('PIN incorrect');
                 setPin(['', '', '', '']);
@@ -378,10 +360,10 @@ export default function LoginPage() {
         setSaving(false);
     };
 
-    const redirectToDashboard = async () => {
+    const redirectToDashboard = async (rpcSession?: any) => {
         if (!userProfile) return;
-        const now = new Date();
-        // Re-fetch classroom_id + photo_url from DB to ensure latest data
+
+        // Re-fetch classroom_id + photo_url depuis la DB
         let freshClassroomId = userProfile.classroom_id;
         let photoUrl: string | null = null;
         if (userProfile.role === 'student') {
@@ -389,28 +371,35 @@ export default function LoginPage() {
                 .select('classroom_id, photo_url').eq('id', userProfile.id).single();
             if (freshProfile?.classroom_id) freshClassroomId = freshProfile.classroom_id;
             if (freshProfile?.photo_url) photoUrl = freshProfile.photo_url;
-        } else if (userProfile.role === 'teacher') {
-            const { data: freshTeacher } = await supabase.from('teacher_profiles')
+        } else {
+            const { data: freshProfile } = await supabase.from('teacher_profiles')
                 .select('photo_url').eq('id', userProfile.id).single();
-            if (freshTeacher?.photo_url) photoUrl = freshTeacher.photo_url;
-        } else if (userProfile.role === 'admin') {
-            // Try admin_profiles first, fallback to teacher_profiles
-            const { data: adminProfile } = await supabase.from('teacher_profiles')
-                .select('photo_url').eq('id', userProfile.id).single();
-            if (adminProfile?.photo_url) photoUrl = adminProfile.photo_url;
+            if (freshProfile?.photo_url) photoUrl = freshProfile.photo_url;
         }
-        // Store session in localStorage WITH expiration + photo_url
-        localStorage.setItem('campusflow_session', JSON.stringify({
-            id: userProfile.id,
-            first_name: userProfile.first_name,
-            last_name: userProfile.last_name,
-            role: userProfile.role,
-            organization_id: userProfile.organization_id,
-            classroom_id: freshClassroomId,
-            photo_url: photoUrl,
-            logged_in_at: now.toISOString(),
-            expires_at: new Date(now.getTime() + SESSION_TTL_MS).toISOString(),
-        }));
+
+        if (rpcSession?.session_token) {
+            // Session sécurisée avec token serveur (verify_pin_and_create_session)
+            SessionManager.set(buildSessionFromRpc(rpcSession, {
+                first_name:   userProfile.first_name,
+                last_name:    userProfile.last_name,
+                classroom_id: freshClassroomId,
+                photo_url:    photoUrl,
+            }));
+        } else {
+            // Fallback après pin_create (set_pin ne retourne pas de session_token)
+            SessionManager.set({
+                session_token: '',
+                profile_id:    userProfile.id,
+                role:          userProfile.role as 'teacher' | 'student' | 'admin',
+                org_id:        userProfile.organization_id,
+                expires_at:    new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
+                first_name:    userProfile.first_name,
+                last_name:     userProfile.last_name,
+                classroom_id:  freshClassroomId,
+                photo_url:     photoUrl,
+                logged_in_at:  new Date().toISOString(),
+            });
+        }
         // Unified SPA — all roles go to /campus
         router.push(`/${orgSlug}/campus`);
     };

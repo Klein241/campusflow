@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { SessionManager } from '@/lib/session';
 
 /**
  * Updates Sky Points balance atomically across profile tables AND sky_points table,
@@ -31,16 +32,9 @@ export async function updateSkyPoints(
         console.warn('sky_points upsert skipped:', e);
     }
 
-    // 3. Sync localStorage session cache
+    // 3. Sync session cache
     try {
-        if (typeof window !== 'undefined') {
-            const raw = localStorage.getItem('campusflow_session');
-            if (raw) {
-                const sess = JSON.parse(raw);
-                sess.sky_points = newBalance;
-                localStorage.setItem('campusflow_session', JSON.stringify(sess));
-            }
-        }
+        SessionManager.patch({ sky_points: newBalance });
     } catch (e) {
         console.warn('Could not persist sky_points to session cache:', e);
     }

@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
+import { SessionManager } from '@/lib/session';
 import { compressImage } from '@/lib/compress';
 import { uploadToR2 } from '@/lib/r2';
 import { toast } from 'sonner';
@@ -58,7 +59,7 @@ interface UserInfo {
 // ═══ Session helper ═══
 function getSession(): { id: string; first_name: string; last_name: string; role: string; organization_id: string } | null {
     if (typeof window === 'undefined') return null;
-    const raw = localStorage.getItem('campusflow_session');
+    // Session via SessionManager
     if (!raw) return null;
     try { return JSON.parse(raw); } catch { return null; }
 }
@@ -744,3 +745,4 @@ export default function MessagesPage() {
         </div>
     );
 }
+

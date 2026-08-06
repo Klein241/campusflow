@@ -5,6 +5,8 @@
  * Replaces Supabase Storage (500MB limit) with Cloudflare R2 (10GB free limit)
  */
 
+import { SessionManager } from '@/lib/session';
+
 function getWorkerUrl(): string {
     return process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL
         || process.env.NEXT_PUBLIC_WORKER_URL
@@ -53,16 +55,11 @@ export async function uploadToR2(
         'Authorization': `Bearer ${adminKey}`,
     };
 
-    // Include logged-in user session ID if available
+    // Inclure le profile_id de la session courante pour traçabilité
     try {
-        if (typeof window !== 'undefined') {
-            const rawSession = localStorage.getItem('campusflow_session');
-            if (rawSession) {
-                const session = JSON.parse(rawSession);
-                if (session?.id) {
-                    headers['X-User-Id'] = session.id;
-                }
-            }
+        const session = SessionManager.get();
+        if (session?.profile_id) {
+            headers['X-User-Id'] = session.profile_id;
         }
     } catch {}
 

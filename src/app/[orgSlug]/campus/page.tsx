@@ -6,6 +6,7 @@ import { useOrgSlug } from '@/hooks/use-org-slug';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, BookOpen, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { SessionManager, type CampusSession } from '@/lib/session';
 import { CampusBottomNav, type CampusTab } from '@/components/campus/campus-bottom-nav';
 import { ActusView } from '@/components/campus/actus-view';
 import { FormsView } from '@/components/campus/forms-view';
@@ -27,42 +28,12 @@ import { usePushNotifications } from '@/hooks/usePushNotifications';
 // + FAB : Bibliothèque | Marketplace | Formulaires
 // ═══════════════════════════════════════════════════════
 
-interface SessionData {
-    id: string;
-    first_name: string;
-    last_name: string;
-    role: 'teacher' | 'student';
-    organization_id: string;
-    classroom_id?: string;
-    logged_in_at: string;
-    expires_at: string;
-    sky_points?: number;
-    avatar_url?: string;
-    photo_url?: string | null;
-}
-
-function getSession(): SessionData | null {
-    if (typeof window === 'undefined') return null;
-    try {
-        const raw = localStorage.getItem('campusflow_session');
-        if (!raw) return null;
-        const session = JSON.parse(raw);
-        if (!session.logged_in_at || !session.expires_at) return null;
-        if (new Date(session.expires_at).getTime() < Date.now()) {
-            localStorage.removeItem('campusflow_session');
-            return null;
-        }
-        return session;
-    } catch {
-        return null;
-    }
-}
 
 export default function CampusPage() {
     const orgSlug = useOrgSlug();
     const router = useRouter();
     const [org, setOrg] = useState<any>(null);
-    const [session, setSession] = useState<SessionData | null>(null);
+    const [session, setSession] = useState<CampusSession | null>(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<CampusTab>('actus');
     // Photo URL — synced from session and updated on profile change
@@ -89,20 +60,20 @@ export default function CampusPage() {
     const [showPushBanner, setShowPushBanner] = useState(false);
     const pushAutoTriggered = useRef(false);
     const { permission, isSubscribed, isSupported, subscribe } = usePushNotifications({
-        userId: session?.id || '',
+        userId: session?.profile_id || '',
         userRole: session?.role,
-        organizationId: session?.organization_id,
+        organizationId: session?.org_id,
         orgSlug,
     });
 
     useEffect(() => {
         (async () => {
-            const sess = getSession();
+            const sess = SessionManager.get();
             if (!sess) { router.push(`/${orgSlug}/login`); return; }
             const { data: o } = await supabase.from('organizations').select('*').eq('slug', orgSlug).single();
             if (!o) { setLoading(false); return; }
-            if (sess.organization_id !== o.id) {
-                localStorage.removeItem('campusflow_session');
+            if (sess.org_id !== o.id) {
+                SessionManager.clear();
                 router.push(`/${orgSlug}/login`);
                 return;
             }
@@ -113,18 +84,15 @@ export default function CampusPage() {
             if (sess.photo_url) setPhotoUrl(sess.photo_url);
             const table = sess.role === 'student' ? 'student_profiles' : 'teacher_profiles';
             const { data: prof } = await supabase.from(table)
-                .select('photo_url, sky_points').eq('id', sess.id).single();
+                .select('photo_url, sky_points').eq('id', sess.profile_id).single();
             if (prof) {
                 if (prof.photo_url) setPhotoUrl(prof.photo_url);
                 if (prof.sky_points !== undefined) setSkyPoints(prof.sky_points ?? 100);
                 try {
-                    const raw = localStorage.getItem('campusflow_session');
-                    if (raw) {
-                        const s = JSON.parse(raw);
-                        s.photo_url = prof.photo_url || s.photo_url;
-                        s.sky_points = prof.sky_points ?? s.sky_points;
-                        localStorage.setItem('campusflow_session', JSON.stringify(s));
-                    }
+                    SessionManager.patch({
+                        photo_url:  prof.photo_url  || sess.photo_url,
+                        sky_points: prof.sky_points ?? sess.sky_points,
+                    });
                 } catch {}
             }
             setLoading(false);
@@ -163,7 +131,7 @@ export default function CampusPage() {
     // Exam session alert — realtime: student gets persistent popup when exam is launched
     useEffect(() => {
         if (!session || !org) return;
-        const userId = session.id;
+        const userId = session.profile_id;
         const isStudent = session.role === 'student';
         if (!isStudent) return;
 
@@ -210,15 +178,8 @@ export default function CampusPage() {
     // Called by ProfileView when user changes their photo
     const handlePhotoUpdate = (newUrl: string) => {
         setPhotoUrl(newUrl);
-        // Update localStorage session too
-        const raw = localStorage.getItem('campusflow_session');
-        if (raw) {
-            try {
-                const s = JSON.parse(raw);
-                s.photo_url = newUrl;
-                localStorage.setItem('campusflow_session', JSON.stringify(s));
-            } catch {}
-        }
+        // Sync dans la session
+        try { SessionManager.patch({ photo_url: newUrl }); } catch {}
     };
 
     const handleStartDM = (targetId: string, targetName: string) => {
@@ -380,10 +341,10 @@ export default function CampusPage() {
                         {/* PWA Install — compact */}
                         <PwaInstall orgSlug={orgSlug} orgName={org.name} orgLogo={org.logo_url} compact />
                         {/* Sky Points */}
-                        <SkyPoints userId={session.id} userRole={session.role} orgId={org.id} compact onOpenStore={() => setStoreOpen(true)} />
+                        <SkyPoints userId={session.profile_id} userRole={session.role} orgId={org.id} compact onOpenStore={() => setStoreOpen(true)} />
 
                         {/* Notification Bell */}
-                        <NotificationBell orgId={org.id} userId={session.id} onClick={() => setNotifOpen(true)} />
+                        <NotificationBell orgId={org.id} userId={session.profile_id} onClick={() => setNotifOpen(true)} />
                         <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium ${
                             session.role === 'teacher' ? 'bg-indigo-500/15 text-indigo-400' : 'bg-teal-500/15 text-teal-400'
                         }`}>
@@ -396,13 +357,13 @@ export default function CampusPage() {
                 <AnimatePresence mode="wait">
                     {activeTab === 'actus' && (
                         <motion.div key="actus" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
-                            <ActusView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role} />
+                            <ActusView orgId={org.id} orgSlug={orgSlug} userId={session.profile_id} userName={userName} userRole={session.role} />
                         </motion.div>
                     )}
 
                     {activeTab === 'contacts' && (
                         <motion.div key="contacts" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
-                            <ContactsView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role}
+                            <ContactsView orgId={org.id} orgSlug={orgSlug} userId={session.profile_id} userName={userName} userRole={session.role}
                                 onStartDM={handleStartDM} />
                         </motion.div>
                     )}
@@ -434,11 +395,11 @@ export default function CampusPage() {
                             </div>
 
                             {chatSubTab === 'dm' ? (
-                                <ChatDMView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role}
+                                <ChatDMView orgId={org.id} orgSlug={orgSlug} userId={session.profile_id} userName={userName} userRole={session.role}
                                     initialTargetUserId={dmTargetId} initialTargetName={dmTargetName}
                                     onClearTarget={() => { setDmTargetId(null); setDmTargetName(null); }} />
                             ) : (
-                                <GroupesView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role}
+                                <GroupesView orgId={org.id} orgSlug={orgSlug} userId={session.profile_id} userName={userName} userRole={session.role}
                                     onOpenGroupChat={handleOpenGroupChat} />
                             )}
                         </motion.div>
@@ -446,7 +407,7 @@ export default function CampusPage() {
 
                     {activeTab === 'myspace' && (
                         <motion.div key="myspace" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
-                            <MySpaceView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role}
+                            <MySpaceView orgId={org.id} orgSlug={orgSlug} userId={session.profile_id} userName={userName} userRole={session.role}
                                 orgName={org.name} orgLogo={org.logo_url} orgPhone={org.phone} orgEmail={org.email}
                                 orgCity={org.city} orgCountry={org.country} onStartDM={handleStartDM}
                                 onOpenGroupChat={handleOpenGroupChat} userPhotoUrl={photoUrl}
@@ -459,8 +420,8 @@ export default function CampusPage() {
                             <FormsView
                                 orgId={org.id}
                                 orgSlug={orgSlug}
-                                userId={session.id}
-                                userRole={session.role}
+                                userId={session.profile_id}
+                                userRole={session.role as 'teacher' | 'student'}
                                 userName={userName}
                             />
                         </motion.div>
@@ -470,7 +431,7 @@ export default function CampusPage() {
 
                     {activeTab === 'profile' && (
                         <motion.div key="profile" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
-                            <ProfileView orgId={org.id} orgSlug={orgSlug} userId={session.id} userName={userName} userRole={session.role} orgName={org.name} orgLogo={org.logo_url} userSkyPoints={skyPoints} onPhotoUpdate={handlePhotoUpdate} />
+                            <ProfileView orgId={org.id} orgSlug={orgSlug} userId={session.profile_id} userName={userName} userRole={session.role} orgName={org.name} orgLogo={org.logo_url} userSkyPoints={skyPoints} onPhotoUpdate={handlePhotoUpdate} />
                         </motion.div>
                     )}
 
@@ -478,7 +439,7 @@ export default function CampusPage() {
                         <ExamRoomView
                             orgId={org.id}
                             orgSlug={orgSlug}
-                            userId={session.id}
+                            userId={session.profile_id}
                             userName={userName}
                             userRole={session.role}
                         />
@@ -497,7 +458,7 @@ export default function CampusPage() {
             {/* Notification Center (slide-out panel) */}
             <NotificationCenter
                 orgId={org.id}
-                userId={session.id}
+                userId={session.profile_id}
                 orgSlug={orgSlug}
                 isOpen={notifOpen}
                 onClose={() => setNotifOpen(false)}
@@ -508,7 +469,7 @@ export default function CampusPage() {
             <SkyPointsStore
                 isOpen={storeOpen}
                 onClose={() => setStoreOpen(false)}
-                userId={session.id}
+                userId={session.profile_id}
                 userName={session.first_name + ' ' + session.last_name}
                 orgId={org.id}
                 orgSlug={orgSlug}
@@ -557,3 +518,4 @@ export default function CampusPage() {
         </main>
     );
 }
+

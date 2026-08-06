@@ -18,6 +18,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
+import { SessionManager } from '@/lib/session';
 import { compressImage } from '@/lib/compress';
 import { uploadToR2 } from '@/lib/r2';
 import { toast } from 'sonner';
@@ -130,7 +131,7 @@ export default function TeacherDashboard() {
     // ═══ LOAD ═══
     useEffect(() => {
         (async () => {
-            const raw = localStorage.getItem('campusflow_session');
+            // Session via SessionManager
             if (!raw) { router.push(`/${orgSlug}/login`); return; }
             const session = JSON.parse(raw);
             if (session.role !== 'teacher') { router.push(`/${orgSlug}/login`); return; }
@@ -140,8 +141,8 @@ export default function TeacherDashboard() {
             setOrg(o);
 
             const { data: t, error: tErr } = await supabase.from('teacher_profiles').select('*').eq('id', session.id).single();
-            if (tErr || !t) { localStorage.removeItem('campusflow_session'); setShowDeletedModal(true); setLoading(false); return; }
-            if (t.is_active === false) { localStorage.removeItem('campusflow_session'); setShowDeactivatedModal(true); setLoading(false); return; }
+            if (tErr || !t) { SessionManager.clear(); setShowDeletedModal(true); setLoading(false); return; }
+            if (t.is_active === false) { SessionManager.clear(); setShowDeactivatedModal(true); setLoading(false); return; }
             setTeacher(t);
 
             const { data: subs } = await supabase.from('subjects').select('*, classrooms:classroom_id(id,name)')
@@ -226,7 +227,7 @@ export default function TeacherDashboard() {
         setSavingGrades(false);
     };
 
-    const signOut = () => { localStorage.removeItem('campusflow_session'); router.push(`/${orgSlug}/login`); };
+    const signOut = () => { SessionManager.clear(); router.push(`/${orgSlug}/login`); };
 
     // ═══ CURSUS: CREATE SUBJECT ═══
     const createSubject = async () => {
@@ -1007,3 +1008,5 @@ export default function TeacherDashboard() {
         </main>
     );
 }
+
+

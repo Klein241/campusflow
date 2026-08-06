@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { supabase } from '@/lib/supabase';
+import { SessionManager } from '@/lib/session';
 import { compressImage } from '@/lib/compress';
 import { uploadToR2 } from '@/lib/r2';
 import { toast } from 'sonner';
@@ -123,7 +124,7 @@ export default function StudentDashboard() {
 
     useEffect(() => {
         (async () => {
-            const raw = localStorage.getItem('campusflow_session');
+            // Session via SessionManager
             if (!raw) { router.push(`/${orgSlug}/login`); return; }
             const session = JSON.parse(raw);
             if (session.role !== 'student') { router.push(`/${orgSlug}/login`); return; }
@@ -136,13 +137,13 @@ export default function StudentDashboard() {
                 .eq('id', session.id).single();
 
             if (sErr || !s) {
-                localStorage.removeItem('campusflow_session');
+                SessionManager.clear();
                 setShowDeletedModal(true);
                 setLoading(false);
                 return;
             }
             if (s.is_active === false) {
-                localStorage.removeItem('campusflow_session');
+                SessionManager.clear();
                 setShowDeactivatedModal(true);
                 setLoading(false);
                 return;
@@ -215,7 +216,7 @@ export default function StudentDashboard() {
     const todaySlots = timetableSlots.filter((s: any) => s.day_of_week === (today === 0 ? 7 : today));
 
     const signOut = () => {
-        localStorage.removeItem('campusflow_session');
+        SessionManager.clear();
         router.push(`/${orgSlug}/login`);
     };
 
@@ -840,3 +841,5 @@ export default function StudentDashboard() {
         </main>
     );
 }
+
+

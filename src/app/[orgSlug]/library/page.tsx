@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
+import { SessionManager } from '@/lib/session';
 import { uploadToR2 } from '@/lib/r2';
 import { toast } from 'sonner';
 
@@ -134,7 +135,7 @@ export default function LibraryPage() {
             setOrg(o);
 
             // Session from localStorage (access code auth)
-            const raw = localStorage.getItem('campusflow_session');
+            // Session via SessionManager
             let userId: string | null = null;
             if (raw) {
                 const sess = JSON.parse(raw);
@@ -760,3 +761,4 @@ export default function LibraryPage() {
         </div>
     );
 }
+

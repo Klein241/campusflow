@@ -13,6 +13,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { supabase } from '@/lib/supabase';
+import { SessionManager } from '@/lib/session';
 import { compressImage } from '@/lib/compress';
 import { uploadToR2 } from '@/lib/r2';
 import { toast } from 'sonner';
@@ -121,8 +122,8 @@ export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgNam
         setTimeout(() => setCodeCopied(false), 2000);
     };
 
-    const signOut = () => {
-        localStorage.removeItem('campusflow_session');
+    const signOut = async () => {
+        await SessionManager.logout();
         router.push(`/${orgSlug}/login`);
     };
 
@@ -136,15 +137,8 @@ export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgNam
             const { error: dbErr } = await supabase.from(table).update({ photo_url: photoUrl }).eq('id', userId);
             if (dbErr) throw dbErr;
             setProfile((prev: any) => ({ ...prev, photo_url: photoUrl }));
-            // Persist photo_url in localStorage session so it survives page reload
-            try {
-                const raw = localStorage.getItem('campusflow_session');
-                if (raw) {
-                    const s = JSON.parse(raw);
-                    s.photo_url = photoUrl;
-                    localStorage.setItem('campusflow_session', JSON.stringify(s));
-                }
-            } catch {}
+            // Mettre à jour photo_url dans la session
+            try { SessionManager.patch({ photo_url: photoUrl }); } catch {}
             // Notify parent (CampusPage) to update avatar in bottom nav & header
             onPhotoUpdate?.(photoUrl);
             setShowPhotoModal(false);
