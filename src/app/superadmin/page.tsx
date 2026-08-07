@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { uploadToR2 } from '@/lib/r2';
 
 // ═══════════════════════════════════════════════════════════════════════
 // CAMPUSFLOW — SUPERADMIN PANEL
@@ -1584,23 +1585,19 @@ function AdsTab({ supabase }: { supabase: any }) {
 
     useEffect(() => { loadAds(); }, []);
 
-    // Upload file to Supabase Storage
+    // Upload file to Cloudflare R2 (no RLS, no Supabase Storage limits)
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
         const isVideo = file.type.startsWith('video/');
-        const ext = file.name.split('.').pop();
-        const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
         setUploading(true);
-        const { error } = await supabase.storage.from('ads-media').upload(path, file, { upsert: true });
-        if (error) {
-            toast.error('Erreur upload: ' + error.message);
-            setUploading(false);
-            return;
+        try {
+            const result = await uploadToR2(file, 'ads-media', file.name);
+            setForm(p => ({ ...p, media_url: result.url, media_type: isVideo ? 'video' : 'image' }));
+            toast.success('✅ Fichier uploadé sur Cloudflare R2 !');
+        } catch (err: any) {
+            toast.error('Erreur upload: ' + err.message);
         }
-        const { data: urlData } = supabase.storage.from('ads-media').getPublicUrl(path);
-        setForm(p => ({ ...p, media_url: urlData.publicUrl, media_type: isVideo ? 'video' : 'image' }));
-        toast.success('✅ Fichier uploadé !');
         setUploading(false);
     };
 
