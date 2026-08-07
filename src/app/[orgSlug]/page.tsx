@@ -16,6 +16,8 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { AdsBanner } from '@/components/campus/ads-banner';
+import { OfficialAnnouncements } from '@/components/campus/official-announcements';
 
 // ═══════════════════════════════════════════════════════════════════════
 // TYPES
@@ -189,6 +191,11 @@ export default function SchoolLandingPage() {
 
     return (
         <div className="min-h-screen bg-[#08090E] text-white overflow-x-hidden">
+
+            {/* ── Publicités & Annonces officielles ────────────────── */}
+            <div className="fixed bottom-4 left-4 right-4 z-50 max-w-sm mx-auto md:max-w-md">
+                <AdsBanner role="public" />
+            </div>
 
             {/* ── Ambient BG ───────────────────────────────────────── */}
             <div className="fixed inset-0 pointer-events-none z-0">

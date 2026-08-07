@@ -27,6 +27,7 @@ import { StudentCursus } from './cursus/student-cursus';
 import { AdminCursus } from './cursus/admin-cursus';
 import { calculateSkyPoints } from './cursus/cursus-exercise-modal';
 import { AdsBanner } from './ads-banner';
+import { OfficialAnnouncements } from './official-announcements';
 import { queueGradeNotification } from '@/lib/whatsapp-queue';
 
 // ═══════════════════════════════════════════════════════
@@ -677,7 +678,9 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                             />
                         ) : (
                             <>
-                                {/* ── Publicités étudiants (Feature 6) ── */}
+                                {/* ── Annonces officielles superadmin ── */}
+                                <OfficialAnnouncements orgId={orgId} />
+                                {/* ── Publicités étudiants ── */}
                                 <AdsBanner
                                     userId={userId}
                                     orgId={orgId}

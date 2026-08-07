@@ -21,6 +21,8 @@ import { calculateSkyPoints } from '@/components/campus/cursus/cursus-exercise-m
 import { RichContentRenderer } from '@/components/campus/cursus/rich-content-renderer';
 import { queueGradeNotification, queuePaymentReceipt, queueDisciplineAlert, enqueueWhatsAppMessage } from '@/lib/whatsapp-queue';
 import { cn } from '@/lib/utils';
+import { AdsBanner } from '@/components/campus/ads-banner';
+import { OfficialAnnouncements } from '@/components/campus/official-announcements';
 
 // ═══ ERROR BOUNDARY (catches React render errors) ═══
 class AdminErrorBoundary extends Component<{ children: ReactNode; orgSlug: string }, { hasError: boolean; error: Error | null }> {
@@ -866,6 +868,17 @@ ${bodyHtml}
                 </header>
 
                 <div className="p-3 sm:p-4 md:p-6 max-w-5xl w-full">
+                    {/* ═══ Annonces officielles + Pub ═══ */}
+                    {org && (
+                        <>
+                            <OfficialAnnouncements orgId={org.id} />
+                            <AdsBanner
+                                userId={session?.user?.id}
+                                orgId={org.id}
+                                role="admin"
+                            />
+                        </>
+                    )}
                     {/* ═══ GENERAL ═══ */}
                     {tab === 'general' && <div className="space-y-6">
                         <div className="p-6 rounded-2xl bg-card/50 backdrop-blur-sm border border-white/10"><h2 className="text-xl font-black mb-4 text-gradient-primary">Informations</h2><div className="grid sm:grid-cols-2 gap-3 text-sm">{[['Nom', org.name], ['Type', org.type], ['Ville', `${org.city}, ${org.country}`], ['Tél', org.phone], ['Email', org.email], ['WhatsApp', org.whatsapp || '—']].map(([k, v], i) => <div key={i}><span className="text-slate-500">{k}:</span> <span className="ml-2">{v}</span></div>)}</div></div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     LayoutDashboard, Building2, Users, Globe, Megaphone,
@@ -1558,8 +1558,10 @@ function AdsTab({ supabase }: { supabase: any }) {
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [uploading, setUploading] = useState(false);
     const [selectedAd, setSelectedAd] = useState<any>(null);
     const [adViews, setAdViews] = useState<any[]>([]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [form, setForm] = useState({
         title: '',
@@ -1582,8 +1584,28 @@ function AdsTab({ supabase }: { supabase: any }) {
 
     useEffect(() => { loadAds(); }, []);
 
+    // Upload file to Supabase Storage
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const isVideo = file.type.startsWith('video/');
+        const ext = file.name.split('.').pop();
+        const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        setUploading(true);
+        const { error } = await supabase.storage.from('ads-media').upload(path, file, { upsert: true });
+        if (error) {
+            toast.error('Erreur upload: ' + error.message);
+            setUploading(false);
+            return;
+        }
+        const { data: urlData } = supabase.storage.from('ads-media').getPublicUrl(path);
+        setForm(p => ({ ...p, media_url: urlData.publicUrl, media_type: isVideo ? 'video' : 'image' }));
+        toast.success('✅ Fichier uploadé !');
+        setUploading(false);
+    };
+
     const createAd = async () => {
-        if (!form.title || !form.media_url) { toast.error('Titre et URL média requis'); return; }
+        if (!form.title || !form.media_url) { toast.error('Titre et média requis'); return; }
         setSaving(true);
         const { error } = await supabase.from('advertisements').insert({
             title: form.title.trim(),
@@ -1693,18 +1715,46 @@ function AdsTab({ supabase }: { supabase: any }) {
                                 placeholder="Description (optionnel)" className="bg-white/[0.05] border-white/10 text-white rounded-xl" />
                         </div>
 
-                        {/* URLs */}
-                        <div className="grid grid-cols-1 gap-3">
-                            <div className="relative">
-                                <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
-                                <Input value={form.media_url} onChange={e => setForm(p => ({ ...p, media_url: e.target.value }))}
-                                    placeholder="URL du média (image/vidéo) *" className="bg-white/[0.05] border-white/10 text-white rounded-xl pl-9" />
-                            </div>
-                            <div className="relative">
-                                <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
-                                <Input value={form.link_url} onChange={e => setForm(p => ({ ...p, link_url: e.target.value }))}
-                                    placeholder="Lien de redirection au clic (optionnel)" className="bg-white/[0.05] border-white/10 text-white rounded-xl pl-9" />
-                            </div>
+                        {/* Upload Media */}
+                        <div>
+                            <label className="text-xs text-slate-400 mb-2 block">Média (image ou vidéo) *</label>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*,video/*"
+                                onChange={handleFileUpload}
+                                className="hidden"
+                            />
+                            {form.media_url ? (
+                                <div className="relative rounded-xl overflow-hidden border border-emerald-500/30 bg-emerald-500/5">
+                                    {form.media_type === 'video' ? (
+                                        <video src={form.media_url} className="w-full max-h-40 object-contain" muted playsInline />
+                                    ) : (
+                                        <img src={form.media_url} alt="preview" className="w-full max-h-40 object-contain" />
+                                    )}
+                                    <button onClick={() => setForm(p => ({ ...p, media_url: '' }))}
+                                        className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white">
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                    <div className="absolute bottom-2 left-2 text-[10px] px-2 py-0.5 bg-black/60 text-emerald-300 rounded-full">✓ Uploadé</div>
+                                </div>
+                            ) : (
+                                <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                                    className="w-full h-24 rounded-xl border-2 border-dashed border-white/15 hover:border-violet-500/40 transition-all flex flex-col items-center justify-center gap-2 text-slate-400 hover:text-violet-300 disabled:opacity-50">
+                                    {uploading ? (
+                                        <><Loader2 className="w-5 h-5 animate-spin" /><span className="text-xs">Upload en cours…</span></>
+                                    ) : (
+                                        <><ImageIcon className="w-6 h-6" /><span className="text-xs font-medium">Cliquer pour uploader image ou vidéo</span><span className="text-[10px] text-slate-600">JPG, PNG, GIF, MP4, MOV…</span></>
+                                    )}
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Lien de clic optionnel */}
+                        <div className="relative">
+                            <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                            <Input value={form.link_url} onChange={e => setForm(p => ({ ...p, link_url: e.target.value }))}
+                                placeholder="Lien de redirection au clic (optionnel)" className="bg-white/[0.05] border-white/10 text-white rounded-xl pl-9" />
                         </div>
 
                         {/* Sky Points & Duration */}

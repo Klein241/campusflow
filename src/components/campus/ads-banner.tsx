@@ -1,28 +1,31 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { X, Star, ChevronLeft, ChevronRight, ExternalLink, Gift } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X, Star, ChevronLeft, ChevronRight, ExternalLink, Gift, Volume2, VolumeX } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 interface AdsBannerProps {
-    userId: string;
-    orgId: string;
-    onSkyUpdate: (delta: number) => void;
+    userId?: string;
+    orgId?: string;
+    onSkyUpdate?: (delta: number) => void;
+    role?: 'student' | 'prof' | 'admin' | 'public';
 }
 
-export function AdsBanner({ userId, orgId, onSkyUpdate }: AdsBannerProps) {
+export function AdsBanner({ userId, orgId, onSkyUpdate, role = 'student' }: AdsBannerProps) {
     const [ads, setAds]             = useState<any[]>([]);
     const [current, setCurrent]     = useState(0);
     const [dismissed, setDismissed] = useState(false);
     const [watchedSecs, setWatchedSecs] = useState(0);
     const [pointsEarned, setPointsEarned] = useState<Record<string, boolean>>({});
     const [viewedAds, setViewedAds] = useState<Record<string, boolean>>({});
+    const [muted, setMuted]         = useState(true);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const viewStartRef = useRef<number>(Date.now());
+    const videoRef = useRef<HTMLVideoElement | null>(null);
 
-    // Load active ads
+    // Load active ads — no starts_at filter (column may not exist yet, handled by SQL migration)
     useEffect(() => {
         const load = async () => {
             const now = new Date().toISOString();
@@ -30,31 +33,32 @@ export function AdsBanner({ userId, orgId, onSkyUpdate }: AdsBannerProps) {
                 .from('advertisements')
                 .select('*')
                 .eq('is_active', true)
-                .lte('starts_at', now)
                 .or(`ends_at.is.null,ends_at.gte.${now}`)
                 .order('created_at', { ascending: false })
                 .limit(10);
             if (!data || data.length === 0) return;
-            const adIds = data.map((a: any) => a.id);
-            const { data: myViews } = await supabase
-                .from('ad_views')
-                .select('ad_id, points_awarded')
-                .eq('user_id', userId)
-                .in('ad_id', adIds);
-            const earnedMap: Record<string, boolean> = {};
-            const viewedMap: Record<string, boolean> = {};
-            (myViews || []).forEach((v: any) => {
-                earnedMap[v.ad_id] = v.points_awarded;
-                viewedMap[v.ad_id] = true;
-            });
+
+            // Load which ads this user already earned points for
+            if (userId) {
+                const adIds = data.map((a: any) => a.id);
+                const { data: myViews } = await supabase
+                    .from('ad_views')
+                    .select('ad_id, points_awarded')
+                    .eq('user_id', userId)
+                    .in('ad_id', adIds);
+                const earnedMap: Record<string, boolean> = {};
+                const viewedMap: Record<string, boolean> = {};
+                (myViews || []).forEach((v: any) => {
+                    earnedMap[v.ad_id] = v.points_awarded;
+                    viewedMap[v.ad_id] = true;
+                });
+                setPointsEarned(earnedMap);
+                setViewedAds(viewedMap);
+            }
             setAds(data);
-            setPointsEarned(earnedMap);
-            setViewedAds(viewedMap);
         };
         load();
-    }, [userId]);
-
-    const currentAd = ads[current];
+    }, [userId]);    const currentAd = ads[current];
 
     // Watch timer
     useEffect(() => {
@@ -64,7 +68,7 @@ export function AdsBanner({ userId, orgId, onSkyUpdate }: AdsBannerProps) {
         timerRef.current = setInterval(() => {
             setWatchedSecs(s => {
                 const next = s + 1;
-                if (next === currentAd.min_watch_seconds) { awardPoints(currentAd); }
+                if (next === currentAd.min_watch_seconds && userId) { awardPoints(currentAd); }
                 return next;
             });
         }, 1000);
@@ -72,6 +76,7 @@ export function AdsBanner({ userId, orgId, onSkyUpdate }: AdsBannerProps) {
     }, [current, currentAd?.id, dismissed]);
 
     const recordView = useCallback(async (ad: any, completed: boolean, clicked = false) => {
+        if (!userId) return; // public/anonymous users don't get tracked
         const secs = Math.round((Date.now() - viewStartRef.current) / 1000);
         await supabase.from('ad_views').upsert({
             ad_id: ad.id, user_id: userId, organization_id: orgId,
@@ -82,7 +87,7 @@ export function AdsBanner({ userId, orgId, onSkyUpdate }: AdsBannerProps) {
     }, [userId, orgId, pointsEarned]);
 
     const awardPoints = useCallback(async (ad: any) => {
-        if (pointsEarned[ad.id]) return;
+        if (!userId || pointsEarned[ad.id]) return;
         const pts = ad.sky_points_reward || 1;
         const tables = ['student_profiles', 'teacher_profiles'];
         for (const table of tables) {
@@ -93,8 +98,8 @@ export function AdsBanner({ userId, orgId, onSkyUpdate }: AdsBannerProps) {
             }
         }
         setPointsEarned(prev => ({ ...prev, [ad.id]: true }));
-        onSkyUpdate(pts);
-        toast.success(`+${pts} Sky Point${pts > 1 ? 's' : ''} gagne !`, { description: `Pour avoir regarde : ${ad.title}`, duration: 3000 });
+        onSkyUpdate?.(pts);
+        toast.success(`+${pts} Sky Point${pts > 1 ? 's' : ''} gagné !`, { description: `Pour avoir regardé : ${ad.title}`, duration: 3000 });
         await supabase.from('ad_views').upsert({
             ad_id: ad.id, user_id: userId, organization_id: orgId,
             watched_seconds: ad.min_watch_seconds, completed: true, points_awarded: true,
@@ -114,6 +119,7 @@ export function AdsBanner({ userId, orgId, onSkyUpdate }: AdsBannerProps) {
 
     const pct = Math.min(100, (watchedSecs / (currentAd.min_watch_seconds || 5)) * 100);
     const alreadyEarned = pointsEarned[currentAd.id];
+    const isVideo = currentAd.media_type === 'video';
 
     return (
         <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}
@@ -126,7 +132,7 @@ export function AdsBanner({ userId, orgId, onSkyUpdate }: AdsBannerProps) {
             {/* Badge PUB */}
             <div className="absolute top-2.5 left-3 z-10 flex items-center gap-1.5">
                 <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-black/60 text-slate-300 border border-white/10 font-semibold uppercase tracking-wider">Pub</span>
-                {alreadyEarned && <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-emerald-500/30 text-emerald-300 border border-emerald-500/20 font-semibold">Points gagnes</span>}
+                {alreadyEarned && <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-emerald-500/30 text-emerald-300 border border-emerald-500/20 font-semibold">Points gagnés ✓</span>}
             </div>
             {/* Fermer */}
             <button onClick={handleDismiss} className="absolute top-2.5 right-2.5 z-10 w-7 h-7 rounded-full bg-black/50 flex items-center justify-center text-slate-400 hover:text-white border border-white/10">
@@ -140,31 +146,47 @@ export function AdsBanner({ userId, orgId, onSkyUpdate }: AdsBannerProps) {
                 </>
             )}
             {/* Content */}
-            <div className={cn('flex gap-3 p-3 pt-6', currentAd.link_url ? 'cursor-pointer' : '')} onClick={handleClick}>
+            <div className={cn('flex gap-3 p-3 pt-6', currentAd.link_url ? 'cursor-pointer' : '')} onClick={!isVideo ? handleClick : undefined}>
                 {currentAd.media_url && (
-                    <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-white/[0.06]">
-                        <img src={currentAd.media_url} alt={currentAd.title} className="w-full h-full object-cover" onError={e => { (e.target as any).style.display = 'none'; }} />
+                    <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 bg-white/[0.06] relative">
+                        {isVideo ? (
+                            <>
+                                <video
+                                    ref={videoRef}
+                                    src={currentAd.media_url}
+                                    className="w-full h-full object-cover"
+                                    autoPlay loop muted={muted} playsInline
+                                />
+                                <button onClick={e => { e.stopPropagation(); setMuted(v => !v); }}
+                                    className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center">
+                                    {muted ? <VolumeX className="w-2.5 h-2.5 text-white" /> : <Volume2 className="w-2.5 h-2.5 text-white" />}
+                                </button>
+                            </>
+                        ) : (
+                            <img src={currentAd.media_url} alt={currentAd.title} className="w-full h-full object-cover"
+                                onError={e => { (e.target as any).style.display = 'none'; }} />
+                        )}
                     </div>
                 )}
                 <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-white truncate">{currentAd.title}</p>
                     {currentAd.description && <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">{currentAd.description}</p>}
                     <div className="flex items-center gap-3 mt-2 flex-wrap">
-                        {!alreadyEarned ? (
+                        {userId && !alreadyEarned ? (
                             <div className="flex items-center gap-1.5">
                                 <Star className="w-3 h-3 text-amber-400" />
                                 <span className="text-[10px] text-amber-300 font-semibold">
                                     {watchedSecs < currentAd.min_watch_seconds
                                         ? `+${currentAd.sky_points_reward} pts dans ${currentAd.min_watch_seconds - watchedSecs}s`
-                                        : `+${currentAd.sky_points_reward} pts en cours...`}
+                                        : `+${currentAd.sky_points_reward} pts...`}
                                 </span>
                             </div>
-                        ) : (
+                        ) : userId && alreadyEarned ? (
                             <div className="flex items-center gap-1.5">
                                 <Gift className="w-3.5 h-3.5 text-emerald-400" />
-                                <span className="text-[10px] text-emerald-300 font-semibold">+{currentAd.sky_points_reward} Sky Points gagnes !</span>
+                                <span className="text-[10px] text-emerald-300 font-semibold">+{currentAd.sky_points_reward} Sky Points gagnés !</span>
                             </div>
-                        )}
+                        ) : null}
                         {currentAd.link_url && <div className="flex items-center gap-1 text-[10px] text-indigo-400"><ExternalLink className="w-3 h-3" /><span>En savoir plus</span></div>}
                     </div>
                 </div>

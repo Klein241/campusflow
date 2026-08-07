@@ -23,6 +23,8 @@ import { compressImage } from '@/lib/compress';
 import { uploadToR2 } from '@/lib/r2';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { AdsBanner } from '@/components/campus/ads-banner';
+import { OfficialAnnouncements } from '@/components/campus/official-announcements';
 
 // ═══════════════════════════════════════════════════════
 // CAMPUSFLOW — DASHBOARD PROFESSEUR (holographic-ring design)
@@ -410,6 +412,13 @@ export default function TeacherDashboard() {
                 </header>
 
                 <AnimatePresence mode="wait">
+                    {/* ═══ Annonces officielles + Pub ═══ */}
+                    {org && (
+                        <>
+                            <OfficialAnnouncements orgId={org.id} />
+                            <AdsBanner userId={teacher?.id} orgId={org.id} role="prof" />
+                        </>
+                    )}
                     {/* ═══ DASHBOARD ═══ */}
                     {tab === 'dashboard' && (
                         <motion.div key="dashboard" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-5">
