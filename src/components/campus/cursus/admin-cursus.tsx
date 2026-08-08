@@ -18,6 +18,52 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { RichContentEditor, parseContent, serializeContent, type ContentBlock } from './rich-content-editor';
 
+// ─── Helper notifications push cursus (admin) ────────────────────────────────
+const WORKER_URL = process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL || process.env.NEXT_PUBLIC_WORKER_URL || '';
+
+async function sendAdminCursusNotification(params: {
+    actionType: 'new_subject' | 'new_chapter' | 'new_lesson' | 'new_exercise';
+    targetId: string; targetName: string;
+    orgId: string; orgSlug?: string;
+    recipientIds: string[];
+}) {
+    if (!WORKER_URL || params.recipientIds.length === 0) return;
+    const { actionType, targetId, targetName, orgId, orgSlug, recipientIds } = params;
+    const titles: Record<string, string> = {
+        new_subject:  '📚 Nouvelle matière ajoutée',
+        new_chapter:  '📖 Nouveau chapitre disponible',
+        new_lesson:   '📝 Nouvelle leçon disponible',
+        new_exercise: '🏋️ Nouvel exercice à faire !',
+    };
+    const bodies: Record<string, string> = {
+        new_subject:  `Matière "${targetName}" maintenant disponible`,
+        new_chapter:  `Nouveau chapitre : "${targetName}"`,
+        new_lesson:   `Nouvelle leçon : "${targetName}"`,
+        new_exercise: `Exercice : "${targetName}" — à compléter`,
+    };
+    fetch(`${WORKER_URL}/notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            action_type:    actionType,
+            actor_id:       'admin',
+            actor_name:     'Administration',
+            recipient_ids:  recipientIds,
+            target_id:      targetId,
+            target_name:    targetName,
+            message_preview: bodies[actionType],
+            extra_data: {
+                push_title: titles[actionType],
+                push_body:  bodies[actionType],
+                org_id:     orgId,
+                orgSlug,
+                tab:        'myspace',
+                subTab:     'cursus',
+            },
+        }),
+    }).catch(() => {});
+}
+
 // ─── Palette couleurs (même palette que teacher/student) ─────────────────────
 const SUBJECT_COLORS = [
     { bg: 'bg-violet-500/15', border: 'border-violet-500/30', text: 'text-violet-300', dot: 'bg-violet-400', glow: 'shadow-violet-500/20', ring: 'ring-violet-500/40' },
@@ -177,7 +223,22 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
             teacher_id: subForm.teacher_id || null
         }).select('*, classrooms:classroom_id(id,name), teacher_profiles:teacher_id(id,first_name,last_name)').single();
         if (error) toast.error(error.message);
-        else { setSubjects(p => [...p, data]); setShowNewSub(false); setSubForm({ name: '', coefficient: '1', classroom_id: '', teacher_id: '' }); toast.success('Matière créée ✅'); }
+        else {
+            setSubjects(p => [...p, data]);
+            setShowNewSub(false);
+            setSubForm({ name: '', coefficient: '1', classroom_id: '', teacher_id: '' });
+            toast.success('Matière créée ✅');
+            // 🔔 Notifier les étudiants de la classe
+            const { data: students } = await supabase.from('student_profiles').select('id')
+                .eq('classroom_id', subForm.classroom_id).eq('organization_id', orgId);
+            if (students?.length) {
+                const slug = (await supabase.from('organizations').select('slug').eq('id', orgId).single()).data?.slug;
+                sendAdminCursusNotification({
+                    actionType: 'new_subject', targetId: data.id, targetName: data.name,
+                    orgId, orgSlug: slug, recipientIds: students.map((s: any) => s.id),
+                });
+            }
+        }
         setSavingSub(false);
     };
 
@@ -200,7 +261,22 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
             content: serializeContent(chForm.contentBlocks), status: 'published', position: pos
         }).select().single();
         if (error) toast.error(error.message);
-        else { setChapters(p => [...p, data]); setShowNewCh(false); setChForm({ title: '', contentBlocks: [] }); toast.success('Chapitre ajouté ✅'); }
+        else {
+            setChapters(p => [...p, data]); setShowNewCh(false);
+            setChForm({ title: '', contentBlocks: [] }); toast.success('Chapitre ajouté ✅');
+            // 🔔 Notifier les étudiants
+            if (selectedSub?.classroom_id) {
+                const { data: students } = await supabase.from('student_profiles').select('id')
+                    .eq('classroom_id', selectedSub.classroom_id).eq('organization_id', orgId);
+                if (students?.length) {
+                    const slug = (await supabase.from('organizations').select('slug').eq('id', orgId).single()).data?.slug;
+                    sendAdminCursusNotification({
+                        actionType: 'new_chapter', targetId: data.id, targetName: data.title,
+                        orgId, orgSlug: slug, recipientIds: students.map((s: any) => s.id),
+                    });
+                }
+            }
+        }
         setSavingCh(false);
     };
 
@@ -209,6 +285,21 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
         await supabase.from('chapters').update({ status: newStatus }).eq('id', ch.id);
         setChapters(p => p.map(c => c.id === ch.id ? { ...c, status: newStatus } : c));
         toast.success(newStatus === 'published' ? '📢 Publié' : '🔒 Masqué');
+        // 🔔 Notifier quand passage en publié
+        if (newStatus === 'published') {
+            const subject = subjects.find((s: any) => s.id === ch.subject_id);
+            if (subject?.classroom_id) {
+                const { data: students } = await supabase.from('student_profiles').select('id')
+                    .eq('classroom_id', subject.classroom_id).eq('organization_id', orgId);
+                if (students?.length) {
+                    const slug = (await supabase.from('organizations').select('slug').eq('id', orgId).single()).data?.slug;
+                    sendAdminCursusNotification({
+                        actionType: 'new_chapter', targetId: ch.id, targetName: ch.title,
+                        orgId, orgSlug: slug, recipientIds: students.map((s: any) => s.id),
+                    });
+                }
+            }
+        }
     };
 
     const saveChapterContent = async (chId: string) => {
@@ -235,7 +326,25 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
             status: 'published', position: pos, estimated_minutes: parseInt(lessonForm.estimated_minutes) || 15
         }).select().single();
         if (error) toast.error(error.message);
-        else { setLessons(p => [...p, data]); setShowNewLesson(false); setLessonForm({ title: '', contentBlocks: [], estimated_minutes: '15' }); toast.success('Leçon ajoutée ✅'); }
+        else {
+            setLessons(p => [...p, data]); setShowNewLesson(false);
+            setLessonForm({ title: '', contentBlocks: [], estimated_minutes: '15' });
+            toast.success('Leçon ajoutée ✅');
+            // 🔔 Notifier les étudiants
+            const chapter = chapters.find((c: any) => c.id === selectedChId);
+            const subject = chapter ? subjects.find((s: any) => s.id === chapter.subject_id) : null;
+            if (subject?.classroom_id) {
+                const { data: students } = await supabase.from('student_profiles').select('id')
+                    .eq('classroom_id', subject.classroom_id).eq('organization_id', orgId);
+                if (students?.length) {
+                    const slug = (await supabase.from('organizations').select('slug').eq('id', orgId).single()).data?.slug;
+                    sendAdminCursusNotification({
+                        actionType: 'new_lesson', targetId: data.id, targetName: data.title,
+                        orgId, orgSlug: slug, recipientIds: students.map((s: any) => s.id),
+                    });
+                }
+            }
+        }
         setSavingLesson(false);
     };
 
@@ -261,7 +370,25 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
             questions: exForm.questions, chapter_id: selectedChId
         }).select().single();
         if (error) toast.error(error.message);
-        else { setExercises(p => [...p, data]); setShowNewEx(false); setExForm({ title: '', type: 'qcm', duration_minutes: 10, max_score: 20, questions: [] }); toast.success('Exercice créé ✅'); }
+        else {
+            setExercises(p => [...p, data]); setShowNewEx(false);
+            setExForm({ title: '', type: 'qcm', duration_minutes: 10, max_score: 20, questions: [] });
+            toast.success('Exercice créé ✅');
+            // 🔔 Notifier les étudiants de l'exercice
+            const chapter = chapters.find((c: any) => c.id === selectedChId);
+            const subject = chapter ? subjects.find((s: any) => s.id === chapter.subject_id) : null;
+            if (subject?.classroom_id) {
+                const { data: students } = await supabase.from('student_profiles').select('id')
+                    .eq('classroom_id', subject.classroom_id).eq('organization_id', orgId);
+                if (students?.length) {
+                    const slug = (await supabase.from('organizations').select('slug').eq('id', orgId).single()).data?.slug;
+                    sendAdminCursusNotification({
+                        actionType: 'new_exercise', targetId: data.id, targetName: data.title,
+                        orgId, orgSlug: slug, recipientIds: students.map((s: any) => s.id),
+                    });
+                }
+            }
+        }
         setSavingEx(false);
     };
 
