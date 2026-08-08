@@ -27,33 +27,51 @@ const WORKER_URL = process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL || process.en
 
 async function sendCursusNotification(params: {
     actorId: string; actorName: string; orgId: string;
-    actionType: 'new_subject' | 'new_chapter' | 'new_lesson';
+    actionType: 'new_subject' | 'new_chapter' | 'new_lesson' | 'new_exercise' | 'evaluation_reminder' | 'timetable_change';
     targetId: string; targetName: string; recipientIds?: string[];
+    orgSlug?: string;
 }) {
     if (!WORKER_URL) return;
-    const { actorId, actorName, orgId, actionType, targetId, targetName, recipientIds } = params;
+    const { actorId, actorName, orgId, actionType, targetId, targetName, recipientIds, orgSlug } = params;
     if (!recipientIds || recipientIds.length === 0) return;
     const titles: Record<string, string> = {
-        new_subject: '📚 Nouvelle matière ajoutée',
-        new_chapter: '📖 Nouveau chapitre disponible',
-        new_lesson:  '📝 Nouvelle leçon disponible',
+        new_subject:         '📚 Nouvelle matière ajoutée',
+        new_chapter:         '📖 Nouveau chapitre disponible',
+        new_lesson:          '📝 Nouvelle leçon disponible',
+        new_exercise:        '🏋️ Nouvel exercice à faire !',
+        evaluation_reminder: '⏰ Rappel : évaluation programmée',
+        timetable_change:    '📅 Emploi du temps mis à jour',
     };
     const bodies: Record<string, string> = {
-        new_subject: `La matière "${targetName}" est maintenant disponible`,
-        new_chapter: `Nouveau chapitre : "${targetName}"`,
-        new_lesson:  `Nouvelle leçon : "${targetName}"`,
+        new_subject:         `La matière "${targetName}" est maintenant disponible`,
+        new_chapter:         `Nouveau chapitre : "${targetName}"`,
+        new_lesson:          `Nouvelle leçon : "${targetName}"`,
+        new_exercise:        `Exercice disponible : "${targetName}" — à compléter`,
+        evaluation_reminder: `Évaluation prévue : "${targetName}"`,
+        timetable_change:    `Ton emploi du temps a été mis à jour`,
     };
     try {
-        await fetch(`${WORKER_URL}/notify`, {
+        fetch(`${WORKER_URL}/notify`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                action_type: actionType, actor_id: actorId, actor_name: actorName,
-                recipient_ids: recipientIds, target_id: targetId, target_name: targetName,
+                action_type: actionType,
+                actor_id: actorId,
+                actor_name: actorName,
+                recipient_ids: recipientIds,
+                target_id: targetId,
+                target_name: targetName,
                 message_preview: bodies[actionType],
-                extra_data: { push_title: titles[actionType], push_body: bodies[actionType], org_id: orgId, tab: 'myspace' },
+                extra_data: {
+                    push_title: titles[actionType],
+                    push_body:  bodies[actionType],
+                    org_id:     orgId,
+                    orgSlug,
+                    tab:        'myspace',
+                    subTab:     'cursus',
+                },
             }),
-        });
+        }).catch(() => {});
     } catch {}
 }
 
@@ -215,6 +233,22 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
         await supabase.from('chapters').update({ status: newStatus }).eq('id', ch.id);
         setChapters(prev => prev.map(c => c.id === ch.id ? { ...c, status: newStatus } : c));
         toast.success(newStatus === 'published' ? '📢 Chapitre publié' : '🔒 Chapitre masqué');
+        // 🔔 Push notification quand chapitre passe en publié
+        if (newStatus === 'published') {
+            const subject = subjects.find((s: any) => s.id === ch.subject_id);
+            if (subject?.classroom_id) {
+                const { data: students } = await supabase.from('student_profiles').select('id')
+                    .eq('classroom_id', subject.classroom_id).eq('organization_id', orgId);
+                if (students?.length) {
+                    sendCursusNotification({
+                        actorId: userId, actorName: userName, orgId,
+                        actionType: 'new_chapter',
+                        targetId: ch.id, targetName: ch.title,
+                        recipientIds: students.map((s: any) => s.id),
+                    });
+                }
+            }
+        }
     };
 
     const saveChapterContent = async (chId: string) => {
@@ -301,7 +335,7 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
                 if (students?.length) {
                     await sendCursusNotification({
                         actorId: userId, actorName: userName, orgId,
-                        actionType: 'new_lesson', // reuse with exercise title
+                        actionType: 'new_exercise',
                         targetId: data.id, targetName: data.title,
                         recipientIds: students.map((s: any) => s.id),
                     });

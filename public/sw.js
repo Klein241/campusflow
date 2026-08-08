@@ -19,18 +19,34 @@ self.addEventListener('push', (event) => {
 
     try {
         const data = event.data.json();
+        const actionType = data.action_type || data.data?.action_type || '';
 
         // Build actions based on notification type
         const actions = [];
-        if (data.data?.conversationId) {
+
+        // ══ Cursus actions ══
+        if (actionType === 'new_exercise') {
+            actions.push({ action: 'do_exercise', title: '🏋️ Faire l\'exercice' });
+        } else if (actionType === 'new_lesson') {
+            actions.push({ action: 'view_lesson', title: '📚 Lire la leçon' });
+        } else if (actionType === 'new_chapter') {
+            actions.push({ action: 'view_chapter', title: '📖 Voir le chapitre' });
+        } else if (actionType === 'new_subject') {
+            actions.push({ action: 'view_cursus', title: '🎓 Voir le cursus' });
+        } else if (actionType === 'evaluation_scheduled' || actionType === 'evaluation_reminder') {
+            actions.push({ action: 'view_eval', title: '⏰ Voir l\'évaluation' });
+        } else if (actionType === 'timetable_change') {
+            actions.push({ action: 'view_timetable', title: '📅 Voir l\'EDT' });
+        }
+        // Legacy actions
+        else if (data.data?.conversationId) {
             actions.push({ action: 'reply', title: '💬 Répondre' });
-        } else if (data.data?.prayerId) {
-            actions.push({ action: 'pray', title: '🙏 Prier' });
         } else if (data.data?.bookId) {
             actions.push({ action: 'read', title: '📖 Lire' });
         } else if (data.data?.orderId) {
             actions.push({ action: 'view', title: '📦 Voir' });
         }
+
         // School-specific actions
         if (data.data?.tab === 'myspace' && data.data?.subTab === 'bulletin') {
             actions.push({ action: 'view_grades', title: '📊 Voir les notes' });
@@ -39,16 +55,32 @@ self.addEventListener('push', (event) => {
         }
         actions.push({ action: 'open', title: 'Ouvrir' });
 
+        // Vibration pattern by type
+        const vibrate = actionType === 'new_exercise' || actionType === 'evaluation_reminder'
+            ? [200, 100, 200, 100, 200]  // urgent
+            : [100, 50, 100];            // standard
+
         const options = {
             body: data.body || data.message || '',
             icon: data.icon || '/icon-192.png',
             badge: data.badge || '/icon-192.png',
-            vibrate: [100, 50, 100],
-            data: data.data || { url: '/' },
+            vibrate,
+            data: {
+                ...(data.data || {}),
+                url: data.data?.url || '/',
+                action_type: actionType,
+            },
             actions,
-            tag: data.tag || `campusflow-${Date.now()}`,
+            tag: data.tag || `campusflow-${actionType}-${Date.now()}`,
             renotify: true,
-            requireInteraction: !!(data.data?.conversationId || data.data?.orderId || data.data?.subTab === 'bulletin'),
+            requireInteraction: !!(
+                data.data?.conversationId ||
+                data.data?.orderId ||
+                data.data?.subTab === 'bulletin' ||
+                actionType === 'new_exercise' ||
+                actionType === 'evaluation_reminder' ||
+                actionType === 'evaluation_scheduled'
+            ),
         };
 
         event.waitUntil(
@@ -67,22 +99,28 @@ self.addEventListener('notificationclick', (event) => {
 
     // Build target URL from notification data
     const data = event.notification.data || {};
+    const actionType = data.action_type || '';
     let url = data.url || '/';
 
     // CampusFlow school deep-links (/{orgSlug}/campus?tab=X)
     const orgSlug = data.orgSlug;
-    if (orgSlug && data.tab) {
-        const tabParam = data.tab;
+
+    // ══ Cursus deep-links ══
+    const cursusActions = ['view_cursus','view_chapter','view_lesson','do_exercise','view_exercise','view_eval','view_timetable'];
+    if (cursusActions.includes(event.action) || ['new_subject','new_chapter','new_lesson','new_exercise','evaluation_reminder','evaluation_scheduled','timetable_change'].includes(actionType)) {
+        const slug = orgSlug || data.orgSlug;
+        if (slug) {
+            url = `/${slug}/campus?tab=myspace&subTab=cursus`;
+        }
+    } else if (orgSlug && data.tab) {
         const subTabParam = data.subTab ? `&subTab=${data.subTab}` : '';
-        url = `/${orgSlug}/campus?tab=${tabParam}${subTabParam}`;
+        url = `/${orgSlug}/campus?tab=${data.tab}${subTabParam}`;
     }
     // Legacy deep-links
     else if (data.conversationId) {
         url = `/?nav=conversation&id=${data.conversationId}`;
     } else if (data.groupId) {
         url = `/?nav=group&id=${data.groupId}`;
-    } else if (data.prayerId) {
-        url = `/?nav=prayer&id=${data.prayerId}`;
     } else if (data.bookId) {
         url = `/?tab=library&book=${data.bookId}`;
     } else if (data.orderId) {
