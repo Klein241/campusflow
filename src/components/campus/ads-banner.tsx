@@ -25,17 +25,22 @@ export function AdsBanner({ userId, orgId, onSkyUpdate, role = 'student' }: AdsB
     const viewStartRef = useRef<number>(Date.now());
     const videoRef = useRef<HTMLVideoElement | null>(null);
 
-    // Load active ads — no starts_at filter (column may not exist yet, handled by SQL migration)
+    // Load active ads — requires RLS policy: "advertisements_public_read" (is_active = true)
     useEffect(() => {
         const load = async () => {
             const now = new Date().toISOString();
-            const { data } = await supabase
+            const { data, error } = await supabase
                 .from('advertisements')
                 .select('*')
                 .eq('is_active', true)
                 .or(`ends_at.is.null,ends_at.gte.${now}`)
                 .order('created_at', { ascending: false })
                 .limit(10);
+            if (error) {
+                console.warn('[AdsBanner] Erreur chargement pubs:', error.message,
+                    '— Vérifiez la politique RLS "advertisements_public_read" dans Supabase');
+                return;
+            }
             if (!data || data.length === 0) return;
 
             // Load which ads this user already earned points for
