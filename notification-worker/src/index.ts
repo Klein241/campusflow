@@ -85,6 +85,7 @@ type NotificationActionType =
     | 'timetable_change'
     | 'admin_announcement'
     | 'evaluation_reminder'
+    | 'exercise_reminder'
     | 'general';
 
 type Priority = 'high' | 'medium' | 'low';
@@ -179,6 +180,7 @@ const DEFAULT_PREFERENCES: Record<NotificationActionType, { in_app: boolean; pus
     timetable_change: { in_app: true, push: true },
     admin_announcement: { in_app: true, push: true },
     evaluation_reminder: { in_app: true, push: true },
+    exercise_reminder:   { in_app: true, push: true },
     general: { in_app: true, push: false },
 };
 
@@ -225,7 +227,8 @@ const PRIORITY_MAP: Record<NotificationActionType, Priority> = {
     discipline_sanction: 'high',
     timetable_change: 'medium',
     admin_announcement: 'high',
-    evaluation_reminder: 'medium',
+    evaluation_reminder: 'high',
+    exercise_reminder:   'high',
     general: 'low',
 };
 
@@ -611,7 +614,13 @@ function buildNotificationMessage(
         case 'evaluation_reminder':
             return {
                 title: '⏰ Rappel — Évaluation demain',
-                message: `${short(targetName)} — ${short(preview)}`,
+                message: `Évaluation prévue demain : "${short(targetName)}" — prépare-toi !`,
+            };
+
+        case 'exercise_reminder':
+            return {
+                title: '⚠️ Exercice non terminé',
+                message: `Tu n'as pas encore complété l'exercice "${short(targetName)}" — à faire !`,
             };
 
         case 'payment_confirmed':
@@ -752,15 +761,24 @@ function buildActionData(actionType: NotificationActionType, payload: NotifyPayl
                 bookId: payload.target_id,
             };
 
-        // ── School deep-links ──
+        // ── School notes deep-link ──
         case 'grade_published':
-        case 'evaluation_scheduled':
-        case 'evaluation_reminder':
             return {
                 ...base,
                 tab: 'myspace',
                 subTab: 'bulletin',
                 orgSlug: payload.extra_data?.orgSlug,
+            };
+
+        // ── Évaluations → cursus ──
+        case 'evaluation_scheduled':
+        case 'evaluation_reminder':
+            return {
+                ...base,
+                tab: 'myspace',
+                subTab: 'cursus',
+                orgSlug: payload.extra_data?.orgSlug,
+                targetId: payload.target_id,
             };
 
         case 'payment_confirmed':
@@ -783,7 +801,7 @@ function buildActionData(actionType: NotificationActionType, payload: NotifyPayl
             return {
                 ...base,
                 tab: 'myspace',
-                subTab: 'horaires',
+                subTab: 'schedule',
                 orgSlug: payload.extra_data?.orgSlug,
             };
 
@@ -822,6 +840,7 @@ function buildActionData(actionType: NotificationActionType, payload: NotifyPayl
         case 'new_chapter':
         case 'new_lesson':
         case 'new_exercise':
+        case 'exercise_reminder':
             return {
                 ...base,
                 tab: 'myspace',
