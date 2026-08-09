@@ -1,42 +1,58 @@
 /**
  * ============================================================
- * CampusFlow - DataProvider
+ * CampusFlow — DataProvider v3
  * ============================================================
- * Orchestrateur dual-write avec Outbox Transactionnel.
+ * Corrections par rapport à v2 :
  *
- * ECRITURE NORMALE (Supabase UP):
- *   1. Ecrit dans Supabase (les triggers fn_sync_outbox inserent
- *      automatiquement dans sync_outbox - meme transaction)
- *   2. Retourne le resultat a l utilisateur immediatement
- *   3. Worker Cloudflare (cron 1 min) lit outbox → sync D1
+ * [FIX-1] supabaseOp() maintenant enveloppé dans Promise.race()
+ *         avec SUPABASE_TIMEOUT_MS — timeout réellement appliqué.
  *
- * ECRITURE (Supabase DOWN):
- *   1. Ecrit directement dans D1 via Worker REST API
- *   2. Insere dans pending_supabase_sync (D1)
- *   3. Superadmin alerte par push notification
- *   4. Worker health-check detecte retour Supabase → replay
+ * [FIX-2] registerPendingSync : échec notifie l'admin au lieu
+ *         d'être avalé silencieusement.
  *
- * LECTURE (Supabase DOWN):
- *   1. Tente Supabase (primaire)
- *   2. Si timeout/erreur → fallback D1 (transparent pour user)
+ * [FIX-3] record_id tiré du payload AVANT writeToD1, pas après.
+ *         ID généré côté client, injecté dans payload.id.
+ *
+ * [FIX-4] pending_supabase_sync idempotent : clé de déduplication
+ *         = hash(table_name + record_id + operation).
+ *
+ * [FIX-5] read() à double échec retourne source:'both_failed'
+ *         (distinguable de source:'not_found').
+ *
+ * [FIX-6] notifyAdmin avec log persistant D1 en fallback.
  * ============================================================
  */
 
 import { supabase } from '@/lib/supabase';
 import { notifyAdmin } from '@/lib/notify-admin';
 
-// URL du Worker Cloudflare
 const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL
     || 'https://campusflow-worker.kleintaptue1.workers.dev';
 
-// Timeout pour detecter Supabase DOWN (ms)
-const SUPABASE_TIMEOUT_MS = 8000;
+// Timeout réel appliqué à supabaseOp() via Promise.race()
+const SUPABASE_TIMEOUT_MS = 5000;
 
-// ── Helper : fetch avec timeout ───────────────────────────
+// ── [FIX-1] Race Supabase vs timeout ─────────────────────
+function withSupabaseTimeout<T>(
+    op: () => Promise<T>,
+    timeoutMs = SUPABASE_TIMEOUT_MS
+): Promise<T> {
+    return Promise.race([
+        op(),
+        new Promise<never>((_, reject) =>
+            setTimeout(
+                () => reject(new Error(`Supabase timeout after ${timeoutMs}ms`)),
+                timeoutMs
+            )
+        ),
+    ]);
+}
+
+// ── fetch avec timeout (pour appels D1/Worker) ────────────
 async function fetchWithTimeout(
     url: string,
     options: RequestInit,
-    timeoutMs = SUPABASE_TIMEOUT_MS
+    timeoutMs = 5000
 ): Promise<Response> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -47,18 +63,74 @@ async function fetchWithTimeout(
     }
 }
 
-// ── Ecriture vers D1 via Worker (fallback Supabase DOWN) ──
+// ── [FIX-6] Log persistant D1 (fallback si notifyAdmin DOWN) ─
+async function persistLog(
+    event: string,
+    table: string,
+    error: string
+): Promise<void> {
+    try {
+        await fetchWithTimeout(
+            `${WORKER_URL}/api/d1/system_alerts`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: crypto.randomUUID(),
+                    service: 'DataProvider',
+                    event,
+                    table_name: table,
+                    error_msg: error,
+                    created_at: new Date().toISOString(),
+                }),
+            },
+            3000
+        );
+    } catch {
+        // Si même D1 est down : on ne peut rien faire de plus
+        // console.error est acceptable ici car c'est le dernier recours
+        console.error(`[DataProvider] CRITICAL — Log persistant échoué: ${event} on ${table}`);
+    }
+}
+
+// ── Notify + log persistant (double filet) ────────────────
+async function alertWithFallback(params: {
+    event: string;
+    table: string;
+    error: string;
+    failover: string;
+    elapsed_ms?: number;
+}): Promise<void> {
+    // Tenter la notification push/email admin
+    const notifOk = await notifyAdmin({
+        event: params.event,
+        table: params.table,
+        error: params.error,
+        failover: params.failover,
+        elapsed_ms: params.elapsed_ms,
+    }).then(() => true).catch(() => false);
+
+    // Si la notification échoue → log persistant D1
+    if (!notifOk) {
+        await persistLog(params.event, params.table, params.error);
+    }
+}
+
+// ── Écriture D1 via Worker ────────────────────────────────
 async function writeToD1(
     table: string,
-    operation: 'upsert' | 'delete',
     payload: Record<string, unknown>
 ): Promise<{ data: unknown; error: null } | { data: null; error: Error }> {
     try {
-        const res = await fetch(`${WORKER_URL}/api/d1/${table}`, {
-            method: operation === 'delete' ? 'DELETE' : 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
+        const res = await fetchWithTimeout(
+            `${WORKER_URL}/api/d1/${table}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            },
+            5000
+        );
         if (!res.ok) throw new Error(`D1 write failed: ${res.status}`);
         return { data: await res.json(), error: null };
     } catch (err) {
@@ -66,14 +138,64 @@ async function writeToD1(
     }
 }
 
-// ── Lecture depuis D1 via Worker ──────────────────────────
+// ── [FIX-3+4] Enregistrement pending sync idempotent ─────
+async function registerPendingSync(
+    table: string,
+    operation: 'INSERT' | 'UPDATE' | 'DELETE',
+    recordId: string,  // [FIX-3] toujours issu de payload.id, jamais regeneré
+    payload: Record<string, unknown>
+): Promise<void> {
+    // [FIX-4] Clé de déduplication déterministe
+    // Même appel deux fois = même dedup_key = UPSERT pas de doublon
+    const dedupKey = `${table}::${recordId}::${operation}`;
+
+    const entry = {
+        id: crypto.randomUUID(),
+        dedup_key: dedupKey,     // colonne UNIQUE dans pending_supabase_sync
+        table_name: table,
+        operation,
+        record_id: recordId,
+        payload: JSON.stringify(payload),
+        retry_count: 0,
+        created_at: new Date().toISOString(),
+    };
+
+    try {
+        const res = await fetchWithTimeout(
+            `${WORKER_URL}/api/d1/pending_supabase_sync`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(entry),
+            },
+            5000
+        );
+        if (!res.ok) throw new Error(`pending_supabase_sync write failed: ${res.status}`);
+    } catch (err) {
+        // [FIX-2] Ne plus avaler silencieusement — alerter l'admin
+        await alertWithFallback({
+            event: 'PENDING_SYNC_REGISTRATION_FAILED',
+            table,
+            error: String(err),
+            failover: 'data_in_d1_but_no_replay_trace',
+        });
+        // Propager pour que write() sache que la trace de replay est absente
+        throw err;
+    }
+}
+
+// ── Lecture D1 ────────────────────────────────────────────
 async function readFromD1(
     table: string,
     params: Record<string, string>
 ): Promise<{ data: unknown; error: null } | { data: null; error: Error }> {
     try {
         const qs = new URLSearchParams(params).toString();
-        const res = await fetch(`${WORKER_URL}/api/d1/${table}?${qs}`);
+        const res = await fetchWithTimeout(
+            `${WORKER_URL}/api/d1/${table}?${qs}`,
+            { method: 'GET' },
+            5000
+        );
         if (!res.ok) throw new Error(`D1 read failed: ${res.status}`);
         return { data: await res.json(), error: null };
     } catch (err) {
@@ -82,99 +204,186 @@ async function readFromD1(
 }
 
 // ═══════════════════════════════════════════════════════════
-// DataProvider public API
+// Types publics
+// ═══════════════════════════════════════════════════════════
+
+export type WriteResult<T> = {
+    data: T;
+    source: 'supabase' | 'd1';
+    replay_pending: boolean;
+};
+
+export type ReadResult<T> = {
+    data: T | null;
+    source: 'supabase' | 'd1' | 'not_found' | 'both_failed'; // [FIX-5]
+};
+
+// ═══════════════════════════════════════════════════════════
+// DataProvider
 // ═══════════════════════════════════════════════════════════
 
 export const DataProvider = {
 
     /**
-     * write() - Ecriture avec outbox transactionnel
+     * write() — Dual-write avec détection de panne réelle
      *
-     * Appelle supabaseOp() en priorite.
-     * Les triggers Postgres inserent automatiquement dans sync_outbox.
-     * Si Supabase est DOWN → fallback D1 direct + alerte superadmin.
+     * IMPORTANT : l'appelant DOIT injecter l'id dans payload avant d'appeler :
+     *   const id = crypto.randomUUID();
+     *   await DataProvider.write(
+     *     () => supabase.from('posts').insert({ id, ...data }),
+     *     { table: 'school_posts', payload: { id, ...data } }
+     *   );
      */
     async write<T>(
         supabaseOp: () => Promise<{ data: T | null; error: unknown }>,
-        d1Fallback: { table: string; payload: Record<string, unknown> }
-    ): Promise<T> {
-        try {
-            const result = await supabaseOp();
-            if (result.error) throw result.error;
-            if (result.data === null) throw new Error('No data returned');
-            return result.data;
-        } catch (primaryError) {
-            // Supabase est DOWN ou erreur critique
-            console.warn('[DataProvider] Supabase write failed, falling back to D1:', primaryError);
+        d1Fallback: {
+            table: string;
+            payload: Record<string, unknown>; // DOIT contenir .id
+            operation?: 'INSERT' | 'UPDATE' | 'DELETE';
+        }
+    ): Promise<WriteResult<T>> {
+        const startMs = Date.now();
 
-            // Alert superadmin
-            notifyAdmin({
+        // [FIX-3] Extraire recordId AVANT toute écriture
+        const recordId = String(d1Fallback.payload.id ?? (() => {
+            throw new Error(
+                `[DataProvider] payload.id manquant pour table '${d1Fallback.table}'. ` +
+                `Générez l'ID côté client avant d'appeler write().`
+            );
+        })());
+
+        try {
+            // [FIX-1] supabaseOp() soumis à un vrai timeout
+            const result = await withSupabaseTimeout(
+                () => supabaseOp(),
+                SUPABASE_TIMEOUT_MS
+            );
+
+            if (result.error) throw result.error;
+            if (result.data === null) throw new Error('Supabase returned null data');
+
+            return { data: result.data, source: 'supabase', replay_pending: false };
+
+        } catch (primaryError) {
+            const elapsed = Date.now() - startMs;
+            console.warn(`[DataProvider] Supabase DOWN (${elapsed}ms):`, primaryError);
+
+            // Alerte admin avec double filet
+            alertWithFallback({
                 event: 'SUPABASE_WRITE_FAILED',
                 table: d1Fallback.table,
                 error: String(primaryError),
                 failover: 'd1_active',
-            }).catch(() => {}); // fire and forget
+                elapsed_ms: elapsed,
+            }).catch(() => {});
 
-            // Ecriture directe D1
-            const d1Result = await writeToD1(d1Fallback.table, 'upsert', d1Fallback.payload);
+            // Écrire dans D1
+            const d1Result = await writeToD1(d1Fallback.table, d1Fallback.payload);
+
             if (d1Result.error) {
-                // Les deux ont echoue
-                notifyAdmin({
-                    event: 'BOTH_SERVICES_FAILED',
+                alertWithFallback({
+                    event: 'BOTH_SERVICES_WRITE_FAILED',
                     table: d1Fallback.table,
                     error: `Supabase: ${primaryError} | D1: ${d1Result.error}`,
                     failover: 'none',
                 }).catch(() => {});
-                throw new Error('Service temporarily unavailable. Please retry in a moment.');
+                throw new Error('Service indisponible. Réessayez dans un instant.');
             }
 
-            return d1Result.data as T;
+            // [FIX-2+4] Enregistrer trace de replay (idempotent, avec alerte si échec)
+            let replayPending = false;
+            try {
+                await registerPendingSync(
+                    d1Fallback.table,
+                    d1Fallback.operation ?? 'INSERT',
+                    recordId,
+                    d1Fallback.payload
+                );
+                replayPending = true;
+            } catch {
+                // registerPendingSync a déjà alerté l'admin
+                // La donnée est dans D1 mais sans garantie de replay
+                replayPending = false;
+            }
+
+            return {
+                data: d1Result.data as T,
+                source: 'd1',
+                replay_pending: replayPending,
+            };
         }
     },
 
     /**
-     * read() - Lecture avec fallback D1 transparent
-     *
-     * Lit depuis Supabase en priorite.
-     * Si timeout ou erreur reseau → fallback D1 (user ne sait pas).
+     * read() — Lecture avec fallback D1 et distinction d1 sources
      */
     async read<T>(
         supabaseOp: () => Promise<{ data: T | null; error: unknown }>,
         d1Fallback: { table: string; params: Record<string, string> }
-    ): Promise<T | null> {
+    ): Promise<ReadResult<T>> {
         try {
-            const result = await supabaseOp();
+            const result = await withSupabaseTimeout(
+                () => supabaseOp(),
+                SUPABASE_TIMEOUT_MS
+            );
             if (result.error) throw result.error;
-            return result.data;
-        } catch (err) {
-            console.warn('[DataProvider] Supabase read failed, falling back to D1:', err);
 
-            notifyAdmin({
+            // data null = enregistrement inexistant (pas une panne)
+            if (result.data === null) return { data: null, source: 'not_found' };
+            return { data: result.data, source: 'supabase' };
+
+        } catch (supabaseErr) {
+            console.warn('[DataProvider] Supabase read failed, basculement D1:', supabaseErr);
+
+            alertWithFallback({
                 event: 'SUPABASE_READ_FAILED',
                 table: d1Fallback.table,
-                error: String(err),
+                error: String(supabaseErr),
                 failover: 'd1_active',
             }).catch(() => {});
 
             const d1Result = await readFromD1(d1Fallback.table, d1Fallback.params);
-            if (d1Result.error) return null;
-            return d1Result.data as T;
+
+            if (d1Result.error) {
+                // [FIX-5] Double échec explicitement distingué
+                alertWithFallback({
+                    event: 'BOTH_SERVICES_READ_FAILED',
+                    table: d1Fallback.table,
+                    error: `Supabase: ${supabaseErr} | D1: ${d1Result.error}`,
+                    failover: 'none',
+                }).catch(() => {});
+
+                return { data: null, source: 'both_failed' };
+            }
+
+            return { data: d1Result.data as T, source: 'd1' };
         }
     },
 
     /**
-     * healthCheck() - Verifie si Supabase repond
-     * Utilise par le Worker pour detecter le retour de Supabase
+     * healthCheck() — État réel des services
      */
-    async healthCheck(): Promise<{ supabase: boolean; d1: boolean }> {
-        const [supabaseOk, d1Ok] = await Promise.allSettled([
-            supabase.from('organizations').select('id').limit(1),
-            fetch(`${WORKER_URL}/api/health`).then(r => r.ok),
-        ]);
-
-        return {
-            supabase: supabaseOk.status === 'fulfilled' && !supabaseOk.value.error,
-            d1: d1Ok.status === 'fulfilled' && d1Ok.value === true,
-        };
+    async healthCheck(): Promise<{
+        supabase: boolean;
+        d1: boolean;
+        pending_syncs: number;
+    }> {
+        try {
+            const res = await fetchWithTimeout(`${WORKER_URL}/health`, { method: 'GET' }, 5000);
+            const json = await res.json() as {
+                services: {
+                    supabase: { status: string };
+                    d1: { status: string };
+                    pending_syncs: number;
+                };
+            };
+            return {
+                supabase: json.services.supabase.status === 'up',
+                d1: json.services.d1.status === 'up',
+                pending_syncs: json.services.pending_syncs ?? 0,
+            };
+        } catch {
+            return { supabase: false, d1: false, pending_syncs: -1 };
+        }
     },
 };
