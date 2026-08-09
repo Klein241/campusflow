@@ -26,6 +26,8 @@ export interface Env {
     USER_PREFERENCES: KVNamespace;
     // R2 Storage (10GB free)
     LIBRARY_BUCKET: R2Bucket;
+    // D1 — Miroir failover Supabase
+    CAMPUSFLOW_DB: D1Database;
     // Queue (optional — only if on Workers Paid plan)
     PUSH_QUEUE?: Queue;
     // Secrets
@@ -35,6 +37,7 @@ export interface Env {
     VAPID_PRIVATE_KEY: string;
     VAPID_EMAIL: string;
     ADMIN_KEY: string;
+    SUPERADMIN_PROFILE_ID: string;
     // Vars
     RATE_LIMIT_PUSH_INTERVAL_MS: string;
     RATE_LIMIT_HOURLY_MAX: string;
@@ -1940,8 +1943,13 @@ export default {
             if (pathname === '/api/push/vapid-key' && method === 'GET') return handleVapidKey(env);
             if (pathname === '/api/push/send' && method === 'POST') return handlePushSend(request, env);
 
-            // ── Health ──
-            if (pathname === '/health' || pathname === '/api/status') return handleHealth(env);
+            // ── Health (inclut status D1) ──
+            if (pathname === '/health' || pathname === '/api/status') return handleHealthWithD1(request, env);
+
+            // ── D1 Failover API ──
+            if (pathname.startsWith('/api/d1/') && method === 'POST')   return handleD1Write(request, env, pathname);
+            if (pathname.startsWith('/api/d1/') && method === 'GET')    return handleD1Read(request, env, pathname);
+            if (pathname.startsWith('/api/d1/') && method === 'DELETE') return handleD1Delete(request, env, pathname);
 
             // ── R2 File Storage ──
             if (pathname === '/api/r2/upload' && method === 'POST') return handleR2Upload(request, env);
@@ -1965,7 +1973,10 @@ export default {
                     'POST   /api/r2/upload          → upload file to R2',
                     'POST   /api/r2/delete          → delete file from R2',
                     'GET    /r2/*                   → serve R2 file',
-                    'GET    /health                 → health check',
+                    'GET    /health                 → health check (+ D1 status)',
+                    'POST   /api/d1/:table          → D1 upsert (failover write)',
+                    'GET    /api/d1/:table          → D1 read (failover read)',
+                    'DELETE /api/d1/:table          → D1 delete (failover delete)',
                 ],
             }, 404);
         } catch (e: any) {
@@ -1973,8 +1984,351 @@ export default {
         }
     },
 
-    // Cron trigger
+    // Cron trigger (toutes les heures : notifications + outbox sync)
     async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-        ctx.waitUntil(handleCron(env));
+        ctx.waitUntil(Promise.all([
+            handleCron(env),
+            processOutbox(env),
+        ]));
     },
 };
+
+// ══════════════════════════════════════════════════════════
+// D1 FAILOVER HANDLERS
+// ══════════════════════════════════════════════════════════
+
+// Tables autorisees pour l'API D1 (whitelist securite - miroir COMPLET 95 tables)
+const D1_ALLOWED_TABLES = new Set([
+    // Auth & Core
+    'organizations', 'student_profiles', 'teacher_profiles', 'profiles',
+    'session_tokens', 'pin_attempts', 'platform_admins',
+    // University
+    'filieres', 'promotions', 'enrollments', 'matieres', 'notes',
+    'timetable', 'presences', 'paiements',
+    // School
+    'classrooms', 'subjects', 'disciplines', 'evaluations', 'grades',
+    'school_payments', 'timetable_slots', 'attendance', 'rooms',
+    'inscription_requests',
+    // Social & Posts
+    'school_posts', 'stories', 'post_comments', 'story_comments',
+    'tutoring_requests', 'experience_feedbacks',
+    // Chat & Messages
+    'chat_conversations', 'chat_participants', 'chat_messages',
+    'direct_messages', 'message_reactions', 'message_threads',
+    // Study Groups
+    'study_groups', 'study_group_members', 'study_group_join_requests',
+    'study_group_messages',
+    // Forum & Shop
+    'forum_threads', 'forum_replies', 'shop_products', 'shop_orders',
+    // Cursus & Learning
+    'teacher_curricula', 'subject_programs', 'chapters', 'lessons',
+    'exercises', 'exercise_submissions', 'lesson_progress', 'grade_disputes',
+    'lesson_video_views', 'lesson_reader_notes',
+    // Exams
+    'exam_papers', 'exam_sessions', 'exam_participants',
+    'exam_permission_requests',
+    // Forms
+    'forms', 'form_fields', 'form_responses', 'form_answers',
+    // Sky & Gamification
+    'sky_transactions', 'sky_points', 'sky_points_history',
+    'sky_point_packs', 'sky_point_requests',
+    // Library
+    'library_items', 'library_favorites', 'library_reading_history',
+    'library_ads',
+    // Marketplace
+    'marketplace_products', 'marketplace_orders', 'marketplace_favorites',
+    // Notifications & Push
+    'notifications', 'notification_preferences', 'notification_queue',
+    'push_subscriptions', 'push_tokens',
+    'admin_notifications', 'organization_announcements',
+    // Livestream & Media
+    'livestream_comments', 'livestream_reactions',
+    'advertisements', 'ad_views',
+    // Progress & Resources
+    'student_progress', 'day_resources', 'day_views',
+    // Queues & Logs
+    'whatsapp_queue', 'cursus_push_log',
+    // Settings
+    'app_settings', 'platform_settings',
+    // System
+    'system_alerts', 'pending_supabase_sync',
+]);
+
+function getTableFromPath(pathname: string): string | null {
+    const parts = pathname.split('/');
+    const table = parts[parts.length - 1];
+    return D1_ALLOWED_TABLES.has(table) ? table : null;
+}
+
+/** POST /api/d1/:table — Upsert idempotent dans D1 */
+async function handleD1Write(request: Request, env: Env, pathname: string): Promise<Response> {
+    const table = getTableFromPath(pathname);
+    if (!table) return json({ error: 'Table not allowed' }, 403);
+
+    const body = await request.json() as Record<string, unknown>;
+    if (!body || !body.id) return json({ error: 'Missing id field for upsert' }, 400);
+
+    try {
+        // Construire la requete d'upsert dynamique
+        const cols = Object.keys(body);
+        const placeholders = cols.map((_, i) => `?${i + 1}`).join(', ');
+        const updates = cols.map(c => `${c} = excluded.${c}`).join(', ');
+        const values = Object.values(body);
+
+        await env.CAMPUSFLOW_DB.prepare(
+            `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${placeholders})
+             ON CONFLICT(id) DO UPDATE SET ${updates}`
+        ).bind(...values).run();
+
+        // Enregistrer dans pending_supabase_sync pour re-sync quand Supabase revient
+        await env.CAMPUSFLOW_DB.prepare(
+            `INSERT INTO pending_supabase_sync(table_name, operation, record_id, payload)
+             VALUES (?1, ?2, ?3, ?4)`
+        ).bind(table, 'INSERT', String(body.id), JSON.stringify(body)).run();
+
+        return json({ ok: true, table, id: body.id });
+    } catch (err: any) {
+        return json({ error: err.message }, 500);
+    }
+}
+
+/** GET /api/d1/:table — Lecture depuis D1 */
+async function handleD1Read(request: Request, env: Env, pathname: string): Promise<Response> {
+    const table = getTableFromPath(pathname);
+    if (!table) return json({ error: 'Table not allowed' }, 403);
+
+    const url = new URL(request.url);
+    const orgId = url.searchParams.get('organization_id');
+    const limit = parseInt(url.searchParams.get('limit') || '50');
+    const offset = parseInt(url.searchParams.get('offset') || '0');
+
+    try {
+        let stmt;
+        if (orgId) {
+            stmt = env.CAMPUSFLOW_DB.prepare(
+                `SELECT * FROM ${table} WHERE organization_id = ?1 ORDER BY created_at DESC LIMIT ?2 OFFSET ?3`
+            ).bind(orgId, limit, offset);
+        } else {
+            stmt = env.CAMPUSFLOW_DB.prepare(
+                `SELECT * FROM ${table} ORDER BY created_at DESC LIMIT ?1 OFFSET ?2`
+            ).bind(limit, offset);
+        }
+        const { results } = await stmt.all();
+        return json(results);
+    } catch (err: any) {
+        return json({ error: err.message }, 500);
+    }
+}
+
+/** DELETE /api/d1/:table — Soft delete ou delete reel */
+async function handleD1Delete(request: Request, env: Env, pathname: string): Promise<Response> {
+    const table = getTableFromPath(pathname);
+    if (!table) return json({ error: 'Table not allowed' }, 403);
+
+    const body = await request.json() as { id: string };
+    if (!body?.id) return json({ error: 'Missing id' }, 400);
+
+    try {
+        await env.CAMPUSFLOW_DB.prepare(
+            `DELETE FROM ${table} WHERE id = ?1`
+        ).bind(body.id).run();
+        return json({ ok: true });
+    } catch (err: any) {
+        return json({ error: err.message }, 500);
+    }
+}
+
+/** GET /health — Health check etendu avec status D1 */
+async function handleHealthWithD1(request: Request, env: Env): Promise<Response> {
+    const start = Date.now();
+    const results: Record<string, unknown> = {};
+
+    // Test Supabase
+    try {
+        const res = await fetch(`${env.SUPABASE_URL}/rest/v1/organizations?select=id&limit=1`, {
+            headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` },
+            signal: AbortSignal.timeout(5000),
+        });
+        results.supabase = { status: res.ok ? 'up' : 'degraded', latency_ms: Date.now() - start };
+    } catch {
+        results.supabase = { status: 'down', latency_ms: Date.now() - start };
+    }
+
+    // Test D1
+    const d1Start = Date.now();
+    try {
+        await env.CAMPUSFLOW_DB.prepare('SELECT 1').run();
+        results.d1 = { status: 'up', latency_ms: Date.now() - d1Start };
+    } catch {
+        results.d1 = { status: 'down', latency_ms: Date.now() - d1Start };
+    }
+
+    // Pending syncs en attente
+    try {
+        const { results: pending } = await env.CAMPUSFLOW_DB.prepare(
+            'SELECT COUNT(*) as count FROM pending_supabase_sync WHERE synced_at IS NULL'
+        ).all();
+        results.pending_syncs = (pending[0] as any)?.count ?? 0;
+    } catch { results.pending_syncs = 'unknown'; }
+
+    return json({ ok: true, timestamp: new Date().toISOString(), services: results });
+}
+
+// ══════════════════════════════════════════════════════════
+// OUTBOX PROCESSOR (cron)
+// Lit sync_outbox depuis Supabase et pousse vers D1
+// ══════════════════════════════════════════════════════════
+
+async function processOutbox(env: Env): Promise<void> {
+    const supabaseUrl = env.SUPABASE_URL?.replace(/\/$/, '');
+    if (!supabaseUrl || !env.SUPABASE_SERVICE_KEY) return;
+
+    try {
+        // 1. Lire les entrees non syncees (batch de 100 max)
+        const res = await fetch(
+            `${supabaseUrl}/rest/v1/sync_outbox?synced_at=is.null&order=created_at.asc&limit=100`,
+            { headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` } }
+        );
+        if (!res.ok) return;
+
+        const entries = await res.json() as Array<{
+            id: string; table_name: string; operation: string;
+            record_id: string; payload: Record<string, unknown>; retry_count: number;
+        }>;
+
+        if (!entries.length) return;
+
+        const successIds: string[] = [];
+        const failedIds: { id: string; error: string }[] = [];
+
+        // 2. Upsert chaque entree dans D1
+        for (const entry of entries) {
+            if (!D1_ALLOWED_TABLES.has(entry.table_name)) {
+                successIds.push(entry.id); // ignorer les tables non mirrorees
+                continue;
+            }
+            try {
+                const payload = entry.payload;
+                if (entry.operation === 'DELETE') {
+                    await env.CAMPUSFLOW_DB.prepare(
+                        `DELETE FROM ${entry.table_name} WHERE id = ?1`
+                    ).bind(String(entry.record_id)).run();
+                } else {
+                    const cols = Object.keys(payload);
+                    const placeholders = cols.map((_, i) => `?${i + 1}`).join(', ');
+                    const updates = cols.map(c => `${c} = excluded.${c}`).join(', ');
+                    const values = cols.map(c => {
+                        const v = payload[c];
+                        // Serialiser arrays et objets en JSON pour SQLite
+                        return Array.isArray(v) || (typeof v === 'object' && v !== null)
+                            ? JSON.stringify(v) : v;
+                    });
+                    await env.CAMPUSFLOW_DB.prepare(
+                        `INSERT INTO ${entry.table_name} (${cols.join(', ')}) VALUES (${placeholders})
+                         ON CONFLICT(id) DO UPDATE SET ${updates}`
+                    ).bind(...values).run();
+                }
+                successIds.push(entry.id);
+            } catch (err: any) {
+                failedIds.push({ id: entry.id, error: err.message });
+            }
+        }
+
+        // 3. Marquer les entrees syncees dans Supabase
+        if (successIds.length) {
+            await fetch(`${supabaseUrl}/rest/v1/sync_outbox`, {
+                method: 'PATCH',
+                headers: {
+                    apikey: env.SUPABASE_SERVICE_KEY,
+                    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal',
+                },
+                body: JSON.stringify({ synced_at: new Date().toISOString() }),
+                // Note: filtrage par IDs via query param
+            });
+            // Requete avec filtre
+            const idList = successIds.map(id => `"${id}"`).join(',');
+            await fetch(`${supabaseUrl}/rest/v1/sync_outbox?id=in.(${idList})`, {
+                method: 'PATCH',
+                headers: {
+                    apikey: env.SUPABASE_SERVICE_KEY,
+                    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ synced_at: new Date().toISOString() }),
+            });
+        }
+
+        // 4. Incrementer retry_count pour les echecs
+        for (const fail of failedIds) {
+            await fetch(`${supabaseUrl}/rest/v1/sync_outbox?id=eq.${fail.id}`, {
+                method: 'PATCH',
+                headers: {
+                    apikey: env.SUPABASE_SERVICE_KEY,
+                    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    retry_count: entries.find(e => e.id === fail.id)!.retry_count + 1,
+                    last_error: fail.error.substring(0, 500),
+                }),
+            });
+        }
+
+        // 5. Rejouer les pending_supabase_sync vers Supabase (si Supabase est revenu)
+        await replaySupabaseSync(env);
+
+        console.log(`[Outbox] Processed: ${successIds.length} OK, ${failedIds.length} failed`);
+    } catch (err: any) {
+        console.error('[Outbox] processOutbox error:', err.message);
+    }
+}
+
+/** Rejoue les ecritures D1 vers Supabase quand Supabase revient */
+async function replaySupabaseSync(env: Env): Promise<void> {
+    const supabaseUrl = env.SUPABASE_URL?.replace(/\/$/, '');
+
+    try {
+        const { results: pending } = await env.CAMPUSFLOW_DB.prepare(
+            `SELECT * FROM pending_supabase_sync
+             WHERE synced_at IS NULL AND retry_count < 5
+             ORDER BY created_at ASC LIMIT 50`
+        ).all() as { results: Array<{ id: string; table_name: string; operation: string; record_id: string; payload: string; retry_count: number }> };
+
+        if (!pending.length) return;
+
+        for (const row of pending) {
+            try {
+                const payload = JSON.parse(row.payload);
+                const res = await fetch(`${supabaseUrl}/rest/v1/${row.table_name}`, {
+                    method: 'POST',
+                    headers: {
+                        apikey: env.SUPABASE_SERVICE_KEY,
+                        Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'resolution=merge-duplicates',
+                    },
+                    body: JSON.stringify(payload),
+                    signal: AbortSignal.timeout(5000),
+                });
+
+                if (res.ok || res.status === 409) {
+                    await env.CAMPUSFLOW_DB.prepare(
+                        `UPDATE pending_supabase_sync SET synced_at = ?1 WHERE id = ?2`
+                    ).bind(new Date().toISOString(), row.id).run();
+                } else {
+                    await env.CAMPUSFLOW_DB.prepare(
+                        `UPDATE pending_supabase_sync SET retry_count = retry_count + 1, last_tried = ?1 WHERE id = ?2`
+                    ).bind(new Date().toISOString(), row.id).run();
+                }
+            } catch {
+                await env.CAMPUSFLOW_DB.prepare(
+                    `UPDATE pending_supabase_sync SET retry_count = retry_count + 1, last_tried = ?1 WHERE id = ?2`
+                ).bind(new Date().toISOString(), row.id).run();
+            }
+        }
+    } catch (err: any) {
+        console.error('[replaySupabaseSync] error:', err.message);
+    }
+}
