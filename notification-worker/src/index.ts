@@ -2070,45 +2070,57 @@ async function handleD1Write(request: Request, env: Env, pathname: string): Prom
     const rawBody = await request.json() as Record<string, unknown>;
     if (!rawBody || !rawBody.id) return json({ error: 'Missing id field — generate ID client-side before calling write()' }, 400);
 
-    // L'appelant précise l'opération réelle via __operation (INSERT ou UPDATE)
-    // On ne persiste pas ce champ de contrôle dans la table métier
     const operation = (rawBody.__operation as string === 'UPDATE') ? 'UPDATE' : 'INSERT';
     const body: Record<string, unknown> = { ...rawBody };
     delete body.__operation;
 
     try {
-        // UPSERT — jamais INSERT brut, pour garantir l'idempotence
         const cols = Object.keys(body);
         const placeholders = cols.map((_, i) => `?${i + 1}`).join(', ');
-        const updates = cols.map(c => `${c} = excluded.${c}`).join(', ');
         const values = Object.values(body).map(v =>
-            // Sérialiser arrays et objets pour SQLite
             Array.isArray(v) || (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v
         );
 
+        // INSERT OR REPLACE : idiome SQLite universel pour l'idempotence.
+        // Fonctionne même si la table n'a pas de UNIQUE INDEX explicite —
+        // contrairement à ON CONFLICT(id) qui exige une contrainte déclarée.
         await env.CAMPUSFLOW_DB.prepare(
-            `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${placeholders})
-             ON CONFLICT(id) DO UPDATE SET ${updates}`
+            `INSERT OR REPLACE INTO ${table} (${cols.join(', ')}) VALUES (${placeholders})`
         ).bind(...values).run();
 
-        // dedup_key inclut l'opération réelle — pas "INSERT" en dur
-        // ON CONFLICT DO UPDATE remet retry_count à 0 : si un enregistrement
-        // est modifié après échec de replay, on repart avec la version fraîche
+        // Trace pour replay D1 → Supabase
         const dedupKey = `${table}::${body.id}::${operation}`;
-        await env.CAMPUSFLOW_DB.prepare(
-            `INSERT INTO pending_supabase_sync
-               (id, table_name, operation, record_id, payload, dedup_key, status, retry_count, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', 0, ?7)
-             ON CONFLICT(dedup_key) DO UPDATE SET
-               payload = excluded.payload,
-               status = 'pending',
-               retry_count = 0,
-               last_error = NULL`
-        ).bind(
-            crypto.randomUUID(), table, operation,
-            String(body.id), JSON.stringify(body), dedupKey,
-            new Date().toISOString()
-        ).run();
+        try {
+            await env.CAMPUSFLOW_DB.prepare(
+                `INSERT INTO pending_supabase_sync
+                   (id, table_name, operation, record_id, payload, dedup_key, status, retry_count, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', 0, ?7)
+                 ON CONFLICT(dedup_key) DO UPDATE SET
+                   payload = excluded.payload,
+                   status = 'pending',
+                   retry_count = 0,
+                   last_error = NULL`
+            ).bind(
+                crypto.randomUUID(), table, operation,
+                String(body.id), JSON.stringify(body), dedupKey,
+                new Date().toISOString()
+            ).run();
+        } catch (syncErr: any) {
+            // Si l'index dedup_key n'existe pas encore : fallback sans ON CONFLICT
+            if (syncErr.message?.includes('no such index') || syncErr.message?.includes('does not match')) {
+                await env.CAMPUSFLOW_DB.prepare(
+                    `INSERT OR IGNORE INTO pending_supabase_sync
+                       (id, table_name, operation, record_id, payload, status, retry_count, created_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, 'pending', 0, ?6)`
+                ).bind(
+                    crypto.randomUUID(), table, operation,
+                    String(body.id), JSON.stringify(body),
+                    new Date().toISOString()
+                ).run();
+            }
+            // Écriture principale réussie : ne pas bloquer l'utilisateur pour un échec de trace
+            console.warn('[handleD1Write] pending_supabase_sync trace failed:', syncErr.message);
+        }
 
         return json({ ok: true, table, id: body.id });
     } catch (err: any) {
@@ -2157,24 +2169,36 @@ async function handleD1Delete(request: Request, env: Env, pathname: string): Pro
             `DELETE FROM ${table} WHERE id = ?1`
         ).bind(body.id).run();
 
-        // Tracer la suppression pour replay vers Supabase
-        // Si un INSERT/UPDATE pending existe pour le même record_id, les deux
-        // coexistent (dedup_key différent ::DELETE vs ::INSERT/:UPDATE) et
-        // reconcilePendingSyncs les rejoue dans l'ordre created_at ASC — correct
+        // Trace DELETE pour replay vers Supabase
         const dedupKey = `${table}::${body.id}::DELETE`;
-        await env.CAMPUSFLOW_DB.prepare(
-            `INSERT INTO pending_supabase_sync
-               (id, table_name, operation, record_id, payload, dedup_key, status, retry_count, created_at)
-             VALUES (?1, ?2, 'DELETE', ?3, ?4, ?5, 'pending', 0, ?6)
-             ON CONFLICT(dedup_key) DO UPDATE SET
-               status = 'pending',
-               retry_count = 0,
-               last_error = NULL`
-        ).bind(
-            crypto.randomUUID(), table, body.id,
-            JSON.stringify({ id: body.id }), dedupKey,
-            new Date().toISOString()
-        ).run();
+        try {
+            await env.CAMPUSFLOW_DB.prepare(
+                `INSERT INTO pending_supabase_sync
+                   (id, table_name, operation, record_id, payload, dedup_key, status, retry_count, created_at)
+                 VALUES (?1, ?2, 'DELETE', ?3, ?4, ?5, 'pending', 0, ?6)
+                 ON CONFLICT(dedup_key) DO UPDATE SET
+                   status = 'pending',
+                   retry_count = 0,
+                   last_error = NULL`
+            ).bind(
+                crypto.randomUUID(), table, body.id,
+                JSON.stringify({ id: body.id }), dedupKey,
+                new Date().toISOString()
+            ).run();
+        } catch (syncErr: any) {
+            if (syncErr.message?.includes('no such index') || syncErr.message?.includes('does not match')) {
+                await env.CAMPUSFLOW_DB.prepare(
+                    `INSERT OR IGNORE INTO pending_supabase_sync
+                       (id, table_name, operation, record_id, payload, status, retry_count, created_at)
+                     VALUES (?1, ?2, 'DELETE', ?3, ?4, 'pending', 0, ?5)`
+                ).bind(
+                    crypto.randomUUID(), table, body.id,
+                    JSON.stringify({ id: body.id }),
+                    new Date().toISOString()
+                ).run();
+            }
+            console.warn('[handleD1Delete] pending trace failed:', syncErr.message);
+        }
 
         return json({ ok: true });
     } catch (err: any) {
