@@ -9,7 +9,7 @@ import {
     Clock, ChevronRight, Star, Heart, Facebook, Instagram, Twitter, Youtube,
     Linkedin, X, CheckCircle2, Send, Loader2, ChevronDown, Menu, Award,
     Zap, Shield, TrendingUp, Play, ArrowUpRight, User, UserCheck, Baby,
-    Building2, FileText, AlertCircle
+    Building2, FileText, AlertCircle, Key, Copy, Check, ChevronLeft
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
@@ -80,20 +80,23 @@ export default function SchoolLandingPage() {
     const [filieres, setFilieres]     = useState<any[]>([]);
     const [teacherCount, setTeacherCount] = useState(0);
     const [studentCount, setStudentCount] = useState(0);
-    const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [mobileMenu, setMobileMenu] = useState(false);
     const [scrolled, setScrolled]     = useState(false);
-    const [showForm, setShowForm]     = useState(false);
 
-    // Form state
-    const [form, setForm] = useState({
-        first_name: '', last_name: '', birth_date: '', gender: '',
-        phone: '', parent_phone: '', email: '', address: '',
-        filiere_id: '', classe_souhaitee: '', previous_school: '', previous_level: '',
-    });
-    const [formStep, setFormStep] = useState(0);
-    const [submitting, setSubmitting] = useState(false);
-    const [submitted, setSubmitted]   = useState(false);
+    // Inscription multi-step
+    const [inscStep, setInscStep]                   = useState(0);
+    const [selectedClassroom, setSelectedClassroom] = useState<any>(null);
+    const [inscForm, setInscForm] = useState({ first_name: '', last_name: '', birth_date: '', gender: '', phone: '', email: '', address: '' });
+    const [inscPin, setInscPin]           = useState(['', '', '', '']);
+    const [inscPinConfirm, setInscPinConfirm] = useState(['', '', '', '']);
+    const [inscSubmitting, setInscSubmitting] = useState(false);
+    const [generatedCode, setGeneratedCode]   = useState('');
+    const [showCredModal, setShowCredModal]   = useState(false);
+    const [credSaved, setCredSaved]           = useState(false);
+    const [codeCopied, setCodeCopied]         = useState(false);
+
+    // Gallery lightbox with navigation
+    const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
 
     // Scroll tracking
     useEffect(() => {
@@ -124,24 +127,54 @@ export default function SchoolLandingPage() {
         load();
     }, [orgSlug]);
 
-    // Form submit
-    const handleSubmit = async () => {
-        if (!org || !form.first_name || !form.last_name || !form.phone) {
-            toast.error('Veuillez remplir les champs obligatoires (prénom, nom, téléphone)');
-            return;
-        }
-        setSubmitting(true);
-        const payload: any = { organization_id: org.id, ...form };
-        if (!form.filiere_id) delete payload.filiere_id;
-        if (!form.birth_date) delete payload.birth_date;
+    // Generate 12-char alphanumeric access code
+    const generateAccessCode = () => {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    };
 
+    const copyCode = () => {
+        navigator.clipboard.writeText(generatedCode).then(() => {
+            setCodeCopied(true);
+            setTimeout(() => setCodeCopied(false), 2500);
+        });
+    };
+
+    // Inscription submit
+    const handleInscription = async () => {
+        if (!org) return;
+        if (!inscForm.first_name || !inscForm.last_name) { toast.error('Prénom et nom sont obligatoires'); return; }
+        if (!inscForm.phone) { toast.error('Le numéro de téléphone est obligatoire'); return; }
+        const pinStr = inscPin.join('');
+        const pinConfirmStr = inscPinConfirm.join('');
+        if (pinStr.length !== 4) { toast.error('Créez un code PIN à 4 chiffres'); return; }
+        if (pinStr !== pinConfirmStr) { toast.error('Les codes PIN ne correspondent pas'); return; }
+
+        setInscSubmitting(true);
+        const code = generateAccessCode();
+        const payload: any = {
+            organization_id: org.id,
+            first_name:  inscForm.first_name,
+            last_name:   inscForm.last_name,
+            phone:       inscForm.phone,
+            access_code: code,
+            pin_code:    pinStr,
+            ...(inscForm.birth_date && { birth_date: inscForm.birth_date }),
+            ...(inscForm.gender     && { gender:     inscForm.gender }),
+            ...(inscForm.email      && { email:      inscForm.email }),
+            ...(inscForm.address    && { address:    inscForm.address }),
+            ...(selectedClassroom   && { classroom_id: selectedClassroom.id }),
+            ...(selectedClassroom?.filiere_id && { filiere_id: selectedClassroom.filiere_id }),
+        };
         const { error } = await supabase.from('inscription_requests').insert(payload);
         if (error) {
-            toast.error('Erreur lors de l\'envoi : ' + error.message);
-        } else {
-            setSubmitted(true);
+            toast.error('Erreur : ' + error.message);
+            setInscSubmitting(false);
+            return;
         }
-        setSubmitting(false);
+        setGeneratedCode(code);
+        setShowCredModal(true);
+        setInscSubmitting(false);
     };
 
     // ── Loading ───────────────────────────────────────────────────────
@@ -183,11 +216,10 @@ export default function SchoolLandingPage() {
         { url: org.social_tiktok,    icon: Globe,     label: 'TikTok' },
     ].filter(s => s.url);
 
-    const FORM_STEPS = [
-        { title: 'Identité', icon: User,      fields: ['first_name', 'last_name', 'birth_date', 'gender'] },
-        { title: 'Contact',  icon: Phone,     fields: ['phone', 'parent_phone', 'email', 'address'] },
-        { title: 'Scolarité',icon: BookOpen,  fields: ['filiere_id', 'classe_souhaitee', 'previous_school', 'previous_level'] },
-    ];
+    // Helpers for gallery nav
+    const openGallery = (idx: number) => { setGalleryIndex(idx); setSelectedImage(null); };
+    const prevImg = () => setGalleryIndex(i => i !== null && i > 0 ? i - 1 : gallery.length - 1);
+    const nextImg = () => setGalleryIndex(i => i !== null && i < gallery.length - 1 ? i + 1 : 0);
 
     return (
         <div className="min-h-screen bg-[#08090E] text-white overflow-x-hidden">
@@ -281,18 +313,25 @@ export default function SchoolLandingPage() {
 
             {/* ═══ HERO ══════════════════════════════════════════════ */}
             <section className="relative z-10 pt-16 min-h-[100svh] flex flex-col justify-center overflow-hidden">
-                {/* Hero image */}
-                <div className="absolute inset-0">
+                {/* Hero image — responsive, cover sans déformation */}
+                <div className="absolute inset-0 overflow-hidden">
                     {org.hero_image_url
                         ? <>
-                            <img src={org.hero_image_url} alt="" className="w-full h-full object-cover" loading="eager" decoding="async" />
-                            <div className="absolute inset-0 bg-gradient-to-b from-[#08090E]/70 via-[#08090E]/60 to-[#08090E]" />
+                            <img
+                                src={org.hero_image_url}
+                                alt={org.name}
+                                className="absolute inset-0 w-full h-full object-cover object-center"
+                                loading="eager"
+                                decoding="async"
+                                style={{ objectPosition: 'center top' }}
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-b from-[#08090E]/60 via-[#08090E]/50 to-[#08090E]" />
+                            <div className="absolute inset-0 bg-gradient-to-r from-[#08090E]/40 via-transparent to-[#08090E]/20" />
                           </>
                         : <div className="absolute inset-0">
                             <div className="absolute inset-0" style={{
                                 backgroundImage: `radial-gradient(ellipse 80% 60% at 50% 30%, ${bc}22 0%, transparent 70%)`
                             }} />
-                            {/* Grid pattern */}
                             <div className="absolute inset-0 opacity-[0.03]"
                                 style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.3) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.3) 1px,transparent 1px)', backgroundSize: '60px 60px' }} />
                           </div>
@@ -561,16 +600,17 @@ export default function SchoolLandingPage() {
                         </motion.div>
                         <motion.h2 variants={fadeUp} custom={1} className="text-3xl font-black mb-10">Galerie photos</motion.h2>
                     </motion.div>
-                    <div className="columns-2 sm:columns-3 lg:columns-4 gap-3 space-y-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                         {gallery.map((img: string, i: number) => (
                             <motion.div key={i}
                                 initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }} transition={{ delay: i * 0.05 }}
-                                className="break-inside-avoid relative group overflow-hidden rounded-2xl border border-white/10 cursor-pointer"
-                                onClick={() => setSelectedImage(img)}>
+                                className="relative group overflow-hidden rounded-2xl border border-white/10 cursor-pointer aspect-square"
+                                onClick={() => openGallery(i)}>
                                 <img src={img} alt={`Photo ${i + 1}`}
-                                    className="w-full object-cover group-hover:scale-105 transition-transform duration-700" loading="lazy" decoding="async" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-end p-3">
+                                    className="absolute inset-0 w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700" loading="lazy" decoding="async" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-end justify-between p-3">
+                                    <span className="text-[10px] text-white/70 font-medium">{i + 1}/{gallery.length}</span>
                                     <ArrowUpRight className="w-4 h-4 text-white" />
                                 </div>
                             </motion.div>
@@ -579,28 +619,61 @@ export default function SchoolLandingPage() {
                 </section>
             )}
 
-            {/* ── Lightbox ─────────────────────────────────────────── */}
+            {/* ── Lightbox avec navigation ──────────────────────────── */}
             <AnimatePresence>
-                {selectedImage && (
+                {galleryIndex !== null && gallery[galleryIndex] && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                         className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4"
-                        onClick={() => setSelectedImage(null)}>
-                        <button className="absolute top-5 right-5 p-2.5 rounded-full bg-white/10 hover:bg-white/20 transition-all"
-                            onClick={e => { e.stopPropagation(); setSelectedImage(null); }}>
+                        onClick={() => setGalleryIndex(null)}>
+                        {/* Close */}
+                        <button className="absolute top-5 right-5 p-2.5 rounded-full bg-white/10 hover:bg-white/20 transition-all z-10"
+                            onClick={e => { e.stopPropagation(); setGalleryIndex(null); }}>
                             <X className="w-5 h-5" />
                         </button>
+                        {/* Counter */}
+                        <div className="absolute top-5 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-white/10 text-xs font-semibold text-white z-10">
+                            {galleryIndex + 1} / {gallery.length}
+                        </div>
+                        {/* Prev */}
+                        {gallery.length > 1 && (
+                            <button className="absolute left-3 sm:left-6 p-3 rounded-full bg-white/10 hover:bg-white/20 transition-all z-10"
+                                onClick={e => { e.stopPropagation(); prevImg(); }}>
+                                <ChevronLeft className="w-6 h-6" />
+                            </button>
+                        )}
+                        {/* Next */}
+                        {gallery.length > 1 && (
+                            <button className="absolute right-3 sm:right-6 p-3 rounded-full bg-white/10 hover:bg-white/20 transition-all z-10"
+                                onClick={e => { e.stopPropagation(); nextImg(); }}>
+                                <ChevronRight className="w-6 h-6" />
+                            </button>
+                        )}
+                        {/* Image */}
                         <motion.img
-                            initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.85, opacity: 0 }} transition={{ type: 'spring', damping: 25 }}
-                            src={selectedImage} alt="" className="max-w-full max-h-[90vh] object-contain rounded-2xl shadow-2xl"
+                            key={galleryIndex}
+                            initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }} transition={{ type: 'spring', damping: 22 }}
+                            src={gallery[galleryIndex]} alt={`Photo ${galleryIndex + 1}`}
+                            className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl"
                             onClick={e => e.stopPropagation()} />
+                        {/* Thumbnails */}
+                        {gallery.length > 1 && (
+                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 max-w-[90vw] overflow-x-auto pb-1">
+                                {gallery.map((img: string, i: number) => (
+                                    <button key={i} onClick={e => { e.stopPropagation(); setGalleryIndex(i); }}
+                                        className={cn('shrink-0 w-12 h-12 rounded-lg overflow-hidden border-2 transition-all',
+                                            i === galleryIndex ? 'border-white scale-110' : 'border-white/20 opacity-60 hover:opacity-100')}>
+                                        <img src={img} alt="" className="w-full h-full object-cover" />
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </motion.div>
                 )}
             </AnimatePresence>
 
             {/* ═══ INSCRIPTION FORM ══════════════════════════════════ */}
             <section id="inscription" className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-20">
-                {/* Section header */}
                 <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} className="text-center mb-12">
                     <motion.div variants={fadeUp} custom={0}
                         className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border mb-6"
@@ -611,234 +684,351 @@ export default function SchoolLandingPage() {
                         Demande d&apos;inscription
                     </motion.h2>
                     <motion.p variants={fadeUp} custom={2} className="text-slate-400 max-w-xl mx-auto">
-                        Remplissez ce formulaire pour soumettre votre demande d&apos;inscription. Notre équipe vous contactera dans les plus brefs délais.
+                        Choisissez votre classe, renseignez vos informations et créez votre code d&apos;accès personnel en quelques étapes.
                     </motion.p>
                 </motion.div>
 
                 <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
                     className="max-w-2xl mx-auto">
 
-                    {submitted ? (
-                        /* ── Success state ───────────────────────── */
-                        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-                            className="text-center py-16 px-8 rounded-3xl border border-emerald-500/20 bg-emerald-500/[0.06]">
-                            <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-6">
-                                <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+                    {/* ── Step indicator ── */}
+                    <div className="flex items-center mb-8 px-2">
+                        {[
+                            { label: 'Classe', icon: BookOpen },
+                            { label: 'Informations', icon: User },
+                            { label: 'Code PIN', icon: Key },
+                        ].map((step, i) => (
+                            <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                                <div className="flex items-center w-full">
+                                    {i > 0 && <div className={cn('flex-1 h-0.5 transition-all', i <= inscStep ? 'opacity-100' : 'opacity-20')} style={{ background: bc }} />}
+                                    <div className={cn(
+                                        'w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 shrink-0',
+                                        inscStep === i ? 'text-white shadow-lg' :
+                                        i < inscStep  ? 'bg-emerald-500 text-white' : 'bg-white/[0.06] text-slate-500'
+                                    )} style={inscStep === i ? { background: `linear-gradient(135deg,${bc},${bc}bb)`, boxShadow: `0 6px 18px ${bc}40` } : {}}>
+                                        {i < inscStep ? <CheckCircle2 className="w-4 h-4" /> : <step.icon className="w-4 h-4" />}
+                                    </div>
+                                    {i < 2 && <div className={cn('flex-1 h-0.5 transition-all', i < inscStep ? 'opacity-100' : 'opacity-20')} style={{ background: bc }} />}
+                                </div>
+                                <span className={cn('text-[10px] font-semibold mt-1', inscStep === i ? 'text-white' : i < inscStep ? 'text-emerald-400' : 'text-slate-600')}>{step.label}</span>
                             </div>
-                            <h3 className="text-2xl font-black text-white mb-3">Demande envoyée !</h3>
-                            <p className="text-slate-400 mb-8 leading-relaxed">
-                                Votre demande d&apos;inscription a bien été reçue par <strong className="text-white">{org.name}</strong>.
-                                Vous serez contacté(e) sur le numéro <strong className="text-white">{form.phone}</strong> très prochainement.
-                            </p>
-                            <Button onClick={() => { setSubmitted(false); setForm({ first_name: '', last_name: '', birth_date: '', gender: '', phone: '', parent_phone: '', email: '', address: '', filiere_id: '', classe_souhaitee: '', previous_school: '', previous_level: '' }); setFormStep(0); }}
-                                className="rounded-2xl px-8 border border-white/10 bg-white/5 hover:bg-white/10 text-white">
-                                Nouvelle demande
-                            </Button>
-                        </motion.div>
+                        ))}
+                    </div>
 
-                    ) : (
-                        /* ── Form ────────────────────────────────── */
-                        <div className="rounded-3xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
-                            {/* Steps header */}
-                            <div className="flex border-b border-white/[0.06]">
-                                {FORM_STEPS.map((step, i) => (
-                                    <button key={i} onClick={() => i < formStep && setFormStep(i)}
-                                        className={cn(
-                                            'flex-1 flex items-center justify-center gap-2 py-4 text-xs font-bold transition-all',
-                                            formStep === i
-                                                ? 'text-white border-b-2'
-                                                : i < formStep
-                                                    ? 'text-slate-400 hover:text-slate-200'
-                                                    : 'text-slate-600 cursor-default'
-                                        )}
-                                        style={formStep === i ? { borderColor: bc } : {}}>
-                                        <div className={cn(
-                                            'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all',
-                                            formStep === i ? 'text-white' : i < formStep ? 'bg-emerald-500 text-white' : 'bg-white/10 text-slate-500'
-                                        )} style={formStep === i ? { background: bc } : {}}>
-                                            {i < formStep ? <CheckCircle2 className="w-3.5 h-3.5" /> : i + 1}
+                    <div className="rounded-3xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+                        <AnimatePresence mode="wait">
+
+                            {/* ── Étape 0 : Sélection de la classe ── */}
+                            {inscStep === 0 && (
+                                <motion.div key="ins0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                                    className="p-6 sm:p-8 space-y-5">
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <BookOpen className="w-4 h-4" style={{ color: bc }} />
+                                            <span className="font-bold text-white">Choisissez votre classe</span>
                                         </div>
-                                        <span className="hidden sm:inline">{step.title}</span>
-                                    </button>
-                                ))}
-                            </div>
+                                        <p className="text-xs text-slate-500">Sélectionnez la classe dans laquelle vous souhaitez vous inscrire. Elle sera automatiquement assignée à votre dossier.</p>
+                                    </div>
 
-                            {/* Step content */}
-                            <div className="p-6 sm:p-8">
-                                <AnimatePresence mode="wait">
-                                    {/* ── Étape 1 : Identité ─── */}
-                                    {formStep === 0 && (
-                                        <motion.div key="step0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
-                                            className="space-y-4">
-                                            <div className="flex items-center gap-2 mb-6">
-                                                <User className="w-4 h-4" style={{ color: bc }} />
-                                                <span className="font-bold text-white">Informations personnelles</span>
-                                            </div>
-                                            <div className="grid sm:grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="text-xs text-slate-400 mb-1.5 block font-medium">Prénom <span className="text-red-400">*</span></label>
-                                                    <input value={form.first_name} onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))}
-                                                        placeholder="Ex : Marie"
-                                                        className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors" />
-                                                </div>
-                                                <div>
-                                                    <label className="text-xs text-slate-400 mb-1.5 block font-medium">Nom <span className="text-red-400">*</span></label>
-                                                    <input value={form.last_name} onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))}
-                                                        placeholder="Ex : Dupont"
-                                                        className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors" />
-                                                </div>
-                                            </div>
-                                            <div className="grid sm:grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="text-xs text-slate-400 mb-1.5 block font-medium">Date de naissance</label>
-                                                    <input type="date" value={form.birth_date} onChange={e => setForm(f => ({ ...f, birth_date: e.target.value }))}
-                                                        className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm focus:outline-none focus:border-white/25 transition-colors [color-scheme:dark]" />
-                                                </div>
-                                                <div>
-                                                    <label className="text-xs text-slate-400 mb-1.5 block font-medium">Genre</label>
-                                                    <select value={form.gender} onChange={e => setForm(f => ({ ...f, gender: e.target.value }))}
-                                                        className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm focus:outline-none focus:border-white/25 transition-colors [color-scheme:dark]">
-                                                        <option value="" className="bg-[#111]">Sélectionner</option>
-                                                        <option value="male" className="bg-[#111]">Masculin</option>
-                                                        <option value="female" className="bg-[#111]">Féminin</option>
-                                                        <option value="other" className="bg-[#111]">Autre</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            <div className="pt-4 flex justify-end">
-                                                <Button onClick={() => {
-                                                    if (!form.first_name || !form.last_name) { toast.error('Prénom et nom sont obligatoires'); return; }
-                                                    setFormStep(1);
-                                                }} className="rounded-xl px-8 font-bold text-white"
-                                                    style={{ background: `linear-gradient(135deg,${bc},${bc}bb)` }}>
-                                                    Suivant <ArrowRight className="w-4 h-4 ml-2" />
-                                                </Button>
-                                            </div>
+                                    {classrooms.length === 0 ? (
+                                        <div className="text-center py-10 text-slate-500 text-sm">
+                                            Aucune classe disponible pour le moment.
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-wrap gap-2.5">
+                                            {classrooms.map((c: any) => {
+                                                const sel = selectedClassroom?.id === c.id;
+                                                return (
+                                                    <button key={c.id}
+                                                        onClick={() => setSelectedClassroom(sel ? null : c)}
+                                                        className={cn(
+                                                            'px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border',
+                                                            sel
+                                                                ? 'text-white border-transparent shadow-lg'
+                                                                : 'bg-white/[0.04] border-white/[0.08] text-slate-300 hover:bg-white/[0.08] hover:border-white/15'
+                                                        )}
+                                                        style={sel ? {
+                                                            background: `linear-gradient(135deg,${bc},${bc}bb)`,
+                                                            boxShadow: `0 4px 15px ${bc}35`
+                                                        } : {}}>
+                                                        {c.name}
+                                                        {c.cycle && <span className="ml-1.5 opacity-60 text-[10px]">({c.cycle})</span>}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+
+                                    {selectedClassroom && (
+                                        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                                            className="flex items-center gap-2 text-sm px-4 py-3 rounded-xl border"
+                                            style={{ backgroundColor: `${bc}10`, borderColor: `${bc}30`, color: bc }}>
+                                            <CheckCircle2 className="w-4 h-4 shrink-0" />
+                                            <span>Sélectionné : <strong>{selectedClassroom.name}</strong></span>
                                         </motion.div>
                                     )}
 
-                                    {/* ── Étape 2 : Contact ─── */}
-                                    {formStep === 1 && (
-                                        <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
-                                            className="space-y-4">
-                                            <div className="flex items-center gap-2 mb-6">
-                                                <Phone className="w-4 h-4" style={{ color: bc }} />
-                                                <span className="font-bold text-white">Coordonnées</span>
-                                            </div>
-                                            <div className="grid sm:grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="text-xs text-slate-400 mb-1.5 block font-medium">Téléphone <span className="text-red-400">*</span></label>
-                                                    <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                                                        placeholder="Ex : +237 6XX XXX XXX"
-                                                        className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors" />
-                                                </div>
-                                                <div>
-                                                    <label className="text-xs text-slate-400 mb-1.5 block font-medium">Tél. parent / tuteur</label>
-                                                    <input value={form.parent_phone} onChange={e => setForm(f => ({ ...f, parent_phone: e.target.value }))}
-                                                        placeholder="Ex : +237 6XX XXX XXX"
-                                                        className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors" />
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Email</label>
-                                                <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                                                    placeholder="exemple@email.com"
-                                                    className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors" />
-                                            </div>
-                                            <div>
-                                                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Adresse / Quartier</label>
-                                                <input value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
-                                                    placeholder="Ex : Quartier Bastos, Yaoundé"
-                                                    className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors" />
-                                            </div>
-                                            <div className="pt-4 flex justify-between">
-                                                <Button variant="outline" onClick={() => setFormStep(0)}
-                                                    className="rounded-xl border-white/15 text-slate-300 hover:bg-white/5">
-                                                    ← Retour
-                                                </Button>
-                                                <Button onClick={() => {
-                                                    if (!form.phone) { toast.error('Le numéro de téléphone est obligatoire'); return; }
-                                                    setFormStep(2);
-                                                }} className="rounded-xl px-8 font-bold text-white"
-                                                    style={{ background: `linear-gradient(135deg,${bc},${bc}bb)` }}>
-                                                    Suivant <ArrowRight className="w-4 h-4 ml-2" />
-                                                </Button>
-                                            </div>
-                                        </motion.div>
-                                    )}
+                                    <div className="pt-2 flex justify-end">
+                                        <Button onClick={() => {
+                                            if (!selectedClassroom) { toast.error('Veuillez sélectionner une classe'); return; }
+                                            setInscStep(1);
+                                        }} className="rounded-xl px-8 font-bold text-white"
+                                            style={{ background: `linear-gradient(135deg,${bc},${bc}bb)` }}>
+                                            Continuer <ArrowRight className="w-4 h-4 ml-2" />
+                                        </Button>
+                                    </div>
+                                </motion.div>
+                            )}
 
-                                    {/* ── Étape 3 : Scolarité ─── */}
-                                    {formStep === 2 && (
-                                        <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
-                                            className="space-y-4">
-                                            <div className="flex items-center gap-2 mb-6">
-                                                <BookOpen className="w-4 h-4" style={{ color: bc }} />
-                                                <span className="font-bold text-white">Informations scolaires</span>
-                                            </div>
-                                            {filieres.length > 0 && (
-                                                <div>
-                                                    <label className="text-xs text-slate-400 mb-1.5 block font-medium">Filière souhaitée</label>
-                                                    <select value={form.filiere_id} onChange={e => setForm(f => ({ ...f, filiere_id: e.target.value }))}
-                                                        className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm focus:outline-none focus:border-white/25 transition-colors [color-scheme:dark]">
-                                                        <option value="" className="bg-[#111]">Sélectionner une filière</option>
-                                                        {filieres.map((f: any) => (
-                                                            <option key={f.id} value={f.id} className="bg-[#111]">{f.nom}</option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                            )}
-                                            <div>
-                                                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Niveau / Classe souhaité(e)</label>
-                                                <input value={form.classe_souhaitee} onChange={e => setForm(f => ({ ...f, classe_souhaitee: e.target.value }))}
-                                                    placeholder="Ex : Terminale, L2, Master 1..."
-                                                    className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors" />
-                                            </div>
-                                            <div className="grid sm:grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="text-xs text-slate-400 mb-1.5 block font-medium">Dernier établissement fréquenté</label>
-                                                    <input value={form.previous_school} onChange={e => setForm(f => ({ ...f, previous_school: e.target.value }))}
-                                                        placeholder="Nom de l'école précédente"
-                                                        className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors" />
-                                                </div>
-                                                <div>
-                                                    <label className="text-xs text-slate-400 mb-1.5 block font-medium">Dernier niveau validé</label>
-                                                    <input value={form.previous_level} onChange={e => setForm(f => ({ ...f, previous_level: e.target.value }))}
-                                                        placeholder="Ex : 3ème, L1, BTS..."
-                                                        className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors" />
-                                                </div>
-                                            </div>
+                            {/* ── Étape 1 : Informations personnelles ── */}
+                            {inscStep === 1 && (
+                                <motion.div key="ins1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                                    className="p-6 sm:p-8 space-y-4">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <User className="w-4 h-4" style={{ color: bc }} />
+                                        <span className="font-bold text-white">Vos informations personnelles</span>
+                                    </div>
+                                    <div className="grid sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-xs text-slate-400 mb-1.5 block font-medium">Prénom <span className="text-red-400">*</span></label>
+                                            <input value={inscForm.first_name} onChange={e => setInscForm(f => ({ ...f, first_name: e.target.value }))}
+                                                placeholder="Ex : Marie"
+                                                className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors" />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-slate-400 mb-1.5 block font-medium">Nom <span className="text-red-400">*</span></label>
+                                            <input value={inscForm.last_name} onChange={e => setInscForm(f => ({ ...f, last_name: e.target.value }))}
+                                                placeholder="Ex : Dupont"
+                                                className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors" />
+                                        </div>
+                                    </div>
+                                    <div className="grid sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-xs text-slate-400 mb-1.5 block font-medium">Date de naissance</label>
+                                            <input type="date" value={inscForm.birth_date} onChange={e => setInscForm(f => ({ ...f, birth_date: e.target.value }))}
+                                                className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm focus:outline-none focus:border-white/25 transition-colors [color-scheme:dark]" />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-slate-400 mb-1.5 block font-medium">Genre</label>
+                                            <select value={inscForm.gender} onChange={e => setInscForm(f => ({ ...f, gender: e.target.value }))}
+                                                className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm focus:outline-none focus:border-white/25 transition-colors [color-scheme:dark]">
+                                                <option value="" className="bg-[#111]">Sélectionner</option>
+                                                <option value="male" className="bg-[#111]">Masculin</option>
+                                                <option value="female" className="bg-[#111]">Féminin</option>
+                                                <option value="other" className="bg-[#111]">Autre</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-slate-400 mb-1.5 block font-medium">Téléphone <span className="text-red-400">*</span></label>
+                                        <input value={inscForm.phone} onChange={e => setInscForm(f => ({ ...f, phone: e.target.value }))}
+                                            placeholder="Ex : +237 6XX XXX XXX"
+                                            className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors" />
+                                    </div>
+                                    <div className="grid sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-xs text-slate-400 mb-1.5 block font-medium">Email</label>
+                                            <input type="email" value={inscForm.email} onChange={e => setInscForm(f => ({ ...f, email: e.target.value }))}
+                                                placeholder="exemple@email.com"
+                                                className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors" />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-slate-400 mb-1.5 block font-medium">Quartier / Adresse</label>
+                                            <input value={inscForm.address} onChange={e => setInscForm(f => ({ ...f, address: e.target.value }))}
+                                                placeholder="Ex : Bastos, Yaoundé"
+                                                className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors" />
+                                        </div>
+                                    </div>
+                                    <div className="pt-4 flex justify-between">
+                                        <Button variant="outline" onClick={() => setInscStep(0)}
+                                            className="rounded-xl border-white/15 text-slate-300 hover:bg-white/5">← Retour</Button>
+                                        <Button onClick={() => {
+                                            if (!inscForm.first_name || !inscForm.last_name) { toast.error('Prénom et nom obligatoires'); return; }
+                                            if (!inscForm.phone) { toast.error('Téléphone obligatoire'); return; }
+                                            setInscStep(2);
+                                        }} className="rounded-xl px-8 font-bold text-white"
+                                            style={{ background: `linear-gradient(135deg,${bc},${bc}bb)` }}>
+                                            Continuer <ArrowRight className="w-4 h-4 ml-2" />
+                                        </Button>
+                                    </div>
+                                </motion.div>
+                            )}
 
-                                            {/* Récapitulatif */}
-                                            <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] mt-2">
-                                                <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-3">Récapitulatif</p>
-                                                <div className="grid grid-cols-2 gap-2 text-xs">
-                                                    <div><span className="text-slate-500">Nom :</span> <span className="text-white font-medium">{form.first_name} {form.last_name}</span></div>
-                                                    <div><span className="text-slate-500">Téléphone :</span> <span className="text-white font-medium">{form.phone}</span></div>
-                                                </div>
-                                            </div>
+                            {/* ── Étape 2 : Code PIN ── */}
+                            {inscStep === 2 && (
+                                <motion.div key="ins2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                                    className="p-6 sm:p-8 space-y-6">
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Key className="w-4 h-4" style={{ color: bc }} />
+                                            <span className="font-bold text-white">Créez votre code PIN</span>
+                                        </div>
+                                        <p className="text-xs text-slate-500">Ce code à 4 chiffres vous permettra de vous connecter à votre espace étudiant.</p>
+                                    </div>
 
-                                            <div className="pt-4 flex justify-between">
-                                                <Button variant="outline" onClick={() => setFormStep(1)}
-                                                    className="rounded-xl border-white/15 text-slate-300 hover:bg-white/5">
-                                                    ← Retour
-                                                </Button>
-                                                <Button onClick={handleSubmit} disabled={submitting}
-                                                    className="rounded-xl px-8 font-black text-white shadow-xl"
-                                                    style={{ background: `linear-gradient(135deg,${bc},${bc}bb)`, boxShadow: `0 12px 30px ${bc}35` }}>
-                                                    {submitting
-                                                        ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Envoi...</>
-                                                        : <><Send className="w-4 h-4 mr-2" />Envoyer la demande</>
-                                                    }
-                                                </Button>
-                                            </div>
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                            </div>
-                        </div>
-                    )}
+                                    {/* PIN créer */}
+                                    <div className="space-y-3">
+                                        <label className="text-xs text-slate-400 font-medium block">Votre code PIN <span className="text-red-400">*</span></label>
+                                        <div className="flex gap-3 justify-center">
+                                            {inscPin.map((d, i) => (
+                                                <input key={i} id={`npin-${i}`} type="password" inputMode="numeric" maxLength={1}
+                                                    value={d} onChange={e => {
+                                                        const val = e.target.value.replace(/\D/, '');
+                                                        const next = [...inscPin]; next[i] = val; setInscPin(next);
+                                                        if (val && i < 3) (document.getElementById(`npin-${i+1}`) as HTMLInputElement)?.focus();
+                                                    }}
+                                                    onKeyDown={e => { if (e.key === 'Backspace' && !d && i > 0) (document.getElementById(`npin-${i-1}`) as HTMLInputElement)?.focus(); }}
+                                                    className="w-14 h-14 text-center text-2xl font-black bg-white/[0.05] border-2 rounded-2xl text-white focus:outline-none transition-all"
+                                                    style={{ borderColor: d ? bc : 'rgba(255,255,255,0.1)', boxShadow: d ? `0 0 0 3px ${bc}25` : 'none' }} />
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* PIN confirmer */}
+                                    <div className="space-y-3">
+                                        <label className="text-xs text-slate-400 font-medium block">Confirmez votre code PIN <span className="text-red-400">*</span></label>
+                                        <div className="flex gap-3 justify-center">
+                                            {inscPinConfirm.map((d, i) => {
+                                                const full = inscPinConfirm.join('').length === 4;
+                                                const match = inscPin.join('') === inscPinConfirm.join('');
+                                                return (
+                                                    <input key={i} id={`npinc-${i}`} type="password" inputMode="numeric" maxLength={1}
+                                                        value={d} onChange={e => {
+                                                            const val = e.target.value.replace(/\D/, '');
+                                                            const next = [...inscPinConfirm]; next[i] = val; setInscPinConfirm(next);
+                                                            if (val && i < 3) (document.getElementById(`npinc-${i+1}`) as HTMLInputElement)?.focus();
+                                                        }}
+                                                        onKeyDown={e => { if (e.key === 'Backspace' && !d && i > 0) (document.getElementById(`npinc-${i-1}`) as HTMLInputElement)?.focus(); }}
+                                                        className="w-14 h-14 text-center text-2xl font-black bg-white/[0.05] border-2 rounded-2xl text-white focus:outline-none transition-all"
+                                                        style={{
+                                                            borderColor: d ? (full && !match ? '#ef4444' : bc) : 'rgba(255,255,255,0.1)',
+                                                            boxShadow: d ? `0 0 0 3px ${full && !match ? '#ef444425' : `${bc}25`}` : 'none'
+                                                        }} />
+                                                );
+                                            })}
+                                        </div>
+                                        {inscPinConfirm.join('').length === 4 && inscPin.join('') !== inscPinConfirm.join('') && (
+                                            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-red-400 text-xs text-center">
+                                                Les codes PIN ne correspondent pas
+                                            </motion.p>
+                                        )}
+                                    </div>
+
+                                    {/* Récap */}
+                                    <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
+                                        <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold mb-3">Récapitulatif</p>
+                                        <div className="space-y-1.5 text-xs">
+                                            <div className="flex justify-between"><span className="text-slate-500">Nom :</span><span className="text-white font-medium">{inscForm.first_name} {inscForm.last_name}</span></div>
+                                            <div className="flex justify-between"><span className="text-slate-500">Téléphone :</span><span className="text-white font-medium">{inscForm.phone}</span></div>
+                                            <div className="flex justify-between"><span className="text-slate-500">Classe :</span><span className="font-bold" style={{ color: bc }}>{selectedClassroom?.name || '—'}</span></div>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-2 flex justify-between">
+                                        <Button variant="outline" onClick={() => setInscStep(1)}
+                                            className="rounded-xl border-white/15 text-slate-300 hover:bg-white/5">← Retour</Button>
+                                        <Button onClick={handleInscription} disabled={inscSubmitting}
+                                            className="rounded-xl px-8 font-black text-white shadow-xl"
+                                            style={{ background: `linear-gradient(135deg,${bc},${bc}bb)`, boxShadow: `0 12px 30px ${bc}35` }}>
+                                            {inscSubmitting
+                                                ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Envoi...</>
+                                                : <><Send className="w-4 h-4 mr-2" />Finaliser l&apos;inscription</>
+                                            }
+                                        </Button>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
                 </motion.div>
             </section>
+
+            {/* ═══ MODAL CONSERVEZ VOS ACCÈS ═════════════════════════ */}
+            <AnimatePresence>
+                {showCredModal && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] bg-black/85 backdrop-blur-xl flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ scale: 0.85, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.85, opacity: 0 }}
+                            transition={{ type: 'spring', damping: 20 }}
+                            className="w-full max-w-md rounded-3xl border bg-[#0f1117] shadow-2xl overflow-hidden"
+                            style={{ borderColor: `${bc}35` }}>
+
+                            {/* Header */}
+                            <div className="relative overflow-hidden px-8 pt-8 pb-5 text-center"
+                                style={{ background: `linear-gradient(135deg,${bc}20,transparent 60%)` }}>
+                                <div className="absolute top-0 right-0 w-40 h-40 rounded-full blur-3xl opacity-25" style={{ background: bc }} />
+                                <div className="relative w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl"
+                                    style={{ background: `${bc}18`, border: `1px solid ${bc}40` }}>🔐</div>
+                                <h3 className="text-xl font-black text-white mb-1">Conservez précieusement vos accès !</h3>
+                                <p className="text-sm text-slate-400">Vous en aurez besoin pour vous connecter à votre espace.</p>
+                            </div>
+
+                            <div className="px-8 py-6 space-y-4">
+                                {/* Code d'accès */}
+                                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                                    <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold mb-2">Code d&apos;accès (12 caractères)</p>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <code className="text-lg sm:text-xl font-black tracking-[0.15em] text-white font-mono select-all">{generatedCode}</code>
+                                        <button onClick={copyCode}
+                                            className="shrink-0 p-2.5 rounded-xl transition-all hover:bg-white/10 active:scale-95"
+                                            style={{ color: codeCopied ? '#22c55e' : bc }}>
+                                            {codeCopied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* PIN */}
+                                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                                    <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold mb-2">Votre code PIN</p>
+                                    <div className="flex gap-2">
+                                        {[0,1,2,3].map(i => (
+                                            <div key={i} className="w-10 h-10 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center text-lg font-black text-white">•</div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Avertissement */}
+                                <div className="flex gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25">
+                                    <span className="text-base shrink-0">⚠️</span>
+                                    <p className="text-xs text-amber-200/90 leading-relaxed">
+                                        Notez ce code dans un endroit sûr. Il ne vous sera <strong>pas envoyé par SMS ou email</strong>. Sans lui, vous ne pourrez pas accéder à votre compte.
+                                    </p>
+                                </div>
+
+                                {/* Checkbox */}
+                                <label className="flex items-start gap-3 cursor-pointer">
+                                    <div className="relative mt-0.5 shrink-0">
+                                        <input type="checkbox" className="sr-only" checked={credSaved} onChange={e => setCredSaved(e.target.checked)} />
+                                        <div className={cn(
+                                            'w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all',
+                                            credSaved ? 'border-transparent' : 'border-white/25 bg-white/5'
+                                        )} style={credSaved ? { background: bc, borderColor: bc } : {}}>
+                                            {credSaved && <Check className="w-3 h-3 text-white" />}
+                                        </div>
+                                    </div>
+                                    <span className="text-sm text-slate-300 leading-relaxed">
+                                        J&apos;ai bien noté mon code d&apos;accès et mon code PIN. Je les ai sauvegardés en lieu sûr.
+                                    </span>
+                                </label>
+
+                                {/* CTA */}
+                                <button disabled={!credSaved}
+                                    onClick={() => { window.location.href = `/${orgSlug}/student/pending`; }}
+                                    className={cn(
+                                        'w-full py-4 rounded-2xl font-black text-white transition-all text-sm',
+                                        credSaved ? 'hover:opacity-90 active:scale-[0.98]' : 'opacity-35 cursor-not-allowed'
+                                    )}
+                                    style={{ background: credSaved ? `linear-gradient(135deg,${bc},${bc}bb)` : 'rgba(255,255,255,0.08)' }}>
+                                    Accéder à mon espace →
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* ═══ CONTACT ═══════════════════════════════════════════ */}
             <section id="contact" className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-16">
