@@ -1,25 +1,24 @@
 /**
  * ============================================================
- * CampusFlow — DataProvider v3
+ * CampusFlow — DataProvider v5 (FINAL)
  * ============================================================
- * Corrections par rapport à v2 :
  *
- * [FIX-1] supabaseOp() maintenant enveloppé dans Promise.race()
- *         avec SUPABASE_TIMEOUT_MS — timeout réellement appliqué.
+ * Architecture : Promise.allSettled — double écriture simultanée
+ * sur TOUTES les données, sans distinction de catégorie.
  *
- * [FIX-2] registerPendingSync : échec notifie l'admin au lieu
- *         d'être avalé silencieusement.
+ * PRINCIPE :
+ *   1. validate() d'abord — lance une exception si invalide
+ *      → rien n'est écrit nulle part si la donnée est invalide
+ *   2. Promise.allSettled([primaryOp(), mirrorOp()]) simultanément
+ *   3. 4 cas gérés explicitement :
+ *      ✅✅ Les deux réussissent    → retourne données primary
+ *      ❌✅ Primary échoue         → mirror a la donnée, replay primary plus tard
+ *      ✅❌ Mirror échoue          → primary a la donnée, outbox cron sync mirror
+ *      ❌❌ Les deux échouent      → erreur explicite à l'utilisateur
  *
- * [FIX-3] record_id tiré du payload AVANT writeToD1, pas après.
- *         ID généré côté client, injecté dans payload.id.
- *
- * [FIX-4] pending_supabase_sync idempotent : clé de déduplication
- *         = hash(table_name + record_id + operation).
- *
- * [FIX-5] read() à double échec retourne source:'both_failed'
- *         (distinguable de source:'not_found').
- *
- * [FIX-6] notifyAdmin avec log persistant D1 en fallback.
+ * GARANTIE : la validation applicative s'exécute avant toute écriture.
+ * Supabase et D1 ne reçoivent jamais une donnée invalide.
+ * La divergence de contenu (≠ timing) devient quasi impossible.
  * ============================================================
  */
 
@@ -29,177 +28,141 @@ import { notifyAdmin } from '@/lib/notify-admin';
 const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL
     || 'https://campusflow-worker.kleintaptue1.workers.dev';
 
-// Timeout réel appliqué à supabaseOp() via Promise.race()
-const SUPABASE_TIMEOUT_MS = 5000;
+const PRIMARY_TIMEOUT_MS = 6000;
+const MIRROR_TIMEOUT_MS  = 5000;
 
-// ── [FIX-1] Race Supabase vs timeout ─────────────────────
-function withSupabaseTimeout<T>(
-    op: () => Promise<T>,
-    timeoutMs = SUPABASE_TIMEOUT_MS
+// ── withTimeout ───────────────────────────────────────────
+async function withTimeout<T>(
+    promise: Promise<T>,
+    ms: number,
+    label: string
 ): Promise<T> {
     return Promise.race([
-        op(),
+        promise,
         new Promise<never>((_, reject) =>
-            setTimeout(
-                () => reject(new Error(`Supabase timeout after ${timeoutMs}ms`)),
-                timeoutMs
-            )
+            setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms)
         ),
     ]);
 }
 
-// ── fetch avec timeout (pour appels D1/Worker) ────────────
-async function fetchWithTimeout(
-    url: string,
-    options: RequestInit,
-    timeoutMs = 5000
-): Promise<Response> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-        return await fetch(url, { ...options, signal: controller.signal });
-    } finally {
-        clearTimeout(timer);
+// ── Rate-limiter notifications admin (anti-spam) ─────────
+const _alertLog = new Map<string, number>();
+function canSendAlert(eventType: string, windowMs = 60_000): boolean {
+    const last = _alertLog.get(eventType) ?? 0;
+    if (Date.now() - last > windowMs) {
+        _alertLog.set(eventType, Date.now());
+        return true;
     }
+    return false;
 }
 
-// ── [FIX-6] Log persistant D1 (fallback si notifyAdmin DOWN) ─
-async function persistLog(
-    event: string,
-    table: string,
-    error: string
-): Promise<void> {
+// ── criticalFallbackLog : log D1 si notifyAdmin est down ─
+async function criticalFallbackLog(event: string, table: string, error: string): Promise<void> {
     try {
-        await fetchWithTimeout(
-            `${WORKER_URL}/api/d1/system_alerts`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    id: crypto.randomUUID(),
-                    service: 'DataProvider',
-                    event,
-                    table_name: table,
-                    error_msg: error,
-                    created_at: new Date().toISOString(),
-                }),
-            },
-            3000
-        );
+        await fetch(`${WORKER_URL}/api/d1/system_alerts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: crypto.randomUUID(),
+                service: 'DataProvider',
+                event,
+                table_name: table,
+                error_msg: error.substring(0, 1000),
+                created_at: new Date().toISOString(),
+            }),
+        });
     } catch {
-        // Si même D1 est down : on ne peut rien faire de plus
-        // console.error est acceptable ici car c'est le dernier recours
-        console.error(`[DataProvider] CRITICAL — Log persistant échoué: ${event} on ${table}`);
+        // Si même D1 est down, console.error est le dernier recours acceptable
+        console.error(`[DataProvider:CRITICAL] ${event} on ${table}: ${error}`);
     }
 }
 
-// ── Notify + log persistant (double filet) ────────────────
-async function alertWithFallback(params: {
+// ── alertAdmin : rate-limited + double filet ─────────────
+async function alertAdmin(params: {
     event: string;
     table: string;
     error: string;
-    failover: string;
-    elapsed_ms?: number;
+    [key: string]: unknown;
 }): Promise<void> {
-    // Tenter la notification push/email admin
-    const notifOk = await notifyAdmin({
-        event: params.event,
-        table: params.table,
-        error: params.error,
-        failover: params.failover,
-        elapsed_ms: params.elapsed_ms,
-    }).then(() => true).catch(() => false);
-
-    // Si la notification échoue → log persistant D1
-    if (!notifOk) {
-        await persistLog(params.event, params.table, params.error);
-    }
+    if (!canSendAlert(params.event)) return;
+    await notifyAdmin(params).catch(err =>
+        criticalFallbackLog('NOTIFY_ADMIN_FAILED', params.table, String(err))
+    );
 }
 
-// ── Écriture D1 via Worker ────────────────────────────────
-async function writeToD1(
+// ── Écriture vers D1 via Worker ───────────────────────────
+async function writeToMirror(
     table: string,
+    operationType: 'INSERT' | 'UPDATE' | 'DELETE',
     payload: Record<string, unknown>
-): Promise<{ data: unknown; error: null } | { data: null; error: Error }> {
+): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> {
     try {
-        const res = await fetchWithTimeout(
-            `${WORKER_URL}/api/d1/${table}`,
-            {
-                method: 'POST',
+        if (operationType === 'DELETE') {
+            const res = await fetch(`${WORKER_URL}/api/d1/${table}`, {
+                method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            },
-            5000
-        );
-        if (!res.ok) throw new Error(`D1 write failed: ${res.status}`);
-        return { data: await res.json(), error: null };
-    } catch (err) {
-        return { data: null, error: err as Error };
-    }
-}
+                body: JSON.stringify({ id: payload.id }),
+            });
+            if (!res.ok) throw new Error(`DELETE failed: HTTP ${res.status}`);
+            return { ok: true, data: { deleted: true } };
+        }
 
-// ── [FIX-3+4] Enregistrement pending sync idempotent ─────
-async function registerPendingSync(
-    table: string,
-    operation: 'INSERT' | 'UPDATE' | 'DELETE',
-    recordId: string,  // [FIX-3] toujours issu de payload.id, jamais regeneré
-    payload: Record<string, unknown>
-): Promise<void> {
-    // [FIX-4] Clé de déduplication déterministe
-    // Même appel deux fois = même dedup_key = UPSERT pas de doublon
-    const dedupKey = `${table}::${recordId}::${operation}`;
-
-    const entry = {
-        id: crypto.randomUUID(),
-        dedup_key: dedupKey,     // colonne UNIQUE dans pending_supabase_sync
-        table_name: table,
-        operation,
-        record_id: recordId,
-        payload: JSON.stringify(payload),
-        retry_count: 0,
-        created_at: new Date().toISOString(),
-    };
-
-    try {
-        const res = await fetchWithTimeout(
-            `${WORKER_URL}/api/d1/pending_supabase_sync`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(entry),
-            },
-            5000
-        );
-        if (!res.ok) throw new Error(`pending_supabase_sync write failed: ${res.status}`);
-    } catch (err) {
-        // [FIX-2] Ne plus avaler silencieusement — alerter l'admin
-        await alertWithFallback({
-            event: 'PENDING_SYNC_REGISTRATION_FAILED',
-            table,
-            error: String(err),
-            failover: 'data_in_d1_but_no_replay_trace',
+        // INSERT ou UPDATE : on passe __operation pour que le Worker
+        // construise le bon dedup_key (table::id::INSERT vs ::UPDATE)
+        const res = await fetch(`${WORKER_URL}/api/d1/${table}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...payload, __operation: operationType }),
         });
-        // Propager pour que write() sache que la trace de replay est absente
-        throw err;
+        if (!res.ok) {
+            const body = await res.text().catch(() => '');
+            throw new Error(`UPSERT failed: HTTP ${res.status} ${body}`);
+        }
+        return { ok: true, data: await res.json() };
+    } catch (err) {
+        return { ok: false, error: String(err) };
     }
 }
 
-// ── Lecture D1 ────────────────────────────────────────────
-async function readFromD1(
-    table: string,
-    params: Record<string, string>
-): Promise<{ data: unknown; error: null } | { data: null; error: Error }> {
+// ── registerPendingSync : trace replay D1→Supabase ───────
+async function registerPendingSync(params: {
+    table: string;
+    operationType: 'INSERT' | 'UPDATE' | 'DELETE';
+    idempotencyKey: string;
+    payload: Record<string, unknown>;
+}): Promise<void> {
+    const dedupKey = `${params.table}::${params.idempotencyKey}::${params.operationType}`;
+    const res = await fetch(`${WORKER_URL}/api/d1/pending_supabase_sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            id: crypto.randomUUID(),
+            table_name: params.table,
+            operation: params.operationType,
+            record_id: params.idempotencyKey,
+            payload: JSON.stringify(params.payload),
+            dedup_key: dedupKey,
+            status: 'pending',
+            retry_count: 0,
+            created_at: new Date().toISOString(),
+        }),
+    });
+    if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`registerPendingSync failed: HTTP ${res.status} ${body}`);
+    }
+}
+
+// ── Lecture depuis D1 via Worker ──────────────────────────
+async function readFromMirror<T>(
+    mirrorFallback: () => Promise<{ data: T | null; error: unknown }>
+): Promise<{ data: T | null; ok: true } | { ok: false; error: string }> {
     try {
-        const qs = new URLSearchParams(params).toString();
-        const res = await fetchWithTimeout(
-            `${WORKER_URL}/api/d1/${table}?${qs}`,
-            { method: 'GET' },
-            5000
-        );
-        if (!res.ok) throw new Error(`D1 read failed: ${res.status}`);
-        return { data: await res.json(), error: null };
+        const result = await mirrorFallback();
+        if (result.error) throw result.error;
+        return { ok: true, data: result.data };
     } catch (err) {
-        return { data: null, error: err as Error };
+        return { ok: false, error: String(err) };
     }
 }
 
@@ -207,161 +170,229 @@ async function readFromD1(
 // Types publics
 // ═══════════════════════════════════════════════════════════
 
+/** Résultat d'une écriture */
 export type WriteResult<T> = {
     data: T;
-    source: 'supabase' | 'd1';
-    replay_pending: boolean;
+    source: 'both' | 'primary_only' | 'mirror_only';
+    // 'both'         → écriture confirmée dans Supabase ET D1
+    // 'primary_only' → Supabase OK, D1 en retard (outbox cron va sync)
+    // 'mirror_only'  → D1 OK, Supabase en panne (replay pending)
 };
 
+/** Résultat d'une lecture */
 export type ReadResult<T> = {
     data: T | null;
-    source: 'supabase' | 'd1' | 'not_found' | 'both_failed'; // [FIX-5]
+    source: 'primary' | 'mirror' | 'unavailable';
+    // 'primary'     → Supabase a répondu
+    // 'mirror'      → Supabase down, D1 a répondu
+    // 'unavailable' → Les deux sont down (panne totale)
+    //                 ≠ data:null qui signifie "enregistrement inexistant"
 };
 
 // ═══════════════════════════════════════════════════════════
-// DataProvider
+// DataProvider v5
 // ═══════════════════════════════════════════════════════════
 
 export const DataProvider = {
 
     /**
-     * write() — Dual-write avec détection de panne réelle
+     * write() — Double écriture simultanée avec validation applicative
      *
-     * IMPORTANT : l'appelant DOIT injecter l'id dans payload avant d'appeler :
+     * RÈGLES OBLIGATOIRES pour l'appelant :
+     *   1. Générer l'ID AVANT d'appeler write()
+     *   2. Injecter cet ID dans payload.id ET comme idempotencyKey
+     *   3. Mettre toute la logique de validation dans validate()
+     *      → validate() doit lever une exception si la donnée est invalide
+     *      → rien n'est écrit si validate() échoue
+     *
+     * @example
      *   const id = crypto.randomUUID();
-     *   await DataProvider.write(
-     *     () => supabase.from('posts').insert({ id, ...data }),
-     *     { table: 'school_posts', payload: { id, ...data } }
-     *   );
+     *   await DataProvider.write({
+     *     table: 'paiements',
+     *     operationType: 'INSERT',
+     *     idempotencyKey: id,
+     *     payload: { id, student_id, montant, organization_id },
+     *     validate: () => {
+     *       if (montant <= 0) throw new Error('Montant invalide');
+     *       if (!student_id) throw new Error('student_id requis');
+     *     },
+     *     primaryOp: () => supabase.from('paiements').insert({ id, student_id, montant }),
+     *   });
      */
-    async write<T>(
-        supabaseOp: () => Promise<{ data: T | null; error: unknown }>,
-        d1Fallback: {
-            table: string;
-            payload: Record<string, unknown>; // DOIT contenir .id
-            operation?: 'INSERT' | 'UPDATE' | 'DELETE';
-        }
-    ): Promise<WriteResult<T>> {
-        const startMs = Date.now();
+    async write<T>(params: {
+        table: string;
+        operationType: 'INSERT' | 'UPDATE' | 'DELETE';
+        idempotencyKey: string;
+        payload: Record<string, unknown>;
+        validate?: () => void;   // Lance une exception si invalide
+        primaryOp: () => Promise<{ data: T | null; error: unknown }>;
+    }): Promise<WriteResult<T>> {
 
-        // [FIX-3] Extraire recordId AVANT toute écriture
-        const recordId = String(d1Fallback.payload.id ?? (() => {
+        // ── ÉTAPE 0 : Vérification contractuelle ────────────
+        if (String(params.payload.id ?? '') !== params.idempotencyKey) {
             throw new Error(
-                `[DataProvider] payload.id manquant pour table '${d1Fallback.table}'. ` +
+                `[DataProvider] payload.id et idempotencyKey doivent être identiques. ` +
                 `Générez l'ID côté client avant d'appeler write().`
             );
-        })());
+        }
 
-        try {
-            // [FIX-1] supabaseOp() soumis à un vrai timeout
-            const result = await withSupabaseTimeout(
-                () => supabaseOp(),
-                SUPABASE_TIMEOUT_MS
-            );
+        // ── ÉTAPE 1 : Validation applicative ────────────────
+        // S'exécute AVANT toute écriture.
+        // Si elle échoue → rien n'est écrit dans aucune BD.
+        // Supabase et D1 ne reçoivent jamais de donnée invalide.
+        if (params.validate) {
+            params.validate(); // lève une exception si invalide
+        }
 
-            if (result.error) throw result.error;
-            if (result.data === null) throw new Error('Supabase returned null data');
+        // ── ÉTAPE 2 : Double écriture simultanée ────────────
+        const [primaryResult, mirrorResult] = await Promise.allSettled([
+            withTimeout(params.primaryOp(), PRIMARY_TIMEOUT_MS, 'Supabase write'),
+            withTimeout(
+                writeToMirror(params.table, params.operationType, params.payload),
+                MIRROR_TIMEOUT_MS,
+                'D1 write'
+            ),
+        ]);
 
-            return { data: result.data, source: 'supabase', replay_pending: false };
+        const primaryOk  = primaryResult.status === 'fulfilled' && !primaryResult.value.error;
+        const primaryData = primaryOk ? (primaryResult as PromiseFulfilledResult<{data: T | null; error: unknown}>).value.data : null;
+        const mirrorOk   = mirrorResult.status === 'fulfilled' && mirrorResult.value.ok;
 
-        } catch (primaryError) {
-            const elapsed = Date.now() - startMs;
-            console.warn(`[DataProvider] Supabase DOWN (${elapsed}ms):`, primaryError);
+        // ── CAS 1 : Les deux réussissent ────────────────────
+        if (primaryOk && mirrorOk) {
+            return { data: primaryData as T, source: 'both' };
+        }
 
-            // Alerte admin avec double filet
-            alertWithFallback({
-                event: 'SUPABASE_WRITE_FAILED',
-                table: d1Fallback.table,
-                error: String(primaryError),
-                failover: 'd1_active',
-                elapsed_ms: elapsed,
+        // ── CAS 2 : Primary OK, Mirror échoue ───────────────
+        // Supabase a la donnée validée → outbox cron va sync D1
+        // L'utilisateur reçoit sa donnée normalement
+        if (primaryOk && !mirrorOk) {
+            const mirrorErr = mirrorResult.status === 'rejected'
+                ? String(mirrorResult.reason)
+                : mirrorResult.status === 'fulfilled' && !mirrorResult.value.ok
+                    ? mirrorResult.value.error
+                    : 'unknown';
+
+            alertAdmin({
+                event: 'MIRROR_WRITE_FAILED',
+                table: params.table,
+                error: mirrorErr,
+                idempotencyKey: params.idempotencyKey,
             }).catch(() => {});
 
-            // Écrire dans D1
-            const d1Result = await writeToD1(d1Fallback.table, d1Fallback.payload);
+            return { data: primaryData as T, source: 'primary_only' };
+        }
 
-            if (d1Result.error) {
-                alertWithFallback({
-                    event: 'BOTH_SERVICES_WRITE_FAILED',
-                    table: d1Fallback.table,
-                    error: `Supabase: ${primaryError} | D1: ${d1Result.error}`,
-                    failover: 'none',
-                }).catch(() => {});
-                throw new Error('Service indisponible. Réessayez dans un instant.');
-            }
+        // ── CAS 3 : Mirror OK, Primary échoue (Supabase down) ─
+        // D1 a la donnée → l'utilisateur est servi depuis D1
+        // On trace pour replay vers Supabase au retour
+        if (!primaryOk && mirrorOk) {
+            const primaryErr = primaryResult.status === 'rejected'
+                ? String(primaryResult.reason)
+                : primaryResult.status === 'fulfilled'
+                    ? String((primaryResult.value as {error: unknown}).error)
+                    : 'unknown';
 
-            // [FIX-2+4] Enregistrer trace de replay (idempotent, avec alerte si échec)
-            let replayPending = false;
+            alertAdmin({
+                event: 'PRIMARY_WRITE_FAILED_MIRROR_OK',
+                table: params.table,
+                error: primaryErr,
+                idempotencyKey: params.idempotencyKey,
+            }).catch(() => {});
+
+            // Trace pour replay — OBLIGATOIRE, jamais silencieux si ça échoue
             try {
-                await registerPendingSync(
-                    d1Fallback.table,
-                    d1Fallback.operation ?? 'INSERT',
-                    recordId,
-                    d1Fallback.payload
+                await registerPendingSync({
+                    table: params.table,
+                    operationType: params.operationType,
+                    idempotencyKey: params.idempotencyKey,
+                    payload: params.payload,
+                });
+            } catch (syncErr) {
+                // La donnée est dans D1 mais sans trace de replay
+                // → alerte critique, double filet
+                await alertAdmin({
+                    event: 'PENDING_SYNC_REGISTRATION_FAILED',
+                    table: params.table,
+                    error: String(syncErr),
+                    idempotencyKey: params.idempotencyKey,
+                }).catch(err =>
+                    criticalFallbackLog('NOTIFY_ADMIN_FAILED', params.table, String(err))
                 );
-                replayPending = true;
-            } catch {
-                // registerPendingSync a déjà alerté l'admin
-                // La donnée est dans D1 mais sans garantie de replay
-                replayPending = false;
             }
 
-            return {
-                data: d1Result.data as T,
-                source: 'd1',
-                replay_pending: replayPending,
-            };
+            const mirrorData = (mirrorResult as PromiseFulfilledResult<{ok: true; data: unknown}>).value.data;
+            return { data: mirrorData as T, source: 'mirror_only' };
         }
+
+        // ── CAS 4 : Les deux échouent ────────────────────────
+        // C'est le seul cas où l'utilisateur voit une erreur
+        const primaryErr = primaryResult.status === 'rejected'
+            ? String(primaryResult.reason) : 'unknown';
+        const mirrorErr  = mirrorResult.status === 'rejected'
+            ? String(mirrorResult.reason) : 'unknown';
+
+        alertAdmin({
+            event: 'BOTH_SYSTEMS_WRITE_FAILED',
+            table: params.table,
+            error: `Primary: ${primaryErr} | Mirror: ${mirrorErr}`,
+            idempotencyKey: params.idempotencyKey,
+        }).catch(err =>
+            criticalFallbackLog('BOTH_FAILED', params.table, String(err))
+        );
+
+        throw new Error(
+            'Service temporairement indisponible. Vos données sont sécurisées — réessayez dans un instant.'
+        );
     },
 
     /**
-     * read() — Lecture avec fallback D1 et distinction d1 sources
+     * read() — Lecture avec fallback D1 transparent
+     *
+     * source:'unavailable' ≠ source:'primary' avec data:null
+     * Le composant UI DOIT distinguer ces deux cas.
      */
-    async read<T>(
-        supabaseOp: () => Promise<{ data: T | null; error: unknown }>,
-        d1Fallback: { table: string; params: Record<string, string> }
-    ): Promise<ReadResult<T>> {
+    async read<T>(params: {
+        table: string;
+        primaryOp: () => Promise<{ data: T | null; error: unknown }>;
+        mirrorFallback: () => Promise<{ data: T | null; error: unknown }>;
+    }): Promise<ReadResult<T>> {
         try {
-            const result = await withSupabaseTimeout(
-                () => supabaseOp(),
-                SUPABASE_TIMEOUT_MS
+            const result = await withTimeout(
+                params.primaryOp(),
+                PRIMARY_TIMEOUT_MS,
+                'Supabase read'
             );
             if (result.error) throw result.error;
+            return { data: result.data, source: 'primary' };
 
-            // data null = enregistrement inexistant (pas une panne)
-            if (result.data === null) return { data: null, source: 'not_found' };
-            return { data: result.data, source: 'supabase' };
-
-        } catch (supabaseErr) {
-            console.warn('[DataProvider] Supabase read failed, basculement D1:', supabaseErr);
-
-            alertWithFallback({
-                event: 'SUPABASE_READ_FAILED',
-                table: d1Fallback.table,
-                error: String(supabaseErr),
-                failover: 'd1_active',
+        } catch (primaryErr) {
+            alertAdmin({
+                event: 'PRIMARY_READ_FAILED',
+                table: params.table,
+                error: String(primaryErr),
             }).catch(() => {});
 
-            const d1Result = await readFromD1(d1Fallback.table, d1Fallback.params);
+            const mirrorResult = await readFromMirror(params.mirrorFallback);
 
-            if (d1Result.error) {
-                // [FIX-5] Double échec explicitement distingué
-                alertWithFallback({
-                    event: 'BOTH_SERVICES_READ_FAILED',
-                    table: d1Fallback.table,
-                    error: `Supabase: ${supabaseErr} | D1: ${d1Result.error}`,
-                    failover: 'none',
-                }).catch(() => {});
-
-                return { data: null, source: 'both_failed' };
+            if (!mirrorResult.ok) {
+                // Panne totale — explicitement distingué de "enregistrement absent"
+                alertAdmin({
+                    event: 'BOTH_SYSTEMS_READ_FAILED',
+                    table: params.table,
+                    error: `Primary: ${primaryErr} | Mirror: ${mirrorResult.error}`,
+                }).catch(err =>
+                    criticalFallbackLog('BOTH_READ_FAILED', params.table, String(err))
+                );
+                return { data: null, source: 'unavailable' };
             }
 
-            return { data: d1Result.data as T, source: 'd1' };
+            return { data: mirrorResult.data, source: 'mirror' };
         }
     },
 
     /**
-     * healthCheck() — État réel des services
+     * healthCheck() — État actuel des deux systèmes
      */
     async healthCheck(): Promise<{
         supabase: boolean;
@@ -369,7 +400,7 @@ export const DataProvider = {
         pending_syncs: number;
     }> {
         try {
-            const res = await fetchWithTimeout(`${WORKER_URL}/health`, { method: 'GET' }, 5000);
+            const res = await fetch(`${WORKER_URL}/health`);
             const json = await res.json() as {
                 services: {
                     supabase: { status: string };
@@ -387,3 +418,43 @@ export const DataProvider = {
         }
     },
 };
+
+// ═══════════════════════════════════════════════════════════
+// Helpers de validation réutilisables
+// ═══════════════════════════════════════════════════════════
+
+/** Valide un paiement avant écriture */
+export function validatePaiement(data: {
+    montant?: unknown;
+    student_id?: unknown;
+    organization_id?: unknown;
+}): void {
+    if (typeof data.montant !== 'number' || data.montant <= 0) {
+        throw new Error('Montant invalide : doit être un nombre positif');
+    }
+    if (!data.student_id) throw new Error('student_id est requis');
+    if (!data.organization_id) throw new Error('organization_id est requis');
+}
+
+/** Valide une note avant écriture */
+export function validateNote(data: {
+    note?: unknown;
+    student_id?: unknown;
+    matiere_id?: unknown;
+}): void {
+    if (typeof data.note !== 'number' || data.note < 0 || data.note > 20) {
+        throw new Error('Note invalide : doit être entre 0 et 20');
+    }
+    if (!data.student_id) throw new Error('student_id est requis');
+    if (!data.matiere_id) throw new Error('matiere_id est requis');
+}
+
+/** Valide un post avant écriture */
+export function validatePost(data: { content?: unknown }): void {
+    if (!data.content || typeof data.content !== 'string' || data.content.trim().length === 0) {
+        throw new Error('Le contenu du post ne peut pas être vide');
+    }
+    if (typeof data.content === 'string' && data.content.length > 5000) {
+        throw new Error('Contenu trop long (max 5000 caractères)');
+    }
+}

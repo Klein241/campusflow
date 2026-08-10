@@ -1776,11 +1776,11 @@ const MAX_R2_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
 function checkAdminAuth(request: Request, env: Env): boolean {
     const auth = request.headers.get('Authorization') || '';
-    const token = auth.replace('Bearer ', '');
-    const userId = request.headers.get('X-User-Id');
-    if (token === env.ADMIN_KEY && !!token) return true;
-    if (userId && userId.length > 5) return true;
-    return true; // Allow R2 upload for CampusFlow application assets
+    const token = auth.replace('Bearer ', '').trim();
+    // Seule vérification valide : token secret comparé à env.ADMIN_KEY
+    // Le header X-User-Id retiré : non vérifiable, falsifiable par n'importe qui
+    if (token && env.ADMIN_KEY && token === env.ADMIN_KEY) return true;
+    return false;
 }
 
 async function handleR2Upload(request: Request, env: Env): Promise<Response> {
@@ -1989,6 +1989,8 @@ export default {
         ctx.waitUntil(Promise.all([
             handleCron(env),
             processOutbox(env),
+            reconcilePendingSyncs(env),   // [SPEC 3] replay D1→Supabase avec circuit breaker
+            purgeSyncResolved(env),        // [SPEC 3] purge des resolved > 7 jours
         ]));
     },
 };
@@ -2065,26 +2067,48 @@ async function handleD1Write(request: Request, env: Env, pathname: string): Prom
     const table = getTableFromPath(pathname);
     if (!table) return json({ error: 'Table not allowed' }, 403);
 
-    const body = await request.json() as Record<string, unknown>;
-    if (!body || !body.id) return json({ error: 'Missing id field for upsert' }, 400);
+    const rawBody = await request.json() as Record<string, unknown>;
+    if (!rawBody || !rawBody.id) return json({ error: 'Missing id field — generate ID client-side before calling write()' }, 400);
+
+    // L'appelant précise l'opération réelle via __operation (INSERT ou UPDATE)
+    // On ne persiste pas ce champ de contrôle dans la table métier
+    const operation = (rawBody.__operation as string === 'UPDATE') ? 'UPDATE' : 'INSERT';
+    const body: Record<string, unknown> = { ...rawBody };
+    delete body.__operation;
 
     try {
-        // Construire la requete d'upsert dynamique
+        // UPSERT — jamais INSERT brut, pour garantir l'idempotence
         const cols = Object.keys(body);
         const placeholders = cols.map((_, i) => `?${i + 1}`).join(', ');
         const updates = cols.map(c => `${c} = excluded.${c}`).join(', ');
-        const values = Object.values(body);
+        const values = Object.values(body).map(v =>
+            // Sérialiser arrays et objets pour SQLite
+            Array.isArray(v) || (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v
+        );
 
         await env.CAMPUSFLOW_DB.prepare(
             `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${placeholders})
              ON CONFLICT(id) DO UPDATE SET ${updates}`
         ).bind(...values).run();
 
-        // Enregistrer dans pending_supabase_sync pour re-sync quand Supabase revient
+        // dedup_key inclut l'opération réelle — pas "INSERT" en dur
+        // ON CONFLICT DO UPDATE remet retry_count à 0 : si un enregistrement
+        // est modifié après échec de replay, on repart avec la version fraîche
+        const dedupKey = `${table}::${body.id}::${operation}`;
         await env.CAMPUSFLOW_DB.prepare(
-            `INSERT INTO pending_supabase_sync(table_name, operation, record_id, payload)
-             VALUES (?1, ?2, ?3, ?4)`
-        ).bind(table, 'INSERT', String(body.id), JSON.stringify(body)).run();
+            `INSERT INTO pending_supabase_sync
+               (id, table_name, operation, record_id, payload, dedup_key, status, retry_count, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', 0, ?7)
+             ON CONFLICT(dedup_key) DO UPDATE SET
+               payload = excluded.payload,
+               status = 'pending',
+               retry_count = 0,
+               last_error = NULL`
+        ).bind(
+            crypto.randomUUID(), table, operation,
+            String(body.id), JSON.stringify(body), dedupKey,
+            new Date().toISOString()
+        ).run();
 
         return json({ ok: true, table, id: body.id });
     } catch (err: any) {
@@ -2120,7 +2144,7 @@ async function handleD1Read(request: Request, env: Env, pathname: string): Promi
     }
 }
 
-/** DELETE /api/d1/:table — Soft delete ou delete reel */
+/** DELETE /api/d1/:table — Suppression + trace pour replay vers Supabase */
 async function handleD1Delete(request: Request, env: Env, pathname: string): Promise<Response> {
     const table = getTableFromPath(pathname);
     if (!table) return json({ error: 'Table not allowed' }, 403);
@@ -2132,6 +2156,26 @@ async function handleD1Delete(request: Request, env: Env, pathname: string): Pro
         await env.CAMPUSFLOW_DB.prepare(
             `DELETE FROM ${table} WHERE id = ?1`
         ).bind(body.id).run();
+
+        // Tracer la suppression pour replay vers Supabase
+        // Si un INSERT/UPDATE pending existe pour le même record_id, les deux
+        // coexistent (dedup_key différent ::DELETE vs ::INSERT/:UPDATE) et
+        // reconcilePendingSyncs les rejoue dans l'ordre created_at ASC — correct
+        const dedupKey = `${table}::${body.id}::DELETE`;
+        await env.CAMPUSFLOW_DB.prepare(
+            `INSERT INTO pending_supabase_sync
+               (id, table_name, operation, record_id, payload, dedup_key, status, retry_count, created_at)
+             VALUES (?1, ?2, 'DELETE', ?3, ?4, ?5, 'pending', 0, ?6)
+             ON CONFLICT(dedup_key) DO UPDATE SET
+               status = 'pending',
+               retry_count = 0,
+               last_error = NULL`
+        ).bind(
+            crypto.randomUUID(), table, body.id,
+            JSON.stringify({ id: body.id }), dedupKey,
+            new Date().toISOString()
+        ).run();
+
         return json({ ok: true });
     } catch (err: any) {
         return json({ error: err.message }, 500);
@@ -2285,50 +2329,183 @@ async function processOutbox(env: Env): Promise<void> {
     }
 }
 
-/** Rejoue les ecritures D1 vers Supabase quand Supabase revient */
-async function replaySupabaseSync(env: Env): Promise<void> {
+// ══════════════════════════════════════════════════════════
+// [SPEC 3] RÉCONCILIATION D1 → SUPABASE avec Circuit Breaker
+// ══════════════════════════════════════════════════════════
+
+// Circuit breaker : N health-checks positifs consécutifs requis avant replay massif
+const CIRCUIT_BREAKER_THRESHOLD = 3;
+const MAX_RETRY_COUNT = 5;
+const RECONCILE_BATCH = 50;
+
+// Rate-limiter admin notifications (anti-spam) : 1 alerte/type/minute max
+const adminAlertTimestamps: Map<string, number> = new Map();
+function shouldSendAdminAlert(eventType: string, windowMs = 60_000): boolean {
+    const last = adminAlertTimestamps.get(eventType) ?? 0;
+    if (Date.now() - last > windowMs) {
+        adminAlertTimestamps.set(eventType, Date.now());
+        return true;
+    }
+    return false;
+}
+
+/** [SPEC 3] Worker de réconciliation : rejoue D1→Supabase avec circuit breaker */
+async function reconcilePendingSyncs(env: Env): Promise<void> {
     const supabaseUrl = env.SUPABASE_URL?.replace(/\/$/, '');
+    if (!supabaseUrl || !env.SUPABASE_SERVICE_KEY) return;
 
     try {
+        // [SPEC 3 circuit breaker] : compter les health-checks positifs consécutifs en KV
+        const cbKey = 'circuit_breaker_ok_count';
+        const cbRaw = await env.NOTIFICATION_CACHE.get(cbKey);
+        const cbCount = parseInt(cbRaw ?? '0');
+
+        // Vérifier si Supabase est UP maintenant
+        let supabaseUp = false;
+        try {
+            const hc = await fetch(
+                `${supabaseUrl}/rest/v1/organizations?select=id&limit=1`,
+                { headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}` },
+                  signal: AbortSignal.timeout(4000) }
+            );
+            supabaseUp = hc.ok;
+        } catch { supabaseUp = false; }
+
+        if (!supabaseUp) {
+            // Reset circuit breaker
+            await env.NOTIFICATION_CACHE.put(cbKey, '0', { expirationTtl: 3600 });
+            return;
+        }
+
+        // Incrémenter le compteur de succès consécutifs
+        const newCount = cbCount + 1;
+        await env.NOTIFICATION_CACHE.put(cbKey, String(newCount), { expirationTtl: 3600 });
+
+        // Attendre N succès consécutifs avant de déclencher le replay (anti-flapping)
+        if (newCount < CIRCUIT_BREAKER_THRESHOLD) {
+            console.log(`[CircuitBreaker] Supabase UP ${newCount}/${CIRCUIT_BREAKER_THRESHOLD} — replay en attente`);
+            return;
+        }
+
+        // [SPEC 3] Lire le batch de pending à rejouer
         const { results: pending } = await env.CAMPUSFLOW_DB.prepare(
             `SELECT * FROM pending_supabase_sync
-             WHERE synced_at IS NULL AND retry_count < 5
-             ORDER BY created_at ASC LIMIT 50`
-        ).all() as { results: Array<{ id: string; table_name: string; operation: string; record_id: string; payload: string; retry_count: number }> };
+             WHERE synced_at IS NULL AND retry_count < ?1 AND status != 'abandoned'
+             ORDER BY created_at ASC LIMIT ?2`
+        ).bind(MAX_RETRY_COUNT, RECONCILE_BATCH).all() as {
+            results: Array<{
+                id: string; table_name: string; operation: string;
+                record_id: string; payload: string; retry_count: number;
+            }>
+        };
 
-        if (!pending.length) return;
+        if (!pending.length) {
+            // Tout est synced — reset circuit breaker
+            await env.NOTIFICATION_CACHE.put(cbKey, '0', { expirationTtl: 3600 });
+            return;
+        }
+
+        console.log(`[Reconcile] Replay ${pending.length} entrées vers Supabase`);
+        let successCount = 0;
 
         for (const row of pending) {
             try {
                 const payload = JSON.parse(row.payload);
-                const res = await fetch(`${supabaseUrl}/rest/v1/${row.table_name}`, {
-                    method: 'POST',
+
+                // [SPEC 3 + SPEC 2.3] UPSERT vers Supabase — jamais INSERT brut
+                const method = row.operation === 'DELETE' ? 'DELETE' : 'POST';
+                const prefer = row.operation === 'DELETE'
+                    ? 'return=minimal'
+                    : 'resolution=merge-duplicates,return=minimal';
+
+                const url = row.operation === 'DELETE'
+                    ? `${supabaseUrl}/rest/v1/${row.table_name}?id=eq.${row.record_id}`
+                    : `${supabaseUrl}/rest/v1/${row.table_name}`;
+
+                const res = await fetch(url, {
+                    method,
                     headers: {
                         apikey: env.SUPABASE_SERVICE_KEY,
                         Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
                         'Content-Type': 'application/json',
-                        'Prefer': 'resolution=merge-duplicates',
+                        'Prefer': prefer,
                     },
-                    body: JSON.stringify(payload),
+                    body: method !== 'DELETE' ? JSON.stringify(payload) : undefined,
                     signal: AbortSignal.timeout(5000),
                 });
 
                 if (res.ok || res.status === 409) {
                     await env.CAMPUSFLOW_DB.prepare(
-                        `UPDATE pending_supabase_sync SET synced_at = ?1 WHERE id = ?2`
+                        `UPDATE pending_supabase_sync
+                         SET synced_at = ?1, status = 'resolved'
+                         WHERE id = ?2`
                     ).bind(new Date().toISOString(), row.id).run();
+                    successCount++;
                 } else {
+                    const errText = await res.text().catch(() => `HTTP ${res.status}`);
+                    const newRetry = row.retry_count + 1;
+                    const status = newRetry >= MAX_RETRY_COUNT ? 'abandoned' : 'retrying';
                     await env.CAMPUSFLOW_DB.prepare(
-                        `UPDATE pending_supabase_sync SET retry_count = retry_count + 1, last_tried = ?1 WHERE id = ?2`
-                    ).bind(new Date().toISOString(), row.id).run();
+                        `UPDATE pending_supabase_sync
+                         SET retry_count = ?1, last_tried = ?2, status = ?3, last_error = ?4
+                         WHERE id = ?5`
+                    ).bind(newRetry, new Date().toISOString(), status, errText.substring(0, 500), row.id).run();
+
+                    // [SPEC 3] Alerte abandon après max retries (rate-limited)
+                    if (status === 'abandoned' && shouldSendAdminAlert(`SYNC_ABANDONED_${row.table_name}`)) {
+                        await fetch(`${supabaseUrl}/functions/v1/admin-alert`, {
+                            method: 'POST',
+                            headers: {
+                                Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                event: 'SYNC_ABANDONED',
+                                table: row.table_name,
+                                record_id: row.record_id,
+                                error: errText,
+                                retry_count: newRetry,
+                            }),
+                        }).catch(() => {
+                            // Log persistant D1 si l'alerte échoue
+                            env.CAMPUSFLOW_DB.prepare(
+                                `INSERT INTO system_alerts(id, service, event, table_name, error_msg, created_at)
+                                 VALUES(?1,'Worker','SYNC_ABANDONED',?2,?3,?4)`
+                            ).bind(crypto.randomUUID(), row.table_name, errText, new Date().toISOString()).run();
+                        });
+                    }
                 }
-            } catch {
+            } catch (err: any) {
+                const newRetry = row.retry_count + 1;
                 await env.CAMPUSFLOW_DB.prepare(
-                    `UPDATE pending_supabase_sync SET retry_count = retry_count + 1, last_tried = ?1 WHERE id = ?2`
-                ).bind(new Date().toISOString(), row.id).run();
+                    `UPDATE pending_supabase_sync
+                     SET retry_count = ?1, last_tried = ?2, status = ?3, last_error = ?4
+                     WHERE id = ?5`
+                ).bind(newRetry, new Date().toISOString(),
+                    newRetry >= MAX_RETRY_COUNT ? 'abandoned' : 'retrying',
+                    err.message.substring(0, 500), row.id).run();
             }
         }
+
+        console.log(`[Reconcile] ${successCount}/${pending.length} synced vers Supabase`);
+
     } catch (err: any) {
-        console.error('[replaySupabaseSync] error:', err.message);
+        console.error('[reconcilePendingSyncs] Erreur critique:', err.message);
+    }
+}
+
+/** [SPEC 3] Purge des entrées resolved de plus de 7 jours */
+async function purgeSyncResolved(env: Env): Promise<void> {
+    try {
+        const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const result = await env.CAMPUSFLOW_DB.prepare(
+            `DELETE FROM pending_supabase_sync
+             WHERE status = 'resolved' AND synced_at < ?1`
+        ).bind(cutoff).run();
+        if ((result.meta?.changes ?? 0) > 0) {
+            console.log(`[Purge] ${result.meta?.changes} entrées resolved supprimées`);
+        }
+    } catch (err: any) {
+        console.error('[purgeSyncResolved] Erreur:', err.message);
     }
 }
