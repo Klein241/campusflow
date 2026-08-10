@@ -1242,7 +1242,7 @@ async function handleNotify(request: Request, env: Env, ctx: ExecutionContext): 
                     let inserted: any = null;
                     try {
                         const existing = await db.select('notifications', {
-                            filter: `user_id=eq.${recipientId}&action_type=eq.${action_type}&created_at=gte.${thirtySecondsAgo}`,
+                            filters: `user_id=eq.${recipientId}&action_type=eq.${action_type}&created_at=gte.${thirtySecondsAgo}`,
                             limit: 1,
                         });
                         const existingNotif = Array.isArray(existing) ? existing[0] : null;
@@ -2284,16 +2284,14 @@ async function processOutbox(env: Env): Promise<void> {
                 } else {
                     const cols = Object.keys(payload);
                     const placeholders = cols.map((_, i) => `?${i + 1}`).join(', ');
-                    const updates = cols.map(c => `${c} = excluded.${c}`).join(', ');
                     const values = cols.map(c => {
                         const v = payload[c];
-                        // Serialiser arrays et objets en JSON pour SQLite
                         return Array.isArray(v) || (typeof v === 'object' && v !== null)
                             ? JSON.stringify(v) : v;
                     });
+                    // INSERT OR REPLACE : universel SQLite, pas besoin de UNIQUE INDEX explicite
                     await env.CAMPUSFLOW_DB.prepare(
-                        `INSERT INTO ${entry.table_name} (${cols.join(', ')}) VALUES (${placeholders})
-                         ON CONFLICT(id) DO UPDATE SET ${updates}`
+                        `INSERT OR REPLACE INTO ${entry.table_name} (${cols.join(', ')}) VALUES (${placeholders})`
                     ).bind(...values).run();
                 }
                 successIds.push(entry.id);
