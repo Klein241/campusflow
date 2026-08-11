@@ -60,9 +60,11 @@ interface UserInfo {
 function getSession(): { id: string; first_name: string; last_name: string; role: string; organization_id: string } | null {
     if (typeof window === 'undefined') return null;
     // Session via SessionManager
-    if (!raw) return null;
-    try { return JSON.parse(raw); } catch { return null; }
+    const s = SessionManager.get();
+    if (!s) return null;
+    return { id: s.profile_id, first_name: s.first_name || '', last_name: s.last_name || '', role: s.role, organization_id: s.org_id };
 }
+
 
 export default function MessagesPage() {
     const orgSlug = useOrgSlug();

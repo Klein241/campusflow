@@ -726,7 +726,8 @@ export function GroupChatView({ groupId, groupName, userId, userName, orgId, onB
     const startRecording = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const rec = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4' });
+            const OPUS = 'audio/webm;codecs=opus';
+            const rec = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported(OPUS) ? OPUS : 'audio/webm' });
             mediaRecorderRef.current = rec;
             audioChunksRef.current = [];
             rec.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };

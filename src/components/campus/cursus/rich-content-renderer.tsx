@@ -1,7 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { cn } from '@/lib/utils';
-import { Copy, Check, Eye, Code2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Copy, Check, Eye, Code2, ChevronDown, ChevronUp, Mic, Play, Pause, Download, Loader2 } from 'lucide-react';
 import type { ContentBlock } from './rich-content-editor';
 
 // ═══════════════════════════════════════════════════════
@@ -14,6 +14,66 @@ interface RichContentRendererProps {
   className?: string;
   /** If provided, shows a compact preview with max N chars of text */
   truncateAt?: number;
+  /** If provided, student can download audio (-sky_cost Sky Points). Return true = success */
+  onAudioDownload?: (block: ContentBlock & { type: 'audio' }) => Promise<boolean>;
+}
+
+// ── Inline AudioPlayer for renderer ───────────────────────────────────────────
+function AudioPlayerInline({
+  url, caption, showDownload, onDownload, downloading,
+}: {
+  url: string; caption: string;
+  showDownload?: boolean; onDownload?: () => void; downloading?: boolean;
+}) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [dur, setDur] = useState(0);
+  const fmt = (s: number) => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+  const toggle = () => {
+    if (!audioRef.current) return;
+    if (playing) { audioRef.current.pause(); setPlaying(false); }
+    else         { audioRef.current.play();  setPlaying(true);  }
+  };
+  return (
+    <div className="rounded-xl overflow-hidden border border-violet-500/20 bg-violet-500/5">
+      <audio ref={audioRef} src={url}
+        onTimeUpdate={() => setProgress(audioRef.current?.currentTime || 0)}
+        onLoadedMetadata={() => setDur(audioRef.current?.duration || 0)}
+        onEnded={() => setPlaying(false)}
+      />
+      <div className="px-3 py-2.5 flex items-center gap-3">
+        <button onClick={toggle}
+          className="w-9 h-9 rounded-full bg-violet-500/20 hover:bg-violet-500/40 border border-violet-500/30 flex items-center justify-center transition-all shrink-0">
+          {playing ? <Pause className="w-4 h-4 text-violet-300" /> : <Play className="w-4 h-4 text-violet-300 ml-0.5" />}
+        </button>
+        <div className="flex-1 space-y-1">
+          <div className="relative h-1.5 bg-white/10 rounded-full overflow-hidden cursor-pointer"
+            onClick={e => {
+              const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+              if (audioRef.current) audioRef.current.currentTime = ((e.clientX - rect.left) / rect.width) * dur;
+            }}>
+            <div className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-400 transition-all"
+              style={{ width: dur ? `${(progress/dur)*100}%` : '0%' }} />
+          </div>
+          <div className="flex justify-between text-[9px] text-slate-500">
+            <span>{fmt(progress)}</span><span>{fmt(dur)}</span>
+          </div>
+        </div>
+        <Mic className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+        {showDownload && onDownload && (
+          <button onClick={onDownload} disabled={downloading}
+            className="w-8 h-8 rounded-full bg-white/5 hover:bg-violet-500/20 border border-white/10 flex items-center justify-center transition-all shrink-0"
+            title="Télécharger (-2 Sky Points)">
+            {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-400" /> : <Download className="w-3.5 h-3.5 text-slate-400" />}
+          </button>
+        )}
+      </div>
+      {caption && (
+        <p className="px-3 pb-2 text-[11px] text-slate-500 italic">{caption}</p>
+      )}
+    </div>
+  );
 }
 
 // ── Parse code fences from text ───────────────────────────────────────────────
@@ -213,8 +273,9 @@ function parseBlocks(raw: string | null | undefined): ContentBlock[] {
   return [{ type: 'text', value: raw }];
 }
 
-export function RichContentRenderer({ content, className, truncateAt }: RichContentRendererProps) {
+export function RichContentRenderer({ content, className, truncateAt, onAudioDownload }: RichContentRendererProps) {
   const blocks = parseBlocks(content);
+  const [downloading, setDownloading] = useState<number | null>(null);
   if (blocks.length === 0) return null;
 
   // ── Compact preview mode ──
@@ -225,6 +286,7 @@ export function RichContentRenderer({ content, className, truncateAt }: RichCont
       .join(' ')
       .trim();
     const hasImages = blocks.some(b => b.type === 'image');
+    const hasAudio = blocks.some(b => b.type === 'audio');
     const hasCode = allText.includes('```');
     const preview = allText.replace(/```[\s\S]*?```/g, '[code]').trim();
     const truncated = preview.length > truncateAt ? preview.slice(0, truncateAt) + '…' : preview;
@@ -232,7 +294,8 @@ export function RichContentRenderer({ content, className, truncateAt }: RichCont
       <p className={cn('text-xs text-slate-400 leading-relaxed', className)}>
         {truncated}
         {hasImages && <span className="ml-1 text-amber-400">📷</span>}
-        {hasCode && <span className="ml-1 text-orange-400">{'</>'}</span>}
+        {hasAudio  && <span className="ml-1 text-violet-400">🎙️</span>}
+        {hasCode   && <span className="ml-1 text-orange-400">{'</>'}</span>}
       </p>
     );
   }
@@ -261,6 +324,33 @@ export function RichContentRenderer({ content, className, truncateAt }: RichCont
                 </figcaption>
               )}
             </figure>
+          );
+        }
+
+        if (block.type === 'audio') {
+          return (
+            <div key={i}>
+              {onAudioDownload && block.sky_cost && (
+                <p className="text-[10px] text-violet-400 mb-1 flex items-center gap-1">
+                  <Download className="w-3 h-3" /> Téléchargement = {block.sky_cost} Sky Points
+                </p>
+              )}
+              <AudioPlayerInline
+                url={block.url}
+                caption={block.caption}
+                showDownload={!!onAudioDownload}
+                downloading={downloading === i}
+                onDownload={onAudioDownload ? async () => {
+                  setDownloading(i);
+                  const ok = await onAudioDownload(block as ContentBlock & { type: 'audio' });
+                  if (ok) {
+                    const a = document.createElement('a');
+                    a.href = block.url; a.download = `note-vocale-${i + 1}.webm`; a.click();
+                  }
+                  setDownloading(null);
+                } : undefined}
+              />
+            </div>
           );
         }
 

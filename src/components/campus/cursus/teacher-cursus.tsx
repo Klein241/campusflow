@@ -20,6 +20,7 @@ import { compressImage } from '@/lib/compress';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { RichContentEditor, parseContent, serializeContent, type ContentBlock } from './rich-content-editor';
+import { updateSkyPoints, deductSkyPoints } from '@/lib/sky-points-service';
 import { DiscussButton } from '../discuss-button';
 
 // ─── Helper: envoyer une notification push via le Worker ────────────────────
@@ -139,6 +140,9 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
     const [gradeInputs,   setGradeInputs]   = useState<Record<string, string>>({});
     const [gradeFeedback, setGradeFeedback] = useState<Record<string, string>>({});
     const [savingGrade,   setSavingGrade]   = useState<Record<string, boolean>>({});
+
+    // ── Disputes : réponses prof ──
+    const [disputeReply,  setDisputeReply]  = useState<Record<string, string>>({});  // réponse libre par dispute id
 
     const loadData = async () => {
         setLoading(true);
@@ -375,12 +379,14 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
         setSavingGrade(prev => ({ ...prev, [submissionId]: false }));
     };
 
-    const resolveDispute = async (dId: string, status: 'accepted' | 'rejected') => {
+    const resolveDispute = async (dId: string, status: 'accepted' | 'rejected', suggestion?: string) => {
+        const response = disputeReply[dId]?.trim() || suggestion || null;
         const { error } = await supabase.from('grade_disputes')
-            .update({ status, resolved_at: new Date().toISOString() })
+            .update({ status, resolved_at: new Date().toISOString(), response })
             .eq('id', dId);
         if (error) { toast.error(error.message); return; }
-        setDisputes(prev => prev.map(d => d.id === dId ? { ...d, status } : d));
+        setDisputes(prev => prev.map(d => d.id === dId ? { ...d, status, response } : d));
+        setDisputeReply(prev => { const n = { ...prev }; delete n[dId]; return n; });
         toast.success(status === 'accepted' ? 'Réclamation acceptée ✅' : 'Réclamation refusée');
     };
 
@@ -428,18 +434,63 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
             {/* ── Disputes alert ── */}
             {pendingDisputes.length > 0 && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                    className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-3 space-y-2">
+                    className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-3 space-y-3">
                     <div className="flex items-center gap-2">
                         <Flag className="w-4 h-4 text-rose-400" />
                         <span className="text-sm font-bold text-rose-300">{pendingDisputes.length} réclamation(s) en attente</span>
                     </div>
-                    {pendingDisputes.slice(0, 2).map((d: any) => (
-                        <div key={d.id} className="bg-white/[0.04] rounded-xl p-2.5 flex items-center gap-2">
-                            <p className="flex-1 text-xs text-white truncate">{d.message}</p>
-                            <button onClick={() => resolveDispute(d.id, 'accepted')} className="px-2 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 text-[10px]">✓</button>
-                            <button onClick={() => resolveDispute(d.id, 'rejected')} className="px-2 py-1 rounded-lg bg-red-500/20 text-red-400 text-[10px]">✗</button>
-                        </div>
-                    ))}
+                    {pendingDisputes.map((d: any) => {
+                        const relatedEx = exercises.find(e => e.id === d.exercise_id);
+                        return (
+                            <div key={d.id} className="bg-white/[0.04] rounded-xl p-3 space-y-2.5">
+                                {/* En-tête */}
+                                <div className="flex items-start gap-2">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[10px] text-rose-400 font-bold uppercase tracking-wide mb-0.5">
+                                            {relatedEx ? `⚡ ${relatedEx.title}` : 'Exercice'}
+                                        </p>
+                                        <p className="text-xs text-white italic">« {d.message} »</p>
+                                    </div>
+                                </div>
+
+                                {/* Champ réponse libre */}
+                                <textarea
+                                    value={disputeReply[d.id] || ''}
+                                    onChange={e => setDisputeReply(prev => ({ ...prev, [d.id]: e.target.value }))}
+                                    placeholder="Votre réponse (optionnel)…"
+                                    rows={2}
+                                    className="w-full bg-white/[0.04] border border-white/10 text-white rounded-lg px-3 py-2 text-xs placeholder:text-slate-600 focus:outline-none focus:border-white/20 resize-none"
+                                />
+
+                                {/* Boutons d'action avec suggestions */}
+                                <div className="grid grid-cols-1 gap-1.5">
+                                    {/* Accepter + Reprendre l'exercice */}
+                                    <button
+                                        onClick={() => resolveDispute(d.id, 'accepted', '🔁 Nous vous suggérons de reprendre cet exercice pour consolider vos acquis.')}
+                                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-300 text-[11px] font-semibold hover:bg-emerald-500/25 transition-all text-left">
+                                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                                        Accepter — Suggérer de reprendre l'exercice
+                                    </button>
+
+                                    {/* Accepter + Proposer un autre exercice */}
+                                    <button
+                                        onClick={() => resolveDispute(d.id, 'accepted', '📚 Nous vous proposons un exercice alternatif adapté à votre niveau.')}
+                                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-500/15 border border-blue-500/25 text-blue-300 text-[11px] font-semibold hover:bg-blue-500/25 transition-all text-left">
+                                        <Zap className="w-3.5 h-3.5 shrink-0" />
+                                        Accepter — Proposer un autre exercice
+                                    </button>
+
+                                    {/* Refuser */}
+                                    <button
+                                        onClick={() => resolveDispute(d.id, 'rejected')}
+                                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/15 border border-red-500/25 text-red-300 text-[11px] font-semibold hover:bg-red-500/25 transition-all text-left">
+                                        <X className="w-3.5 h-3.5 shrink-0" />
+                                        Refuser la réclamation
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </motion.div>
             )}
 
@@ -641,7 +692,8 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
                                                 </div>
                                                 {editCh === ch.id && (
                                                     <div className="px-3 pb-3 space-y-2 border-t border-white/[0.05] pt-2">
-                                                        <RichContentEditor blocks={editChBlocks} onChange={setEditChBlocks} placeholder="Contenu du chapitre..." userId={userId} />
+                                                        <RichContentEditor blocks={editChBlocks} onChange={setEditChBlocks} placeholder="Contenu du chapitre..." userId={userId}
+                                                            onVoicePublished={() => deductSkyPoints(userId, 3, 'note_vocale', 'Note vocale dans un chapitre', 'teacher')} />
                                                         <div className="flex gap-2">
                                                             <Button size="sm" onClick={() => saveChapterContent(ch.id)} className="bg-teal-600 text-white rounded-xl text-xs flex-1"><Save className="w-3 h-3 mr-1" />Sauvegarder</Button>
                                                             <Button size="sm" variant="ghost" onClick={() => setEditCh(null)} className="text-slate-400 text-xs">Annuler</Button>
@@ -663,7 +715,8 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
                                                 </div>
                                                 <Input value={chForm.title} onChange={e => setChForm(p => ({ ...p, title: e.target.value }))}
                                                     placeholder="Titre du chapitre..." className="bg-white/[0.05] border-white/10 text-white rounded-xl" />
-                                                <RichContentEditor blocks={chForm.contentBlocks} onChange={blocks => setChForm(p => ({ ...p, contentBlocks: blocks }))} placeholder="Contenu du chapitre..." userId={userId} />
+                                                <RichContentEditor blocks={chForm.contentBlocks} onChange={blocks => setChForm(p => ({ ...p, contentBlocks: blocks }))} placeholder="Contenu du chapitre..." userId={userId}
+                                                    onVoicePublished={() => deductSkyPoints(userId, 3, 'note_vocale', 'Note vocale dans un chapitre', 'teacher')} />
                                                 <div className="flex gap-2">
                                                     <Button onClick={createChapter} disabled={savingCh || !chForm.title} className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-sm">
                                                         {savingCh ? 'Ajout...' : 'Ajouter le chapitre'}
@@ -731,7 +784,8 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
                                         </div>
                                         {editLesson === lesson.id && (
                                             <div className="border-t border-white/[0.06] px-3 pb-3 pt-2.5 space-y-2">
-                                                <RichContentEditor blocks={editLessonBlocks} onChange={setEditLessonBlocks} placeholder="Contenu de la leçon..." userId={userId} />
+                                                <RichContentEditor blocks={editLessonBlocks} onChange={setEditLessonBlocks} placeholder="Contenu de la leçon..." userId={userId}
+                                                    onVoicePublished={() => deductSkyPoints(userId, 3, 'note_vocale', 'Note vocale dans une leçon', 'teacher')} />
                                                 <div className="flex gap-2">
                                                     <Button size="sm" onClick={() => saveLessonContent(lesson.id)} className="bg-teal-600 text-white rounded-xl text-xs flex-1"><Save className="w-3 h-3 mr-1" />Sauvegarder</Button>
                                                     <Button size="sm" variant="ghost" onClick={() => setEditLesson(null)} className="text-slate-400 text-xs">Annuler</Button>
@@ -757,7 +811,8 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
                                                 <Input type="number" value={lessonForm.estimated_minutes} onChange={e => setLessonForm(p => ({ ...p, estimated_minutes: e.target.value }))}
                                                     placeholder="min" className="bg-white/[0.05] border-white/10 text-white rounded-xl" />
                                             </div>
-                                            <RichContentEditor blocks={lessonForm.contentBlocks} onChange={blocks => setLessonForm(p => ({ ...p, contentBlocks: blocks }))} placeholder="Contenu..." userId={userId} />
+                                            <RichContentEditor blocks={lessonForm.contentBlocks} onChange={blocks => setLessonForm(p => ({ ...p, contentBlocks: blocks }))} placeholder="Contenu..." userId={userId}
+                                                onVoicePublished={() => deductSkyPoints(userId, 3, 'note_vocale', 'Note vocale dans une leçon', 'teacher')} />
                                             <div className="flex gap-2">
                                                 <Button onClick={createLesson} disabled={savingLesson || !lessonForm.title} className="flex-1 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-sm">
                                                     {savingLesson ? 'Ajout...' : 'Ajouter la leçon'}

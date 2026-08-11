@@ -217,7 +217,7 @@ export default function SchoolLandingPage() {
     ].filter(s => s.url);
 
     // Helpers for gallery nav
-    const openGallery = (idx: number) => { setGalleryIndex(idx); setSelectedImage(null); };
+    const openGallery = (idx: number) => { setGalleryIndex(idx); };
     const prevImg = () => setGalleryIndex(i => i !== null && i > 0 ? i - 1 : gallery.length - 1);
     const nextImg = () => setGalleryIndex(i => i !== null && i < gallery.length - 1 ? i + 1 : 0);
 
@@ -718,7 +718,6 @@ export default function SchoolLandingPage() {
                     <div className="rounded-3xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
                         <AnimatePresence mode="wait">
 
-                            {/* ── Étape 0 : Sélection de la classe ── */}
                             {inscStep === 0 && (
                                 <motion.div key="ins0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
                                     className="p-6 sm:p-8 space-y-5">
@@ -735,27 +734,61 @@ export default function SchoolLandingPage() {
                                             Aucune classe disponible pour le moment.
                                         </div>
                                     ) : (
-                                        <div className="flex flex-wrap gap-2.5">
-                                            {classrooms.map((c: any) => {
-                                                const sel = selectedClassroom?.id === c.id;
-                                                return (
-                                                    <button key={c.id}
-                                                        onClick={() => setSelectedClassroom(sel ? null : c)}
-                                                        className={cn(
-                                                            'px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border',
-                                                            sel
-                                                                ? 'text-white border-transparent shadow-lg'
-                                                                : 'bg-white/[0.04] border-white/[0.08] text-slate-300 hover:bg-white/[0.08] hover:border-white/15'
-                                                        )}
-                                                        style={sel ? {
-                                                            background: `linear-gradient(135deg,${bc},${bc}bb)`,
-                                                            boxShadow: `0 4px 15px ${bc}35`
-                                                        } : {}}>
-                                                        {c.name}
-                                                        {c.cycle && <span className="ml-1.5 opacity-60 text-[10px]">({c.cycle})</span>}
-                                                    </button>
-                                                );
-                                            })}
+                                        <div className="space-y-4">
+                                            {/* ── Dropdown sélecteur ── */}
+                                            <div>
+                                                <label className="text-xs text-slate-400 mb-1.5 block font-medium">
+                                                    Niveau / Classe souhaitée <span className="text-red-400">*</span>
+                                                </label>
+                                                <select
+                                                    value={selectedClassroom?.id || ''}
+                                                    onChange={e => {
+                                                        const cls = classrooms.find((c: any) => c.id === e.target.value) || null;
+                                                        setSelectedClassroom(cls);
+                                                    }}
+                                                    className="w-full h-12 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm focus:outline-none focus:border-white/25 transition-colors [color-scheme:dark] appearance-none cursor-pointer"
+                                                    style={{ borderColor: selectedClassroom ? `${bc}50` : undefined }}
+                                                >
+                                                    <option value="" className="bg-[#111]">— Sélectionner une classe —</option>
+                                                    {classrooms.map((c: any) => {
+                                                        const fil = filieres.find((f: any) => f.id === c.filiere_id);
+                                                        return (
+                                                            <option key={c.id} value={c.id} className="bg-[#111]">
+                                                                {c.name}{c.cycle ? ` (${c.cycle})` : ''}{fil ? ` — ${fil.nom}` : ''}
+                                                            </option>
+                                                        );
+                                                    })}
+                                                </select>
+                                            </div>
+
+                                            {/* ── Pastilles rapides (si ≤ 12 classes) ── */}
+                                            {classrooms.length <= 12 && (
+                                                <div>
+                                                    <p className="text-[10px] text-slate-600 uppercase tracking-widest font-semibold mb-2">Ou sélectionnez directement</p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {classrooms.map((c: any) => {
+                                                            const sel = selectedClassroom?.id === c.id;
+                                                            return (
+                                                                <button key={c.id}
+                                                                    onClick={() => setSelectedClassroom(sel ? null : c)}
+                                                                    className={cn(
+                                                                        'px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 border',
+                                                                        sel
+                                                                            ? 'text-white border-transparent shadow-lg'
+                                                                            : 'bg-white/[0.04] border-white/[0.08] text-slate-300 hover:bg-white/[0.08] hover:border-white/15'
+                                                                    )}
+                                                                    style={sel ? {
+                                                                        background: `linear-gradient(135deg,${bc},${bc}bb)`,
+                                                                        boxShadow: `0 4px 15px ${bc}35`
+                                                                    } : {}}>
+                                                                    {c.name}
+                                                                    {c.cycle && <span className="ml-1.5 opacity-60 text-[10px]">({c.cycle})</span>}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
@@ -764,7 +797,11 @@ export default function SchoolLandingPage() {
                                             className="flex items-center gap-2 text-sm px-4 py-3 rounded-xl border"
                                             style={{ backgroundColor: `${bc}10`, borderColor: `${bc}30`, color: bc }}>
                                             <CheckCircle2 className="w-4 h-4 shrink-0" />
-                                            <span>Sélectionné : <strong>{selectedClassroom.name}</strong></span>
+                                            <span>Sélectionné : <strong>{selectedClassroom.name}</strong>
+                                                {filieres.find((f: any) => f.id === selectedClassroom.filiere_id) && (
+                                                    <span className="opacity-70"> — {filieres.find((f: any) => f.id === selectedClassroom.filiere_id)?.nom}</span>
+                                                )}
+                                            </span>
                                         </motion.div>
                                     )}
 
@@ -779,6 +816,7 @@ export default function SchoolLandingPage() {
                                     </div>
                                 </motion.div>
                             )}
+
 
                             {/* ── Étape 1 : Informations personnelles ── */}
                             {inscStep === 1 && (
@@ -1016,7 +1054,7 @@ export default function SchoolLandingPage() {
 
                                 {/* CTA */}
                                 <button disabled={!credSaved}
-                                    onClick={() => { window.location.href = `/${orgSlug}/student/pending`; }}
+                                    onClick={() => { window.location.href = `/${orgSlug}/student`; }}
                                     className={cn(
                                         'w-full py-4 rounded-2xl font-black text-white transition-all text-sm',
                                         credSaved ? 'hover:opacity-90 active:scale-[0.98]' : 'opacity-35 cursor-not-allowed'

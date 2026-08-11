@@ -134,15 +134,15 @@ export default function LibraryPage() {
             if (!o) { setLoading(false); return; }
             setOrg(o);
 
-            // Session from localStorage (access code auth)
             // Session via SessionManager
             let userId: string | null = null;
-            if (raw) {
-                const sess = JSON.parse(raw);
-                setUser(sess);
-                userId = sess.id;
-                if (sess.role === 'admin' || sess.role === 'owner') setIsOwner(true);
+            const campSess = SessionManager.get();
+            if (campSess) {
+                setUser(campSess);
+                userId = campSess.profile_id;
+                if (campSess.role === 'admin') setIsOwner(true);
             }
+
             // Also check supabase auth for admin/owner
             const { data: { user: u } } = await supabase.auth.getUser();
             if (u) {

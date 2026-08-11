@@ -7,12 +7,15 @@ import {
     Highlighter, BookOpen, StickyNote, Save,
     ChevronLeft, ChevronRight, Copy,
     Check, Trash2, FileText,
-    Eye, Code2, ChevronDown, ChevronUp
+    Eye, Code2, ChevronDown, ChevronUp,
+    Mic, Play, Pause, Download, Loader2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { ContentBlock } from './rich-content-editor';
+import { deductSkyPoints } from '@/lib/sky-points-service';
+
 
 // ═══════════════════════════════════════════════════════════════
 // LESSON FULLSCREEN READER
@@ -55,6 +58,60 @@ const HIGHLIGHT_COLORS = [
     { id: 'orange', label: 'Orange',bg: 'bg-orange-400/40', text: 'text-orange-200', border: 'border-orange-400/60', css: 'rgba(251,146,60,0.35)'  },
 ];
 
+// ── Mini AudioPlayer (lesson reader) ───────────────────────────────────
+function AudioBlockPlayer({
+  url, caption, onDownload, downloading,
+}: { url: string; caption: string; onDownload?: () => void; downloading?: boolean }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [playing,  setPlaying]  = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [dur,      setDur]      = useState(0);
+  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  const toggle = () => {
+    if (!audioRef.current) return;
+    if (playing) { audioRef.current.pause(); setPlaying(false); }
+    else         { audioRef.current.play();  setPlaying(true);  }
+  };
+  return (
+    <div className="rounded-2xl overflow-hidden border border-violet-500/20 bg-violet-500/5 my-2">
+      <audio ref={audioRef} src={url}
+        onTimeUpdate={()    => setProgress(audioRef.current?.currentTime || 0)}
+        onLoadedMetadata={() => setDur(audioRef.current?.duration || 0)}
+        onEnded={() => setPlaying(false)}
+      />
+      <div className="px-4 py-3 flex items-center gap-3">
+        <button onClick={toggle}
+          className="w-10 h-10 rounded-full bg-violet-500/20 hover:bg-violet-500/40 border border-violet-500/30 flex items-center justify-center transition-all shrink-0">
+          {playing ? <Pause className="w-5 h-5 text-violet-300" /> : <Play className="w-5 h-5 text-violet-300 ml-0.5" />}
+        </button>
+        <div className="flex-1 space-y-1">
+          <div className="relative h-2 bg-white/10 rounded-full overflow-hidden cursor-pointer"
+            onClick={e => {
+              const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+              if (audioRef.current) audioRef.current.currentTime = ((e.clientX - rect.left) / rect.width) * dur;
+            }}>
+            <div className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-400 transition-all"
+              style={{ width: dur ? `${(progress / dur) * 100}%` : '0%' }} />
+          </div>
+          <div className="flex justify-between text-[10px] text-slate-500">
+            <span>{fmt(progress)}</span><span>{fmt(dur)}</span>
+          </div>
+        </div>
+        <Mic className="w-4 h-4 text-violet-400 shrink-0" />
+        {onDownload && (
+          <button onClick={onDownload} disabled={downloading}
+            className="w-9 h-9 rounded-full bg-white/5 hover:bg-violet-500/20 border border-white/10 flex items-center justify-center transition-all shrink-0"
+            title="Télécharger (-2 Sky Points)">
+            {downloading ? <Loader2 className="w-4 h-4 animate-spin text-violet-400" /> : <Download className="w-4 h-4 text-slate-400" />}
+          </button>
+        )}
+      </div>
+      {caption && <p className="px-4 pb-3 text-xs text-slate-500 italic">{caption}</p>}
+    </div>
+  );
+}
+
+
 function parseBlocks(raw: string | null | undefined): ContentBlock[] {
     if (!raw) return [];
     try {
@@ -62,6 +119,7 @@ function parseBlocks(raw: string | null | undefined): ContentBlock[] {
         if (Array.isArray(p)) return p as ContentBlock[];
     } catch {}
     return [{ type: 'text', value: raw }];
+
 }
 
 // ── Code fence parser for lesson content ───────────────────────────────────────
@@ -209,6 +267,7 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
     const [newNote, setNewNote] = useState('');
     const [savingNote, setSavingNote] = useState(false);
     const [loadingNotes, setLoadingNotes] = useState(false);
+    const [downloadingAudio, setDownloadingAudio] = useState<number | null>(null);
     // Selected text popup — on sauvegarde le texte dans un ref pour ne pas le perdre au clic
     const [selection, setSelection] = useState<{ text: string; x: number; y: number } | null>(null);
     const savedSelectionText = useRef<string>('');  // ← clé du fix: texte sauvegardé avant mousedown
@@ -611,6 +670,36 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
                                                         </figcaption>
                                                     )}
                                                 </figure>
+                                            );
+                                        }
+                                        if (block.type === 'audio') {
+                                            return (
+                                                <div key={i}>
+                                                    {block.sky_cost && (
+                                                        <p className="text-[10px] text-violet-400 mb-1 flex items-center gap-1">
+                                                            <Download className="w-3 h-3" /> Téléchargement = {block.sky_cost} Sky Points
+                                                        </p>
+                                                    )}
+                                                    <AudioBlockPlayer
+                                                        url={block.url}
+                                                        caption={block.caption}
+                                                        downloading={downloadingAudio === i}
+                                                        onDownload={async () => {
+                                                            setDownloadingAudio(i);
+                                                            const ok = await deductSkyPoints(userId, block.sky_cost ?? 2, 'telechargement_audio', 'Téléchargement note vocale', 'student');
+                                                            if (ok) {
+                                                                const a = document.createElement('a');
+                                                                a.href = block.url;
+                                                                a.download = `note-vocale-${i + 1}.webm`;
+                                                                a.click();
+                                                                toast.success('-2 Sky Points déduits');
+                                                            } else {
+                                                                toast.error('Sky Points insuffisants');
+                                                            }
+                                                            setDownloadingAudio(null);
+                                                        }}
+                                                    />
+                                                </div>
                                             );
                                         }
                                         return null;

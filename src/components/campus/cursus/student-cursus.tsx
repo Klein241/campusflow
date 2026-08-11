@@ -18,6 +18,8 @@ import { CursusExerciseModal } from './cursus-exercise-modal';
 import { RichContentRenderer } from './rich-content-renderer';
 import { DiscussButton } from '../discuss-button';
 import { LessonReader } from './lesson-reader';
+import { deductSkyPoints } from '@/lib/sky-points-service';
+import type { ContentBlock } from './rich-content-editor';
 
 // ─── Palette couleurs ──────────────────────────────────────────────────────
 const SUBJECT_COLORS = [
@@ -836,7 +838,58 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                 {selectedSubId && selectedChId && (
                     <motion.div key="content" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} className="p-3 space-y-3">
 
-                        {/* Tab switcher */}
+                        {/* ── Contenu du chapitre (si le prof a ajouté du texte/média directement) ── */}
+                        {selectedCh?.content && (
+                            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] overflow-hidden">
+                                <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06] bg-white/[0.02]">
+                                    <BookOpen className="w-4 h-4 text-indigo-400" />
+                                    <span className="text-xs font-semibold text-white">Contenu du chapitre</span>
+                                </div>
+                                <div className="px-4 py-4">
+                                    <RichContentRenderer
+                                        content={selectedCh.content}
+                                        onAudioDownload={async (block) => {
+                                            const ok = await deductSkyPoints(
+                                                userId, block.sky_cost ?? 2,
+                                                'telechargement_audio',
+                                                'Téléchargement note vocale',
+                                                'student'
+                                            );
+                                            if (!ok) { toast.error('Sky Points insuffisants'); return false; }
+                                            toast.success('-2 Sky Points déduits');
+                                            onSkyUpdate(-2);
+                                            return true;
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── Vidéo du chapitre (si présente) ── */}
+                        {selectedCh?.video_url && (
+                            <button
+                                onClick={async () => {
+                                    setVideoPopup({ url: selectedCh.video_url, title: selectedCh.title, contentId: selectedCh.id, contentType: 'chapter' });
+                                    setVideoNote('');
+                                    setVideoStartTime(Date.now());
+                                    await supabase.from('lesson_video_views').upsert(
+                                        { user_id: userId, content_type: 'chapter', content_id: selectedCh.id, organization_id: orgId, opened_at: new Date().toISOString() },
+                                        { onConflict: 'user_id,content_type,content_id', ignoreDuplicates: false }
+                                    );
+                                }}
+                                className="w-full flex items-center gap-3 p-3 rounded-xl border border-indigo-500/20 bg-indigo-500/[0.06] hover:bg-indigo-500/10 transition-all group">
+                                <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center shrink-0 group-hover:bg-indigo-500/30 transition-all">
+                                    <Play className="w-4 h-4 text-indigo-400" />
+                                </div>
+                                <div className="flex-1 text-left">
+                                    <p className="text-sm font-semibold text-white">Vidéo du chapitre</p>
+                                    <p className="text-[11px] text-slate-500">Cliquer pour regarder</p>
+                                </div>
+                                <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors" />
+                            </button>
+                        )}
+
+                        {/* Tab switcher (leçons / exercices) */}
                         <div className="flex items-center gap-1 p-1 rounded-xl bg-white/[0.04] border border-white/[0.06]">
                             {(['lessons', 'exercises'] as const).map(t => (
                                 <button key={t} onClick={() => setActiveTab(t)}
@@ -851,11 +904,14 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
                         {activeTab === 'lessons' && (
                             <div className="space-y-2">
                                 {chLessons.length === 0 && (
-                                    <div className="text-center py-10">
-                                        <FileText className="w-10 h-10 mx-auto mb-2 text-slate-700" />
-                                        <p className="text-slate-500 text-sm">Aucune leçon publiée</p>
+                                    <div className="text-center py-8">
+                                        <FileText className="w-8 h-8 mx-auto mb-2 text-slate-700" />
+                                        <p className="text-slate-500 text-sm">
+                                            {selectedCh?.content ? 'Consultez le contenu ci-dessus' : 'Aucune leçon publiée'}
+                                        </p>
                                     </div>
                                 )}
+
                                 {chLessons.map((lesson: any, li: number) => {
                                     const done = isLessonCompleted(lesson.id);
                                     return (

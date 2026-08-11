@@ -96,12 +96,11 @@ export default function ShopPage() {
             if (!o) { setLoading(false); return; }
             setOrg(o);
 
-            // Session from localStorage
             // Session via SessionManager
-            if (raw) {
-                const s = JSON.parse(raw);
-                setSession(s);
-                setIsAdmin(s.role === 'admin' || s.role === 'owner');
+            const sess = SessionManager.get();
+            if (sess) {
+                setSession(sess);
+                setIsAdmin(sess.role === 'admin' || sess.role === 'teacher');
             }
 
             // Also check supabase auth for admin/owner
@@ -114,10 +113,9 @@ export default function ShopPage() {
             setProducts(p || []);
 
             // Load orders for the current session user
-            if (raw) {
-                const s = JSON.parse(raw);
+            if (sess?.profile_id) {
                 const { data: ord } = await supabase.from('shop_orders').select('*, shop_products:product_id(nom, prix, image_url, devise)')
-                    .eq('student_id', s.id).order('created_at', { ascending: false }).limit(50);
+                    .eq('student_id', sess.profile_id).order('created_at', { ascending: false }).limit(50);
                 setMyOrders(ord || []);
             }
 
@@ -125,16 +123,17 @@ export default function ShopPage() {
         })();
     }, [orgSlug]);
 
+
     // ═══ ADD PRODUCT ═══
     const addProduct = async () => {
         if (!pName.trim() || !pPrice) { toast.error('Nom et prix requis'); return; }
-        if (!session?.id) { toast.error('Connectez-vous pour vendre'); return; }
+        if (!session?.profile_id) { toast.error('Connectez-vous pour vendre'); return; }
         setSaving(true);
         try {
             // ── Deduct 10 Sky Points (with fallback) ──
             const role = session.role || 'student';
-            const table = (role === 'teacher' || role === 'admin' || role === 'owner') ? 'teacher_profiles' : 'student_profiles';
-            const { data: prof } = await supabase.from(table).select('sky_points').eq('id', session.id).maybeSingle();
+            const table = (role === 'teacher' || role === 'admin') ? 'teacher_profiles' : 'student_profiles';
+            const { data: prof } = await supabase.from(table).select('sky_points').eq('id', session.profile_id).maybeSingle();
             const currentPts = prof?.sky_points ?? 100;
 
             if (currentPts < 10) {
@@ -144,18 +143,26 @@ export default function ShopPage() {
             }
 
             const { data: spendResult } = await supabase.rpc('spend_sky_point', {
-                p_user_id: session.id,
+                p_user_id: session.profile_id,
                 p_org_id: org.id,
                 p_amount: 10,
                 p_reason: 'marketplace_post',
                 p_description: `Produit: ${pName.trim()}`,
             });
 
+            // Calculer le nouveau solde réel
+            let newBalance = Math.max(0, currentPts - 10);
             if (!spendResult || spendResult.success === false) {
                 // Fallback direct update
-                const newBal = Math.max(0, currentPts - 10);
-                await supabase.from(table).update({ sky_points: newBal }).eq('id', session.id);
+                await supabase.from(table).update({ sky_points: newBalance }).eq('id', session.profile_id);
+            } else if (typeof spendResult?.new_balance === 'number') {
+                newBalance = spendResult.new_balance;
             }
+
+            // ── Persistance UI : update SessionManager + broadcast ──
+            try { SessionManager.patch({ sky_points: newBalance }); } catch {}
+            window.dispatchEvent(new CustomEvent('sky_points_updated', { detail: { newBalance } }));
+
             let imageUrl = '';
             if (pImg) {
                 const compressed = await compressImage(pImg, { maxWidth: 800, quality: 0.7 });
@@ -165,7 +172,7 @@ export default function ShopPage() {
             const productPayload = {
                 tenant_id: org.id, nom: pName.trim(), description: pDesc || null,
                 prix: parseFloat(pPrice), categorie: pCat, stock: parseInt(pStock) || 0,
-                image_url: imageUrl || null, created_by: session?.id || null,
+                image_url: imageUrl || null, created_by: session?.profile_id || null,
                 is_visible: isAdmin,
             };
             let { error } = await supabase.from('shop_products').insert(productPayload);
@@ -189,12 +196,12 @@ export default function ShopPage() {
 
     // ═══ PLACE ORDER ═══
     const placeOrder = async () => {
-        if (!session?.id || !selectedProduct) { toast.info('Connectez-vous pour commander'); return; }
+        if (!session?.profile_id || !selectedProduct) { toast.info('Connectez-vous pour commander'); return; }
         setSaving(true);
         try {
             const total = selectedProduct.prix * orderQty;
             const orderPayload: any = {
-                student_id: session.id,
+                student_id: session.profile_id,
                 product_id: selectedProduct.id,
                 quantite: orderQty,
                 montant_total: total,
@@ -202,7 +209,7 @@ export default function ShopPage() {
             let { error } = await supabase.from('shop_orders').insert(orderPayload);
             if (error && (error.message?.includes('student_id') || error.code === 'PGRST204')) {
                 const { error: err2 } = await supabase.from('shop_orders').insert({
-                    user_id: session.id,
+                    user_id: session.profile_id,
                     product_id: selectedProduct.id,
                     quantite: orderQty,
                     montant_total: total,

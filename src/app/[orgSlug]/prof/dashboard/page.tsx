@@ -134,15 +134,16 @@ export default function TeacherDashboard() {
     useEffect(() => {
         (async () => {
             // Session via SessionManager
-            if (!raw) { router.push(`/${orgSlug}/login`); return; }
-            const session = JSON.parse(raw);
+            const session = SessionManager.get();
+            if (!session) { router.push(`/${orgSlug}/login`); return; }
             if (session.role !== 'teacher') { router.push(`/${orgSlug}/login`); return; }
 
             const { data: o } = await supabase.from('organizations').select('*').eq('slug', orgSlug).single();
             if (!o) { setLoading(false); return; }
             setOrg(o);
 
-            const { data: t, error: tErr } = await supabase.from('teacher_profiles').select('*').eq('id', session.id).single();
+            const { data: t, error: tErr } = await supabase.from('teacher_profiles').select('*').eq('id', session.profile_id).single();
+
             if (tErr || !t) { SessionManager.clear(); setShowDeletedModal(true); setLoading(false); return; }
             if (t.is_active === false) { SessionManager.clear(); setShowDeactivatedModal(true); setLoading(false); return; }
             setTeacher(t);

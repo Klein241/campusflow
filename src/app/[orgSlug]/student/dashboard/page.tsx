@@ -125,16 +125,18 @@ export default function StudentDashboard() {
     useEffect(() => {
         (async () => {
             // Session via SessionManager
-            if (!raw) { router.push(`/${orgSlug}/login`); return; }
-            const session = JSON.parse(raw);
+            const session = SessionManager.get();
+            if (!session) { router.push(`/${orgSlug}/login`); return; }
             if (session.role !== 'student') { router.push(`/${orgSlug}/login`); return; }
+
 
             const { data: o } = await supabase.from('organizations').select('*').eq('slug', orgSlug).single();
             if (!o) { setLoading(false); return; }
             setOrg(o);
 
             const { data: s, error: sErr } = await supabase.from('student_profiles').select('*')
-                .eq('id', session.id).single();
+                .eq('id', session.profile_id).single();
+
 
             if (sErr || !s) {
                 SessionManager.clear();
