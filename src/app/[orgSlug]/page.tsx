@@ -189,16 +189,18 @@ export default function SchoolLandingPage() {
             ...(selectedClassroom?.filiere_id && { filiere_id: selectedClassroom.filiere_id }),
         };
 
-        // ── Appel via Route API (bypass RLS) ──────────────────────────────
+        // ── Appel via Cloudflare Worker (bypass RLS, SPA statique) ───────
+        const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL
+            || 'https://campusflow-worker.kleintaptue1.workers.dev';
         try {
-            const res = await fetch('/api/inscription', {
+            const res = await fetch(`${workerUrl}/api/inscription`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
-            const json = await res.json();
+            const data = await res.json();
             if (!res.ok) {
-                toast.error('Erreur : ' + (json.error || res.statusText));
+                toast.error('Erreur : ' + (data.error || res.statusText));
                 setInscSubmitting(false);
                 return;
             }

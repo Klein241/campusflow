@@ -1765,6 +1765,9 @@ const ALLOWED_MIME_TYPES = [
     'application/pdf',
     'video/mp4', 'video/webm',
     'audio/mpeg', 'audio/ogg', 'audio/wav',
+    'audio/webm',   // ← Notes vocales enregistrées avec MediaRecorder (Chrome/Firefox)
+    'audio/mp4',    // ← Notes vocales Safari / iOS
+    'audio/aac',    // ← Format AAC alternatif
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.ms-excel',
@@ -1912,6 +1915,76 @@ async function handlePushUnregister(request: Request, env: Env): Promise<Respons
 }
 
 // ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+// INSCRIPTION HANDLER (bypasse RLS via service key)
+// ══════════════════════════════════════════════════════════
+
+async function handleInscription(request: Request, env: Env): Promise<Response> {
+    let body: any;
+    try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+
+    const { organization_id, first_name, last_name, phone, access_code, pin_code,
+            birth_date, gender, email, address, classroom_id, filiere_id } = body;
+
+    if (!organization_id || !first_name || !last_name || !phone || !access_code || !pin_code) {
+        return json({ error: 'Champs obligatoires manquants' }, 400);
+    }
+
+    const supabaseUrl = env.SUPABASE_URL;
+    const serviceKey  = env.SUPABASE_SERVICE_KEY;
+
+    if (!supabaseUrl || !serviceKey) {
+        return json({ error: 'Configuration serveur manquante' }, 500);
+    }
+
+    const headers = {
+        'Content-Type': 'application/json',
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`,
+        'Prefer': 'return=minimal',
+    };
+
+    // 1. Insert dans inscription_requests
+    const inscPayload: any = { organization_id, first_name, last_name, phone, access_code, pin_code };
+    if (birth_date)   inscPayload.birth_date   = birth_date;
+    if (gender)       inscPayload.gender        = gender;
+    if (email)        inscPayload.email         = email;
+    if (address)      inscPayload.address       = address;
+    if (classroom_id) inscPayload.classroom_id  = classroom_id;
+    if (filiere_id)   inscPayload.filiere_id    = filiere_id;
+
+    const inscRes = await fetch(`${supabaseUrl}/rest/v1/inscription_requests`, {
+        method: 'POST', headers, body: JSON.stringify(inscPayload),
+    });
+    if (!inscRes.ok) {
+        const err = await inscRes.text();
+        // Ignorer les erreurs de doublon (23505 = unique_violation)
+        if (!err.includes('23505')) {
+            return json({ error: err }, inscRes.status);
+        }
+    }
+
+    // 2. Créer immédiatement le student_profile pour accès instantané
+    const profilePayload: any = {
+        organization_id, first_name, last_name, phone, access_code, pin_code,
+        sky_points: 100, is_active: true, pin_set: true,
+    };
+    if (birth_date)   profilePayload.birth_date   = birth_date;
+    if (gender)       profilePayload.gender        = gender;
+    if (email)        profilePayload.email         = email;
+    if (address)      profilePayload.address       = address;
+    if (classroom_id) profilePayload.classroom_id  = classroom_id;
+    if (filiere_id)   profilePayload.filiere_id    = filiere_id;
+
+    await fetch(`${supabaseUrl}/rest/v1/student_profiles`, {
+        method: 'POST',
+        headers: { ...headers, 'Prefer': 'resolution=ignore-duplicates,return=minimal' },
+        body: JSON.stringify(profilePayload),
+    });
+
+    return json({ success: true });
+}
+
 // MAIN ROUTER
 // ══════════════════════════════════════════════════════════
 
@@ -1950,6 +2023,9 @@ export default {
             if (pathname.startsWith('/api/d1/') && method === 'POST')   return handleD1Write(request, env, pathname);
             if (pathname.startsWith('/api/d1/') && method === 'GET')    return handleD1Read(request, env, pathname);
             if (pathname.startsWith('/api/d1/') && method === 'DELETE') return handleD1Delete(request, env, pathname);
+
+            // ── Inscription (bypass RLS) ──
+            if (pathname === '/api/inscription' && method === 'POST') return handleInscription(request, env);
 
             // ── R2 File Storage ──
             if (pathname === '/api/r2/upload' && method === 'POST') return handleR2Upload(request, env);
