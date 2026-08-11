@@ -98,17 +98,18 @@ function AudioPlayer({
 
                 <Mic className="w-3.5 h-3.5 text-violet-400 shrink-0" />
 
-                {/* Download button (student side) */}
+                {/* Download button (student side) — always visible */}
                 {showDownload && onDownload && (
                     <button
                         onClick={onDownload} disabled={downloading}
-                        className="w-8 h-8 rounded-full bg-white/5 hover:bg-violet-500/20 border border-white/10 flex items-center justify-center transition-all shrink-0"
-                        title="Télécharger (-2 Sky Points)"
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-violet-500/15 hover:bg-violet-500/30 border border-violet-500/25 text-violet-300 text-[11px] font-semibold transition-all shrink-0"
+                        title="Télécharger la note vocale"
                     >
                         {downloading
-                            ? <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-400" />
-                            : <Download className="w-3.5 h-3.5 text-slate-400" />
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Download className="w-3.5 h-3.5" />
                         }
+                        <span className="hidden sm:inline">-2 Sky Pts</span>
                     </button>
                 )}
             </div>
@@ -180,19 +181,19 @@ function VoiceRecorder({ onDone }: { onDone: (blob: Blob, duration: number) => v
             {!recording ? (
                 <button
                     onClick={start}
-                    className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-violet-400 px-2 py-0.5 rounded-full hover:bg-violet-500/10 transition-all"
+                    className="flex items-center gap-1 text-[11px] text-violet-400 px-2.5 py-1 rounded-full bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 transition-all font-medium"
                 >
-                    <Mic className="w-2.5 h-2.5" /> Note vocale
+                    <Mic className="w-3 h-3" /> Note vocale
                 </button>
             ) : (
-                <div className="flex items-center gap-2 px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/20">
+                <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-rose-500/10 border border-rose-500/20">
                     <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
-                    <span className="text-[10px] text-rose-300 font-mono">{fmt(elapsed)}</span>
+                    <span className="text-[11px] text-rose-300 font-mono">{fmt(elapsed)}</span>
                     <button
                         onClick={stop}
-                        className="flex items-center gap-1 text-[10px] text-rose-400 hover:text-rose-300 transition-all"
+                        className="flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 transition-all font-semibold"
                     >
-                        <Square className="w-2.5 h-2.5 fill-current" /> Stop
+                        <Square className="w-3 h-3 fill-current" /> Stop
                     </button>
                 </div>
             )}
@@ -297,7 +298,7 @@ export function RichContentEditor({
                         className="group relative"
                     >
                         {/* Block Controls */}
-                        <div className="absolute -top-2 right-0 z-10 hidden group-hover:flex items-center gap-0.5 bg-[#0d1017] border border-white/10 rounded-lg px-1 py-0.5 shadow-xl">
+                        <div className="absolute -top-2 right-0 z-10 flex items-center gap-0.5 bg-[#0d1017] border border-white/10 rounded-lg px-1 py-0.5 shadow-xl">
                             <button onClick={() => move(i, -1)} disabled={i === 0}
                                 className="p-1 text-slate-500 hover:text-white disabled:opacity-20 rounded transition">
                                 <MoveUp className="w-3 h-3" />
@@ -347,37 +348,35 @@ export function RichContentEditor({
                             />
                         )}
 
-                        {/* Toolbar between blocks */}
-                        <div className="flex flex-wrap items-center gap-1.5 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                            <div className="flex-1 h-px bg-white/[0.05]" />
+                        {/* ── Toolbar d'insertion (toujours visible) ── */}
+                        <div className="flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t border-white/[0.06]">
                             <button onClick={() => addText(i)}
-                                className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-300 px-2 py-0.5 rounded-full hover:bg-white/5 transition-all">
-                                <Type className="w-2.5 h-2.5" /> Texte
+                                className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-white px-2.5 py-1 rounded-full bg-white/[0.05] hover:bg-white/10 border border-white/10 transition-all">
+                                <Type className="w-3 h-3" /> Texte
                             </button>
                             <button
                                 onClick={() => { setInsertAt(i); fileRef.current?.click(); }}
                                 disabled={uploadingAt !== null}
-                                className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-amber-400 px-2 py-0.5 rounded-full hover:bg-amber-500/10 transition-all disabled:opacity-40">
+                                className="flex items-center gap-1 text-[11px] text-amber-400 px-2.5 py-1 rounded-full bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-all disabled:opacity-40">
                                 {uploadingAt === i
-                                    ? <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                                    : <ImageIcon className="w-2.5 h-2.5" />
+                                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                                    : <ImageIcon className="w-3 h-3" />
                                 }
                                 Image
                             </button>
                             <button
                                 onClick={() => { setInsertAt(i); multiRef.current?.click(); }}
                                 disabled={uploadingAt !== null}
-                                className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-teal-400 px-2 py-0.5 rounded-full hover:bg-teal-500/10 transition-all disabled:opacity-40">
-                                <Upload className="w-2.5 h-2.5" /> Multi-images
+                                className="flex items-center gap-1 text-[11px] text-teal-400 px-2.5 py-1 rounded-full bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 transition-all disabled:opacity-40">
+                                <Upload className="w-3 h-3" /> Multi-images
                             </button>
                             {audioLoading === i ? (
-                                <span className="flex items-center gap-1 text-[10px] text-violet-400 px-2 py-0.5">
-                                    <Loader2 className="w-2.5 h-2.5 animate-spin" /> Upload…
+                                <span className="flex items-center gap-1 text-[11px] text-violet-400 px-2.5 py-1">
+                                    <Loader2 className="w-3 h-3 animate-spin" /> Upload…
                                 </span>
                             ) : (
                                 <VoiceRecorder onDone={(blob, dur) => uploadVoiceNote(blob, dur, i)} />
                             )}
-                            <div className="flex-1 h-px bg-white/[0.05]" />
                         </div>
                     </motion.div>
                 ))}
