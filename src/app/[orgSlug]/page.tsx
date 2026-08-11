@@ -151,12 +151,34 @@ export default function SchoolLandingPage() {
         if (pinStr !== pinConfirmStr) { toast.error('Les codes PIN ne correspondent pas'); return; }
 
         setInscSubmitting(true);
+
+        // ── Vérification doublon (même nom + téléphone dans la même école) ──
+        const { data: existing } = await supabase
+            .from('inscription_requests')
+            .select('id, status')
+            .eq('organization_id', org.id)
+            .eq('first_name', inscForm.first_name.trim())
+            .eq('last_name', inscForm.last_name.trim())
+            .eq('phone', inscForm.phone.trim())
+            .limit(1);
+
+        if (existing && existing.length > 0) {
+            const st = existing[0].status;
+            const msg = st === 'pending'   ? 'Une demande avec ces informations est déjà en attente de validation.' :
+                        st === 'accepted'  ? 'Ce profil est déjà inscrit. Utilisez votre code d\'accès pour vous connecter.' :
+                        st === 'rejected'  ? 'Cette demande a déjà été refusée. Contactez l\'administration.' :
+                        'Une demande avec ces informations existe déjà.';
+            toast.error(msg);
+            setInscSubmitting(false);
+            return;
+        }
+
         const code = generateAccessCode();
         const payload: any = {
             organization_id: org.id,
-            first_name:  inscForm.first_name,
-            last_name:   inscForm.last_name,
-            phone:       inscForm.phone,
+            first_name:  inscForm.first_name.trim(),
+            last_name:   inscForm.last_name.trim(),
+            phone:       inscForm.phone.trim(),
             access_code: code,
             pin_code:    pinStr,
             ...(inscForm.birth_date && { birth_date: inscForm.birth_date }),
@@ -166,16 +188,31 @@ export default function SchoolLandingPage() {
             ...(selectedClassroom   && { classroom_id: selectedClassroom.id }),
             ...(selectedClassroom?.filiere_id && { filiere_id: selectedClassroom.filiere_id }),
         };
-        const { error } = await supabase.from('inscription_requests').insert(payload);
-        if (error) {
-            toast.error('Erreur : ' + error.message);
+
+        // ── Appel via Route API (bypass RLS) ──────────────────────────────
+        try {
+            const res = await fetch('/api/inscription', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const json = await res.json();
+            if (!res.ok) {
+                toast.error('Erreur : ' + (json.error || res.statusText));
+                setInscSubmitting(false);
+                return;
+            }
+        } catch (err: any) {
+            toast.error('Erreur réseau : ' + err.message);
             setInscSubmitting(false);
             return;
         }
+
         setGeneratedCode(code);
         setShowCredModal(true);
         setInscSubmitting(false);
     };
+
 
     // ── Loading ───────────────────────────────────────────────────────
     if (loading) return (
