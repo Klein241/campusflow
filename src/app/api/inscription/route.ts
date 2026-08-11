@@ -57,7 +57,35 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
+        // ── Créer immédiatement le student_profile pour accès instantané ──
+        // L'étudiant peut se connecter dès la fin de l'inscription avec son code.
+        const { error: profileErr } = await supabaseAdmin
+            .from('student_profiles')
+            .insert({
+                organization_id: organization_id,
+                first_name:      first_name,
+                last_name:       last_name,
+                phone:           phone,
+                email:           email      || null,
+                address:         address    || null,
+                birth_date:      birth_date || null,
+                gender:          gender     || null,
+                classroom_id:    classroom_id || null,
+                filiere_id:      filiere_id   || null,
+                access_code:     access_code,
+                pin_code:        pin_code,
+                sky_points:      100,   // Points de bienvenue
+                is_active:       true,
+                pin_set:         true,  // PIN configuré lors de l'inscription
+            });
+
+        if (profileErr) {
+            // Log mais ne bloque pas — la demande est quand même enregistrée
+            console.warn('[inscription API] student_profile creation failed:', profileErr.message);
+        }
+
         return NextResponse.json({ success: true });
+
     } catch (err: any) {
         console.error('[inscription API] Unexpected error:', err);
         return NextResponse.json({ error: err.message || 'Erreur serveur' }, { status: 500 });
