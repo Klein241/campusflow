@@ -33,6 +33,8 @@ interface UserProfile {
     organization_id: string;
     classroom_id?: string;
     approval_status?: 'pending' | 'approved' | 'rejected' | 'info_needed';
+    is_inscription_request?: boolean;  // vrai si le profil vient de inscription_requests (pas encore validé)
+    insc_pin_code?: string;            // PIN brut stocké lors de l'inscription (pour vérification offline)
 }
 
 export default function LoginPage() {
@@ -270,16 +272,17 @@ export default function LoginPage() {
                 .single();
 
             if (inscReq) {
-                // Stocker la session comme étudiant en attente
                 const profile: UserProfile = {
-                    id: inscReq.id,
-                    first_name: inscReq.first_name,
-                    last_name: inscReq.last_name,
-                    role: 'student',
-                    pin_set: true,
-                    organization_id: inscReq.organization_id,
-                    classroom_id: inscReq.classroom_id,
-                    approval_status: inscReq.status || 'pending',
+                    id:                     inscReq.id,
+                    first_name:             inscReq.first_name,
+                    last_name:              inscReq.last_name,
+                    role:                   'student',
+                    pin_set:                true,
+                    organization_id:        inscReq.organization_id,
+                    classroom_id:           inscReq.classroom_id,
+                    approval_status:        inscReq.status || 'pending',
+                    is_inscription_request: true,
+                    insc_pin_code:          inscReq.pin_code,  // PIN brut pour vérification
                 };
                 setUserProfile(profile);
                 setMode('pin_verify');
@@ -366,6 +369,29 @@ export default function LoginPage() {
 
         setSaving(true);
         try {
+            // ── Cas spécial : étudiant en attente (inscription_requests) ──────
+            // La RPC verify_pin_and_create_session cherche dans student_profiles
+            // mais cet étudiant n'y est pas encore (dossier en attente de validation).
+            // On vérifie le PIN directement contre le code stocké.
+            if (userProfile?.is_inscription_request) {
+                const storedPin = userProfile.insc_pin_code || '';
+                // Le PIN est stocké en clair dans inscription_requests (pas de bcrypt ici)
+                const pinOk = storedPin === pinStr;
+                if (!pinOk) {
+                    toast.error('PIN incorrect');
+                    setPin(['', '', '', '']);
+                    setTimeout(() => pinRefs[0].current?.focus(), 100);
+                    setSaving(false);
+                    return;
+                }
+                // PIN correct → session manuelle en attente
+                toast.success(`Bienvenue, ${userProfile.first_name} !`);
+                await redirectToDashboard();
+                setSaving(false);
+                return;
+            }
+
+            // ── Cas normal : teacher ou student validé (student_profiles) ──────
             const { data: sessionData, error } = await supabase.rpc('verify_pin_and_create_session', {
                 p_profile_id: userProfile!.id,
                 p_role: userProfile!.role,

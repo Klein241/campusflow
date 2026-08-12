@@ -675,6 +675,10 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                                 userName={userName}
                                 allClasses={allClasses}
                                 onOpenGroupChat={onOpenGroupChat}
+                                allStudents={myStudents}
+                                orgName={orgName}
+                                orgLogo={orgLogo}
+                                orgSlug={orgSlug}
                             />
                         ) : (
                             <>

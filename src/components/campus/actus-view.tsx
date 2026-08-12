@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { EmailModal } from '@/components/campus/email-modal';
 import { supabase } from '@/lib/supabase';
 import { compressImage } from '@/lib/compress';
 import { uploadToR2 } from '@/lib/r2';
@@ -168,6 +169,9 @@ interface ActusViewProps {
     userName: string;
     userRole: string;
     onSkyUpdate?: (delta: number) => void;
+    allStudents?: any[];  // pour l'email modal
+    orgName?: string;
+    orgLogo?: string;
 }
 
 interface PostItem {
@@ -225,7 +229,7 @@ interface StoryCommentItem {
     avatarUrl?: string;
 }
 
-export function ActusView({ orgId, orgSlug, userId, userName, userRole, onSkyUpdate }: ActusViewProps) {
+export function ActusView({ orgId, orgSlug, userId, userName, userRole, onSkyUpdate, allStudents = [], orgName = 'CampusFlow', orgLogo }: ActusViewProps) {
     const [posts, setPosts] = useState<PostItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [showNewPost, setShowNewPost] = useState(false);
@@ -293,6 +297,11 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole, onSkyUpd
     const [contacts, setContacts] = useState<any[]>([]);
     const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
     const [contactSearch, setContactSearch] = useState('');
+
+    // ── Email Modal (post-publication actu) ──
+    const [emailModalOpen, setEmailModalOpen] = useState(false);
+    const [emailSubject, setEmailSubject] = useState('');
+    const [emailBody, setEmailBody] = useState('');
 
     const batchResolveUsers = async (userIds: string[], ownerId?: string) => {
         const uniqueIds = [...new Set(userIds.filter(Boolean))];
@@ -503,6 +512,13 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole, onSkyUpd
                     recipientIds, orgSlug, orgId,
                 });
             } catch (e) { console.warn('[Notif] actu_published:', e); }
+            // 📧 Proposer l'email si admin ou prof
+            if (isAdminOrOwner || userRole === 'teacher') {
+                const preview = newPostContent.trim().slice(0, 150);
+                setEmailSubject(`Nouvelle annonce de ${userName}`);
+                setEmailBody(`${preview}${newPostContent.length > 150 ? '...' : ''}\n\nConnectez-vous à CampusFlow pour lire la suite et réagir.`);
+                setEmailModalOpen(true);
+            }
             loadPosts();
 
         } catch (e: any) { toast.error(e.message); }
@@ -881,6 +897,16 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole, onSkyUpd
 
     return (
         <div className="space-y-4">
+            {/* ── Email Modal post-publication actu ── */}
+            <EmailModal
+                open={emailModalOpen}
+                onClose={() => setEmailModalOpen(false)}
+                subject={emailSubject}
+                body={emailBody}
+                students={allStudents}
+                orgName={orgName}
+                orgLogo={orgLogo}
+            />
             {/* ═══ STORIES SECTION ═══ */}
             <div className="relative">
                 <div className="flex gap-4 mb-4 items-center">

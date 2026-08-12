@@ -1920,83 +1920,234 @@ async function handlePushUnregister(request: Request, env: Env): Promise<Respons
 // ══════════════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════════════
-// EMAIL SEND HANDLER (via Resend API)
+// EMAIL DUAL-PROVIDER — Resend (100/j) + Brevo (300/j)
+// Failover automatique : Resend → Brevo si quota dépassé
 // POST /api/email/send
-// Body: { to: string[], subject: string, html: string, org_name?: string, org_logo?: string }
+// GET  /api/email/status  (superadmin only)
 // ══════════════════════════════════════════════════════════
 
+// ── Helpers compteurs KV ─────────────────────────────────
+const TODAY_KEY = () => `email_count_${new Date().toISOString().slice(0, 10)}`;
+
+async function getEmailCount(env: Env, provider: 'resend' | 'brevo'): Promise<number> {
+    const raw = await env.NOTIFICATION_CACHE.get(`${TODAY_KEY()}_${provider}`);
+    return raw ? parseInt(raw, 10) : 0;
+}
+
+async function incrementEmailCount(env: Env, provider: 'resend' | 'brevo', count: number) {
+    const key = `${TODAY_KEY()}_${provider}`;
+    const current = await getEmailCount(env, provider);
+    // TTL 25h pour nettoyage auto
+    await env.NOTIFICATION_CACHE.put(key, String(current + count), { expirationTtl: 90000 });
+}
+
+// ── Builder HTML email premium ────────────────────────────
+function buildEmailHtml(html: string | undefined, text: string | undefined, org_name: string, org_logo: string | undefined, subject: string): string {
+    if (html) return html;
+    return `<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${subject}</title></head>
+<body style="margin:0;padding:0;background:#0F172A;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+  <div style="max-width:580px;margin:0 auto;padding:20px;">
+    <div style="text-align:center;padding:36px 0 20px;">
+      ${org_logo ? `<img src="${org_logo}" alt="${org_name}" style="height:60px;border-radius:14px;margin-bottom:14px;object-fit:contain;"/>` : ''}
+      <h1 style="color:#fff;font-size:20px;margin:0 0 4px;font-weight:800;">${org_name}</h1>
+      <p style="color:#64748B;font-size:13px;margin:0;">Notification de votre établissement</p>
+    </div>
+    <div style="background:#1E293B;border-radius:20px;padding:28px 32px;border:1px solid #334155;">
+      <h2 style="color:#38BDF8;font-size:17px;font-weight:700;margin:0 0 16px;">${subject}</h2>
+      <div style="color:#CBD5E1;font-size:14px;line-height:1.75;white-space:pre-line;">${text || ''}</div>
+    </div>
+    <p style="text-align:center;color:#475569;font-size:11px;margin-top:20px;">
+      Envoyé via CampusFlow · ${org_name}<br/>
+      <span style="font-size:10px;">Ne pas répondre à cet email</span>
+    </p>
+  </div>
+</body></html>`;
+}
+
+// ── Envoi via Resend ──────────────────────────────────────
+async function sendViaResend(
+    apiKey: string,
+    to: string[],
+    subject: string,
+    html: string,
+    fromAddress: string
+): Promise<{ ok: boolean; status: number; quotaExceeded: boolean; data: any }> {
+    const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: fromAddress, to, subject, html }),
+    });
+    const data = await res.json() as any;
+    // Resend quota dépassé → 429 OU error.name === 'rate_limit_exceeded' OU daily_sending_quota_exceeded
+    const quotaExceeded = res.status === 429 ||
+        data?.name === 'rate_limit_exceeded' ||
+        data?.name === 'daily_sending_quota_exceeded' ||
+        (data?.message || '').toLowerCase().includes('quota');
+    return { ok: res.ok, status: res.status, quotaExceeded, data };
+}
+
+// ── Envoi via Brevo (SMTP API) ────────────────────────────
+async function sendViaBrevo(
+    apiKey: string,
+    to: string[],
+    subject: string,
+    html: string,
+    fromName: string
+): Promise<{ ok: boolean; status: number; quotaExceeded: boolean; data: any }> {
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+            'api-key': apiKey,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            sender: { name: fromName, email: 'noreply@campusflow.app' },
+            to: to.map(email => ({ email })),
+            subject,
+            htmlContent: html,
+        }),
+    });
+    const data = await res.json() as any;
+    const quotaExceeded = res.status === 429 || res.status === 402 ||
+        (data?.message || '').toLowerCase().includes('quota') ||
+        (data?.message || '').toLowerCase().includes('limit');
+    return { ok: res.ok, status: res.status, quotaExceeded, data };
+}
+
+// ── Handler principal ────────────────────────────────────
 async function handleEmailSend(request: Request, env: Env): Promise<Response> {
     const body = await request.json() as {
-        to:        string[];
-        subject:   string;
-        html?:     string;
-        text?:     string;
-        org_name?: string;
-        org_logo?: string;
+        to:         string[];
+        subject:    string;
+        html?:      string;
+        text?:      string;
+        org_name?:  string;
+        org_logo?:  string;
         from_name?: string;
     };
 
-    const { to, subject, html, text, org_name, org_logo, from_name } = body;
+    const { to, subject, html, text, org_name = 'CampusFlow', org_logo, from_name } = body;
 
-    if (!to || !to.length)  return json({ error: 'recipients (to) required' }, 400);
-    if (!subject)           return json({ error: 'subject required' }, 400);
-    if (!html && !text)     return json({ error: 'html or text body required' }, 400);
+    if (!to?.length) return json({ error: 'recipients (to) required' }, 400);
+    if (!subject)    return json({ error: 'subject required' }, 400);
+    if (!html && !text) return json({ error: 'html or text body required' }, 400);
 
-    const resendKey = (env as any).RESEND_API_KEY;
-    if (!resendKey) return json({ error: 'RESEND_API_KEY not configured. Add it in Cloudflare Worker secrets.' }, 503);
+    const resendKey = (env as any).RESEND_API_KEY as string | undefined;
+    const brevoKey  = (env as any).BREVO_API_KEY  as string | undefined;
 
-    // Template HTML premium
-    const emailHtml = html || `
-<!DOCTYPE html>
-<html lang="fr">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#0F172A;font-family:'Segoe UI',sans-serif;">
-  <div style="max-width:600px;margin:0 auto;padding:24px 16px;">
-    <!-- Header -->
-    <div style="text-align:center;padding:32px 0 24px;">
-      ${org_logo ? `<img src="${org_logo}" alt="${org_name||'École'}" style="height:56px;border-radius:12px;margin-bottom:16px;" />` : ''}
-      <h1 style="color:#fff;font-size:22px;margin:0;font-weight:800;">${org_name || 'CampusFlow'}</h1>
-    </div>
-    <!-- Card -->
-    <div style="background:#1E293B;border-radius:20px;padding:32px;border:1px solid #334155;">
-      <p style="color:#CBD5E1;font-size:15px;line-height:1.7;margin:0;">${text || ''}</p>
-    </div>
-    <!-- Footer -->
-    <p style="text-align:center;color:#475569;font-size:12px;margin-top:24px;">
-      Envoyé via CampusFlow · ${org_name || ''}
-    </p>
-  </div>
-</body>
-</html>`;
-
-    const fromAddress = `${from_name || org_name || 'CampusFlow'} <noreply@campusflow.app>`;
-
-    // Envoyer via Resend (max 50 recipients par appel)
-    const results: any[] = [];
-    const chunks = [];
-    for (let i = 0; i < to.length; i += 50) chunks.push(to.slice(i, i + 50));
-
-    for (const chunk of chunks) {
-        const res = await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${resendKey}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                from:    fromAddress,
-                to:      chunk,
-                subject,
-                html:    emailHtml,
-            }),
-        });
-        const data = await res.json();
-        results.push({ chunk_size: chunk.length, status: res.status, data });
-        if (!res.ok) break;
+    if (!resendKey && !brevoKey) {
+        return json({ error: 'No email provider configured. Add RESEND_API_KEY or BREVO_API_KEY to Worker secrets.' }, 503);
     }
 
-    const allOk = results.every(r => r.status >= 200 && r.status < 300);
-    return json({ success: allOk, sent: to.length, results }, allOk ? 200 : 500);
+    const emailHtml  = buildEmailHtml(html, text, org_name, org_logo, subject);
+    const fromName   = from_name || org_name;
+    const fromAddr   = `${fromName} <noreply@campusflow.app>`;
+
+    // Chunking : Resend max 50/call, Brevo max 50/call
+    const CHUNK = 50;
+    const chunks: string[][] = [];
+    for (let i = 0; i < to.length; i += CHUNK) chunks.push(to.slice(i, i + CHUNK));
+
+    let providerUsed: 'resend' | 'brevo' | 'none' = 'none';
+    let totalSent = 0;
+    let failedOver = false;
+    const results: any[] = [];
+    let lastError: string | null = null;
+
+    for (const chunk of chunks) {
+        let sent = false;
+
+        // ── Tentative 1 : Resend ──────────────────────────
+        if (resendKey && !failedOver) {
+            const r = await sendViaResend(resendKey, chunk, subject, emailHtml, fromAddr);
+            if (r.ok) {
+                providerUsed = 'resend';
+                totalSent += chunk.length;
+                await incrementEmailCount(env, 'resend', chunk.length);
+                results.push({ provider: 'resend', chunk_size: chunk.length, status: r.status });
+                sent = true;
+            } else if (r.quotaExceeded) {
+                // Quota Resend dépassé → failover vers Brevo
+                failedOver = true;
+                console.log('[Email] Resend quota exceeded → switching to Brevo');
+            } else {
+                lastError = r.data?.message || `Resend error ${r.status}`;
+                results.push({ provider: 'resend', chunk_size: chunk.length, status: r.status, error: lastError });
+            }
+        }
+
+        // ── Tentative 2 (ou failover) : Brevo ────────────
+        if (!sent && brevoKey) {
+            const b = await sendViaBrevo(brevoKey, chunk, subject, emailHtml, fromName);
+            if (b.ok) {
+                providerUsed = providerUsed === 'resend' ? 'resend' : 'brevo'; // keep 'resend' if already sent some via resend
+                if (failedOver || providerUsed === 'none') providerUsed = 'brevo';
+                totalSent += chunk.length;
+                await incrementEmailCount(env, 'brevo', chunk.length);
+                results.push({ provider: 'brevo', chunk_size: chunk.length, status: b.status });
+                sent = true;
+            } else {
+                lastError = b.data?.message || `Brevo error ${b.status}`;
+                results.push({ provider: 'brevo', chunk_size: chunk.length, status: b.status, error: lastError });
+            }
+        }
+
+        if (!sent) break; // Arrêt si les deux providers échouent
+    }
+
+    const success = totalSent === to.length;
+    return json({
+        success,
+        sent: totalSent,
+        total: to.length,
+        provider: providerUsed,    // visible uniquement dans les logs / superadmin
+        failed_over: failedOver,
+        ...(lastError ? { error: lastError } : {}),
+    }, success ? 200 : (totalSent > 0 ? 207 : 500));
+}
+
+// ── Statut email providers (superadmin only) ─────────────
+async function handleEmailStatus(request: Request, env: Env): Promise<Response> {
+    // Vérification superadmin via header secret
+    const adminKey = request.headers.get('x-admin-key');
+    const expectedKey = (env as any).ADMIN_KEY as string | undefined;
+    if (expectedKey && adminKey !== expectedKey) {
+        return json({ error: 'Unauthorized' }, 401);
+    }
+
+    const resendCount = await getEmailCount(env, 'resend');
+    const brevoCount  = await getEmailCount(env, 'brevo');
+    const today       = new Date().toISOString().slice(0, 10);
+
+    const resendConfigured = !!(env as any).RESEND_API_KEY;
+    const brevoConfigured  = !!(env as any).BREVO_API_KEY;
+
+    return json({
+        date:  today,
+        providers: {
+            resend: {
+                configured:    resendConfigured,
+                sent_today:    resendCount,
+                daily_limit:   100,
+                remaining:     Math.max(0, 100 - resendCount),
+                status:        resendCount < 100 ? 'active' : 'quota_exceeded',
+            },
+            brevo: {
+                configured:    brevoConfigured,
+                sent_today:    brevoCount,
+                daily_limit:   300,
+                remaining:     Math.max(0, 300 - brevoCount),
+                status:        brevoCount < 300 ? 'active' : 'quota_exceeded',
+            },
+        },
+        total_sent_today:     resendCount + brevoCount,
+        total_capacity_today: (resendConfigured ? 100 : 0) + (brevoConfigured ? 300 : 0),
+        active_provider:      resendCount < 100 ? 'resend' : (brevoConfigured ? 'brevo' : 'none'),
+        failover_triggered:   resendCount >= 100 && brevoConfigured,
+    });
 }
 
 async function handleInscription(request: Request, env: Env): Promise<Response> {
@@ -2126,7 +2277,8 @@ export default {
             if (pathname.startsWith('/api/d1/') && method === 'DELETE') return handleD1Delete(request, env, pathname);
 
             // ── Email (Resend API) ──
-            if (pathname === '/api/email/send' && method === 'POST') return handleEmailSend(request, env);
+            if (pathname === '/api/email/send'   && method === 'POST') return handleEmailSend(request, env);
+            if (pathname === '/api/email/status'  && method === 'GET')  return handleEmailStatus(request, env);
 
             // ── Inscription (bypass RLS) ──
             if (pathname === '/api/inscription' && method === 'POST') return handleInscription(request, env);

@@ -1886,6 +1886,9 @@ ${bodyHtml}
                             orgId={org.id}
                             allClasses={cls.filter((c: any) => c.id)}
                             allTeachers={teachers}
+                            allStudents={students}
+                            orgName={org.name}
+                            orgLogo={org.logo_url}
                         />
                     )}
 
@@ -1925,6 +1928,9 @@ ${bodyHtml}
                                 userId={session.id}
                                 userName={`${session.first_name || ''} ${session.last_name || ''}`.trim()}
                                 userRole="admin"
+                                allStudents={students}
+                                orgName={org.name}
+                                orgLogo={org.logo_url}
                             />
                         </div>
                     )}

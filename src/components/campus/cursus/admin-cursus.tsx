@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { RichContentEditor, parseContent, serializeContent, type ContentBlock } from './rich-content-editor';
+import { EmailModal } from '@/components/campus/email-modal';
 
 // ─── Helper notifications push cursus (admin) ────────────────────────────────
 const WORKER_URL = process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL || process.env.NEXT_PUBLIC_WORKER_URL || '';
@@ -81,9 +82,12 @@ interface AdminCursusProps {
     orgId: string;
     allClasses: any[];
     allTeachers: any[];
+    allStudents?: any[];  // Pour l'email modal
+    orgName?: string;     // Nom de l'établissement
+    orgLogo?: string;     // Logo URL
 }
 
-export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps) {
+export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], orgName = 'CampusFlow', orgLogo }: AdminCursusProps) {
     const [subjects,    setSubjects]    = useState<any[]>([]);
     const [chapters,    setChapters]    = useState<any[]>([]);
     const [lessons,     setLessons]     = useState<any[]>([]);
@@ -137,6 +141,12 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
     const [videoUrl, setVideoUrl] = useState('');
     const [videoViews, setVideoViews] = useState<any[]>([]);
     const [savingVideo, setSavingVideo] = useState(false);
+
+    // ── Email Modal (post-publication) ──
+    const [emailModalOpen, setEmailModalOpen] = useState(false);
+    const [emailSubject, setEmailSubject] = useState('');
+    const [emailBody, setEmailBody] = useState('');
+    const [emailStudents, setEmailStudents] = useState<any[]>([]);
 
     const loadData = async () => {
         setLoading(true);
@@ -264,17 +274,23 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
         else {
             setChapters(p => [...p, data]); setShowNewCh(false);
             setChForm({ title: '', contentBlocks: [] }); toast.success('Chapitre ajouté ✅');
-            // 🔔 Notifier les étudiants
+            // 🔔 Notifier les étudiants (push)
             if (selectedSub?.classroom_id) {
-                const { data: students } = await supabase.from('student_profiles').select('id')
+                const { data: stus } = await supabase.from('student_profiles').select('id')
                     .eq('classroom_id', selectedSub.classroom_id).eq('organization_id', orgId);
-                if (students?.length) {
+                if (stus?.length) {
                     const slug = (await supabase.from('organizations').select('slug').eq('id', orgId).single()).data?.slug;
                     sendAdminCursusNotification({
                         actionType: 'new_chapter', targetId: data.id, targetName: data.title,
-                        orgId, orgSlug: slug, recipientIds: students.map((s: any) => s.id),
+                        orgId, orgSlug: slug, recipientIds: stus.map((s: any) => s.id),
                     });
                 }
+                // 📧 Trigger email modal
+                const classStudents = allStudents.filter(s => s.classroom_id === selectedSub.classroom_id);
+                setEmailStudents(classStudents);
+                setEmailSubject(`Nouveau chapitre : ${data.title}`);
+                setEmailBody(`Un nouveau chapitre vient d'être publié dans votre cours.\n\n📚 Chapitre : ${data.title}\n🏫 Matière : ${selectedSub?.name || ''}\n\nConnectez-vous à CampusFlow pour accéder au contenu.`);
+                setEmailModalOpen(true);
             }
         }
         setSavingCh(false);
@@ -330,19 +346,25 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
             setLessons(p => [...p, data]); setShowNewLesson(false);
             setLessonForm({ title: '', contentBlocks: [], estimated_minutes: '15' });
             toast.success('Leçon ajoutée ✅');
-            // 🔔 Notifier les étudiants
+            // 🔔 Notifier les étudiants (push)
             const chapter = chapters.find((c: any) => c.id === selectedChId);
             const subject = chapter ? subjects.find((s: any) => s.id === chapter.subject_id) : null;
             if (subject?.classroom_id) {
-                const { data: students } = await supabase.from('student_profiles').select('id')
+                const { data: stus } = await supabase.from('student_profiles').select('id')
                     .eq('classroom_id', subject.classroom_id).eq('organization_id', orgId);
-                if (students?.length) {
+                if (stus?.length) {
                     const slug = (await supabase.from('organizations').select('slug').eq('id', orgId).single()).data?.slug;
                     sendAdminCursusNotification({
                         actionType: 'new_lesson', targetId: data.id, targetName: data.title,
-                        orgId, orgSlug: slug, recipientIds: students.map((s: any) => s.id),
+                        orgId, orgSlug: slug, recipientIds: stus.map((s: any) => s.id),
                     });
                 }
+                // 📧 Trigger email modal
+                const classStudents = allStudents.filter(s => s.classroom_id === subject.classroom_id);
+                setEmailStudents(classStudents);
+                setEmailSubject(`Nouvelle leçon : ${data.title}`);
+                setEmailBody(`Une nouvelle leçon vient d'être publiée.\n\n📚 Leçon : ${data.title}\n📖 Chapitre : ${chapter?.title || ''}\n🏫 Matière : ${subject?.name || ''}\n\nConnectez-vous à CampusFlow pour l'étudier.`);
+                setEmailModalOpen(true);
             }
         }
         setSavingLesson(false);
@@ -378,15 +400,21 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
             const chapter = chapters.find((c: any) => c.id === selectedChId);
             const subject = chapter ? subjects.find((s: any) => s.id === chapter.subject_id) : null;
             if (subject?.classroom_id) {
-                const { data: students } = await supabase.from('student_profiles').select('id')
+                const { data: stus } = await supabase.from('student_profiles').select('id')
                     .eq('classroom_id', subject.classroom_id).eq('organization_id', orgId);
-                if (students?.length) {
+                if (stus?.length) {
                     const slug = (await supabase.from('organizations').select('slug').eq('id', orgId).single()).data?.slug;
                     sendAdminCursusNotification({
                         actionType: 'new_exercise', targetId: data.id, targetName: data.title,
-                        orgId, orgSlug: slug, recipientIds: students.map((s: any) => s.id),
+                        orgId, orgSlug: slug, recipientIds: stus.map((s: any) => s.id),
                     });
                 }
+                // 📧 Trigger email modal
+                const classStudents = allStudents.filter(s => s.classroom_id === subject.classroom_id);
+                setEmailStudents(classStudents);
+                setEmailSubject(`Nouvel exercice disponible : ${data.title}`);
+                setEmailBody(`Un nouvel exercice vous attend sur CampusFlow !\\n\\n🏋️ Exercice : ${data.title}\\n📖 Chapitre : ${chapter?.title || ''}\\n🏫 Matière : ${subject?.name || ''}\\n⏱️ Durée : ${data.duration_minutes} min · 🏆 ${data.max_score} pts\\n\\nConnectez-vous pour le commencer.`);
+                setEmailModalOpen(true);
             }
         }
         setSavingEx(false);
@@ -422,6 +450,16 @@ export function AdminCursus({ orgId, allClasses, allTeachers }: AdminCursusProps
 
     return (
         <div className="space-y-4">
+            {/* ── Email Modal post-publication ── */}
+            <EmailModal
+                open={emailModalOpen}
+                onClose={() => setEmailModalOpen(false)}
+                subject={emailSubject}
+                body={emailBody}
+                students={emailStudents}
+                orgName={orgName}
+                orgLogo={orgLogo}
+            />
 
             {/* ── Stats ── */}
             <div className="grid grid-cols-4 gap-2">

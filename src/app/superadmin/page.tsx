@@ -25,7 +25,7 @@ import { uploadToR2 } from '@/lib/r2';
 // Protected by platform_admins table (Supabase Auth + RLS)
 // ═══════════════════════════════════════════════════════════════════════
 
-type Tab = 'overview' | 'orgs' | 'users' | 'domains' | 'announcements' | 'points' | 'requests' | 'ads' | 'compte';
+type Tab = 'overview' | 'orgs' | 'users' | 'domains' | 'announcements' | 'points' | 'requests' | 'ads' | 'email' | 'compte';
 
 interface Stats {
     total_orgs: number;
@@ -76,6 +76,7 @@ const SIDEBAR: { id: Tab; label: string; icon: any; emoji?: string }[] = [
     { id: 'points',         label: 'Sky Points',       icon: Star,            emoji: '⭐' },
     { id: 'requests',       label: 'Demandes',         icon: MessageSquare,   emoji: '💬' },
     { id: 'ads',            label: 'Publicités',       icon: Target,          emoji: '📺' },
+    { id: 'email',          label: 'Email Providers',  icon: Mail,            emoji: '📧' },
     { id: 'domains',        label: 'Domaines',         icon: Globe,           emoji: '🌐' },
     { id: 'announcements',  label: 'Annonces',         icon: Megaphone,       emoji: '📢' },
     { id: 'compte',         label: 'Mon Compte',        icon: Lock,            emoji: '🔑' },
@@ -1060,6 +1061,15 @@ export default function SuperAdminPage() {
                         )}
 
                         {/* ══════════════════════════════════════════
+                            EMAIL PROVIDERS — Dual provider dashboard
+                        ══════════════════════════════════════════ */}
+                        {tab === 'email' && (
+                            <EmailProvidersPanel
+                                workerUrl="https://campusflow-worker.kleintaptue1.workers.dev"
+                            />
+                        )}
+
+                        {/* ══════════════════════════════════════════
                             MON COMPTE — Changement de mot de passe
                         ══════════════════════════════════════════ */}
                         {tab === 'compte' && (
@@ -2024,6 +2034,201 @@ function AdsTab({ supabase }: { supabase: any }) {
                     </motion.div>
                 )}
             </AnimatePresence>
+        </motion.div>
+    );
+}
+
+// ─── EmailProvidersPanel ──────────────────────────────────────────────────────
+function EmailProvidersPanel({ workerUrl, adminKey }: { workerUrl: string; adminKey?: string }) {
+    const [status, setStatus] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const load = async () => {
+        setLoading(true); setError(null);
+        try {
+            const res = await fetch(`${workerUrl}/api/email/status`, {
+                headers: adminKey ? { 'x-admin-key': adminKey } : {}
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            setStatus(await res.json());
+        } catch (e: any) { setError(e.message); }
+        setLoading(false);
+    };
+
+    useEffect(() => { load(); }, []);
+
+    const pct = (val: number, max: number) => Math.min(100, Math.round((val / max) * 100));
+
+    return (
+        <motion.div key="email" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            className="space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="font-black text-xl text-white flex items-center gap-2">
+                        📧 Email Providers
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-1">Dual-provider automatique · Invisible pour les utilisateurs</p>
+                </div>
+                <button onClick={load} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition">
+                    <RefreshCw className={`w-4 h-4 text-slate-400 ${loading ? 'animate-spin' : ''}`} />
+                </button>
+            </div>
+
+            {loading && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[1,2].map(i => <div key={i} className="h-48 rounded-2xl bg-white/[0.03] animate-pulse border border-white/5" />)}
+                </div>
+            )}
+
+            {error && (
+                <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                    ⚠️ {error} — Vérifiez que le Worker est déployé et que ADMIN_KEY est configuré.
+                </div>
+            )}
+
+            {status && (
+                <>
+                    {/* Active provider banner */}
+                    <div className={`p-4 rounded-2xl border flex items-center gap-4 ${
+                        status.active_provider === 'resend'
+                            ? 'bg-indigo-500/10 border-indigo-500/25'
+                            : status.active_provider === 'brevo'
+                            ? 'bg-amber-500/10 border-amber-500/25'
+                            : 'bg-red-500/10 border-red-500/20'
+                    }`}>
+                        <div className="text-2xl">
+                            {status.active_provider === 'resend' ? '🟢' : status.active_provider === 'brevo' ? '🟡' : '🔴'}
+                        </div>
+                        <div className="flex-1">
+                            <p className="font-bold text-white text-sm">
+                                Provider actif : <span className="uppercase">{status.active_provider}</span>
+                                {status.failover_triggered && (
+                                    <span className="ml-2 text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full">⚡ Failover déclenché</span>
+                                )}
+                            </p>
+                            <p className="text-xs text-slate-400 mt-0.5">
+                                {status.total_sent_today} / {status.total_capacity_today} emails envoyés aujourd'hui
+                            </p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-2xl font-black text-white">{status.total_capacity_today - status.total_sent_today}</p>
+                            <p className="text-[10px] text-slate-500">restants ce jour</p>
+                        </div>
+                    </div>
+
+                    {/* Provider cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Resend */}
+                        {(() => {
+                            const r = status.providers?.resend;
+                            if (!r) return null;
+                            const used_pct = pct(r.sent_today, r.daily_limit);
+                            return (
+                                <div className={`p-5 rounded-2xl border space-y-4 ${r.status === 'active' ? 'bg-white/[0.03] border-white/10' : 'bg-red-500/5 border-red-500/15'}`}>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-xl bg-indigo-500/20 flex items-center justify-center text-sm">📨</div>
+                                            <div>
+                                                <p className="font-bold text-white text-sm">Resend</p>
+                                                <p className="text-[10px] text-slate-500">resend.com</p>
+                                            </div>
+                                        </div>
+                                        <span className={`text-[10px] px-2 py-1 rounded-full font-bold ${
+                                            !r.configured ? 'bg-slate-500/20 text-slate-400' :
+                                            r.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+                                        }`}>
+                                            {!r.configured ? '⚙ Non configuré' : r.status === 'active' ? '● Actif' : '⚠ Quota dépassé'}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <div className="flex justify-between text-xs text-slate-400 mb-1.5">
+                                            <span>{r.sent_today} envoyés</span>
+                                            <span>{r.daily_limit}/j</span>
+                                        </div>
+                                        <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
+                                            <div className={`h-full rounded-full transition-all duration-700 ${used_pct >= 100 ? 'bg-red-500' : used_pct >= 75 ? 'bg-amber-500' : 'bg-indigo-500'}`}
+                                                style={{ width: `${used_pct}%` }} />
+                                        </div>
+                                        <p className="text-[10px] text-slate-500 mt-1">{r.remaining} emails restants · {used_pct}% utilisé</p>
+                                    </div>
+                                    {!r.configured && (
+                                        <p className="text-[11px] text-indigo-300 bg-indigo-500/10 rounded-xl px-3 py-2">
+                                            👉 Ajoutez <code className="bg-white/10 px-1 rounded">RESEND_API_KEY</code> dans Cloudflare Worker secrets
+                                        </p>
+                                    )}
+                                </div>
+                            );
+                        })()}
+
+                        {/* Brevo */}
+                        {(() => {
+                            const b = status.providers?.brevo;
+                            if (!b) return null;
+                            const used_pct = pct(b.sent_today, b.daily_limit);
+                            return (
+                                <div className={`p-5 rounded-2xl border space-y-4 ${b.status === 'active' ? 'bg-white/[0.03] border-white/10' : 'bg-red-500/5 border-red-500/15'}`}>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-xl bg-amber-500/20 flex items-center justify-center text-sm">✉️</div>
+                                            <div>
+                                                <p className="font-bold text-white text-sm">Brevo</p>
+                                                <p className="text-[10px] text-slate-500">brevo.com (ex-Sendinblue)</p>
+                                            </div>
+                                        </div>
+                                        <span className={`text-[10px] px-2 py-1 rounded-full font-bold ${
+                                            !b.configured ? 'bg-slate-500/20 text-slate-400' :
+                                            b.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+                                        }`}>
+                                            {!b.configured ? '⚙ Non configuré' : b.status === 'active' ? '● Backup prêt' : '⚠ Quota dépassé'}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <div className="flex justify-between text-xs text-slate-400 mb-1.5">
+                                            <span>{b.sent_today} envoyés</span>
+                                            <span>{b.daily_limit}/j</span>
+                                        </div>
+                                        <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
+                                            <div className={`h-full rounded-full transition-all duration-700 ${used_pct >= 100 ? 'bg-red-500' : used_pct >= 75 ? 'bg-amber-500' : 'bg-amber-500'}`}
+                                                style={{ width: `${used_pct}%` }} />
+                                        </div>
+                                        <p className="text-[10px] text-slate-500 mt-1">{b.remaining} emails restants · {used_pct}% utilisé</p>
+                                    </div>
+                                    {!b.configured && (
+                                        <p className="text-[11px] text-amber-300 bg-amber-500/10 rounded-xl px-3 py-2">
+                                            👉 Ajoutez <code className="bg-white/10 px-1 rounded">BREVO_API_KEY</code> dans Cloudflare Worker secrets pour activer le failover
+                                        </p>
+                                    )}
+                                </div>
+                            );
+                        })()}
+                    </div>
+
+                    {/* Info box */}
+                    <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-2">
+                        <p className="text-xs font-semibold text-slate-300">ℹ️ Fonctionnement du failover</p>
+                        <ul className="text-[11px] text-slate-400 space-y-1 list-disc list-inside">
+                            <li>Resend est le provider principal (100 emails/jour gratuits)</li>
+                            <li>Si Resend retourne une erreur de quota → basculement automatique vers Brevo</li>
+                            <li>Brevo offre 300 emails/jour gratuits en backup</li>
+                            <li>Total combiné : <strong className="text-white">400 emails/jour</strong> gratuitement</li>
+                            <li>Les utilisateurs ne voient jamais quel provider est utilisé</li>
+                            <li>Les compteurs se réinitialisent automatiquement chaque jour à minuit</li>
+                        </ul>
+                    </div>
+
+                    {/* How to add Brevo key */}
+                    <div className="p-4 rounded-2xl bg-violet-500/5 border border-violet-500/15 text-xs text-slate-400 space-y-2">
+                        <p className="text-violet-300 font-semibold">⚙️ Ajouter la clé Brevo</p>
+                        <p>1. Créez un compte sur <a href="https://brevo.com" target="_blank" rel="noreferrer" className="text-violet-400 underline">brevo.com</a> → Gratuit, 300 mails/j</p>
+                        <p>2. Dashboard Brevo → SMTP & API → API Keys → Créer une clé</p>
+                        <p>3. Dashboard Cloudflare Workers → campusflow-worker → Settings → Variables & Secrets</p>
+                        <p>4. Ajoutez le secret : <code className="bg-white/10 px-1 rounded">BREVO_API_KEY</code> = votre clé API Brevo</p>
+                        <p>5. Le failover s'active automatiquement — aucun redéploiement requis</p>
+                    </div>
+                </>
+            )}
         </motion.div>
     );
 }

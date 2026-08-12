@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { RichContentEditor, parseContent, serializeContent, type ContentBlock } from './rich-content-editor';
 import { updateSkyPoints, deductSkyPoints } from '@/lib/sky-points-service';
 import { DiscussButton } from '../discuss-button';
+import { EmailModal } from '@/components/campus/email-modal';
 
 // ─── Helper: envoyer une notification push via le Worker ────────────────────
 const WORKER_URL = process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL || process.env.NEXT_PUBLIC_WORKER_URL || '';
@@ -94,9 +95,13 @@ interface TeacherCursusProps {
     allClasses: any[];
     onStartDM?: (targetId: string, name: string) => void;
     onOpenGroupChat?: (convId: string, convName: string) => void;
+    allStudents?: any[];  // pour le modal email
+    orgName?: string;
+    orgLogo?: string;
+    orgSlug?: string;
 }
 
-export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, onOpenGroupChat }: TeacherCursusProps) {
+export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, onOpenGroupChat, allStudents = [], orgName = 'CampusFlow', orgLogo, orgSlug }: TeacherCursusProps) {
     const [subjects,    setSubjects]    = useState<any[]>([]);
     const [chapters,    setChapters]    = useState<any[]>([]);
     const [lessons,     setLessons]     = useState<any[]>([]);
@@ -135,7 +140,25 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
     const [editNewQ,      setEditNewQ]      = useState({ question: '', answer: '', options: ['', '', '', ''] });
     const [savingEditEx,  setSavingEditEx]  = useState(false);
 
-    // ── Correction (correction des soumissions) ──
+    // ── Email Modal (post-publication leçon/chapitre/exercice) ──
+    const [emailModalOpen,    setEmailModalOpen]    = useState(false);
+    const [emailSubject,      setEmailSubject]      = useState('');
+    const [emailBody,         setEmailBody]         = useState('');
+
+    // Helper : trigger email modal
+    const triggerEmailModal = (type: string, name: string) => {
+        const labels: Record<string, string> = {
+            new_chapter:  'Nouveau chapitre disponible',
+            new_lesson:   'Nouvelle leçon disponible',
+            new_exercise: 'Nouvel exercice à faire',
+        };
+        setEmailSubject(`${labels[type] || 'Nouveau contenu'} : ${name}`);
+        setEmailBody(`${userName} vient de publier "${name}".
+
+Connectez-vous à CampusFlow pour accéder au nouveau contenu dès maintenant.`);
+        setEmailModalOpen(true);
+    };
+
     const [gradingEx,     setGradingEx]     = useState<any | null>(null);
     const [gradeInputs,   setGradeInputs]   = useState<Record<string, string>>({});
     const [gradeFeedback, setGradeFeedback] = useState<Record<string, string>>({});
@@ -224,6 +247,7 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
         else {
             setChapters(prev => [...prev, data]); setShowNewCh(false);
             setChForm({ title: '', description: '', contentBlocks: [] }); toast.success('Chapitre ajouté ✅');
+            triggerEmailModal('new_chapter', data.title);
             if (selectedSub?.classroom_id) {
                 const { data: students } = await supabase.from('student_profiles').select('id').eq('classroom_id', selectedSub.classroom_id).eq('organization_id', orgId);
                 if (students?.length) await sendCursusNotification({ actorId: userId, actorName: userName, orgId, actionType: 'new_chapter', targetId: data.id, targetName: data.title, recipientIds: students.map((s: any) => s.id) });
@@ -284,6 +308,7 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
         else {
             setLessons(prev => [...prev, data]); setShowNewLesson(false);
             setLessonForm({ title: '', contentBlocks: [], estimated_minutes: '15' }); toast.success('Leçon ajoutée ✅');
+            triggerEmailModal('new_lesson', data.title);
             const chapter = chapters.find((c: any) => c.id === selectedChId);
             const subject = chapter ? subjects.find((s: any) => s.id === chapter.subject_id) : null;
             if (subject?.classroom_id) {
@@ -329,6 +354,7 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
             setShowNewEx(false);
             setExForm({ title: '', type: 'qcm', duration_minutes: 10, max_score: 20, questions: [] });
             toast.success('Exercice créé ✅');
+            triggerEmailModal('new_exercise', data.title);
             // 🔔 Notifier les étudiants du nouvel exercice
             const chapter = chapters.find((c: any) => c.id === selectedChId);
             const subject = chapter ? subjects.find((s: any) => s.id === chapter.subject_id) : null;
@@ -1120,6 +1146,17 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* ── Email Modal (prof → étudiants) ── */}
+            <EmailModal
+                open={emailModalOpen}
+                onClose={() => setEmailModalOpen(false)}
+                students={allStudents}
+                orgName={orgName}
+                orgLogo={orgLogo}
+                subject={emailSubject}
+                body={emailBody}
+            />
         </div>
     );
 }
