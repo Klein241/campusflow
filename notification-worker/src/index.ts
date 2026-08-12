@@ -1919,6 +1919,86 @@ async function handlePushUnregister(request: Request, env: Env): Promise<Respons
 // INSCRIPTION HANDLER (bypasse RLS via service key)
 // ══════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════
+// EMAIL SEND HANDLER (via Resend API)
+// POST /api/email/send
+// Body: { to: string[], subject: string, html: string, org_name?: string, org_logo?: string }
+// ══════════════════════════════════════════════════════════
+
+async function handleEmailSend(request: Request, env: Env): Promise<Response> {
+    const body = await request.json() as {
+        to:        string[];
+        subject:   string;
+        html?:     string;
+        text?:     string;
+        org_name?: string;
+        org_logo?: string;
+        from_name?: string;
+    };
+
+    const { to, subject, html, text, org_name, org_logo, from_name } = body;
+
+    if (!to || !to.length)  return json({ error: 'recipients (to) required' }, 400);
+    if (!subject)           return json({ error: 'subject required' }, 400);
+    if (!html && !text)     return json({ error: 'html or text body required' }, 400);
+
+    const resendKey = (env as any).RESEND_API_KEY;
+    if (!resendKey) return json({ error: 'RESEND_API_KEY not configured. Add it in Cloudflare Worker secrets.' }, 503);
+
+    // Template HTML premium
+    const emailHtml = html || `
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0F172A;font-family:'Segoe UI',sans-serif;">
+  <div style="max-width:600px;margin:0 auto;padding:24px 16px;">
+    <!-- Header -->
+    <div style="text-align:center;padding:32px 0 24px;">
+      ${org_logo ? `<img src="${org_logo}" alt="${org_name||'École'}" style="height:56px;border-radius:12px;margin-bottom:16px;" />` : ''}
+      <h1 style="color:#fff;font-size:22px;margin:0;font-weight:800;">${org_name || 'CampusFlow'}</h1>
+    </div>
+    <!-- Card -->
+    <div style="background:#1E293B;border-radius:20px;padding:32px;border:1px solid #334155;">
+      <p style="color:#CBD5E1;font-size:15px;line-height:1.7;margin:0;">${text || ''}</p>
+    </div>
+    <!-- Footer -->
+    <p style="text-align:center;color:#475569;font-size:12px;margin-top:24px;">
+      Envoyé via CampusFlow · ${org_name || ''}
+    </p>
+  </div>
+</body>
+</html>`;
+
+    const fromAddress = `${from_name || org_name || 'CampusFlow'} <noreply@campusflow.app>`;
+
+    // Envoyer via Resend (max 50 recipients par appel)
+    const results: any[] = [];
+    const chunks = [];
+    for (let i = 0; i < to.length; i += 50) chunks.push(to.slice(i, i + 50));
+
+    for (const chunk of chunks) {
+        const res = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${resendKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                from:    fromAddress,
+                to:      chunk,
+                subject,
+                html:    emailHtml,
+            }),
+        });
+        const data = await res.json();
+        results.push({ chunk_size: chunk.length, status: res.status, data });
+        if (!res.ok) break;
+    }
+
+    const allOk = results.every(r => r.status >= 200 && r.status < 300);
+    return json({ success: allOk, sent: to.length, results }, allOk ? 200 : 500);
+}
+
 async function handleInscription(request: Request, env: Env): Promise<Response> {
     let body: any;
     try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
@@ -1966,9 +2046,18 @@ async function handleInscription(request: Request, env: Env): Promise<Response> 
 
     // 2. Créer immédiatement le student_profile pour accès instantané
     const profilePayload: any = {
-        organization_id, first_name, last_name, phone, access_code, pin_code,
-        sky_points: 100, is_active: true, pin_set: true,
+        organization_id,
+        first_name,
+        last_name,
+        phone,
+        access_code,
+        pin_code,
+        sky_points:      100,
+        is_active:       true,
+        pin_set:         true,
+        approval_status: 'pending',   // verrouillé jusqu'à validation admin
     };
+    // Colonnes optionnelles — uniquement si présentes
     if (birth_date)   profilePayload.birth_date   = birth_date;
     if (gender)       profilePayload.gender        = gender;
     if (email)        profilePayload.email         = email;
@@ -1976,13 +2065,25 @@ async function handleInscription(request: Request, env: Env): Promise<Response> 
     if (classroom_id) profilePayload.classroom_id  = classroom_id;
     if (filiere_id)   profilePayload.filiere_id    = filiere_id;
 
-    await fetch(`${supabaseUrl}/rest/v1/student_profiles`, {
+    const profRes = await fetch(`${supabaseUrl}/rest/v1/student_profiles`, {
         method: 'POST',
-        headers: { ...headers, 'Prefer': 'resolution=ignore-duplicates,return=minimal' },
+        headers: { ...headers, 'Prefer': 'resolution=ignore-duplicates,return=representation' },
         body: JSON.stringify(profilePayload),
     });
 
-    return json({ success: true });
+    let profileCreated = true;
+    let profileError   = '';
+    if (!profRes.ok) {
+        profileError   = await profRes.text();
+        profileCreated = profileError.includes('23505'); // déjà existant = OK
+    }
+
+    return json({
+        success:        true,
+        access_code,
+        profileCreated,
+        profileError:   profileCreated ? null : profileError,
+    });
 }
 
 // MAIN ROUTER
@@ -2023,6 +2124,9 @@ export default {
             if (pathname.startsWith('/api/d1/') && method === 'POST')   return handleD1Write(request, env, pathname);
             if (pathname.startsWith('/api/d1/') && method === 'GET')    return handleD1Read(request, env, pathname);
             if (pathname.startsWith('/api/d1/') && method === 'DELETE') return handleD1Delete(request, env, pathname);
+
+            // ── Email (Resend API) ──
+            if (pathname === '/api/email/send' && method === 'POST') return handleEmailSend(request, env);
 
             // ── Inscription (bypass RLS) ──
             if (pathname === '/api/inscription' && method === 'POST') return handleInscription(request, env);

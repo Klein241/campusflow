@@ -130,6 +130,12 @@ function AdminPageContent() {
     const [sPhone, setSPhone] = useState(''); const [sGuardian, setSGuardian] = useState(''); const [sGuardianPhone, setSGuardianPhone] = useState(''); const [sNat, setSNat] = useState('Camerounaise'); const [sRes, setSRes] = useState('');
     const [sShowCode, setSShowCode] = useState(''); const [showAddTeacher, setShowAddTeacher] = useState(false); const [showAddStudent, setShowAddStudent] = useState(false);
     const [sidebar, setSidebar] = useState(false);
+    // ── Inscription requests (demandes en attente) ──
+    const [inscRequests, setInscRequests] = useState<any[]>([]);
+    const [inscLoaded, setInscLoaded] = useState(false);
+    const [inscActionId, setInscActionId] = useState<string | null>(null);
+    const [inscMsg, setInscMsg] = useState('');
+    const [inscSaving, setInscSaving] = useState(false);
     // Edit states for classes/subjects inline
     const [editingClsId, setEditingClsId] = useState<string | null>(null);
     const [editClsName, setEditClsName] = useState('');
@@ -330,6 +336,10 @@ function AdminPageContent() {
                 const { data: st } = await supabase.from('student_profiles').select('id, organization_id, first_name, last_name, sex, birth_date, classroom_id, phone, guardian_name, guardian_phone, nationality, residence, matricule, access_code, pin_set, created_at').eq('organization_id', o.id);
                 if (cancelled) return;
                 setStudents(st || []);
+                // Charger les demandes d'inscription en attente
+                const { data: ir } = await supabase.from('inscription_requests')
+                    .select('*').eq('organization_id', o.id).order('created_at', { ascending: false });
+                if (!cancelled) { setInscRequests(ir || []); setInscLoaded(true); }
                 // Load rooms
                 const { data: rm } = await supabase.from('rooms').select('*').eq('organization_id', o.id).order('name');
                 if (cancelled) return;
@@ -1073,6 +1083,99 @@ ${bodyHtml}
 
                     {/* ═══ STUDENTS ═══ */}
                     {tab === 'students' && <div className="space-y-4">
+                        {/* ── DEMANDES EN ATTENTE ── */}
+                        {(() => {
+                            const pending = inscRequests.filter((r: any) => r.status === 'pending' || r.status === 'info_needed');
+                            if (pending.length === 0) return null;
+                            return (
+                                <div className="p-5 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-3">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-lg">📋</span>
+                                        <h3 className="font-bold text-amber-300">Demandes en attente ({pending.length})</h3>
+                                    </div>
+                                    {pending.map((req: any) => (
+                                        <div key={req.id} className="p-4 rounded-xl bg-white/[0.03] border border-white/10 space-y-3">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div>
+                                                    <p className="font-bold text-white">{req.first_name} {req.last_name}</p>
+                                                    <p className="text-xs text-slate-400">{req.phone || '—'} · {req.email || '—'}</p>
+                                                    <p className="text-xs text-slate-500">Code: <code className="font-mono text-slate-300">{req.access_code}</code> · {new Date(req.created_at).toLocaleDateString('fr')}</p>
+                                                    {req.document_url && (
+                                                        <a href={req.document_url} target="_blank" rel="noreferrer"
+                                                            className="inline-flex items-center gap-1 mt-1 text-xs text-blue-400 hover:underline">
+                                                            <FileText className="w-3 h-3" />Voir le document
+                                                        </a>
+                                                    )}
+                                                </div>
+                                                <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                                                    req.status === 'pending' ? 'bg-amber-500/20 text-amber-300' : 'bg-blue-500/20 text-blue-300'
+                                                }`}>{req.status === 'pending' ? '⏳ En attente' : '📋 Infos requises'}</span>
+                                            </div>
+                                            {/* Zone message admin */}
+                                            {inscActionId === req.id && (
+                                                <div className="space-y-2">
+                                                    <textarea value={inscMsg} onChange={e => setInscMsg(e.target.value)}
+                                                        placeholder="Message pour l'étudiant (optionnel pour approuver, obligatoire pour demander infos)..."
+                                                        rows={2} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white resize-none" />
+                                                </div>
+                                            )}
+                                            {/* Actions */}
+                                            <div className="flex flex-wrap gap-2">
+                                                <button onClick={async () => {
+                                                    setInscSaving(true);
+                                                    try {
+                                                        // Approuver : mettre à jour inscription_request + student_profiles
+                                                        await supabase.from('inscription_requests').update({ status: 'approved', admin_message: inscMsg || null }).eq('id', req.id);
+                                                        await supabase.from('student_profiles').update({ approval_status: 'approved' }).eq('access_code', req.access_code).eq('organization_id', org.id);
+                                                        setInscRequests(p => p.map((r: any) => r.id === req.id ? { ...r, status: 'approved' } : r));
+                                                        setStudents(p => [...p]); // refresh hint
+                                                        setInscActionId(null); setInscMsg('');
+                                                        toast.success(`✅ ${req.first_name} ${req.last_name} approuvé(e) !`);
+                                                    } catch (e: any) { toast.error(e.message); }
+                                                    setInscSaving(false);
+                                                }} disabled={inscSaving}
+                                                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white disabled:opacity-50 transition">
+                                                    {inscSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}Approuver
+                                                </button>
+                                                <button onClick={async () => {
+                                                    if (!inscMsg.trim()) { toast.error('Écrivez un message pour expliquer ce qui manque'); return; }
+                                                    setInscSaving(true);
+                                                    try {
+                                                        await supabase.from('inscription_requests').update({ status: 'info_needed', admin_message: inscMsg }).eq('id', req.id);
+                                                        await supabase.from('student_profiles').update({ approval_status: 'info_needed' }).eq('access_code', req.access_code).eq('organization_id', org.id);
+                                                        setInscRequests(p => p.map((r: any) => r.id === req.id ? { ...r, status: 'info_needed', admin_message: inscMsg } : r));
+                                                        setInscActionId(null); setInscMsg('');
+                                                        toast.success('Message envoyé à l\'étudiant');
+                                                    } catch (e: any) { toast.error(e.message); }
+                                                    setInscSaving(false);
+                                                }} disabled={inscSaving}
+                                                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white disabled:opacity-50 transition">
+                                                    <FileText className="w-3 h-3" />Demander des infos
+                                                </button>
+                                                <button onClick={async () => {
+                                                    setInscSaving(true);
+                                                    try {
+                                                        await supabase.from('inscription_requests').update({ status: 'rejected', admin_message: inscMsg || 'Demande non acceptée.' }).eq('id', req.id);
+                                                        await supabase.from('student_profiles').update({ approval_status: 'rejected' }).eq('access_code', req.access_code).eq('organization_id', org.id);
+                                                        setInscRequests(p => p.map((r: any) => r.id === req.id ? { ...r, status: 'rejected' } : r));
+                                                        setInscActionId(null); setInscMsg('');
+                                                        toast.success('Demande rejetée');
+                                                    } catch (e: any) { toast.error(e.message); }
+                                                    setInscSaving(false);
+                                                }} disabled={inscSaving}
+                                                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-600/80 hover:bg-red-500 text-xs font-bold text-white disabled:opacity-50 transition">
+                                                    <X className="w-3 h-3" />Rejeter
+                                                </button>
+                                                <button onClick={() => { setInscActionId(inscActionId === req.id ? null : req.id); setInscMsg(req.admin_message || ''); }}
+                                                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs text-slate-400 border border-white/10 transition">
+                                                    <Edit className="w-3 h-3" />{inscActionId === req.id ? 'Annuler' : 'Écrire message'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            );
+                        })()}
                         <div className="flex items-center justify-between">
                             <p className="text-sm text-slate-400">{students.length} étudiant(s)</p>
                             <Button size="sm" className="bg-blue-600" onClick={() => { setShowAddStudent(!showAddStudent); setSShowCode(''); }}><Plus className="w-4 h-4 mr-1" />{showAddStudent ? 'Fermer' : 'Inscrire un étudiant'}</Button>

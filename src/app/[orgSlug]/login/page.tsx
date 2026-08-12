@@ -32,6 +32,7 @@ interface UserProfile {
     pin_set: boolean;
     organization_id: string;
     classroom_id?: string;
+    approval_status?: 'pending' | 'approved' | 'rejected' | 'info_needed';
 }
 
 export default function LoginPage() {
@@ -248,7 +249,6 @@ export default function LoginPage() {
                 if (student.is_active === false) { toast.error('Votre compte a été désactivé. Contactez l\'administration.'); setSaving(false); return; }
                 const profile: UserProfile = { id: student.id, first_name: student.first_name, last_name: student.last_name, role: 'student', pin_set: student.pin_set || false, organization_id: student.organization_id, classroom_id: student.classroom_id };
                 setUserProfile(profile);
-
                 if (!student.pin_set) {
                     setMode('pin_create');
                     setPinStep('create');
@@ -257,6 +257,33 @@ export default function LoginPage() {
                     setMode('pin_verify');
                     setTimeout(() => pinRefs[0].current?.focus(), 100);
                 }
+                setSaving(false);
+                return;
+            }
+
+            // Fallback : chercher dans inscription_requests (inscription via landing page)
+            const { data: inscReq } = await supabase
+                .from('inscription_requests')
+                .select('id, first_name, last_name, organization_id, access_code, pin_code, status, classroom_id')
+                .eq('organization_id', org.id)
+                .eq('access_code', code)
+                .single();
+
+            if (inscReq) {
+                // Stocker la session comme étudiant en attente
+                const profile: UserProfile = {
+                    id: inscReq.id,
+                    first_name: inscReq.first_name,
+                    last_name: inscReq.last_name,
+                    role: 'student',
+                    pin_set: true,
+                    organization_id: inscReq.organization_id,
+                    classroom_id: inscReq.classroom_id,
+                    approval_status: inscReq.status || 'pending',
+                };
+                setUserProfile(profile);
+                setMode('pin_verify');
+                setTimeout(() => pinRefs[0].current?.focus(), 100);
                 setSaving(false);
                 return;
             }
@@ -378,26 +405,26 @@ export default function LoginPage() {
         }
 
         if (rpcSession?.session_token) {
-            // Session sécurisée avec token serveur (verify_pin_and_create_session)
             SessionManager.set(buildSessionFromRpc(rpcSession, {
-                first_name:   userProfile.first_name,
-                last_name:    userProfile.last_name,
-                classroom_id: freshClassroomId,
-                photo_url:    photoUrl,
+                first_name:      userProfile.first_name,
+                last_name:       userProfile.last_name,
+                classroom_id:    freshClassroomId,
+                photo_url:       photoUrl,
+                approval_status: userProfile.approval_status,
             }));
         } else {
-            // Fallback après pin_create (set_pin ne retourne pas de session_token)
             SessionManager.set({
-                session_token: '',
-                profile_id:    userProfile.id,
-                role:          userProfile.role as 'teacher' | 'student' | 'admin',
-                org_id:        userProfile.organization_id,
-                expires_at:    new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
-                first_name:    userProfile.first_name,
-                last_name:     userProfile.last_name,
-                classroom_id:  freshClassroomId,
-                photo_url:     photoUrl,
-                logged_in_at:  new Date().toISOString(),
+                session_token:   '',
+                profile_id:      userProfile.id,
+                role:            userProfile.role as 'teacher' | 'student' | 'admin',
+                org_id:          userProfile.organization_id,
+                expires_at:      new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
+                first_name:      userProfile.first_name,
+                last_name:       userProfile.last_name,
+                classroom_id:    freshClassroomId,
+                photo_url:       photoUrl,
+                logged_in_at:    new Date().toISOString(),
+                approval_status: userProfile.approval_status,
             });
         }
         // Unified SPA — all roles go to /campus

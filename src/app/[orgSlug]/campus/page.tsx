@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOrgSlug } from '@/hooks/use-org-slug';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, BookOpen, X } from 'lucide-react';
+import { Loader2, BookOpen, X, Clock, AlertTriangle, CheckCircle, FileText, Upload, Send } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { SessionManager, type CampusSession } from '@/lib/session';
 import { CampusBottomNav, type CampusTab } from '@/components/campus/campus-bottom-nav';
@@ -56,6 +56,12 @@ export default function CampusPage() {
     // Exam session alert (persistent popup for students)
     const [examAlertSession, setExamAlertSession] = useState<{ id: string; title: string; sessionId: string } | null>(null);
 
+    // Approbation en attente
+    const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
+    const [adminMessage, setAdminMessage] = useState<string>('');
+    const [docFile, setDocFile] = useState<File | null>(null);
+    const [sendingDoc, setSendingDoc] = useState(false);
+
     // Push notifications — auto-subscribe after login
     const [showPushBanner, setShowPushBanner] = useState(false);
     const pushAutoTriggered = useRef(false);
@@ -80,6 +86,23 @@ export default function CampusPage() {
             setOrg(o);
             setSession(sess);
             if (sess.sky_points !== undefined) setSkyPoints(sess.sky_points);
+            // Approbation : vérifier le statut depuis inscription_requests ou student_profiles
+            if (sess.role === 'student') {
+                // Check in student_profiles first
+                const { data: sprof } = await supabase.from('student_profiles')
+                    .select('approval_status').eq('id', sess.profile_id).maybeSingle();
+                if (sprof?.approval_status && sprof.approval_status !== 'approved') {
+                    setApprovalStatus(sprof.approval_status);
+                } else if (!sprof) {
+                    // Check inscription_requests
+                    const { data: ir } = await supabase.from('inscription_requests')
+                        .select('status, admin_message').eq('id', sess.profile_id).maybeSingle();
+                    if (ir && ir.status !== 'approved') {
+                        setApprovalStatus(ir.status || 'pending');
+                        if (ir.admin_message) setAdminMessage(ir.admin_message);
+                    }
+                }
+            }
             // Photo & Sky Points: re-fetch depuis Supabase pour garantir la persistance
             if (sess.photo_url) setPhotoUrl(sess.photo_url);
             const table = sess.role === 'student' ? 'student_profiles' : 'teacher_profiles';
@@ -246,6 +269,153 @@ export default function CampusPage() {
     }
 
     const userName = `${session.first_name} ${session.last_name}`;
+
+    // ── Modal approbation en attente ──────────────────────────────────────
+    const sendDocument = async () => {
+        if (!docFile || !session) return;
+        setSendingDoc(true);
+        try {
+            const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'https://campusflow-worker.kleintaptue1.workers.dev';
+            const fd = new FormData();
+            fd.append('file', docFile);
+            fd.append('folder', 'inscriptions');
+            const up = await fetch(`${workerUrl}/api/r2/upload`, { method: 'POST', body: fd });
+            const { url } = await up.json();
+            // Mettre à jour inscription_request avec l'URL du document
+            await supabase.from('inscription_requests')
+                .update({ document_url: url })
+                .eq('id', session.profile_id);
+            setDocFile(null);
+            alert('Document envoyé avec succès ! L\'administration va le vérifier.');
+        } catch { alert('Erreur lors de l\'envoi du document.'); }
+        setSendingDoc(false);
+    };
+
+    const pendingConfig = {
+        pending: {
+            icon: <Clock className="w-12 h-12 text-amber-400" />,
+            bg: 'from-amber-500/20 to-orange-600/10',
+            border: 'border-amber-500/30',
+            title: 'Dossier en cours de traitement',
+            subtitle: 'L\'administration examine votre demande d\'inscription. Vous serez notifié dès qu\'une décision sera prise.',
+            color: 'text-amber-400',
+        },
+        rejected: {
+            icon: <AlertTriangle className="w-12 h-12 text-red-400" />,
+            bg: 'from-red-500/20 to-rose-600/10',
+            border: 'border-red-500/30',
+            title: 'Inscription non acceptée',
+            subtitle: 'Votre demande d\'inscription n\'a pas été acceptée. Contactez l\'administration pour plus d\'informations.',
+            color: 'text-red-400',
+        },
+        info_needed: {
+            icon: <FileText className="w-12 h-12 text-blue-400" />,
+            bg: 'from-blue-500/20 to-indigo-600/10',
+            border: 'border-blue-500/30',
+            title: 'Informations complémentaires requises',
+            subtitle: 'L\'administration vous demande des informations ou documents supplémentaires.',
+            color: 'text-blue-400',
+        },
+    };
+
+    if (approvalStatus && approvalStatus !== 'approved') {
+        const cfg = pendingConfig[approvalStatus as keyof typeof pendingConfig] || pendingConfig.pending;
+        return (
+            <div className="min-h-screen bg-gradient-to-b from-[#0B0E14] to-[#0F1219] text-white flex flex-col items-center justify-center px-6 relative overflow-hidden">
+                {/* Background blobs */}
+                <div className="absolute inset-0 pointer-events-none">
+                    <div className="absolute top-[-20%] right-[-20%] w-[60%] h-[60%] bg-indigo-600/5 blur-[120px] rounded-full" />
+                    <div className="absolute bottom-[-20%] left-[-20%] w-[50%] h-[50%] bg-teal-600/5 blur-[120px] rounded-full" />
+                </div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ duration: 0.5, ease: 'easeOut' }}
+                    className="relative z-10 w-full max-w-sm"
+                >
+                    {/* Card */}
+                    <div className={`rounded-3xl bg-gradient-to-b ${cfg.bg} border ${cfg.border} backdrop-blur-xl p-8 shadow-2xl`}>
+                        {/* Icon */}
+                        <div className="flex justify-center mb-6">
+                            <motion.div
+                                animate={{ scale: [1, 1.05, 1] }}
+                                transition={{ duration: 2, repeat: Infinity }}
+                                className={`w-24 h-24 rounded-full bg-gradient-to-br ${cfg.bg} border ${cfg.border} flex items-center justify-center`}
+                            >
+                                {cfg.icon}
+                            </motion.div>
+                        </div>
+
+                        {/* Title */}
+                        <h1 className={`text-xl font-black text-center mb-2 ${cfg.color}`}>{cfg.title}</h1>
+                        <p className="text-sm text-slate-400 text-center leading-relaxed mb-6">{cfg.subtitle}</p>
+
+                        {/* Admin message */}
+                        {adminMessage && (
+                            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-5">
+                                <p className="text-xs text-slate-400 mb-1 font-semibold uppercase tracking-wider">Message de l'administration</p>
+                                <p className="text-sm text-white">{adminMessage}</p>
+                            </div>
+                        )}
+
+                        {/* Infos étudiant */}
+                        <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 mb-5 space-y-2">
+                            <div className="flex justify-between text-sm">
+                                <span className="text-slate-400">Nom</span>
+                                <span className="font-semibold">{session.first_name} {session.last_name}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span className="text-slate-400">Établissement</span>
+                                <span className="font-semibold">{org?.name || orgSlug}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span className="text-slate-400">Statut</span>
+                                <span className={`font-bold ${cfg.color}`}>
+                                    {approvalStatus === 'pending' ? '⏳ En attente' : approvalStatus === 'rejected' ? '❌ Refusé' : '📋 Infos requises'}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Upload document si info_needed */}
+                        {approvalStatus === 'info_needed' && (
+                            <div className="space-y-3 mb-5">
+                                <label className="block">
+                                    <div className="flex items-center gap-2 text-xs text-slate-400 mb-2 font-semibold uppercase tracking-wider">
+                                        <Upload className="w-3 h-3" />Envoyer un document
+                                    </div>
+                                    <div className="relative">
+                                        <input type="file" accept=".pdf,.jpg,.jpeg,.png"
+                                            onChange={e => setDocFile(e.target.files?.[0] || null)}
+                                            className="w-full text-sm text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-blue-600/20 file:text-blue-300 file:font-semibold hover:file:bg-blue-600/30 cursor-pointer" />
+                                    </div>
+                                    {docFile && <p className="text-xs text-blue-400 mt-1 truncate">📎 {docFile.name}</p>}
+                                </label>
+                                <button onClick={sendDocument} disabled={!docFile || sendingDoc}
+                                    className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm font-bold flex items-center justify-center gap-2 transition-all">
+                                    {sendingDoc ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                    {sendingDoc ? 'Envoi...' : 'Envoyer le document'}
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Logout */}
+                        <button
+                            onClick={() => { SessionManager.clear(); router.push(`/${orgSlug}/login`); }}
+                            className="w-full py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-slate-400 transition-all"
+                        >
+                            Se déconnecter
+                        </button>
+                    </div>
+
+                    {/* Note de bas */}
+                    <p className="text-center text-xs text-slate-500 mt-6">
+                        Revenir plus tard · L'administration traitera votre dossier dans les meilleurs délais
+                    </p>
+                </motion.div>
+            </div>
+        );
+    }
 
     return (
         <main className="min-h-screen bg-gradient-to-b from-[#0B0E14] to-[#0F1219] text-white pb-28 overflow-y-auto">
