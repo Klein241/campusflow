@@ -357,7 +357,8 @@ export default function CampusPage() {
                 <AnimatePresence mode="wait">
                     {activeTab === 'actus' && (
                         <motion.div key="actus" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}>
-                            <ActusView orgId={org.id} orgSlug={orgSlug} userId={session.profile_id} userName={userName} userRole={session.role} />
+                            <ActusView orgId={org.id} orgSlug={orgSlug} userId={session.profile_id} userName={userName} userRole={session.role}
+                                onSkyUpdate={(delta) => setSkyPoints((p: number) => p + delta)} />
                         </motion.div>
                     )}
 

@@ -1569,6 +1569,7 @@ function AdsTab({ supabase }: { supabase: any }) {
         description: '',
         media_url: '',
         media_type: 'image' as 'image' | 'video' | 'story',
+        placement_zone: 'feed' as 'feed' | 'banner' | 'story' | 'popup' | 'rewarded',
         link_url: '',
         sky_points_reward: 1,
         min_watch_seconds: 5,
@@ -1609,6 +1610,7 @@ function AdsTab({ supabase }: { supabase: any }) {
             description: form.description.trim() || null,
             media_url: form.media_url.trim(),
             media_type: form.media_type,
+            placement_zone: form.placement_zone,
             link_url: form.link_url.trim() || null,
             sky_points_reward: form.sky_points_reward,
             min_watch_seconds: form.min_watch_seconds,
@@ -1619,7 +1621,7 @@ function AdsTab({ supabase }: { supabase: any }) {
         if (!error) {
             toast.success('📺 Publicité créée !');
             setShowForm(false);
-            setForm({ title: '', description: '', media_url: '', media_type: 'image', link_url: '', sky_points_reward: 1, min_watch_seconds: 5, is_active: true, ends_at: '' });
+            setForm({ title: '', description: '', media_url: '', media_type: 'image', placement_zone: 'feed', link_url: '', sky_points_reward: 1, min_watch_seconds: 5, is_active: true, ends_at: '' });
             loadAds();
         } else toast.error('Erreur: ' + error.message);
         setSaving(false);
@@ -1644,10 +1646,66 @@ function AdsTab({ supabase }: { supabase: any }) {
     };
 
     const MEDIA_TYPES = [
-        { id: 'image', label: 'Image', icon: '🖼️' },
-        { id: 'video', label: 'Vidéo', icon: '🎬' },
-        { id: 'story', label: 'Story', icon: '📱' },
+        { id: 'image', label: 'Image',  icon: '🖼️' },
+        { id: 'video', label: 'Vidéo',  icon: '🎬' },
+        { id: 'story', label: 'Story',  icon: '📱' },
     ];
+
+    const PLACEMENT_ZONES = [
+        {
+            id: 'feed',
+            label: 'Feed',
+            icon: '📰',
+            color: 'blue',
+            desc: 'Dans le fil d\'actualité des étudiants',
+            size: '1200×628 px',
+            format: 'Image / Vidéo'
+        },
+        {
+            id: 'banner',
+            label: 'Bannière',
+            icon: '📏',
+            color: 'teal',
+            desc: 'Bande horizontale en haut de page',
+            size: '728×90 px',
+            format: 'Image'
+        },
+        {
+            id: 'story',
+            label: 'Story',
+            icon: '📱',
+            color: 'pink',
+            desc: 'Format plein écran vertical (stories)',
+            size: '1080×1920 px',
+            format: 'Image / Vidéo'
+        },
+        {
+            id: 'popup',
+            label: 'Pop-up',
+            icon: '💬',
+            color: 'orange',
+            desc: 'Fenêtre modale au centre de l\'écran',
+            size: '600×400 px',
+            format: 'Image'
+        },
+        {
+            id: 'rewarded',
+            label: 'Récompensée',
+            icon: '🎁',
+            color: 'amber',
+            desc: 'Pub optionnelle près du bouton Story — gains Sky Points',
+            size: 'Plein écran',
+            format: 'Image / Vidéo'
+        },
+    ];
+
+    const zoneColorMap: Record<string, string> = {
+        blue:   'bg-blue-500/20 border-blue-500/40 text-blue-300',
+        teal:   'bg-teal-500/20 border-teal-500/40 text-teal-300',
+        pink:   'bg-pink-500/20 border-pink-500/40 text-pink-300',
+        orange: 'bg-orange-500/20 border-orange-500/40 text-orange-300',
+        amber:  'bg-amber-500/20 border-amber-500/40 text-amber-300',
+    };
 
     return (
         <motion.div key="ads" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
@@ -1690,7 +1748,32 @@ function AdsTab({ supabase }: { supabase: any }) {
                             <button onClick={() => setShowForm(false)} className="text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
                         </div>
 
-                        {/* Type */}
+                        {/* Zone de placement */}
+                        <div>
+                            <label className="text-xs text-slate-400 mb-2 block font-semibold uppercase tracking-wide">📍 Zone de placement</label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {PLACEMENT_ZONES.map(z => {
+                                    const isActive = form.placement_zone === z.id;
+                                    const colorClass = isActive ? zoneColorMap[z.color] : 'bg-white/[0.03] border-white/10 text-slate-400';
+                                    return (
+                                        <button key={z.id} onClick={() => setForm(p => ({ ...p, placement_zone: z.id as any }))}
+                                            className={cn('flex items-start gap-3 p-3 rounded-xl border text-left transition-all', colorClass)}>
+                                            <span className="text-xl mt-0.5">{z.icon}</span>
+                                            <div className="min-w-0">
+                                                <div className="text-sm font-semibold leading-none">{z.label}</div>
+                                                <div className="text-[10px] mt-1 opacity-70 leading-snug">{z.desc}</div>
+                                                <div className="flex gap-2 mt-1.5">
+                                                    <span className="text-[9px] bg-black/30 px-1.5 py-0.5 rounded-full">{z.size}</span>
+                                                    <span className="text-[9px] bg-black/30 px-1.5 py-0.5 rounded-full">{z.format}</span>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Type de média */}
                         <div>
                             <label className="text-xs text-slate-400 mb-2 block">Type de média</label>
                             <div className="flex gap-2">
@@ -1826,6 +1909,16 @@ function AdsTab({ supabase }: { supabase: any }) {
                                                 <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-400 font-medium">
                                                     {ad.media_type}
                                                 </span>
+                                                {ad.placement_zone && (
+                                                    <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full font-medium',
+                                                        ad.placement_zone === 'rewarded' ? 'bg-amber-500/20 text-amber-400' :
+                                                        ad.placement_zone === 'banner'   ? 'bg-teal-500/20 text-teal-400' :
+                                                        ad.placement_zone === 'story'    ? 'bg-pink-500/20 text-pink-400' :
+                                                        ad.placement_zone === 'popup'    ? 'bg-orange-500/20 text-orange-400' :
+                                                        'bg-blue-500/20 text-blue-400')}>
+                                                        📍 {ad.placement_zone}
+                                                    </span>
+                                                )}
                                             </div>
                                             {ad.description && <p className="text-xs text-slate-400 mt-0.5 truncate">{ad.description}</p>}
                                         </div>

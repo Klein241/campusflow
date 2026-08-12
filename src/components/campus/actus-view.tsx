@@ -3,10 +3,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    TrendingUp, Plus, Loader2, Heart, Send, X, Share2,
+    TrendingUp, Plus, Loader2, Heart, Send, X, Share2, Gift, Star,
     ShieldCheck, Image as ImageIcon, MessageCircle, ChevronLeft,
     ChevronRight, Globe, Users, UserCheck, Eye, Clock, Repeat, Trash2, Reply,
-    Edit2, MoreVertical, Star
+    Edit2, MoreVertical,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,140 @@ import {
 
 import { updateSkyPoints, fetchSkyPoints, deductSkyPoints } from '@/lib/sky-points-service';
 
+// ── Rewarded Ad Button (🎁 près des stories) ─────────────────────────────
+function RewardedAdButton({ userId, orgId, onSkyUpdate }: {
+    userId: string; orgId: string; onSkyUpdate?: (d: number) => void;
+}) {
+    const [ads, setAds] = useState<any[]>([]);
+    const [open, setOpen] = useState(false);
+    const [current, setCurrent] = useState(0);
+    const [watched, setWatched] = useState(0);
+    const [claimed, setClaimed] = useState<Record<string, boolean>>({});
+    const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    useEffect(() => {
+        supabase.from('advertisements')
+            .select('*')
+            .eq('is_active', true)
+            .eq('placement_zone', 'rewarded')
+            .then(({ data }) => setAds(data || []));
+    }, []);
+
+    useEffect(() => {
+        if (!open) { if (timerRef.current) clearInterval(timerRef.current); setWatched(0); return; }
+        const ad = ads[current];
+        if (!ad) return;
+        setWatched(0);
+        timerRef.current = setInterval(() => {
+            setWatched(s => {
+                const next = s + 1;
+                if (next >= ad.min_watch_seconds && !claimed[ad.id] && userId) {
+                    creditPoints(ad);
+                }
+                return next;
+            });
+        }, 1000);
+        return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    }, [open, current]);
+
+    const creditPoints = async (ad: any) => {
+        if (claimed[ad.id]) return;
+        setClaimed(p => ({ ...p, [ad.id]: true }));
+        const pts = ad.sky_points_reward || 1;
+        // Met à jour réellement en DB
+        for (const table of ['student_profiles', 'teacher_profiles']) {
+            const { data: prof } = await supabase.from(table).select('id, sky_points').eq('id', userId).maybeSingle();
+            if (prof) {
+                await supabase.from(table).update({ sky_points: (prof.sky_points || 0) + pts }).eq('id', userId);
+                break;
+            }
+        }
+        await supabase.from('ad_views').upsert({
+            ad_id: ad.id, user_id: userId, organization_id: orgId,
+            watched_seconds: ad.min_watch_seconds, completed: true, points_awarded: true,
+        }, { onConflict: 'ad_id,user_id' });
+        onSkyUpdate?.(pts);
+        toast.success(`+${pts} Sky Point${pts > 1 ? 's' : ''} gagné ! 🌟`, { description: ad.title, duration: 3000 });
+    };
+
+    if (ads.length === 0) return null;
+    const ad = ads[current];
+
+    return (
+        <>
+            {/* Bouton rond près des stories */}
+            <button onClick={() => setOpen(true)}
+                className="flex-shrink-0 flex flex-col items-center gap-1">
+                <div className="relative w-16 h-16 rounded-full bg-gradient-to-br from-amber-500/30 to-yellow-600/20 border-2 border-amber-500/50 flex items-center justify-center hover:scale-105 transition-transform shadow-lg shadow-amber-500/20">
+                    <Gift className="w-6 h-6 text-amber-400" />
+                    <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-amber-500 text-[9px] font-black text-black flex items-center justify-center">
+                        {ads.length}
+                    </span>
+                </div>
+                <span className="text-[9px] text-amber-400 w-16 text-center font-semibold">Gagner pts</span>
+            </button>
+
+            {/* Modal plein écran */}
+            <AnimatePresence>
+                {open && ad && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] bg-black flex flex-col">
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-4 pt-safe pt-4 pb-3 shrink-0">
+                            <div className="flex items-center gap-2">
+                                <Star className="w-4 h-4 text-amber-400" />
+                                <span className="text-sm font-bold text-white">Pub récompensée</span>
+                                <span className="text-[10px] text-slate-400">{current + 1}/{ads.length}</span>
+                            </div>
+                            <button onClick={() => setOpen(false)}
+                                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                                <X className="w-4 h-4 text-white" />
+                            </button>
+                        </div>
+
+                        {/* Contenu pub */}
+                        <div className="flex-1 overflow-hidden relative">
+                            {ad.media_type === 'video' ? (
+                                <video src={ad.media_url} className="w-full h-full object-cover" autoPlay muted playsInline />
+                            ) : (
+                                <img src={ad.media_url} alt={ad.title} className="w-full h-full object-cover" />
+                            )}
+                            {/* Progression */}
+                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10">
+                                <div className="h-full bg-amber-500 transition-all duration-1000"
+                                    style={{ width: `${Math.min(100, (watched / (ad.min_watch_seconds || 5)) * 100)}%` }} />
+                            </div>
+                            {/* Info overlay */}
+                            <div className="absolute bottom-3 left-3 right-3 bg-black/60 backdrop-blur-sm rounded-2xl px-4 py-3">
+                                <p className="font-bold text-white text-sm">{ad.title}</p>
+                                {ad.description && <p className="text-xs text-slate-300 mt-0.5">{ad.description}</p>}
+                                <div className="flex items-center justify-between mt-2">
+                                    {claimed[ad.id] ? (
+                                        <span className="text-xs font-bold text-amber-400 flex items-center gap-1">
+                                            <Star className="w-3 h-3" />+{ad.sky_points_reward} pts gagnés !
+                                        </span>
+                                    ) : (
+                                        <span className="text-xs text-slate-400">
+                                            Regardez encore {Math.max(0, ad.min_watch_seconds - watched)}s pour gagner{' '}
+                                            <strong className="text-amber-400">+{ad.sky_points_reward} pts</strong>
+                                        </span>
+                                    )}
+                                    {current < ads.length - 1 && claimed[ad.id] && (
+                                        <button onClick={() => { setCurrent(c => c + 1); setWatched(0); }}
+                                            className="text-xs text-amber-400 font-bold">
+                                            Suivante →
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </>
+    );
+}
+
 // ═══════════════════════════════════════════════════════
 // ACTUS VIEW — Actualités + Stories + Comments + Partage
 // ═══════════════════════════════════════════════════════
@@ -33,6 +167,7 @@ interface ActusViewProps {
     userId: string;
     userName: string;
     userRole: string;
+    onSkyUpdate?: (delta: number) => void;
 }
 
 interface PostItem {
@@ -90,7 +225,7 @@ interface StoryCommentItem {
     avatarUrl?: string;
 }
 
-export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusViewProps) {
+export function ActusView({ orgId, orgSlug, userId, userName, userRole, onSkyUpdate }: ActusViewProps) {
     const [posts, setPosts] = useState<PostItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [showNewPost, setShowNewPost] = useState(false);
@@ -767,6 +902,15 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole }: ActusV
                             </div>
                             <span className="text-[9px] text-slate-400 w-16 text-center truncate">Ma story</span>
                         </button>
+                    )}
+
+                    {/* 🎁 Rewarded Ads Button */}
+                    {storyTab === 'active' && (
+                        <RewardedAdButton
+                            userId={userId}
+                            orgId={orgId}
+                            onSkyUpdate={onSkyUpdate}
+                        />
                     )}
                     
                     {/* Story bubbles */}
