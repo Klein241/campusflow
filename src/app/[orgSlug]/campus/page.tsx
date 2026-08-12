@@ -86,22 +86,21 @@ export default function CampusPage() {
             setOrg(o);
             setSession(sess);
             if (sess.sky_points !== undefined) setSkyPoints(sess.sky_points);
-            // Approbation : vérifier le statut depuis inscription_requests ou student_profiles
+            // Approbation : UNIQUEMENT pour les étudiants auto-inscrits via la landing page
+            // Les étudiants créés par l'admin ont approval_status = 'approved' directement
             if (sess.role === 'student') {
-                // Check in student_profiles first
-                const { data: sprof } = await supabase.from('student_profiles')
-                    .select('approval_status').eq('id', sess.profile_id).maybeSingle();
-                if (sprof?.approval_status && sprof.approval_status !== 'approved') {
-                    setApprovalStatus(sprof.approval_status);
-                } else if (!sprof) {
-                    // Check inscription_requests
+                if (sess.approval_status === 'pending' || sess.approval_status === 'info_needed') {
+                    // Étudiant venant d'inscription_requests — vérifier le statut actuel en DB
                     const { data: ir } = await supabase.from('inscription_requests')
                         .select('status, admin_message').eq('id', sess.profile_id).maybeSingle();
                     if (ir && ir.status !== 'approved') {
                         setApprovalStatus(ir.status || 'pending');
                         if (ir.admin_message) setAdminMessage(ir.admin_message);
                     }
+                    // Si ir.status === 'approved' → l'étudiant a été approuvé depuis la dernière connexion
+                    // → on laisse passer (approvalStatus reste null)
                 }
+                // Les étudiants sans approval_status dans la session = créés par admin = accès direct
             }
             // Photo & Sky Points: re-fetch depuis Supabase pour garantir la persistance
             if (sess.photo_url) setPhotoUrl(sess.photo_url);

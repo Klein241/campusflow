@@ -10,18 +10,19 @@ const SESSION_KEY = 'campusflow_session';
 // ── Interface session ──────────────────────────────────────
 export interface CampusSession {
     // Identité vérifiée côté serveur
-    session_token: string;        // token opaque 64 hex chars
+    session_token: string;        // token opaque 64 hex chars (vide pour sessions pending)
     profile_id:    string;        // UUID du profil teacher/student
     role:          'teacher' | 'student' | 'admin';
     org_id:        string;        // UUID de l'organisation
     expires_at:    string;        // ISO string (8h)
 
     // Cache local du profil (non-vérifié côté serveur)
-    first_name?:   string;
-    last_name?:    string;
-    classroom_id?: string;
-    photo_url?:    string | null;
-    sky_points?:   number;
+    first_name?:      string;
+    last_name?:       string;
+    classroom_id?:    string;
+    photo_url?:       string | null;
+    sky_points?:      number;
+    approval_status?: 'pending' | 'approved' | 'rejected' | 'info_needed'; // pour étudiants auto-inscrits
 
     // Timestamp client
     logged_in_at:  string;
@@ -38,7 +39,7 @@ export const SessionManager = {
             if (!raw) return null;
             const session: CampusSession = JSON.parse(raw);
 
-            if (!session.expires_at || !session.session_token) {
+            if (!session.expires_at || !session.profile_id || !session.org_id) {
                 this.clear();
                 return null;
             }
@@ -114,24 +115,27 @@ export function buildSessionFromRpc(
         expires_at:    string;
     },
     profileData: {
-        first_name:    string;
-        last_name:     string;
-        classroom_id?: string;
-        photo_url?:    string | null;
-        sky_points?:   number;
+        first_name:      string;
+        last_name:       string;
+        classroom_id?:   string;
+        photo_url?:      string | null;
+        sky_points?:     number;
+        approval_status?: 'pending' | 'approved' | 'rejected' | 'info_needed';
     }
 ): CampusSession {
     return {
-        session_token: rpcResult.session_token,
-        profile_id:    rpcResult.profile_id,
-        role:          rpcResult.role as CampusSession['role'],
-        org_id:        rpcResult.org_id,
-        expires_at:    rpcResult.expires_at,
-        first_name:    profileData.first_name,
-        last_name:     profileData.last_name,
-        classroom_id:  profileData.classroom_id,
-        photo_url:     profileData.photo_url ?? null,
-        sky_points:    profileData.sky_points ?? 0,
-        logged_in_at:  new Date().toISOString(),
+        session_token:   rpcResult.session_token,
+        profile_id:      rpcResult.profile_id,
+        role:            rpcResult.role as CampusSession['role'],
+        org_id:          rpcResult.org_id,
+        expires_at:      rpcResult.expires_at,
+        first_name:      profileData.first_name,
+        last_name:       profileData.last_name,
+        classroom_id:    profileData.classroom_id,
+        photo_url:       profileData.photo_url ?? null,
+        sky_points:      profileData.sky_points ?? 0,
+        approval_status: profileData.approval_status,
+        logged_in_at:    new Date().toISOString(),
     };
 }
+
