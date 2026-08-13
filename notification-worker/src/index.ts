@@ -2155,7 +2155,8 @@ async function handleInscription(request: Request, env: Env): Promise<Response> 
     try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
 
     const { organization_id, first_name, last_name, phone, access_code, pin_code,
-            birth_date, gender, email, address, classroom_id, filiere_id } = body;
+            birth_date, gender, email, address, classroom_id, filiere_id,
+            nationality, guardian_name, guardian_phone } = body;
 
     if (!organization_id || !first_name || !last_name || !phone || !access_code || !pin_code) {
         return json({ error: 'Champs obligatoires manquants' }, 400);
@@ -2177,12 +2178,15 @@ async function handleInscription(request: Request, env: Env): Promise<Response> 
 
     // 1. Insert dans inscription_requests
     const inscPayload: any = { organization_id, first_name, last_name, phone, access_code, pin_code };
-    if (birth_date)   inscPayload.birth_date   = birth_date;
-    if (gender)       inscPayload.gender        = gender;
-    if (email)        inscPayload.email         = email;
-    if (address)      inscPayload.address       = address;
-    if (classroom_id) inscPayload.classroom_id  = classroom_id;
-    if (filiere_id)   inscPayload.filiere_id    = filiere_id;
+    if (birth_date)      inscPayload.birth_date      = birth_date;
+    if (gender)          inscPayload.gender           = gender;
+    if (email)           inscPayload.email            = email;
+    if (address)         inscPayload.address          = address;
+    if (classroom_id)    inscPayload.classroom_id     = classroom_id;
+    if (filiere_id)      inscPayload.filiere_id       = filiere_id;
+    if (nationality)     inscPayload.nationality      = nationality;
+    if (guardian_name)   inscPayload.guardian_name    = guardian_name;
+    if (guardian_phone)  inscPayload.guardian_phone   = guardian_phone;
 
     const inscRes = await fetch(`${supabaseUrl}/rest/v1/inscription_requests`, {
         method: 'POST', headers, body: JSON.stringify(inscPayload),
@@ -2209,12 +2213,15 @@ async function handleInscription(request: Request, env: Env): Promise<Response> 
         approval_status: 'pending',   // verrouillé jusqu'à validation admin
     };
     // Colonnes optionnelles — uniquement si présentes
-    if (birth_date)   profilePayload.birth_date   = birth_date;
-    if (gender)       profilePayload.gender        = gender;
-    if (email)        profilePayload.email         = email;
-    if (address)      profilePayload.address       = address;
-    if (classroom_id) profilePayload.classroom_id  = classroom_id;
-    if (filiere_id)   profilePayload.filiere_id    = filiere_id;
+    if (birth_date)      profilePayload.birth_date      = birth_date;
+    if (gender)          profilePayload.gender           = gender;
+    if (email)           profilePayload.email            = email;
+    if (address)         profilePayload.address          = address;
+    if (classroom_id)    profilePayload.classroom_id     = classroom_id;
+    if (filiere_id)      profilePayload.filiere_id       = filiere_id;
+    if (nationality)     profilePayload.nationality      = nationality;
+    if (guardian_name)   profilePayload.guardian_name    = guardian_name;
+    if (guardian_phone)  profilePayload.guardian_phone   = guardian_phone;
 
     const profRes = await fetch(`${supabaseUrl}/rest/v1/student_profiles`, {
         method: 'POST',

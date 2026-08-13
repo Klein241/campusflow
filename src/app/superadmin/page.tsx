@@ -1066,6 +1066,7 @@ export default function SuperAdminPage() {
                         {tab === 'email' && (
                             <EmailProvidersPanel
                                 workerUrl="https://campusflow-worker.kleintaptue1.workers.dev"
+                                adminKey={process.env.NEXT_PUBLIC_ADMIN_KEY}
                             />
                         )}
 
