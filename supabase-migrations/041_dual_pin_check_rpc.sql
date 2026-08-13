@@ -1,8 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════════
 -- Migration 041: Dual PIN verification (plain-text + bcrypt) with auto-upgrade
--- Permet la vérification instantanée du PIN pour TOUS les étudiants/enseignants,
--- qu'il soit stocké en clair (inscription landing) ou déjà hashé bcrypt.
--- Auto-upgrade les PINs en clair vers bcrypt lors de la première validation réussie.
+-- Correction : utilise public.session_tokens (et non active_sessions)
 -- ═══════════════════════════════════════════════════════════════════════
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -25,7 +23,7 @@ BEGIN
       AND attempted_at > NOW() - INTERVAL '15 minutes';
 
     IF v_attempt_count >= 5 THEN
-        RAISE EXCEPTION 'Trop de tentatives PIN. Veuillez patienter 15 minutes.'
+        RAISE EXCEPTION 'Too many PIN attempts. Please wait 15 minutes.'
             USING ERRCODE = 'P0001';
     END IF;
 
@@ -38,7 +36,7 @@ BEGIN
         SELECT pin_code INTO v_stored_pin FROM public.student_profiles
         WHERE id = p_profile_id AND (pin_set = TRUE OR pin_code IS NOT NULL);
     ELSE
-        RAISE EXCEPTION 'Role invalide: %', p_role;
+        RAISE EXCEPTION 'Invalid role: %', p_role;
     END IF;
 
     IF v_stored_pin IS NULL OR v_stored_pin = '' THEN
@@ -88,7 +86,7 @@ BEGIN
       AND attempted_at > NOW() - INTERVAL '15 minutes';
 
     IF v_attempt_count >= 5 THEN
-        RAISE EXCEPTION 'Trop de tentatives PIN. Veuillez patienter 15 minutes.'
+        RAISE EXCEPTION 'Too many PIN attempts. Please wait 15 minutes.'
             USING ERRCODE = 'P0001';
     END IF;
 
@@ -103,7 +101,7 @@ BEGIN
         FROM public.student_profiles
         WHERE id = p_profile_id AND (pin_set = TRUE OR pin_code IS NOT NULL);
     ELSE
-        RAISE EXCEPTION 'Role invalide: %', p_role;
+        RAISE EXCEPTION 'Invalid role: %', p_role;
     END IF;
 
     IF v_stored_pin IS NULL OR v_stored_pin = '' THEN
@@ -129,15 +127,15 @@ BEGIN
         RETURN NULL;
     END IF;
 
-    -- Générer session_token (64 chars hex)
-    v_token := encode(gen_random_bytes(32), 'hex');
-    v_expires_at := NOW() + INTERVAL '8 hours';
+    -- Invalider les anciennes sessions actives dans session_tokens
+    UPDATE public.session_tokens
+    SET is_active = FALSE
+    WHERE profile_id = p_profile_id AND is_active = TRUE;
 
-    INSERT INTO public.active_sessions (
-        session_token, profile_id, role, organization_id, expires_at
-    ) VALUES (
-        v_token, p_profile_id, p_role, v_org_id, v_expires_at
-    );
+    -- Créer la nouvelle session
+    INSERT INTO public.session_tokens (profile_id, profile_type, organization_id)
+    VALUES (p_profile_id, p_role, v_org_id)
+    RETURNING token, expires_at INTO v_token, v_expires_at;
 
     RETURN json_build_object(
         'session_token', v_token,
