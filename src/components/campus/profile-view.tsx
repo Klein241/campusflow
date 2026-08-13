@@ -64,32 +64,64 @@ export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgNam
         (async () => {
             setLoading(true);
             const table = userRole === 'teacher' ? 'teacher_profiles' : 'student_profiles';
-            const { data: p } = await supabase.from(table).select('*').eq('id', userId).single();
+            let { data: p } = await supabase.from(table).select('*').eq('id', userId).maybeSingle();
+
+            // Fallback pour étudiant si p non trouvé par ID
+            if (!p && userRole === 'student') {
+                const sess = SessionManager.get();
+                if (sess?.access_code) {
+                    const { data: spByCode } = await supabase.from('student_profiles').select('*').eq('access_code', sess.access_code).maybeSingle();
+                    if (spByCode) p = spByCode;
+                }
+                if (!p) {
+                    const { data: ir } = await supabase.from('inscription_requests').select('*').eq('id', userId).maybeSingle();
+                    if (ir) {
+                        p = {
+                            id:              ir.id,
+                            first_name:      ir.first_name,
+                            last_name:       ir.last_name,
+                            phone:           ir.phone,
+                            email:           ir.email,
+                            birth_date:      ir.birth_date,
+                            gender:          ir.gender,
+                            classroom_id:    ir.classroom_id,
+                            filiere_id:      ir.filiere_id,
+                            sky_points:      100,
+                            access_code:     ir.access_code,
+                            nationality:     ir.nationality,
+                            guardian_name:   ir.guardian_name,
+                            guardian_phone:  ir.guardian_phone,
+                        };
+                    }
+                }
+            }
+
             setProfile(p);
 
-            if (p?.classroom_id) {
-                const { data: cls } = await supabase.from('classrooms').select('*, filieres:filiere_id(*)').eq('id', p.classroom_id).single();
+            const activeClassroomId = p?.classroom_id;
+            if (activeClassroomId) {
+                const { data: cls } = await supabase.from('classrooms').select('*, filieres:filiere_id(*)').eq('id', activeClassroomId).maybeSingle();
                 setClassroom(cls);
                 if (cls?.filieres) setFiliere(cls.filieres);
 
                 const { data: subs } = await supabase.from('subjects').select('*, teacher_profiles:teacher_id(first_name, last_name)')
-                    .eq('classroom_id', p.classroom_id);
+                    .eq('classroom_id', activeClassroomId);
                 setSubjects(subs || []);
 
                 const { data: grs } = await supabase.from('grades')
                     .select('*, evaluations:evaluation_id(title, max_score, type, subject_id, subjects:subject_id(name))')
-                    .eq('student_id', userId);
+                    .eq('student_id', p?.id || userId);
                 setGrades(grs || []);
             }
 
             const { data: pays } = await supabase.from('school_payments').select('*')
-                .eq('student_id', userId);
+                .eq('student_id', p?.id || userId);
             setPayments(pays || []);
 
             // Load marketplace products by this user
             setLoadingProducts(true);
             const { data: products } = await supabase.from('products')
-                .select('*').eq('seller_id', userId).order('created_at', { ascending: false });
+                .select('*').eq('seller_id', p?.id || userId).order('created_at', { ascending: false });
             setMyProducts(products || []);
             setLoadingProducts(false);
 

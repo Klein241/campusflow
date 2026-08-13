@@ -378,6 +378,20 @@ function AdminPageContent() {
 
         const channel = supabase.channel(`realtime_admin_inscriptions_${org.id}`)
             .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'inscription_requests',
+            }, (payload) => {
+                const created = payload.new as any;
+                if (!created || created.organization_id !== org.id) return;
+                // Ajouter la nouvelle demande en tête de liste
+                setInscRequests(prev => [created, ...prev]);
+                toast.success(
+                    `📋 Nouvelle inscription : ${created.first_name} ${created.last_name}`,
+                    { duration: 6000, icon: '🎓' }
+                );
+            })
+            .on('postgres_changes', {
                 event: 'UPDATE',
                 schema: 'public',
                 table: 'inscription_requests',
@@ -1265,18 +1279,21 @@ ${bodyHtml}
                                                             // 1. Mettre à jour inscription_requests
                                                             await supabase.from('inscription_requests').update({ status: 'approved', admin_message: inscMsg || null }).eq('id', req.id);
                                                             
-                                                            // 2. Mettre à jour student_profiles
-                                                            const { data: updatedSp } = await supabase.from('student_profiles')
-                                                                .update({ approval_status: 'approved' })
-                                                                .or(`access_code.eq.${req.access_code},id.eq.${req.id},phone.eq.${req.phone || ''}`)
-                                                                .eq('organization_id', org.id)
-                                                                .select();
+                                                            // 2. Mettre à jour student_profiles par access_code
+                                                            let updatedSp: any[] | null = null;
+                                                            if (req.access_code) {
+                                                                const res = await supabase.from('student_profiles')
+                                                                    .update({ approval_status: 'approved' })
+                                                                    .eq('access_code', req.access_code)
+                                                                    .eq('organization_id', org.id)
+                                                                    .select();
+                                                                updatedSp = res.data;
+                                                            }
 
-                                                            // 3. Si student_profile absent, le créer immédiatement
+                                                            // 3. Si student_profile absent, le créer immédiatement avec les infos complètes
                                                             if (!updatedSp || updatedSp.length === 0) {
                                                                 const mat = `STU${Date.now().toString(36).toUpperCase()}`;
                                                                 await supabase.from('student_profiles').insert({
-                                                                    id:              req.id,
                                                                     organization_id: org.id,
                                                                     first_name:      req.first_name,
                                                                     last_name:       req.last_name,
@@ -1293,6 +1310,10 @@ ${bodyHtml}
                                                                     pin_set:         true,
                                                                     approval_status: 'approved',
                                                                     matricule:       mat,
+                                                                    nationality:     req.nationality || null,
+                                                                    guardian_name:   req.guardian_name || null,
+                                                                    guardian_phone:  req.guardian_phone || null,
+                                                                    is_active:       true,
                                                                 });
                                                             }
 

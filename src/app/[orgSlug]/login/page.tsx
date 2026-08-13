@@ -267,29 +267,36 @@ export default function LoginPage() {
             // Fallback : chercher dans inscription_requests (inscription via landing page)
             const { data: inscReq } = await supabase
                 .from('inscription_requests')
-                .select('id, first_name, last_name, organization_id, access_code, pin_code, status, classroom_id')
+                .select('*')
                 .eq('organization_id', org.id)
                 .eq('access_code', code)
-                .single();
+                .maybeSingle();
 
             if (inscReq) {
-                const profile: UserProfile = {
-                    id:                     inscReq.id,
-                    first_name:             inscReq.first_name,
-                    last_name:              inscReq.last_name,
-                    role:                   'student',
-                    pin_set:                true,
-                    organization_id:        inscReq.organization_id,
-                    classroom_id:           inscReq.classroom_id,
-                    approval_status:        inscReq.status || 'pending',
-                    is_inscription_request: true,
-                    insc_pin_code:          inscReq.pin_code,  // PIN brut pour vérification
-                };
-                setUserProfile(profile);
-                setMode('pin_verify');
-                setTimeout(() => pinRefs[0].current?.focus(), 100);
-                setSaving(false);
-                return;
+                // Upsert via RPC server-side : le PIN est hashé bcrypt côté Postgres
+                const { data: spRows } = await supabase.rpc('upsert_student_from_inscription', {
+                    p_access_code: code,
+                    p_org_id:      org.id,
+                });
+                const sp = Array.isArray(spRows) ? spRows[0] : spRows;
+
+                if (sp) {
+                    const profile: UserProfile = {
+                        id:              sp.id,
+                        first_name:      sp.first_name,
+                        last_name:       sp.last_name,
+                        role:            'student',
+                        pin_set:         sp.pin_set ?? true,
+                        organization_id: sp.organization_id,
+                        classroom_id:    sp.classroom_id,
+                        approval_status: sp.approval_status || inscReq.status || 'pending',
+                    };
+                    setUserProfile(profile);
+                    setMode('pin_verify');
+                    setTimeout(() => pinRefs[0].current?.focus(), 100);
+                    setSaving(false);
+                    return;
+                }
             }
 
             toast.error('Code d\'accès invalide');

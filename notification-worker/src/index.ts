@@ -2199,31 +2199,41 @@ async function handleInscription(request: Request, env: Env): Promise<Response> 
         }
     }
 
-    // 2. Créer immédiatement le student_profile pour accès instantané
+    // 2. Créer immédiatement le student_profile
+    const mat = `STU-${Date.now().toString(36).toUpperCase()}`;
     const profilePayload: any = {
         organization_id,
         first_name,
         last_name,
-        phone,
+        phone:           phone || null,
         access_code,
-        pin_code,
+        pin_code:        pin_code || null,
         sky_points:      100,
         is_active:       true,
         pin_set:         true,
-        approval_status: 'pending',   // verrouillé jusqu'à validation admin
+        approval_status: 'pending',   // en attente de validation admin
+        matricule:       mat,
     };
-    // Colonnes optionnelles — uniquement si présentes
-    if (birth_date)      profilePayload.birth_date      = birth_date;
-    if (gender)          profilePayload.gender           = gender;
-    if (email)           profilePayload.email            = email;
-    if (address)         profilePayload.address          = address;
-    if (classroom_id)    profilePayload.classroom_id     = classroom_id;
-    if (filiere_id)      profilePayload.filiere_id       = filiere_id;
-    if (nationality)     profilePayload.nationality      = nationality;
-    if (guardian_name)   profilePayload.guardian_name    = guardian_name;
-    if (guardian_phone)  profilePayload.guardian_phone   = guardian_phone;
+    if (birth_date) {
+        profilePayload.birth_date    = birth_date;
+        profilePayload.date_of_birth = birth_date;
+    }
+    if (gender)          profilePayload.gender          = gender;
+    if (email)           profilePayload.email           = email;
+    if (address)         profilePayload.address         = address;
+    if (classroom_id)    profilePayload.classroom_id    = classroom_id;
+    if (filiere_id)      profilePayload.filiere_id      = filiere_id;
+    if (nationality)     profilePayload.nationality     = nationality;
+    if (guardian_name) {
+        profilePayload.guardian_name = guardian_name;
+        profilePayload.parent_name   = guardian_name;
+    }
+    if (guardian_phone) {
+        profilePayload.guardian_phone = guardian_phone;
+        profilePayload.parent_phone   = guardian_phone;
+    }
 
-    const profRes = await fetch(`${supabaseUrl}/rest/v1/student_profiles`, {
+    let profRes = await fetch(`${supabaseUrl}/rest/v1/student_profiles`, {
         method: 'POST',
         headers: { ...headers, 'Prefer': 'resolution=ignore-duplicates,return=representation' },
         body: JSON.stringify(profilePayload),
@@ -2232,8 +2242,38 @@ async function handleInscription(request: Request, env: Env): Promise<Response> 
     let profileCreated = true;
     let profileError   = '';
     if (!profRes.ok) {
-        profileError   = await profRes.text();
-        profileCreated = profileError.includes('23505'); // déjà existant = OK
+        profileError = await profRes.text();
+        if (!profileError.includes('23505')) {
+            // Fallback: si échec à cause d'une colonne inexistante, réessayer avec les champs de base uniquement
+            const basePayload = {
+                organization_id,
+                first_name,
+                last_name,
+                phone:           phone || null,
+                access_code,
+                pin_code:        pin_code || null,
+                sky_points:      100,
+                is_active:       true,
+                pin_set:         true,
+                approval_status: 'pending',
+                matricule:       mat,
+            };
+            const retryRes = await fetch(`${supabaseUrl}/rest/v1/student_profiles`, {
+                method: 'POST',
+                headers: { ...headers, 'Prefer': 'resolution=ignore-duplicates,return=representation' },
+                body: JSON.stringify(basePayload),
+            });
+            if (retryRes.ok) {
+                profileCreated = true;
+                profileError   = '';
+            } else {
+                const retryErr = await retryRes.text();
+                profileCreated = retryErr.includes('23505');
+                profileError   = retryErr;
+            }
+        } else {
+            profileCreated = true;
+        }
     }
 
     return json({

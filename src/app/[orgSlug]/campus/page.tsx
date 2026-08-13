@@ -89,54 +89,90 @@ export default function CampusPage() {
             setOrg(o);
             setSession(sess);
             if (sess.sky_points !== undefined) setSkyPoints(sess.sky_points);
-            // Approbation : UNIQUEMENT pour les étudiants auto-inscrits via la landing page
+            // Approbation & profil étudiant
             if (sess.role === 'student') {
-                // Fetch status direct depuis student_profiles
-                const { data: sprof } = await supabase.from('student_profiles')
-                    .select('approval_status, access_code').eq('id', sess.profile_id).maybeSingle();
-                
-                if (sprof?.access_code) setUserAccessCode(sprof.access_code);
-                let currentStatus = sprof?.approval_status;
+                // 1. Chercher student_profiles par profile_id ou access_code
+                let { data: sprof } = await supabase.from('student_profiles')
+                    .select('id, approval_status, access_code, photo_url, sky_points')
+                    .eq('id', sess.profile_id)
+                    .maybeSingle();
 
-                // Si pas approved en local, vérifier dans inscription_requests par access_code (clé fiable)
-                if (currentStatus !== 'approved' && sprof?.access_code) {
-                    const { data: ir } = await supabase.from('inscription_requests')
-                        .select('status, admin_message')
-                        .eq('access_code', sprof.access_code)
+                if (!sprof && sess.access_code) {
+                    const { data: spByCode } = await supabase.from('student_profiles')
+                        .select('id, approval_status, access_code, photo_url, sky_points')
+                        .eq('access_code', sess.access_code)
                         .maybeSingle();
+                    if (spByCode) {
+                        sprof = spByCode;
+                        SessionManager.patch({ profile_id: spByCode.id });
+                    }
+                }
 
-                    if (ir?.status === 'approved') {
+                let currentStatus: string | null = sprof?.approval_status || null;
+                let accessCode = sprof?.access_code || sess.access_code || '';
+
+                // 2. Vérifier aussi dans inscription_requests
+                const { data: ir } = await supabase.from('inscription_requests')
+                    .select('status, admin_message, access_code')
+                    .or(accessCode ? `access_code.eq.${accessCode},id.eq.${sess.profile_id}` : `id.eq.${sess.profile_id}`)
+                    .maybeSingle();
+
+                if (ir) {
+                    if (!accessCode && ir.access_code) accessCode = ir.access_code;
+                    if (ir.status === 'approved') {
                         currentStatus = 'approved';
-                        // Auto-sync la DB student_profiles
-                        await supabase.from('student_profiles').update({ approval_status: 'approved' }).eq('id', sess.profile_id);
-                    } else if (ir?.status) {
+                        if (sprof && sprof.approval_status !== 'approved') {
+                            await supabase.from('student_profiles').update({ approval_status: 'approved' }).eq('id', sprof.id);
+                        }
+                    } else if (ir.status) {
                         currentStatus = ir.status;
-                        // Charger admin_message si présent
                         if (ir.admin_message) setAdminMessage(ir.admin_message);
                     }
                 }
 
+                if (accessCode) setUserAccessCode(accessCode);
+
                 if (currentStatus && currentStatus !== 'approved') {
                     setApprovalStatus(currentStatus);
-                } else {
+                } else if (currentStatus === 'approved') {
                     setApprovalStatus(null);
                     SessionManager.patch({ approval_status: 'approved' });
+                } else {
+                    // Si le profil existe et n'a pas d'approval_status explicite (ex: créés par admin), il est approved par défaut
+                    if (sprof && (!ir || !ir.status)) {
+                        setApprovalStatus(null);
+                        SessionManager.patch({ approval_status: 'approved' });
+                    } else {
+                        // Étudiant auto-inscrit non trouvé en DB -> verrouiller en pending
+                        setApprovalStatus('pending');
+                    }
                 }
-            }
-            // Photo & Sky Points: re-fetch depuis Supabase pour garantir la persistance
-            if (sess.photo_url) setPhotoUrl(sess.photo_url);
-            const table = sess.role === 'student' ? 'student_profiles' : 'teacher_profiles';
-            const { data: prof } = await supabase.from(table)
-                .select('photo_url, sky_points').eq('id', sess.profile_id).single();
-            if (prof) {
-                if (prof.photo_url) setPhotoUrl(prof.photo_url);
-                if (prof.sky_points !== undefined) setSkyPoints(prof.sky_points ?? 100);
-                try {
-                    SessionManager.patch({
-                        photo_url:  prof.photo_url  || sess.photo_url,
-                        sky_points: prof.sky_points ?? sess.sky_points,
-                    });
-                } catch {}
+
+                if (sprof) {
+                    if (sprof.photo_url) setPhotoUrl(sprof.photo_url);
+                    setSkyPoints(sprof.sky_points ?? 100);
+                    try {
+                        SessionManager.patch({
+                            photo_url:  sprof.photo_url  || sess.photo_url,
+                            sky_points: sprof.sky_points ?? sess.sky_points ?? 100,
+                        });
+                    } catch {}
+                }
+            } else {
+                // Professeur / Admin
+                if (sess.photo_url) setPhotoUrl(sess.photo_url);
+                const { data: prof } = await supabase.from('teacher_profiles')
+                    .select('photo_url, sky_points').eq('id', sess.profile_id).maybeSingle();
+                if (prof) {
+                    if (prof.photo_url) setPhotoUrl(prof.photo_url);
+                    if (prof.sky_points !== undefined) setSkyPoints(prof.sky_points ?? 100);
+                    try {
+                        SessionManager.patch({
+                            photo_url:  prof.photo_url  || sess.photo_url,
+                            sky_points: prof.sky_points ?? sess.sky_points ?? 100,
+                        });
+                    } catch {}
+                }
             }
             setLoading(false);
         })();
