@@ -87,20 +87,36 @@ export default function CampusPage() {
             setSession(sess);
             if (sess.sky_points !== undefined) setSkyPoints(sess.sky_points);
             // Approbation : UNIQUEMENT pour les étudiants auto-inscrits via la landing page
-            // Les étudiants créés par l'admin ont approval_status = 'approved' directement
             if (sess.role === 'student') {
-                if (sess.approval_status === 'pending' || sess.approval_status === 'info_needed') {
-                    // Étudiant venant d'inscription_requests — vérifier le statut actuel en DB
+                // Fetch status direct depuis student_profiles
+                const { data: sprof } = await supabase.from('student_profiles')
+                    .select('approval_status, access_code').eq('id', sess.profile_id).maybeSingle();
+                
+                let currentStatus = sprof?.approval_status;
+
+                // Si pas approved en local, vérifier si inscription_requests a été approuvé par l'admin
+                if (currentStatus !== 'approved' && (sprof?.access_code || sess.profile_id)) {
                     const { data: ir } = await supabase.from('inscription_requests')
-                        .select('status, admin_message').eq('id', sess.profile_id).maybeSingle();
-                    if (ir && ir.status !== 'approved') {
-                        setApprovalStatus(ir.status || 'pending');
+                        .select('status, admin_message')
+                        .or(`id.eq.${sess.profile_id},access_code.eq.${sprof?.access_code || ''}`)
+                        .maybeSingle();
+
+                    if (ir?.status === 'approved') {
+                        currentStatus = 'approved';
+                        // Auto-sync la DB student_profiles
+                        await supabase.from('student_profiles').update({ approval_status: 'approved' }).eq('id', sess.profile_id);
+                    } else if (ir?.status) {
+                        currentStatus = ir.status;
                         if (ir.admin_message) setAdminMessage(ir.admin_message);
                     }
-                    // Si ir.status === 'approved' → l'étudiant a été approuvé depuis la dernière connexion
-                    // → on laisse passer (approvalStatus reste null)
                 }
-                // Les étudiants sans approval_status dans la session = créés par admin = accès direct
+
+                if (currentStatus && currentStatus !== 'approved') {
+                    setApprovalStatus(currentStatus);
+                } else {
+                    setApprovalStatus(null);
+                    SessionManager.patch({ approval_status: 'approved' });
+                }
             }
             // Photo & Sky Points: re-fetch depuis Supabase pour garantir la persistance
             if (sess.photo_url) setPhotoUrl(sess.photo_url);
