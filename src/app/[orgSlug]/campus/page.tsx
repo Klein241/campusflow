@@ -6,6 +6,7 @@ import { useOrgSlug } from '@/hooks/use-org-slug';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, BookOpen, X, Clock, AlertTriangle, CheckCircle, FileText, Upload, Send } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 import { SessionManager, type CampusSession } from '@/lib/session';
 import { CampusBottomNav, type CampusTab } from '@/components/campus/campus-bottom-nav';
 import { ActusView } from '@/components/campus/actus-view';
@@ -60,6 +61,8 @@ export default function CampusPage() {
     const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
     const [adminMessage, setAdminMessage] = useState<string>('');
     const [docFile, setDocFile] = useState<File | null>(null);
+    const [studentTextResponse, setStudentTextResponse] = useState<string>('');
+    const [userAccessCode, setUserAccessCode] = useState<string>('');
     const [sendingDoc, setSendingDoc] = useState(false);
 
     // Push notifications — auto-subscribe after login
@@ -92,6 +95,7 @@ export default function CampusPage() {
                 const { data: sprof } = await supabase.from('student_profiles')
                     .select('approval_status, access_code').eq('id', sess.profile_id).maybeSingle();
                 
+                if (sprof?.access_code) setUserAccessCode(sprof.access_code);
                 let currentStatus = sprof?.approval_status;
 
                 // Si pas approved en local, vérifier si inscription_requests a été approuvé par l'admin
@@ -136,6 +140,38 @@ export default function CampusPage() {
             setLoading(false);
         })();
     }, [orgSlug, router]);
+
+    // ── SUPABASE REALTIME : Écoute instantanée des messages admin pour l'étudiant ──
+    useEffect(() => {
+        if (!session || session.role !== 'student') return;
+
+        const channel = supabase.channel(`realtime_student_approval_${session.profile_id}`)
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'inscription_requests',
+            }, (payload) => {
+                const updatedReq = payload.new as any;
+                if (!updatedReq) return;
+                // Match par profile_id ou access_code
+                if (updatedReq.id === session.profile_id || (userAccessCode && updatedReq.access_code === userAccessCode)) {
+                    if (updatedReq.status === 'approved') {
+                        setApprovalStatus(null);
+                        SessionManager.patch({ approval_status: 'approved' });
+                        toast.success('🎉 Votre inscription a été approuvée par l\'administration ! Bienvenue !');
+                    } else if (updatedReq.status) {
+                        setApprovalStatus(updatedReq.status);
+                        if (updatedReq.admin_message) {
+                            setAdminMessage(updatedReq.admin_message);
+                            toast.info(`📋 Message de l'admin : "${updatedReq.admin_message}"`);
+                        }
+                    }
+                }
+            })
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, [session, userAccessCode]);
 
     // Auto-subscribe push : si permission déjà accordée → subscribe silencieusement
     // Si permission 'default' → montrer le banner après 5s
@@ -287,22 +323,47 @@ export default function CampusPage() {
 
     // ── Modal approbation en attente ──────────────────────────────────────
     const sendDocument = async () => {
-        if (!docFile || !session) return;
+        if ((!docFile && !studentTextResponse.trim()) || !session) {
+            toast.error('Veuillez joindre un document ou écrire un message de réponse.');
+            return;
+        }
         setSendingDoc(true);
         try {
-            const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'https://campusflow-worker.kleintaptue1.workers.dev';
-            const fd = new FormData();
-            fd.append('file', docFile);
-            fd.append('folder', 'inscriptions');
-            const up = await fetch(`${workerUrl}/api/r2/upload`, { method: 'POST', body: fd });
-            const { url } = await up.json();
-            // Mettre à jour inscription_request avec l'URL du document
+            let uploadedUrl: string | null = null;
+            if (docFile) {
+                const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'https://campusflow-worker.kleintaptue1.workers.dev';
+                const fd = new FormData();
+                fd.append('file', docFile);
+                fd.append('folder', 'inscriptions');
+                const up = await fetch(`${workerUrl}/api/r2/upload`, { method: 'POST', body: fd });
+                const resData = await up.json();
+                uploadedUrl = resData.url || null;
+            }
+
+            const updateData: any = {
+                status: 'pending', // Repasser en pending pour re-traitement par l'admin
+                updated_at: new Date().toISOString(),
+            };
+            if (uploadedUrl) updateData.document_url = uploadedUrl;
+            if (studentTextResponse.trim()) updateData.student_response = studentTextResponse.trim();
+
+            // Mettre à jour inscription_requests par id OU access_code
             await supabase.from('inscription_requests')
-                .update({ document_url: url })
+                .update(updateData)
+                .or(`id.eq.${session.profile_id},access_code.eq.${userAccessCode || ''}`);
+
+            // Synchro status dans student_profiles
+            await supabase.from('student_profiles')
+                .update({ approval_status: 'pending' })
                 .eq('id', session.profile_id);
+
             setDocFile(null);
-            alert('Document envoyé avec succès ! L\'administration va le vérifier.');
-        } catch { alert('Erreur lors de l\'envoi du document.'); }
+            setStudentTextResponse('');
+            setApprovalStatus('pending');
+            toast.success('✅ Pièce justificative et réponse envoyées ! Votre dossier a été ré-examine par l\'admin.');
+        } catch (e: any) {
+            toast.error('Erreur lors de l\'envoi : ' + e.message);
+        }
         setSendingDoc(false);
     };
 
@@ -370,7 +431,7 @@ export default function CampusPage() {
                         {adminMessage && (
                             <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-5">
                                 <p className="text-xs text-slate-400 mb-1 font-semibold uppercase tracking-wider">Message de l'administration</p>
-                                <p className="text-sm text-white">{adminMessage}</p>
+                                <p className="text-sm text-white font-medium">{adminMessage}</p>
                             </div>
                         )}
 
@@ -392,24 +453,36 @@ export default function CampusPage() {
                             </div>
                         </div>
 
-                        {/* Upload document si info_needed */}
+                        {/* Zone réponse & document si info_needed */}
                         {approvalStatus === 'info_needed' && (
-                            <div className="space-y-3 mb-5">
-                                <label className="block">
-                                    <div className="flex items-center gap-2 text-xs text-slate-400 mb-2 font-semibold uppercase tracking-wider">
-                                        <Upload className="w-3 h-3" />Envoyer un document
+                            <div className="space-y-4 mb-5 pt-3 border-t border-white/10">
+                                <div>
+                                    <label className="block text-xs font-semibold text-blue-300 uppercase tracking-wider mb-1">
+                                        💬 Votre message de réponse / correction :
+                                    </label>
+                                    <textarea
+                                        value={studentTextResponse}
+                                        onChange={e => setStudentTextResponse(e.target.value)}
+                                        placeholder="Ex: J'ai corrigé mon âge (15/03/2004) et joint mon acte de naissance en pièce..."
+                                        rows={3}
+                                        className="w-full bg-black/40 border border-white/15 rounded-xl p-3 text-xs text-white resize-none focus:border-blue-400 outline-none"
+                                    />
+                                </div>
+
+                                <div>
+                                    <div className="flex items-center gap-2 text-xs text-blue-300 font-semibold uppercase tracking-wider mb-2">
+                                        <Upload className="w-3.5 h-3.5" /> Joindre une pièce justificative (CNI, Permis, Acte) :
                                     </div>
-                                    <div className="relative">
-                                        <input type="file" accept=".pdf,.jpg,.jpeg,.png"
-                                            onChange={e => setDocFile(e.target.files?.[0] || null)}
-                                            className="w-full text-sm text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-blue-600/20 file:text-blue-300 file:font-semibold hover:file:bg-blue-600/30 cursor-pointer" />
-                                    </div>
+                                    <input type="file" accept=".pdf,.jpg,.jpeg,.png"
+                                        onChange={e => setDocFile(e.target.files?.[0] || null)}
+                                        className="w-full text-xs text-slate-300 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-blue-600/30 file:text-blue-200 file:font-semibold hover:file:bg-blue-600/40 cursor-pointer" />
                                     {docFile && <p className="text-xs text-blue-400 mt-1 truncate">📎 {docFile.name}</p>}
-                                </label>
-                                <button onClick={sendDocument} disabled={!docFile || sendingDoc}
-                                    className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm font-bold flex items-center justify-center gap-2 transition-all">
+                                </div>
+
+                                <button onClick={sendDocument} disabled={(!docFile && !studentTextResponse.trim()) || sendingDoc}
+                                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-sm font-bold text-white flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-600/25">
                                     {sendingDoc ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                                    {sendingDoc ? 'Envoi...' : 'Envoyer le document'}
+                                    {sendingDoc ? 'Transmission en cours...' : 'Envoyer ma réponse à l\'administration'}
                                 </button>
                             </div>
                         )}

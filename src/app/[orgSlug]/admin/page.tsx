@@ -364,6 +364,37 @@ function AdminPageContent() {
         };
     }, [orgSlug]);
 
+    // ── SUPABASE REALTIME : Écoute des réponses des étudiants aux demandes d'info ──
+    useEffect(() => {
+        if (!org?.id) return;
+
+        const channel = supabase.channel(`realtime_admin_inscriptions_${org.id}`)
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'inscription_requests',
+            }, (payload) => {
+                const updated = payload.new as any;
+                if (!updated || updated.organization_id !== org.id) return;
+
+                // Mettre à jour la liste locale
+                setInscRequests(prev => prev.map((r: any) =>
+                    r.id === updated.id ? { ...r, ...updated } : r
+                ));
+
+                // Notifier l'admin si l'étudiant a envoyé une réponse
+                if (updated.student_response && updated.status === 'pending') {
+                    toast.success(
+                        `📩 ${updated.first_name} ${updated.last_name} a répondu à votre demande !`,
+                        { duration: 6000, icon: '💬' }
+                    );
+                }
+            })
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, [org?.id]);
+
     if (loading || !authChecked) return <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center"><Loader2 className="w-8 h-8 text-teal-400 animate-spin" /></div>;
     if (!isAuthorized) return <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center text-white"><div className="text-center"><h1 className="text-2xl font-black mb-2">🔒 Accès refusé</h1><p className="text-slate-400 text-sm mb-4">Vous devez être connecté en tant que propriétaire de cet établissement.</p><button onClick={() => router.push(`/${orgSlug}/login`)} className="px-4 py-2 bg-indigo-600 rounded-xl text-sm hover:bg-indigo-500 transition">Se connecter</button></div></div>;
     if (!org) return <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center text-white"><h1 className="text-2xl font-black">Introuvable</h1></div>;
@@ -1186,10 +1217,27 @@ ${bodyHtml}
                                                                 <FileText className="w-3.5 h-3.5" />Voir le document joint
                                                             </a>
                                                         )}
+
+                                                        {/* Réponse de l'étudiant */}
+                                                        {req.student_response && (
+                                                            <div className="mt-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                                                                <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
+                                                                    💬 Réponse de l'étudiant :
+                                                                </p>
+                                                                <p className="text-xs text-white leading-relaxed">{req.student_response}</p>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    <span className={`text-xs px-2.5 py-1 rounded-full font-bold shrink-0 ${
-                                                        req.status === 'pending' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                                                    }`}>{req.status === 'pending' ? '⏳ En attente' : '📋 Infos requises'}</span>
+                                                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                                        <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
+                                                            req.status === 'pending' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                                                        }`}>{req.status === 'pending' ? '⏳ En attente' : '📋 Infos requises'}</span>
+                                                        {req.student_response && (
+                                                            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 animate-pulse">
+                                                                🔔 Réponse reçue
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
 
                                                 {/* Zone message admin */}
