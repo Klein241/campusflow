@@ -532,6 +532,26 @@ function AdminPageContent() {
     const assignTeacherToSubject = async (subId: string, teacherId: string | null) => { const { error } = await supabase.from('subjects').update({ teacher_id: teacherId }).eq('id', subId); if (error) { toast.error(error.message); return; } setSubs(p => p.map(s => s.id === subId ? { ...s, teacher_id: teacherId } : s)); toast.success('Professeur assigné ✅'); };
     const deleteTeacher = async (id: string) => { if (!confirm('Supprimer ce professeur ?')) return; await supabase.from('teacher_profiles').delete().eq('id', id); setTeachers(p => p.filter(t => t.id !== id)); toast.success('Professeur supprimé'); };
     const deleteStudent = async (id: string) => { if (!confirm('Supprimer cet étudiant ?')) return; await supabase.from('student_profiles').delete().eq('id', id); setStudents(p => p.filter(s => s.id !== id)); toast.success('Étudiant supprimé'); };
+    const resetTeacherPin = async (id: string, name: string) => {
+        if (!confirm(`Réinitialiser le PIN de ${name} ? Le professeur créera un nouveau PIN à sa prochaine connexion.`)) return;
+        try {
+            const { error } = await supabase.from('teacher_profiles').update({ pin_set: false, pin_code: null }).eq('id', id);
+            if (error) throw error;
+            setTeachers(p => p.map(t => t.id === id ? { ...t, pin_set: false } : t));
+            toast.success(`🔑 PIN de ${name} réinitialisé avec succès !`);
+        } catch (e: any) { toast.error(e.message); }
+    };
+    const resetStudentPin = async (id: string, accessCode: string, name: string) => {
+        if (!confirm(`Réinitialiser le PIN de ${name} ? L'étudiant créera un nouveau PIN à sa prochaine connexion.`)) return;
+        try {
+            await supabase.from('student_profiles').update({ pin_set: false, pin_code: null }).eq('id', id);
+            if (accessCode) {
+                await supabase.from('inscription_requests').update({ pin_code: null }).eq('access_code', accessCode);
+            }
+            setStudents(p => p.map(s => s.id === id ? { ...s, pin_set: false } : s));
+            toast.success(`🔑 PIN de ${name} réinitialisé avec succès !`);
+        } catch (e: any) { toast.error(e.message); }
+    };
     const saveSettings = async () => {
         setSSavingSettings(true);
         try {
@@ -1115,14 +1135,19 @@ ${bodyHtml}
                                                         {subs.filter(s => !s.teacher_id).map(s => <option key={s.id} value={s.id} className="bg-slate-900">{s.name} ({cls.find(c => c.id === s.classroom_id)?.name})</option>)}
                                                     </select>
 
-                                                    {t.access_code && (
-                                                        <div className="flex items-center justify-between bg-black/40 px-3 py-1.5 rounded-xl border border-white/5">
-                                                            <span className="text-[10px] text-slate-500 uppercase font-semibold">Code d'accès</span>
-                                                            <button onClick={() => { navigator.clipboard.writeText(t.access_code); toast.success('Code copié !'); }} className="text-xs font-mono font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
-                                                                {t.access_code} <Copy className="w-3 h-3" />
-                                                            </button>
-                                                        </div>
-                                                    )}
+                                                    <div className="flex items-center gap-2">
+                                                        {t.access_code && (
+                                                            <div className="flex-1 flex items-center justify-between bg-black/40 px-3 py-1.5 rounded-xl border border-white/5">
+                                                                <span className="text-[10px] text-slate-500 uppercase font-semibold">Code</span>
+                                                                <button onClick={() => { navigator.clipboard.writeText(t.access_code); toast.success('Code copié !'); }} className="text-xs font-mono font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
+                                                                    {t.access_code} <Copy className="w-3 h-3" />
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                        <button onClick={() => resetTeacherPin(t.id, `${t.first_name} ${t.last_name}`)} className="text-[11px] px-2.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 font-medium flex items-center gap-1 transition" title="Réinitialiser le PIN">
+                                                            <RefreshCw className="w-3 h-3" /> Reset PIN
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         );
@@ -1357,14 +1382,19 @@ ${bodyHtml}
                                                     <Printer className="w-3.5 h-3.5" /> Bulletin PDF
                                                 </button>
 
-                                                {s.access_code && (
-                                                    <div className="flex items-center justify-between bg-black/40 px-3 py-1.5 rounded-xl border border-white/5">
-                                                        <span className="text-[10px] text-slate-500 uppercase font-semibold">Code d'accès</span>
-                                                        <button onClick={() => { navigator.clipboard.writeText(s.access_code); toast.success('Code copié !'); }} className="text-xs font-mono font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1">
-                                                            {s.access_code} <Copy className="w-3 h-3" />
-                                                        </button>
-                                                    </div>
-                                                )}
+                                                <div className="flex items-center gap-2">
+                                                    {s.access_code && (
+                                                        <div className="flex-1 flex items-center justify-between bg-black/40 px-3 py-1.5 rounded-xl border border-white/5">
+                                                            <span className="text-[10px] text-slate-500 uppercase font-semibold">Code</span>
+                                                            <button onClick={() => { navigator.clipboard.writeText(s.access_code); toast.success('Code copié !'); }} className="text-xs font-mono font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                                                                {s.access_code} <Copy className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                    <button onClick={() => resetStudentPin(s.id, s.access_code, `${s.first_name} ${s.last_name}`)} className="text-[11px] px-2.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 font-medium flex items-center gap-1 transition" title="Réinitialiser le PIN">
+                                                        <RefreshCw className="w-3 h-3" /> Reset PIN
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     ))}

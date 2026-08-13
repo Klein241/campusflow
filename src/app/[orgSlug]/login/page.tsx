@@ -64,6 +64,7 @@ export default function LoginPage() {
     const [pinConfirm, setPinConfirm] = useState(['', '', '', '']);
     const [pinStep, setPinStep] = useState<'create' | 'confirm'>('create');
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+    const [showPinHelp, setShowPinHelp] = useState(false);
     const pinRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
     const pinConfirmRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
 
@@ -676,9 +677,41 @@ export default function LoginPage() {
                         Se connecter
                     </Button>
 
-                    <Button variant="ghost" className="w-full mt-3 text-slate-400" onClick={() => { setMode('access_code'); setPin(['', '', '', '']); setUserProfile(null); setAccessCode(''); }}>
-                        <ArrowLeft className="w-4 h-4 mr-2" /> Changer de compte
-                    </Button>
+                    <div className="flex items-center justify-between mt-3 text-xs">
+                        <button type="button" onClick={() => setShowPinHelp(true)} className="text-indigo-400 hover:text-indigo-300 font-medium hover:underline">
+                            💡 PIN oublié ?
+                        </button>
+                        <button type="button" onClick={() => { setMode('access_code'); setPin(['', '', '', '']); setUserProfile(null); setAccessCode(''); }} className="text-slate-400 hover:text-white transition flex items-center gap-1">
+                            <ArrowLeft className="w-3 h-3" /> Changer de compte
+                        </button>
+                    </div>
+
+                    {/* Modal PIN Oublié */}
+                    <AnimatePresence>
+                        {showPinHelp && (
+                            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="bg-[#111622] border border-white/10 rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl">
+                                    <div className="w-12 h-12 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+                                        <Lock className="w-6 h-6" />
+                                    </div>
+                                    <div className="text-center space-y-2">
+                                        <h3 className="font-bold text-white text-lg">PIN oublié ?</h3>
+                                        <p className="text-xs text-slate-300 leading-relaxed">
+                                            Contactez la direction ou un administrateur de votre établissement <strong>({org?.name || 'CampusFlow'})</strong>.
+                                        </p>
+                                        <div className="bg-black/30 p-3 rounded-xl border border-white/5 text-left text-xs text-slate-400 space-y-1.5 mt-2">
+                                            <p className="font-semibold text-amber-300">Procédure simple :</p>
+                                            <p>1. L'admin réinitialise votre PIN en 1 clic dans son panneau.</p>
+                                            <p>2. Vous entrez votre Code d'accès et créez un nouveau PIN à 4 chiffres.</p>
+                                        </div>
+                                    </div>
+                                    <Button onClick={() => setShowPinHelp(false)} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl h-10">
+                                        J'ai compris
+                                    </Button>
+                                </motion.div>
+                            </div>
+                        )}
+                    </AnimatePresence>
                 </motion.div>
             </div>
         );
