@@ -98,11 +98,11 @@ export default function CampusPage() {
                 if (sprof?.access_code) setUserAccessCode(sprof.access_code);
                 let currentStatus = sprof?.approval_status;
 
-                // Si pas approved en local, vérifier si inscription_requests a été approuvé par l'admin
-                if (currentStatus !== 'approved' && (sprof?.access_code || sess.profile_id)) {
+                // Si pas approved en local, vérifier dans inscription_requests par access_code (clé fiable)
+                if (currentStatus !== 'approved' && sprof?.access_code) {
                     const { data: ir } = await supabase.from('inscription_requests')
                         .select('status, admin_message')
-                        .or(`id.eq.${sess.profile_id},access_code.eq.${sprof?.access_code || ''}`)
+                        .eq('access_code', sprof.access_code)
                         .maybeSingle();
 
                     if (ir?.status === 'approved') {
@@ -111,6 +111,7 @@ export default function CampusPage() {
                         await supabase.from('student_profiles').update({ approval_status: 'approved' }).eq('id', sess.profile_id);
                     } else if (ir?.status) {
                         currentStatus = ir.status;
+                        // Charger admin_message si présent
                         if (ir.admin_message) setAdminMessage(ir.admin_message);
                     }
                 }
@@ -143,28 +144,27 @@ export default function CampusPage() {
 
     // ── SUPABASE REALTIME : Écoute instantanée des messages admin pour l'étudiant ──
     useEffect(() => {
-        if (!session || session.role !== 'student') return;
+        if (!session || session.role !== 'student' || !userAccessCode) return;
 
-        const channel = supabase.channel(`realtime_student_approval_${session.profile_id}`)
+        // On filtre directement sur access_code pour ne recevoir que les events de CET étudiant
+        const channel = supabase.channel(`realtime_student_approval_${userAccessCode}`)
             .on('postgres_changes', {
                 event: 'UPDATE',
                 schema: 'public',
                 table: 'inscription_requests',
+                filter: `access_code=eq.${userAccessCode}`,
             }, (payload) => {
                 const updatedReq = payload.new as any;
                 if (!updatedReq) return;
-                // Match par profile_id ou access_code
-                if (updatedReq.id === session.profile_id || (userAccessCode && updatedReq.access_code === userAccessCode)) {
-                    if (updatedReq.status === 'approved') {
-                        setApprovalStatus(null);
-                        SessionManager.patch({ approval_status: 'approved' });
-                        toast.success('🎉 Votre inscription a été approuvée par l\'administration ! Bienvenue !');
-                    } else if (updatedReq.status) {
-                        setApprovalStatus(updatedReq.status);
-                        if (updatedReq.admin_message) {
-                            setAdminMessage(updatedReq.admin_message);
-                            toast.info(`📋 Message de l'admin : "${updatedReq.admin_message}"`);
-                        }
+                if (updatedReq.status === 'approved') {
+                    setApprovalStatus(null);
+                    SessionManager.patch({ approval_status: 'approved' });
+                    toast.success('🎉 Votre inscription a été approuvée ! Bienvenue sur CampusFlow !');
+                } else if (updatedReq.status === 'info_needed' || updatedReq.status === 'pending') {
+                    setApprovalStatus(updatedReq.status);
+                    if (updatedReq.admin_message) {
+                        setAdminMessage(updatedReq.admin_message);
+                        toast.info(`📋 Message de l'administration : "${updatedReq.admin_message}"`, { duration: 8000 });
                     }
                 }
             })

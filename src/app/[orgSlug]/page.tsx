@@ -86,7 +86,7 @@ export default function SchoolLandingPage() {
     // Inscription multi-step
     const [inscStep, setInscStep]                   = useState(0);
     const [selectedClassroom, setSelectedClassroom] = useState<any>(null);
-    const [inscForm, setInscForm] = useState({ first_name: '', last_name: '', birth_date: '', gender: '', phone: '', email: '', address: '' });
+    const [inscForm, setInscForm] = useState({ first_name: '', last_name: '', birth_date: '', gender: '', phone: '', email: '', address: '', nationality: 'Camerounaise', guardian_name: '', guardian_phone: '' });
     const [inscPin, setInscPin]           = useState(['', '', '', '']);
     const [inscPinConfirm, setInscPinConfirm] = useState(['', '', '', '']);
     const [inscSubmitting, setInscSubmitting] = useState(false);
@@ -181,11 +181,14 @@ export default function SchoolLandingPage() {
             phone:       inscForm.phone.trim(),
             access_code: code,
             pin_code:    pinStr,
-            ...(inscForm.birth_date && { birth_date: inscForm.birth_date }),
-            ...(inscForm.gender     && { gender:     inscForm.gender }),
-            ...(inscForm.email      && { email:      inscForm.email }),
-            ...(inscForm.address    && { address:    inscForm.address }),
-            ...(selectedClassroom   && { classroom_id: selectedClassroom.id }),
+            ...(inscForm.birth_date    && { birth_date:    inscForm.birth_date }),
+            ...(inscForm.gender        && { gender:        inscForm.gender }),
+            ...(inscForm.email         && { email:         inscForm.email }),
+            ...(inscForm.address       && { address:       inscForm.address }),
+            ...(inscForm.nationality   && { nationality:   inscForm.nationality }),
+            ...(inscForm.guardian_name && { guardian_name: inscForm.guardian_name }),
+            ...(inscForm.guardian_phone && { guardian_phone: inscForm.guardian_phone }),
+            ...(selectedClassroom      && { classroom_id:  selectedClassroom.id }),
             ...(selectedClassroom?.filiere_id && { filiere_id: selectedClassroom.filiere_id }),
         };
 
@@ -915,6 +918,27 @@ export default function SchoolLandingPage() {
                                                 placeholder="Ex : Bastos, Yaoundé"
                                                 className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors" />
                                         </div>
+                                    </div>
+                                    {/* Nationalité + Tuteur */}
+                                    <div className="grid sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-xs text-slate-400 mb-1.5 block font-medium">Nationalité</label>
+                                            <input value={inscForm.nationality} onChange={e => setInscForm(f => ({ ...f, nationality: e.target.value }))}
+                                                placeholder="Ex : Camerounaise"
+                                                className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors" />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-slate-400 mb-1.5 block font-medium">Nom du tuteur / parent</label>
+                                            <input value={inscForm.guardian_name} onChange={e => setInscForm(f => ({ ...f, guardian_name: e.target.value }))}
+                                                placeholder="Ex : Jean Dupont"
+                                                className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors" />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-slate-400 mb-1.5 block font-medium">Téléphone du tuteur / parent</label>
+                                        <input value={inscForm.guardian_phone} onChange={e => setInscForm(f => ({ ...f, guardian_phone: e.target.value }))}
+                                            placeholder="Ex : +237 6XX XXX XXX"
+                                            className="w-full h-11 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors" />
                                     </div>
                                     <div className="pt-4 flex justify-between">
                                         <Button variant="outline" onClick={() => setInscStep(0)}

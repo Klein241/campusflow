@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, Component, type ReactNode, type ErrorInfo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOrgSlug } from '@/hooks/use-org-slug';
-import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus, Building2, FileText, Receipt, PhoneCall, ClipboardCheck } from 'lucide-react';
+import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus, Building2, FileText, Receipt, PhoneCall, ClipboardCheck, Eye } from 'lucide-react';
 import { ExamRoomView } from '@/components/campus/exam-room/exam-room-view';
 import { BULLETIN_TEMPLATES, generateBulletinPDF, type BulletinData } from '@/lib/bulletin-pdf';
 import { RECEIPT_TEMPLATES, generateReceiptPDF, generateReceiptNumber, type ReceiptData } from '@/lib/receipt-pdf';
@@ -68,7 +68,7 @@ const Sel = ({ v, onChange, opts, ph = '—' }: { v: string, onChange: (v: strin
     </select>
 );
 
-type Tab = 'general' | 'landing' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'modeles' | 'cursus' | 'settings' | 'chat' | 'stories' | 'actus' | 'groupes' | 'whatsapp' | 'exam_room';
+type Tab = 'general' | 'landing' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'modeles' | 'cursus' | 'settings' | 'chat' | 'stories' | 'actus' | 'groupes' | 'whatsapp' | 'exam_room' | 'monitoring';
 interface Cls { id?: string; name: string; cycle: string; filiere_id: string | null; level: number; capacity: number; }
 interface Sub { id?: string; name: string; code: string; coefficient: number; classroom_id: string; teacher_id: string | null; }
 interface Room { id?: string; name: string; }
@@ -85,6 +85,7 @@ const SIDES = [
     { id: 'cursus' as Tab, icon: BookMarked, label: 'Cursus' },
     { id: 'chat' as Tab, icon: MessageSquare, label: 'Chat DM' },
     { id: 'groupes' as Tab, icon: Users, label: 'Groupes' },
+    { id: 'monitoring' as Tab, icon: Eye, label: '👁️ Monitoring Chats' },
     { id: 'actus' as Tab, icon: Bell, label: 'Actus' },
     { id: 'exam_room' as Tab, icon: ClipboardCheck, label: '🏛️ Salle d\'Évaluation' },
     { id: 'settings' as Tab, icon: Palette, label: 'Paramètres' },
@@ -136,6 +137,13 @@ function AdminPageContent() {
     const [inscActionId, setInscActionId] = useState<string | null>(null);
     const [inscMsg, setInscMsg] = useState('');
     const [inscSaving, setInscSaving] = useState(false);
+    // ── Monitoring conversations ──
+    const [monitoringConvs, setMonitoringConvs] = useState<any[]>([]);
+    const [monitoringLoaded, setMonitoringLoaded] = useState(false);
+    const [monitoringActiveConv, setMonitoringActiveConv] = useState<any>(null);
+    const [monitoringMessages, setMonitoringMessages] = useState<any[]>([]);
+    const [monitoringLoadingMsgs, setMonitoringLoadingMsgs] = useState(false);
+    const [monitoringSearch, setMonitoringSearch] = useState('');
     // Edit states for classes/subjects inline
     const [editingClsId, setEditingClsId] = useState<string | null>(null);
     const [editClsName, setEditClsName] = useState('');
@@ -1288,7 +1296,7 @@ ${bodyHtml}
                                                                 });
                                                             }
 
-                                                            setInscRequests(p => p.map((r: any) => r.id === req.id ? { ...r, status: 'approved' } : r));
+                                                            setInscRequests(p => p.filter((r: any) => r.id !== req.id));
                                                             // Refresh list
                                                             const { data: freshStudents } = await supabase.from('student_profiles').select('*').eq('organization_id', org.id);
                                                             if (freshStudents) setStudents(freshStudents);
@@ -2118,6 +2126,139 @@ ${bodyHtml}
                                 userName={`${session.first_name || ''} ${session.last_name || ''}`.trim()}
                                 userRole="admin"
                             />
+                        </div>
+                    )}
+
+                    {/* ── MONITORING CONVERSATIONS (admin spy mode) ── */}
+                    {tab === 'monitoring' && org && (
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h2 className="text-xl font-black text-white flex items-center gap-2">👁️ Monitoring Conversations</h2>
+                                    <p className="text-xs text-slate-500 mt-0.5">Surveillance en temps réel de tous les DM et groupes</p>
+                                </div>
+                                <button onClick={async () => {
+                                    setMonitoringLoaded(false);
+                                    const { data: convs } = await supabase
+                                        .from('chat_conversations')
+                                        .select('*, chat_participants(user_id)')
+                                        .eq('organization_id', org.id)
+                                        .order('created_at', { ascending: false });
+                                    // Enrich avec le dernier message
+                                    const enriched = await Promise.all((convs || []).map(async (c: any) => {
+                                        const { data: lastMsg } = await supabase.from('chat_messages')
+                                            .select('content, created_at, sender_id').eq('conversation_id', c.id)
+                                            .order('created_at', { ascending: false }).limit(1).maybeSingle();
+                                        const { count } = await supabase.from('chat_messages')
+                                            .select('id', { count: 'exact', head: true }).eq('conversation_id', c.id);
+                                        return { ...c, lastMessage: lastMsg?.content, lastMessageAt: lastMsg?.created_at || c.created_at, totalMessages: count || 0 };
+                                    }));
+                                    enriched.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+                                    setMonitoringConvs(enriched);
+                                    setMonitoringLoaded(true);
+                                }} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-xs font-bold text-white transition">
+                                    Charger toutes les conversations
+                                </button>
+                            </div>
+
+                            {!monitoringLoaded ? (
+                                <div className="text-center py-16 text-slate-500">
+                                    <p className="text-4xl mb-3">👁️</p>
+                                    <p className="font-medium">Cliquez sur "Charger toutes les conversations" pour commencer la surveillance</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-200px)]">
+                                    {/* Liste conversations */}
+                                    <div className="lg:col-span-1 bg-black/30 rounded-2xl border border-white/10 overflow-hidden flex flex-col">
+                                        <div className="p-3 border-b border-white/5">
+                                            <input value={monitoringSearch} onChange={e => setMonitoringSearch(e.target.value)}
+                                                placeholder="Rechercher une conversation..."
+                                                className="w-full h-9 bg-white/5 border border-white/10 rounded-xl px-3 text-xs text-white placeholder:text-slate-600 outline-none focus:border-violet-500/50" />
+                                        </div>
+                                        <div className="flex-1 overflow-y-auto">
+                                            {monitoringConvs
+                                                .filter(c => !monitoringSearch || (c.name || '').toLowerCase().includes(monitoringSearch.toLowerCase()))
+                                                .map((conv: any) => (
+                                                <button key={conv.id} onClick={async () => {
+                                                    setMonitoringActiveConv(conv);
+                                                    setMonitoringLoadingMsgs(true);
+                                                    const { data: msgs } = await supabase.from('chat_messages')
+                                                        .select('*').eq('conversation_id', conv.id)
+                                                        .order('created_at', { ascending: true }).limit(100);
+                                                    setMonitoringMessages(msgs || []);
+                                                    setMonitoringLoadingMsgs(false);
+                                                }}
+                                                    className={`w-full text-left p-3 border-b border-white/5 hover:bg-white/5 transition ${
+                                                        monitoringActiveConv?.id === conv.id ? 'bg-violet-500/10 border-l-2 border-l-violet-500' : ''
+                                                    }`}>
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="min-w-0">
+                                                            <p className="text-xs font-bold text-white truncate">{conv.name || 'Conversation sans nom'}</p>
+                                                            <p className="text-[10px] text-slate-500 mt-0.5">{conv.type === 'direct' ? '💬 DM' : '👥 Groupe'} · {conv.totalMessages} msgs</p>
+                                                            {conv.lastMessage && (
+                                                                <p className="text-[10px] text-slate-400 truncate mt-1">{conv.lastMessage}</p>
+                                                            )}
+                                                        </div>
+                                                        <span className="text-[9px] text-slate-600 shrink-0">{conv.lastMessageAt ? new Date(conv.lastMessageAt).toLocaleDateString('fr') : ''}</span>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                            {monitoringConvs.length === 0 && (
+                                                <div className="text-center py-10 text-slate-600 text-xs">Aucune conversation trouvée</div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Messages de la conversation sélectionnée */}
+                                    <div className="lg:col-span-2 bg-black/30 rounded-2xl border border-white/10 overflow-hidden flex flex-col">
+                                        {!monitoringActiveConv ? (
+                                            <div className="flex-1 flex items-center justify-center text-slate-600 text-sm">
+                                                Sélectionnez une conversation pour voir les messages
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className="p-4 border-b border-white/5 flex items-center justify-between">
+                                                    <div>
+                                                        <h3 className="font-bold text-white text-sm">{monitoringActiveConv.name || 'Conversation'}</h3>
+                                                        <p className="text-[10px] text-slate-500">{monitoringActiveConv.type === 'direct' ? 'Message Direct' : 'Groupe'} · {monitoringMessages.length} messages</p>
+                                                    </div>
+                                                    <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 font-bold">🔴 MODE SURVEILLANCE</span>
+                                                </div>
+                                                <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                                                    {monitoringLoadingMsgs ? (
+                                                        <div className="flex items-center justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-slate-500" /></div>
+                                                    ) : monitoringMessages.map((msg: any) => (
+                                                        <div key={msg.id} className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                                                            <div className="flex items-center justify-between mb-1">
+                                                                <span className="text-[10px] font-bold text-violet-300">
+                                                                    {students.find((s: any) => s.id === msg.sender_id)?.first_name ||
+                                                                     teachers.find((t: any) => t.id === msg.sender_id)?.first_name || 'Admin'} 
+                                                                    {students.find((s: any) => s.id === msg.sender_id)?.last_name ||
+                                                                     teachers.find((t: any) => t.id === msg.sender_id)?.last_name || ''}
+                                                                    <span className="ml-1.5 text-slate-600 font-normal">
+                                                                        ({students.find((s: any) => s.id === msg.sender_id) ? 'Étudiant' :
+                                                                          teachers.find((t: any) => t.id === msg.sender_id) ? 'Prof' : 'Admin'})
+                                                                    </span>
+                                                                </span>
+                                                                <span className="text-[9px] text-slate-600">{new Date(msg.created_at).toLocaleString('fr')}</span>
+                                                            </div>
+                                                            <p className="text-xs text-white leading-relaxed">
+                                                                {msg.msg_type === 'voice' ? '🎙️ Message vocal' :
+                                                                 msg.msg_type === 'file' ? '📎 Fichier joint' :
+                                                                 msg.msg_type === 'system' ? <span className="text-slate-500 italic">{msg.content}</span> :
+                                                                 msg.content}
+                                                            </p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <div className="p-3 border-t border-white/5 text-center">
+                                                    <p className="text-[10px] text-slate-600">Mode lecture seule — L'admin ne peut pas envoyer de messages ici</p>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 

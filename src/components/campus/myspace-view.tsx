@@ -695,6 +695,7 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
                                     userId={userId}
                                     userName={userName}
                                     classroomId={classroom?.id || null}
+                                    filiereId={filiere?.id || classroom?.filiere_id || null}
                                     skyPoints={skyPoints}
                                     onSkyUpdate={(delta) => setSkyPoints(p => p + delta)}
                                     onOpenGroupChat={onOpenGroupChat}

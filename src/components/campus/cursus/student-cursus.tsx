@@ -38,13 +38,14 @@ interface StudentCursusProps {
     userId: string;
     userName: string;
     classroomId: string | null;
+    filiereId?: string | null;
     skyPoints: number;
     onSkyUpdate: (delta: number) => void;
     onOpenGroupChat?: (convId: string, convName: string) => void;
     onStartDM?: (targetId: string, targetName: string) => void;
 }
 
-export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints, onSkyUpdate, onOpenGroupChat, onStartDM }: StudentCursusProps) {
+export function StudentCursus({ orgId, userId, userName, classroomId, filiereId, skyPoints, onSkyUpdate, onOpenGroupChat, onStartDM }: StudentCursusProps) {
     const [subjects,    setSubjects]    = useState<any[]>([]);
     const [chapters,    setChapters]    = useState<any[]>([]);
     const [lessons,     setLessons]     = useState<any[]>([]);
@@ -81,18 +82,27 @@ export function StudentCursus({ orgId, userId, userName, classroomId, skyPoints,
         setLoading(true);
         try {
             let subs: any[] = [];
+            // Priorité 1 : par classroom_id (filtre strict)
             if (classroomId) {
                 const { data } = await supabase.from('subjects')
                     .select('*, teacher_profiles:teacher_id(first_name, last_name, photo_url)')
                     .eq('classroom_id', classroomId).order('name');
                 subs = data || [];
             }
-            if (subs.length === 0) {
-                const { data } = await supabase.from('subjects')
-                    .select('*, teacher_profiles:teacher_id(first_name, last_name, photo_url)')
-                    .eq('organization_id', orgId).order('name');
-                subs = data || [];
+            // Priorité 2 : si pas de classroom mais une filière, filtrer par filière via les classrooms
+            if (subs.length === 0 && filiereId) {
+                // Récupérer les classrooms de cette filière
+                const { data: filCls } = await supabase.from('classrooms')
+                    .select('id').eq('filiere_id', filiereId).eq('organization_id', orgId);
+                const filClsIds = (filCls || []).map((c: any) => c.id);
+                if (filClsIds.length > 0) {
+                    const { data } = await supabase.from('subjects')
+                        .select('*, teacher_profiles:teacher_id(first_name, last_name, photo_url)')
+                        .in('classroom_id', filClsIds).order('name');
+                    subs = data || [];
+                }
             }
+            // PAS de fallback global org — un étudiant ne voit QUE sa filière
             setSubjects(subs);
             if (subs.length === 0) { setLoading(false); return; }
 
