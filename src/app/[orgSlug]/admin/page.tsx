@@ -341,7 +341,7 @@ function AdminPageContent() {
                 const { data: t } = await supabase.from('teacher_profiles').select('id, organization_id, first_name, last_name, speciality, email, phone, nationality, marital_status, children_count, residence, access_code, pin_set, created_at').eq('organization_id', o.id);
                 if (cancelled) return;
                 setTeachers(t || []);
-                const { data: st } = await supabase.from('student_profiles').select('id, organization_id, first_name, last_name, sex, birth_date, classroom_id, phone, guardian_name, guardian_phone, nationality, residence, matricule, access_code, pin_set, created_at').eq('organization_id', o.id);
+                const { data: st } = await supabase.from('student_profiles').select('id, organization_id, first_name, last_name, sex, birth_date, classroom_id, phone, guardian_name, guardian_phone, nationality, residence, matricule, access_code, pin_set, approval_status, created_at').eq('organization_id', o.id);
                 if (cancelled) return;
                 setStudents(st || []);
                 // Charger les demandes d'inscription en attente
@@ -1413,12 +1413,31 @@ ${bodyHtml}
                                 <div className="text-center py-12 text-slate-500"><GraduationCap className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>Aucun étudiant trouvé</p></div>
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {filtered.map((s: any) => (
-                                        <div key={s.id} className="relative group p-5 rounded-2xl bg-gradient-to-br from-[#131927] via-[#111622] to-[#0E121B] border border-white/10 hover:border-blue-500/40 transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-blue-500/5 flex flex-col justify-between">
+                                    {filtered.map((s: any) => {
+                                        const isPending = s.approval_status === 'pending' || s.approval_status === 'info_needed';
+                                        return (
+                                        <div key={s.id} className={`relative group p-5 rounded-2xl transition-all duration-300 shadow-xl flex flex-col justify-between ${
+                                            isPending
+                                                ? 'bg-gradient-to-br from-amber-500/10 via-[#111622] to-[#0E121B] border-2 border-amber-500/50 hover:border-amber-400'
+                                                : 'bg-gradient-to-br from-[#131927] via-[#111622] to-[#0E121B] border border-white/10 hover:border-blue-500/40 hover:shadow-2xl hover:shadow-blue-500/5'
+                                        }`}>
                                             <div>
+                                                {isPending && (
+                                                    <div className="mb-3 px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-between">
+                                                        <span className="text-xs text-amber-300 font-bold flex items-center gap-1.5">
+                                                            ⏳ Inscription en attente
+                                                        </span>
+                                                        <span className="text-[10px] text-amber-400/80 uppercase font-semibold">Non approuvé</span>
+                                                    </div>
+                                                )}
+
                                                 <div className="flex items-start justify-between gap-3 mb-3">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500/20 to-indigo-500/10 border border-blue-500/30 flex items-center justify-center font-bold text-blue-300 text-base shadow-inner shrink-0">
+                                                        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-base shadow-inner shrink-0 ${
+                                                            isPending
+                                                                ? 'bg-amber-500/20 border border-amber-500/30 text-amber-300'
+                                                                : 'bg-gradient-to-br from-blue-500/20 to-indigo-500/10 border border-blue-500/30 text-blue-300'
+                                                        }`}>
                                                             {s.first_name?.[0]}{s.last_name?.[0]}
                                                         </div>
                                                         <div className="min-w-0">
@@ -1455,6 +1474,25 @@ ${bodyHtml}
                                             </div>
 
                                             <div className="pt-3 border-t border-white/5 space-y-2">
+                                                {/* Bouton d'approbation directe si l'étudiant est en attente */}
+                                                {isPending && (
+                                                    <button onClick={async () => {
+                                                        try {
+                                                            await supabase.from('student_profiles').update({ approval_status: 'approved' }).eq('id', s.id);
+                                                            if (s.access_code) {
+                                                                await supabase.from('inscription_requests').update({ status: 'approved' }).eq('access_code', s.access_code);
+                                                            }
+                                                            setStudents(prev => prev.map((st: any) => st.id === s.id ? { ...st, approval_status: 'approved' } : st));
+                                                            setInscRequests(prev => prev.filter((r: any) => r.access_code !== s.access_code));
+                                                            toast.success(`✅ ${s.first_name} ${s.last_name} approuvé(e) !`);
+                                                        } catch (err: any) {
+                                                            toast.error(err.message);
+                                                        }
+                                                    }} className="w-full text-xs py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center justify-center gap-1.5 transition shadow-md shadow-emerald-600/20">
+                                                        <CheckCircle2 className="w-4 h-4" /> Approuver l'inscription
+                                                    </button>
+                                                )}
+                                                
                                                 <button onClick={() => exportStudentBulletinPdf(s)} className="w-full text-xs py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 font-semibold flex items-center justify-center gap-1.5 transition shadow-sm">
                                                     <Printer className="w-3.5 h-3.5" /> Bulletin PDF
                                                 </button>
@@ -1474,7 +1512,8 @@ ${bodyHtml}
                                                 </div>
                                             </div>
                                         </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             );
                         })()}
