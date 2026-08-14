@@ -11,6 +11,8 @@ export interface ReceiptData {
         email?: string;
         city?: string;
         country?: string;
+        signature_url?: string;
+        stamp_url?: string;
     };
     student: {
         first_name: string;
@@ -34,6 +36,14 @@ export interface ReceiptData {
 // ── Helpers ──────────────────────────────────────────────
 const fmtMoney = (n: number) => new Intl.NumberFormat('fr-FR').format(n);
 const dateNow = () => new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+const renderStampSignature = (sig?: string, stamp?: string, label: string = 'Cachet & Signature') => `
+    <div style="position:relative;display:inline-block;width:100%;min-height:45px;">
+        ${sig ? `<img src="${sig}" style="max-height:45px;max-width:130px;object-fit:contain;margin-bottom:2px;display:block;margin-left:auto;margin-right:auto;" alt="Signature" />` : '<div style="height:35px"></div>'}
+        ${stamp ? `<img src="${stamp}" style="position:absolute;right:5px;bottom:0px;max-height:60px;max-width:60px;object-fit:contain;opacity:0.85;transform:rotate(-6deg);pointer-events:none;" alt="Cachet" />` : ''}
+    </div>
+    <div style="border-top:1px solid #94a3b8;padding-top:4px;font-size:8pt;color:#64748b">${label}</div>
+`;
 const amountInWords = (n: number): string => {
     const units = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize', 'dix-sept', 'dix-huit', 'dix-neuf'];
     const tens = ['', '', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante', 'quatre-vingt', 'quatre-vingt'];
@@ -127,9 +137,9 @@ function receipt1Html(d: ReceiptData): string {
 
         ${d.remainingBalance !== undefined ? `<div style="text-align:right;margin-bottom:15px"><span style="font-size:9pt;color:#64748b">Solde restant : </span><span style="font-size:11pt;font-weight:bold;color:${d.remainingBalance > 0 ? '#dc2626' : '#059669'}">${fmtMoney(d.remainingBalance)} ${d.payment.currency}</span></div>` : ''}
 
-        <div style="display:flex;justify-content:space-between;margin-top:40px">
-            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b">Le Caissier</p><div style="border-top:1px solid #94a3b8;margin-top:50px;padding-top:5px;font-size:8pt;color:#64748b">Signature</div></div>
-            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b">Le Directeur</p><div style="border-top:1px solid #94a3b8;margin-top:50px;padding-top:5px;font-size:8pt;color:#64748b">Cachet & Signature</div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:35px">
+            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b;margin-bottom:4px;">Le Caissier</p><div style="border-top:1px solid #94a3b8;margin-top:45px;padding-top:4px;font-size:8pt;color:#64748b">Signature</div></div>
+            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b;margin-bottom:4px;">Le Directeur</p>${renderStampSignature(d.org.signature_url, d.org.stamp_url, 'Cachet & Signature')}</div>
         </div>
 
         <div style="text-align:center;margin-top:25px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">
@@ -179,9 +189,9 @@ function receipt2Html(d: ReceiptData): string {
 
         ${d.remainingBalance !== undefined ? `<p style="text-align:center;font-size:9pt;color:#64748b;margin-bottom:15px">Solde restant : <strong style="color:${d.remainingBalance > 0 ? '#dc2626' : '#059669'}">${fmtMoney(d.remainingBalance)} ${d.payment.currency}</strong></p>` : ''}
 
-        <div style="display:flex;justify-content:space-between;margin-top:40px">
-            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b">Le Service Financier</p><div style="border-top:1px solid #94a3b8;margin-top:50px;padding-top:5px;font-size:8pt;color:#64748b">Signature</div></div>
-            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b">Le Directeur</p><div style="border-top:1px solid #94a3b8;margin-top:50px;padding-top:5px;font-size:8pt;color:#64748b">Cachet & Signature</div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:35px">
+            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b;margin-bottom:4px;">Le Service Financier</p><div style="border-top:1px solid #94a3b8;margin-top:45px;padding-top:4px;font-size:8pt;color:#64748b">Signature</div></div>
+            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b;margin-bottom:4px;">Le Directeur</p>${renderStampSignature(d.org.signature_url, d.org.stamp_url, 'Cachet & Signature')}</div>
         </div>
 
         <div style="text-align:center;margin-top:20px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">
@@ -221,9 +231,9 @@ function receipt3Html(d: ReceiptData): string {
 
         ${d.remainingBalance !== undefined ? `<p style="text-align:center;font-size:9pt;margin:10px 0">Reste à payer : <strong style="color:${d.remainingBalance > 0 ? '#dc2626' : '#059669'}">${fmtMoney(d.remainingBalance)} ${d.payment.currency}</strong></p>` : ''}
 
-        <div style="display:flex;justify-content:space-between;margin-top:40px">
-            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b">Le Comptable</p><div style="border-top:1px solid #94a3b8;margin-top:50px;padding-top:5px;font-size:8pt;color:#64748b">Signature</div></div>
-            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b">Le Directeur</p><div style="border-top:1px solid #94a3b8;margin-top:50px;padding-top:5px;font-size:8pt;color:#64748b">Cachet & Signature</div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:35px">
+            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b;margin-bottom:4px;">Le Comptable</p><div style="border-top:1px solid #94a3b8;margin-top:45px;padding-top:4px;font-size:8pt;color:#64748b">Signature</div></div>
+            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b;margin-bottom:4px;">Le Directeur</p>${renderStampSignature(d.org.signature_url, d.org.stamp_url, 'Cachet & Signature')}</div>
         </div>
 
         <div style="text-align:center;margin-top:20px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">${dateNow()} — ${d.org.name} — CampusFlow</div>
@@ -266,10 +276,10 @@ function receipt4Html(d: ReceiptData): string {
             </div>
         </div>
 
-        <div style="display:flex;justify-content:space-between;margin-top:40px">
+        <div style="display:flex;justify-content:space-between;margin-top:35px">
             <div style="text-align:center;width:30%"><p style="font-size:7pt;color:#64748b">Cashier / Caissier</p><div style="border-top:1px solid #94a3b8;margin-top:40px;padding-top:4px;font-size:7pt;color:#64748b">Signature</div></div>
             <div style="text-align:center;width:30%"><p style="font-size:7pt;color:#64748b">Bursar / Intendant</p><div style="border-top:1px solid #94a3b8;margin-top:40px;padding-top:4px;font-size:7pt;color:#64748b">Signature</div></div>
-            <div style="text-align:center;width:30%"><p style="font-size:7pt;color:#64748b">Principal / Directeur</p><div style="border-top:1px solid #94a3b8;margin-top:40px;padding-top:4px;font-size:7pt;color:#64748b">Stamp & Signature</div></div>
+            <div style="text-align:center;width:30%"><p style="font-size:7pt;color:#64748b;margin-bottom:2px;">Principal / Directeur</p>${renderStampSignature(d.org.signature_url, d.org.stamp_url, 'Stamp & Signature')}</div>
         </div>
 
         <div style="text-align:center;margin-top:20px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">${dateNow()} — ${d.org.name} — CampusFlow</div>
@@ -325,9 +335,9 @@ function receipt5Html(d: ReceiptData): string {
             </div>
         </div>` : ''}
 
-        <div style="display:flex;justify-content:space-between;margin-top:35px">
-            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b">Le Caissier</p><div style="border-top:1px solid #94a3b8;margin-top:45px;padding-top:5px;font-size:8pt;color:#64748b">Signature</div></div>
-            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b">Le Directeur</p><div style="border-top:1px solid #94a3b8;margin-top:45px;padding-top:5px;font-size:8pt;color:#64748b">Cachet & Signature</div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:30px">
+            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b;margin-bottom:4px;">Le Caissier</p><div style="border-top:1px solid #94a3b8;margin-top:45px;padding-top:4px;font-size:8pt;color:#64748b">Signature</div></div>
+            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b;margin-bottom:4px;">Le Directeur</p>${renderStampSignature(d.org.signature_url, d.org.stamp_url, 'Cachet & Signature')}</div>
         </div>
 
         <div style="text-align:center;margin-top:20px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">

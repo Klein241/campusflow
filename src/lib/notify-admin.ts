@@ -12,33 +12,73 @@ const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL
 // Profile ID du superadmin (a setter dans .env)
 const SUPERADMIN_ID = process.env.NEXT_PUBLIC_SUPERADMIN_ID || '';
 
-interface AlertPayload {
-    event: 'SUPABASE_WRITE_FAILED' | 'SUPABASE_READ_FAILED' | 'BOTH_SERVICES_FAILED' | 'D1_SYNC_FAILED' | 'SUPABASE_RESTORED';
+export type AlertEventType =
+    | 'SUPABASE_WRITE_FAILED'
+    | 'SUPABASE_READ_FAILED'
+    | 'BOTH_SERVICES_FAILED'
+    | 'D1_SYNC_FAILED'
+    | 'SUPABASE_RESTORED'
+    | 'MIRROR_WRITE_FAILED'
+    | 'PRIMARY_WRITE_FAILED_MIRROR_OK'
+    | 'PENDING_SYNC_REGISTRATION_FAILED'
+    | 'BOTH_SYSTEMS_WRITE_FAILED'
+    | 'PRIMARY_READ_FAILED'
+    | 'BOTH_SYSTEMS_READ_FAILED'
+    | string;
+
+export interface AlertPayload {
+    event: AlertEventType;
     table?: string;
     error?: string;
     failover?: 'd1_active' | 'supabase_active' | 'none';
+    idempotencyKey?: string;
+    [key: string]: unknown;
 }
 
-const EVENT_MESSAGES: Record<AlertPayload['event'], { title: string; body: (p: AlertPayload) => string }> = {
+const EVENT_MESSAGES: Record<string, { title: string; body: (p: AlertPayload) => string }> = {
     SUPABASE_WRITE_FAILED: {
         title: '🔴 Supabase inaccessible',
-        body: (p) => `Ecriture echouee (${p.table}). Cloudflare D1 a pris le relais automatiquement. Verifiez le dashboard Supabase.`,
+        body: (p) => `Ecriture echouee (${p.table}). Cloudflare D1 a pris le relais automatiquement.`,
+    },
+    MIRROR_WRITE_FAILED: {
+        title: '🟠 Ecriture miroir D1 echouee',
+        body: (p) => `Ecriture D1 echouee (${p.table}). Supabase a la donnee. Synchronisation outbox prevue.`,
+    },
+    PRIMARY_WRITE_FAILED_MIRROR_OK: {
+        title: '🟡 Supabase en echec, D1 securise',
+        body: (p) => `Ecriture Supabase echouee (${p.table}). Cloudflare D1 a enregistre la donnee. Rejeu planifie.`,
+    },
+    PENDING_SYNC_REGISTRATION_FAILED: {
+        title: '🟠 Enregistrement sync echoue',
+        body: (p) => `Impossible d enregistrer la synchronisation pending (${p.table}).`,
+    },
+    BOTH_SYSTEMS_WRITE_FAILED: {
+        title: '🆘 CRITIQUE - Ecriture echouee sur les 2 systemes',
+        body: (p) => `Supabase ET Cloudflare D1 ont echoue (${p.table}). Erreur: ${p.error}`,
+    },
+    PRIMARY_READ_FAILED: {
+        title: '🟡 Lecture Supabase echouee, bascule D1',
+        body: (p) => `Lecture primaire echouee (${p.table}). Lecture D1 activee avec succes.`,
+    },
+    BOTH_SYSTEMS_READ_FAILED: {
+        title: '🆘 CRITIQUE - Lecture echouee partout',
+        body: (p) => `Impossible de lire les donnees (${p.table}) sur Supabase et D1.`,
     },
     SUPABASE_READ_FAILED: {
         title: '🟡 Lecture Supabase echouee',
-        body: (p) => `Lecture echouee (${p.table}). Fallback D1 actif. L utilisateur n a rien remarque.`,
+        body: (p) => `Lecture echouee (${p.table}). Fallback D1 actif.`,
     },
     BOTH_SERVICES_FAILED: {
         title: '🆘 CRITIQUE - Les deux services sont DOWN',
-        body: (p) => `Supabase ET Cloudflare D1 sont inaccessibles (${p.table}). Action immediate requise.`,
+        body: (p) => `Supabase ET Cloudflare D1 sont inaccessibles (${p.table}).`,
     },
     D1_SYNC_FAILED: {
         title: '🟠 Sync D1 echouee',
-        body: (p) => `La synchronisation outbox vers D1 a echoue (${p.table}). Retry automatique en cours.`,
+        body: (p) => `La synchronisation outbox vers D1 a echoue (${p.table}).`,
     },
     SUPABASE_RESTORED: {
         title: '✅ Supabase retabli',
-        body: () => 'Supabase est de nouveau accessible. Synchronisation D1 → Supabase en cours.',
+        body: () => 'Supabase est de nouveau accessible.',
     },
 };
 
@@ -53,7 +93,10 @@ export async function notifyAdmin(payload: AlertPayload): Promise<void> {
     if (now - lastSent < DEDUP_MS) return; // dedup
     alertCache.set(cacheKey, now);
 
-    const msg = EVENT_MESSAGES[payload.event];
+    const msg = EVENT_MESSAGES[payload.event] || {
+        title: `⚠️ Alerte systeme: ${payload.event}`,
+        body: (p: AlertPayload) => `Evenement sur table ${p.table || 'inconnue'}: ${p.error || ''}`,
+    };
     const title = msg.title;
     const body = msg.body(payload);
 

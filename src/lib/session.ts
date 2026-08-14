@@ -23,6 +23,10 @@ export interface CampusSession {
     photo_url?:       string | null;
     sky_points?:      number;
     approval_status?: 'pending' | 'approved' | 'rejected' | 'info_needed'; // pour étudiants auto-inscrits
+    access_code?:     string | null;
+    phone?:           string | null;
+    email?:           string | null;
+    organization_id?: string;
 
     // Timestamp client
     logged_in_at:  string;

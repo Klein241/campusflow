@@ -384,9 +384,26 @@ export default function CampusPage() {
             if (studentTextResponse.trim()) updateData.student_response = studentTextResponse.trim();
 
             // Mettre à jour inscription_requests par id OU access_code
-            await supabase.from('inscription_requests')
+            const { data: updatedIr } = await supabase.from('inscription_requests')
                 .update(updateData)
-                .or(`id.eq.${session.profile_id},access_code.eq.${userAccessCode || ''}`);
+                .or(userAccessCode ? `access_code.eq.${userAccessCode},id.eq.${session.profile_id}` : `id.eq.${session.profile_id}`)
+                .select();
+
+            // Si aucune ligne n'a été mise à jour dans inscription_requests, on insère pour que l'admin le voie immédiatement
+            if (!updatedIr || updatedIr.length === 0) {
+                await supabase.from('inscription_requests').insert({
+                    organization_id: org.id,
+                    first_name: session.first_name || 'Étudiant',
+                    last_name: session.last_name || '',
+                    phone: session.phone || null,
+                    email: session.email || null,
+                    access_code: userAccessCode || null,
+                    status: 'pending',
+                    admin_message: adminMessage || null,
+                    student_response: studentTextResponse.trim() || null,
+                    document_url: uploadedUrl || null,
+                });
+            }
 
             // Synchro status dans student_profiles
             await supabase.from('student_profiles')
@@ -396,7 +413,7 @@ export default function CampusPage() {
             setDocFile(null);
             setStudentTextResponse('');
             setApprovalStatus('pending');
-            toast.success('✅ Pièce justificative et réponse envoyées ! Votre dossier a été ré-examine par l\'admin.');
+            toast.success('✅ Pièce justificative et réponse envoyées ! Votre dossier a été ré-examiné par l\'admin.');
         } catch (e: any) {
             toast.error('Erreur lors de l\'envoi : ' + e.message);
         }

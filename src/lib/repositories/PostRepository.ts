@@ -28,21 +28,13 @@ export const PostRepository = {
         const session = SessionManager.get();
         if (!session) throw new Error('Session required');
 
-        return DataProvider.read<SchoolPost[]>(
-            () => supabase.rpc('get_school_posts', {
-                p_token: session.session_token,
-                p_limit: limit,
-                p_offset: offset,
-            }),
-            {
-                table: 'school_posts',
-                params: {
-                    organization_id: session.organization_id,
-                    limit: String(limit),
-                    offset: String(offset),
-                },
-            }
-        ).then(data => data ?? []);
+        const { data, error } = await supabase.rpc('get_school_posts', {
+            p_token: session.session_token,
+            p_limit: limit,
+            p_offset: offset,
+        });
+        if (error) throw error;
+        return (data as SchoolPost[]) ?? [];
     },
 
     /** Creer un post */
@@ -50,23 +42,13 @@ export const PostRepository = {
         const session = SessionManager.get();
         if (!session) throw new Error('Session required');
 
-        return DataProvider.write<SchoolPost>(
-            () => supabase.rpc('create_school_post', {
-                p_token: session.session_token,
-                p_content: content,
-                p_photos: photos,
-            }),
-            {
-                table: 'school_posts',
-                payload: {
-                    organization_id: session.organization_id,
-                    user_id: session.profile_id,
-                    user_type: session.role,
-                    content,
-                    photos,
-                },
-            }
-        );
+        const { data, error } = await supabase.rpc('create_school_post', {
+            p_token: session.session_token,
+            p_content: content,
+            p_photos: photos,
+        });
+        if (error) throw error;
+        return data as SchoolPost;
     },
 
     /** Modifier un post (auteur seulement) */
@@ -74,18 +56,14 @@ export const PostRepository = {
         const session = SessionManager.get();
         if (!session) throw new Error('Session required');
 
-        return DataProvider.write<SchoolPost>(
-            () => supabase.rpc('update_school_post', {
-                p_token: session.session_token,
-                p_post_id: postId,
-                p_content: content,
-                p_photos: photos ?? null,
-            }),
-            {
-                table: 'school_posts',
-                payload: { id: postId, content, photos, updated_at: new Date().toISOString() },
-            }
-        );
+        const { data, error } = await supabase.rpc('update_school_post', {
+            p_token: session.session_token,
+            p_post_id: postId,
+            p_content: content,
+            p_photos: photos ?? null,
+        });
+        if (error) throw error;
+        return data as SchoolPost;
     },
 
     /** Supprimer un post (auteur seulement) */
@@ -93,16 +71,12 @@ export const PostRepository = {
         const session = SessionManager.get();
         if (!session) throw new Error('Session required');
 
-        return DataProvider.write<boolean>(
-            () => supabase.rpc('delete_school_post', {
-                p_token: session.session_token,
-                p_post_id: postId,
-            }),
-            {
-                table: 'school_posts',
-                payload: { id: postId, _delete: true },
-            }
-        );
+        const { data, error } = await supabase.rpc('delete_school_post', {
+            p_token: session.session_token,
+            p_post_id: postId,
+        });
+        if (error) throw error;
+        return !!data;
     },
 
     /** Toggle like sur un post */
@@ -110,15 +84,11 @@ export const PostRepository = {
         const session = SessionManager.get();
         if (!session) throw new Error('Session required');
 
-        return DataProvider.write<{ liked: boolean; like_count: number }>(
-            () => supabase.rpc('toggle_like_post', {
-                p_token: session.session_token,
-                p_post_id: postId,
-            }),
-            {
-                table: 'school_posts',
-                payload: { id: postId, _toggle_like: true, user_id: session.profile_id },
-            }
-        );
+        const { data, error } = await supabase.rpc('toggle_like_post', {
+            p_token: session.session_token,
+            p_post_id: postId,
+        });
+        if (error) throw error;
+        return data as { liked: boolean; like_count: number };
     },
 };

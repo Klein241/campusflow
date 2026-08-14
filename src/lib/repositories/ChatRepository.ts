@@ -35,17 +35,13 @@ export const ChatRepository = {
         const session = SessionManager.get();
         if (!session) throw new Error('Session required');
 
-        return DataProvider.read<ChatMessage[]>(
-            () => supabase.rpc('get_chat_messages', {
-                p_token: session.session_token,
-                p_conversation_id: conversationId,
-                p_limit: limit,
-            }),
-            {
-                table: 'chat_messages',
-                params: { conversation_id: conversationId, limit: String(limit) },
-            }
-        ).then(data => data ?? []);
+        const { data, error } = await supabase.rpc('get_chat_messages', {
+            p_token: session.session_token,
+            p_conversation_id: conversationId,
+            p_limit: limit,
+        });
+        if (error) throw error;
+        return (data as ChatMessage[]) ?? [];
     },
 
     /** Envoyer un message */
@@ -53,22 +49,13 @@ export const ChatRepository = {
         const session = SessionManager.get();
         if (!session) throw new Error('Session required');
 
-        return DataProvider.write<ChatMessage>(
-            () => supabase.rpc('send_chat_message', {
-                p_token: session.session_token,
-                p_conversation_id: conversationId,
-                p_content: content,
-            }),
-            {
-                table: 'chat_messages',
-                payload: {
-                    conversation_id: conversationId,
-                    sender_id: session.profile_id,
-                    sender_type: session.role,
-                    content,
-                },
-            }
-        );
+        const { data, error } = await supabase.rpc('send_chat_message', {
+            p_token: session.session_token,
+            p_conversation_id: conversationId,
+            p_content: content,
+        });
+        if (error) throw error;
+        return data as ChatMessage;
     },
 
     /** Supprimer un message (auteur seulement) */
@@ -76,16 +63,12 @@ export const ChatRepository = {
         const session = SessionManager.get();
         if (!session) throw new Error('Session required');
 
-        return DataProvider.write<boolean>(
-            () => supabase.rpc('delete_chat_message', {
-                p_token: session.session_token,
-                p_message_id: messageId,
-            }),
-            {
-                table: 'chat_messages',
-                payload: { id: messageId, _delete: true },
-            }
-        );
+        const { data, error } = await supabase.rpc('delete_chat_message', {
+            p_token: session.session_token,
+            p_message_id: messageId,
+        });
+        if (error) throw error;
+        return !!data;
     },
 
     /** Lire les conversations de l utilisateur */
@@ -93,14 +76,10 @@ export const ChatRepository = {
         const session = SessionManager.get();
         if (!session) throw new Error('Session required');
 
-        return DataProvider.read<ChatConversation[]>(
-            () => supabase.rpc('get_conversations', {
-                p_token: session.session_token,
-            }),
-            {
-                table: 'chat_conversations',
-                params: { organization_id: session.organization_id },
-            }
-        ).then(data => data ?? []);
+        const { data, error } = await supabase.rpc('get_conversations', {
+            p_token: session.session_token,
+        });
+        if (error) throw error;
+        return (data as ChatConversation[]) ?? [];
     },
 };

@@ -13,6 +13,8 @@ export interface BulletinData {
         country?: string;
         motto?: string;
         current_term?: string;
+        signature_url?: string;
+        stamp_url?: string;
     };
     student: {
         first_name: string;
@@ -78,6 +80,14 @@ const progressColor = (avg: number): string => {
 };
 
 const dateNow = () => new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+const renderStampSignature = (sig?: string, stamp?: string, label: string = 'Cachet & Signature') => `
+    <div style="position:relative;display:inline-block;width:100%;min-height:45px;">
+        ${sig ? `<img src="${sig}" style="max-height:45px;max-width:130px;object-fit:contain;margin-bottom:2px;display:block;margin-left:auto;margin-right:auto;" alt="Signature" />` : '<div style="height:35px"></div>'}
+        ${stamp ? `<img src="${stamp}" style="position:absolute;right:5px;bottom:0px;max-height:60px;max-width:60px;object-fit:contain;opacity:0.85;transform:rotate(-6deg);pointer-events:none;" alt="Cachet" />` : ''}
+    </div>
+    <div style="border-top:1px solid #94a3b8;padding-top:4px;font-size:8pt;color:#64748b">${label}</div>
+`;
 
 // ── CSS SHARED ──────────────────────────────────────────
 
@@ -203,8 +213,8 @@ function template1Html(d: BulletinData): string {
         ${d.decision ? `<p style="margin-top:10px;font-size:10pt"><strong>Décision :</strong> <span class="mention-box" style="background:${d.overallAverage >= 10 ? '#dcfce7;color:#166534' : '#fee2e2;color:#991b1b'}">${d.decision}</span></p>` : ''}
 
         <div class="sig-area">
-            <div><p style="font-size:8pt;color:#64748b">Le Professeur Principal</p><div class="line">Signature</div></div>
-            <div><p style="font-size:8pt;color:#64748b">Le Directeur / Proviseur</p><div class="line">Cachet & Signature</div></div>
+            <div><p style="font-size:8pt;color:#64748b;margin-bottom:4px;">Le Professeur Principal</p><div style="border-top:1px solid #94a3b8;margin-top:45px;padding-top:4px;font-size:8pt;color:#64748b">Signature</div></div>
+            <div><p style="font-size:8pt;color:#64748b;margin-bottom:4px;">Le Directeur / Proviseur</p>${renderStampSignature(d.org.signature_url, d.org.stamp_url, 'Cachet & Signature')}</div>
         </div>
 
         <div style="text-align:center;margin-top:20px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">
@@ -288,9 +298,9 @@ function template2Html(d: BulletinData): string {
             </div>
         </div>
 
-        <div style="display:flex;justify-content:space-between;margin-top:40px">
-            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b">Le Chef de Département</p><div style="border-top:1px solid #94a3b8;margin-top:50px;padding-top:5px;font-size:8pt;color:#64748b">Signature</div></div>
-            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b">Le Doyen / Directeur</p><div style="border-top:1px solid #94a3b8;margin-top:50px;padding-top:5px;font-size:8pt;color:#64748b">Cachet & Signature</div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:35px">
+            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b;margin-bottom:4px;">Le Chef de Département</p><div style="border-top:1px solid #94a3b8;margin-top:45px;padding-top:4px;font-size:8pt;color:#64748b">Signature</div></div>
+            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b;margin-bottom:4px;">Le Doyen / Directeur</p>${renderStampSignature(d.org.signature_url, d.org.stamp_url, 'Cachet & Signature')}</div>
         </div>
 
         <div style="text-align:center;margin-top:20px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">
@@ -376,9 +386,9 @@ function template3Html(d: BulletinData): string {
             <p style="font-size:13pt;font-weight:800;color:${d.overallAverage >= 10 ? '#166534' : '#991b1b'}">${d.overallAverage >= 10 ? '✅ APTE' : '❌ NON APTE'}</p>
         </div>
 
-        <div style="display:flex;justify-content:space-between;margin-top:35px">
-            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b">Le Formateur Principal</p><div style="border-top:1px solid #94a3b8;margin-top:50px;padding-top:5px;font-size:8pt;color:#64748b">Signature</div></div>
-            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b">Le Directeur du Centre</p><div style="border-top:1px solid #94a3b8;margin-top:50px;padding-top:5px;font-size:8pt;color:#64748b">Cachet & Signature</div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:30px">
+            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b;margin-bottom:4px;">Le Formateur Principal</p><div style="border-top:1px solid #94a3b8;margin-top:45px;padding-top:4px;font-size:8pt;color:#64748b">Signature</div></div>
+            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b;margin-bottom:4px;">Le Directeur du Centre</p>${renderStampSignature(d.org.signature_url, d.org.stamp_url, 'Cachet & Signature')}</div>
         </div>
 
         <div style="text-align:center;margin-top:20px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">
@@ -465,10 +475,10 @@ function template4Html(d: BulletinData): string {
 
         ${d.rank ? `<p style="margin-top:8px;font-size:9pt;color:#475569"><strong>Class Position / Rang :</strong> ${d.rank}${d.totalStudents ? ` / ${d.totalStudents}` : ''}</p>` : ''}
 
-        <div style="display:flex;justify-content:space-between;margin-top:35px">
+        <div style="display:flex;justify-content:space-between;margin-top:30px">
             <div style="text-align:center;width:30%"><p style="font-size:7pt;color:#64748b">Class Teacher<br>Prof. Principal</p><div style="border-top:1px solid #94a3b8;margin-top:40px;padding-top:4px;font-size:7pt;color:#64748b">Signature</div></div>
             <div style="text-align:center;width:30%"><p style="font-size:7pt;color:#64748b">Vice-Principal<br>Censeur</p><div style="border-top:1px solid #94a3b8;margin-top:40px;padding-top:4px;font-size:7pt;color:#64748b">Signature</div></div>
-            <div style="text-align:center;width:30%"><p style="font-size:7pt;color:#64748b">Principal<br>Le Proviseur</p><div style="border-top:1px solid #94a3b8;margin-top:40px;padding-top:4px;font-size:7pt;color:#64748b">Stamp & Signature</div></div>
+            <div style="text-align:center;width:30%"><p style="font-size:7pt;color:#64748b;margin-bottom:2px;">Principal<br>Le Proviseur</p>${renderStampSignature(d.org.signature_url, d.org.stamp_url, 'Stamp & Signature')}</div>
         </div>
 
         <div style="text-align:center;margin-top:20px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">
@@ -575,9 +585,9 @@ function template5Html(d: BulletinData): string {
             </div>` : ''}
         </div>
 
-        <div style="display:flex;justify-content:space-between;margin-top:30px">
-            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b">Le Professeur Principal</p><div style="border-top:1px solid #94a3b8;margin-top:40px;padding-top:4px;font-size:8pt;color:#64748b">Signature</div></div>
-            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b">Le Directeur</p><div style="border-top:1px solid #94a3b8;margin-top:40px;padding-top:4px;font-size:8pt;color:#64748b">Cachet & Signature</div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:25px">
+            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b;margin-bottom:4px;">Le Professeur Principal</p><div style="border-top:1px solid #94a3b8;margin-top:40px;padding-top:4px;font-size:8pt;color:#64748b">Signature</div></div>
+            <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b;margin-bottom:4px;">Le Directeur</p>${renderStampSignature(d.org.signature_url, d.org.stamp_url, 'Cachet & Signature')}</div>
         </div>
 
         <div style="text-align:center;margin-top:15px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px">

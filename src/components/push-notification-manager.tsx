@@ -85,7 +85,7 @@ async function performSubscription(userId: string): Promise<boolean> {
         if (!sub) {
             sub = await reg.pushManager.subscribe({
                 userVisibleOnly: true,
-                applicationServerKey: keyBytes,
+                applicationServerKey: keyBytes as unknown as BufferSource,
             });
         }
 
@@ -189,7 +189,7 @@ export function PushNotificationManager() {
     const [show, setShow]         = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const initialized = useRef(false);
-    const timerRef    = useRef<ReturnType<typeof setTimeout>>();
+    const timerRef    = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     useEffect(() => {
         if (!user?.id || initialized.current) return;
