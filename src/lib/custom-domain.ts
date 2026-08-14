@@ -6,20 +6,32 @@
 
 /** Suffixes that identify the CampusFlow platform — NOT school custom domains */
 const PLATFORM_SUFFIXES = [
-    'netlify.app',    // catches campusflw.netlify.app, campusflow.netlify.app, any preview URL
+    'netlify.app',    // catches campusflw.netlify.app, mycampusfl.netlify.app, preview URLs
     'netlify.live',   // Netlify preview links
-    'campusflow.app', // production domain (if/when set)
+    'campusflow.app', // production domain
+    'readsgreat.site', // primary production domain
     'localhost',
     '127.0.0.1',
 ];
 
 /** Returns true if running on a school's custom domain (not the platform) */
 export function isCustomDomain(hostname?: string): boolean {
-    const h = hostname ?? (typeof window !== 'undefined' ? window.location.hostname : '');
+    const h = (hostname ?? (typeof window !== 'undefined' ? window.location.hostname : '')).toLowerCase();
     if (!h) return false;
+
+    // Check environment variable configured platform domain
+    const envDomain = (
+        (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_PLATFORM_DOMAIN) ||
+        (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_MAIN_DOMAIN) ||
+        ''
+    ).toLowerCase();
+    if (envDomain && (h === envDomain || h.endsWith('.' + envDomain))) {
+        return false;
+    }
+
     // Not a custom domain if hostname IS or ENDS WITH any platform suffix
     return !PLATFORM_SUFFIXES.some(suffix =>
-        h === suffix || h.endsWith('.' + suffix) || h.endsWith(suffix)
+        h === suffix || h.endsWith('.' + suffix)
     );
 }
 

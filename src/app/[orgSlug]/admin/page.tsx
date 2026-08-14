@@ -4007,6 +4007,29 @@ ${bodyHtml}
                 </div>
             )}
 
+            {/* Lightbox / Modal Image agrandie (Monitoring & Chat) */}
+            {selectedImageModal && (
+                <div
+                    className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4"
+                    onClick={() => setSelectedImageModal(null)}
+                >
+                    <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center">
+                        <img
+                            src={selectedImageModal}
+                            alt="Aperçu agrandi"
+                            className="max-w-full max-h-[85vh] object-contain rounded-2xl border border-white/10 shadow-2xl"
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                        <button
+                            onClick={() => setSelectedImageModal(null)}
+                            className="mt-3 px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold backdrop-blur transition"
+                        >
+                            ✕ Fermer
+                        </button>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 }

@@ -26,6 +26,24 @@ import {
  *
  * Falls back to `_` (the static placeholder slug) during initial hydration.
  */
+const RESERVED_ROOT_PATHS = new Set([
+    'campus',
+    'admin',
+    'login',
+    'library',
+    'shop',
+    'messages',
+    'student',
+    'prof',
+    'f',
+    'superadmin',
+    'demo',
+    'onboarding',
+    'api',
+    '_next',
+    '_',
+]);
+
 export function useOrgSlug(): string {
     const params = useParams<{ orgSlug: string }>();
 
@@ -64,23 +82,27 @@ export function useOrgSlug(): string {
 
     const slug = useMemo(() => {
         if (typeof window === 'undefined') {
-            return params.orgSlug || '_';
+            return params?.orgSlug || '_';
         }
 
-        // ─── Custom domain ───────────────────────────────────────────────
+        const segments = window.location.pathname.split('/').filter(Boolean);
+        const firstSegment = segments[0] || '';
+
+        // If the URL has a explicit school slug in the path (e.g. /the-greatsoft-academy/...),
+        // use it directly — whether on platform domain or any custom domain.
+        if (firstSegment && !RESERVED_ROOT_PATHS.has(firstSegment)) {
+            return firstSegment;
+        }
+
+        // ─── Custom domain without slug in path (e.g. ecole.com/campus) ───
         if (isCustomDomain()) {
-            // Return resolved slug or '_' placeholder while resolving
             return resolvedSlug || '_';
         }
 
-        // ─── Platform domain ─────────────────────────────────────────────
-        // URL: /the-great-academy/campus/ → orgSlug = "the-great-academy"
-        const segments = window.location.pathname.split('/').filter(Boolean);
+        // ─── Platform domain fallback ─────────────────────────────────────
         const urlSlug = segments[0] || '_';
-
-        // If URL shows '_' (the placeholder), fall back to useParams
-        return urlSlug === '_' ? (params.orgSlug || '_') : urlSlug;
-    }, [params.orgSlug, resolvedSlug]);
+        return urlSlug === '_' ? (params?.orgSlug || '_') : urlSlug;
+    }, [params?.orgSlug, resolvedSlug]);
 
     return slug;
 }

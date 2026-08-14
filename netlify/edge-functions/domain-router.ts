@@ -18,11 +18,11 @@
 // NOTE: No template literals used — Deno eszip bundler requires plain string concatenation.
 
 const PLATFORM_DOMAINS = [
-    "netlify.app",      // catches ALL *.netlify.app subdomains (campusflw, campusflow, previews...)
+    "netlify.app",      // catches ALL *.netlify.app subdomains (campusflw, mycampusfl, previews...)
     "netlify.live",     // Netlify deploy previews
     "campusflow.app",   // production domain
+    "readsgreat.site",  // primary production domain
 ];
-
 
 // Sub-paths that exist inside an org context
 const ORG_SUB_PATHS = [
@@ -39,19 +39,27 @@ const ORG_SUB_PATHS = [
 
 export default async function handler(request, context) {
     const url = new URL(request.url);
-    const hostname = url.hostname;
+    const hostname = url.hostname.toLowerCase();
+
+    // Check environment-configured platform domain (if set)
+    let envPlatformDomain = "";
+    try {
+        envPlatformDomain = (Deno.env.get("NEXT_PUBLIC_PLATFORM_DOMAIN") || Deno.env.get("NEXT_PUBLIC_MAIN_DOMAIN") || "").toLowerCase();
+    } catch (_e) {
+        // Deno env may not be available in all contexts
+    }
 
     // Platform domain or localhost -> pass through to normal Netlify redirects
     if (
         hostname === "localhost" ||
         hostname === "127.0.0.1" ||
+        (envPlatformDomain && (hostname === envPlatformDomain || hostname.endsWith("." + envPlatformDomain))) ||
         PLATFORM_DOMAINS.some(function(d) {
-            return hostname === d || hostname.endsWith("." + d) || hostname.endsWith(d);
+            return hostname === d || hostname.endsWith("." + d);
         })
     ) {
         return context.next();
     }
-
 
     // Custom domain detected
     const pathname = url.pathname;

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { isCustomDomain } from '@/lib/custom-domain';
 
 interface OrgBranding {
     isWhiteLabel: boolean;
@@ -14,8 +15,6 @@ interface OrgBranding {
     orgName: string;
     orgSlug: string;
 }
-
-const PLATFORM_DOMAINS = ['localhost', '127.0.0.1', 'campusflow.netlify.app', 'campusflow.app'];
 
 /**
  * Hook to detect white-label mode and provide branding info.
@@ -37,7 +36,7 @@ export function useWhiteLabel(orgSlug: string) {
 
     useEffect(() => {
         const hostname = window.location.hostname;
-        const isCustom = !PLATFORM_DOMAINS.some(d => hostname.includes(d));
+        const isCustom = isCustomDomain(hostname);
 
         (async () => {
             const { data: org } = await supabase
