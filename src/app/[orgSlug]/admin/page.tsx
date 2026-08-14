@@ -177,6 +177,29 @@ function AdminPageContent() {
     const [grGrades, setGrGrades] = useState<Record<string, string>>({}); const [grLoaded, setGrLoaded] = useState(false);
     // Filters / search
     const [teacherSearch, setTeacherSearch] = useState(''); const [studentSearch, setStudentSearch] = useState(''); const [studentClsFilter, setStudentClsFilter] = useState('');
+    // ── Tâche 2 : Students tab new features ──
+    const [studentSubTab, setStudentSubTab] = useState<'approved' | 'pending' | 'rejected'>('approved');
+    // Edit student modal
+    const [editStudentId, setEditStudentId] = useState<string | null>(null);
+    const [editStudentData, setEditStudentData] = useState<any>(null);
+    const [savingStudent, setSavingStudent] = useState(false);
+    // Migrate filière modal
+    const [migrateStudentId, setMigrateStudentId] = useState<string | null>(null);
+    const [migrateStudentName, setMigrateStudentName] = useState('');
+    const [migrateNewFiliereId, setMigrateNewFiliereId] = useState('');
+    const [migrateNewClsId, setMigrateNewClsId] = useState('');
+    const [savingMigrate, setSavingMigrate] = useState(false);
+    // Filieres list
+    const [filieres, setFilieres] = useState<any[]>([]);
+    // Chat detail for inscription requests
+    const [chatDetailId, setChatDetailId] = useState<string | null>(null);
+    // Send new info_needed form flag
+    const [sendFormReqId, setSendFormReqId] = useState<string | null>(null);
+    const [sendFormMsg, setSendFormMsg] = useState('');
+    // ── Tâche 3 : Suspension + Relevé de notes ──
+    const [suspendModal, setSuspendModal] = useState<{ id: string; name: string; type: 'student' | 'teacher'; isSuspended: boolean } | null>(null);
+    const [suspendReason, setSuspendReason] = useState('');
+    const [savingSuspend, setSavingSuspend] = useState(false);
     // Settings / Domain
     // Template selection state
     const [selBulletinTemplate, setSelBulletinTemplate] = useState(1);
@@ -341,7 +364,7 @@ function AdminPageContent() {
                 const { data: t } = await supabase.from('teacher_profiles').select('id, organization_id, first_name, last_name, speciality, email, phone, nationality, marital_status, children_count, residence, access_code, pin_set, created_at').eq('organization_id', o.id);
                 if (cancelled) return;
                 setTeachers(t || []);
-                const { data: st } = await supabase.from('student_profiles').select('id, organization_id, first_name, last_name, sex, birth_date, classroom_id, phone, guardian_name, guardian_phone, nationality, residence, matricule, access_code, pin_set, approval_status, created_at').eq('organization_id', o.id);
+                const { data: st } = await supabase.from('student_profiles').select('id, organization_id, first_name, last_name, sex, birth_date, classroom_id, filiere_id, phone, guardian_name, guardian_phone, nationality, residence, matricule, access_code, pin_set, approval_status, photo_url, sky_points, created_at, email, address').eq('organization_id', o.id);
                 if (cancelled) return;
                 setStudents(st || []);
                 // Charger les demandes d'inscription en attente
@@ -352,6 +375,9 @@ function AdminPageContent() {
                 const { data: rm } = await supabase.from('rooms').select('*').eq('organization_id', o.id).order('name');
                 if (cancelled) return;
                 setRooms((rm || []).map((x: any) => ({ id: x.id, name: x.name })));
+                // Charger les filières
+                const { data: fil } = await supabase.from('filieres').select('id, name').eq('organization_id', o.id).order('name');
+                if (!cancelled) setFilieres(fil || []);
                 if (!o.setup_completed && (c || []).length === 0) setTab('setup');
             } catch (err: any) {
                 if (cancelled) return;
@@ -604,6 +630,58 @@ function AdminPageContent() {
             setStudents(p => p.map(s => s.id === id ? { ...s, pin_set: false } : s));
             toast.success(`🔑 PIN de ${name} réinitialisé avec succès !`);
         } catch (e: any) { toast.error(e.message); }
+    };
+
+    // ── Tâche 3 : Suspension de comptes ──
+    const suspendAccount = async () => {
+        if (!suspendModal) return;
+        setSavingSuspend(true);
+        try {
+            const table = suspendModal.type === 'student' ? 'student_profiles' : 'teacher_profiles';
+            const willSuspend = !suspendModal.isSuspended;
+            const updateData: any = { is_active: !willSuspend };
+            if (willSuspend) updateData.suspension_reason = suspendReason.trim() || 'Suspendu par l\'administrateur';
+            else updateData.suspension_reason = null;
+            const { error } = await supabase.from(table).update(updateData).eq('id', suspendModal.id);
+            if (error) throw error;
+            if (suspendModal.type === 'student') {
+                setStudents(p => p.map((s: any) => s.id === suspendModal!.id ? { ...s, ...updateData } : s));
+            } else {
+                setTeachers(p => p.map((t: any) => t.id === suspendModal!.id ? { ...t, ...updateData } : t));
+            }
+            toast.success(willSuspend ? `🚫 ${suspendModal.name} suspendu(e)` : `✅ ${suspendModal.name} réactivé(e)`);
+            setSuspendModal(null); setSuspendReason('');
+        } catch (e: any) { toast.error(e.message); }
+        setSavingSuspend(false);
+    };
+
+    // ── Tâche 3 : Relevé de notes PDF ──
+    const exportReleveNotesPdf = async (student: any) => {
+        try {
+            const studentCls = cls.find(c => c.id === student.classroom_id);
+            const { data: evals } = await supabase.from('evaluations').select('*').eq('classroom_id', student.classroom_id).order('created_at');
+            const { data: grades } = await supabase.from('grades').select('*').eq('student_id', student.id);
+            const evalList = evals || [];
+            const gradeList = grades || [];
+            const rows = evalList.map((ev: any) => {
+                const g = gradeList.find((gr: any) => gr.evaluation_id === ev.id);
+                const score = g ? Number(g.value) : null;
+                const sur20 = score !== null && ev.max_score ? ((score / ev.max_score) * 20).toFixed(2) : '—';
+                const ok = score !== null && ev.max_score && (score / ev.max_score) * 20 >= 10;
+                return `<tr><td>${ev.title}</td><td>${ev.type || '—'}</td><td style="text-align:center">${ev.coefficient || 1}</td><td style="text-align:center">${score !== null ? `${score}/${ev.max_score}` : '<em style="color:#94a3b8">Absent</em>'}</td><td style="text-align:center;font-weight:bold;color:${ok ? '#16a34a' : '#dc2626'}">${sur20}/20</td></tr>`;
+            }).join('');
+            const totalCoeff = evalList.reduce((s: number, e: any) => s + (e.coefficient || 1), 0);
+            const moyNum = totalCoeff > 0 ? gradeList.reduce((s: number, g: any) => {
+                const ev = evalList.find((e: any) => e.id === g.evaluation_id);
+                if (!ev) return s;
+                return s + (Number(g.value) / ev.max_score) * 20 * (ev.coefficient || 1);
+            }, 0) / totalCoeff : null;
+            const moy = moyNum !== null ? moyNum.toFixed(2) : '—';
+            const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Relevé de notes — ${student.first_name} ${student.last_name}</title><style>body{font-family:Arial,sans-serif;color:#1e293b;padding:40px;max-width:800px;margin:auto}h1{font-size:20px;margin:0 0 4px}p.sub{color:#64748b;font-size:13px;margin:2px 0}table{width:100%;border-collapse:collapse;margin-top:20px;font-size:13px}th{background:#1e293b;color:#fff;padding:9px 12px;text-align:left}td{padding:8px 12px;border-bottom:1px solid #e2e8f0}tr:nth-child(even){background:#f8fafc}.moy{margin-top:16px;text-align:right;font-size:14px;font-weight:bold}.header{display:flex;justify-content:space-between}.org{text-align:right;font-size:12px;color:#64748b}</style></head><body><div class="header"><div><h1>Relevé de notes</h1><p class="sub">${student.first_name} ${student.last_name} — Matricule : ${student.matricule || '—'}</p><p class="sub">Classe : ${studentCls?.name || 'Non assignée'}</p></div><div class="org"><strong>${org?.name || ''}</strong><br/><small>Généré le ${new Date().toLocaleDateString('fr-FR')}</small></div></div><table><thead><tr><th>Évaluation</th><th>Type</th><th style="text-align:center">Coeff.</th><th style="text-align:center">Note</th><th style="text-align:center">/ 20</th></tr></thead><tbody>${rows || '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:20px">Aucune évaluation enregistrée</td></tr>'}</tbody></table><p class="moy">Moyenne générale : <span style="color:${moyNum !== null && moyNum >= 10 ? '#16a34a' : '#dc2626'}">${moy} / 20</span></p></body></html>`;
+            const w = window.open('', '_blank');
+            if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 600); }
+            toast.success('Relevé de notes généré !');
+        } catch (e: any) { toast.error('Erreur: ' + e.message); }
     };
     const saveSettings = async () => {
         setSSavingSettings(true);
@@ -1200,6 +1278,11 @@ ${bodyHtml}
                                                         <button onClick={() => resetTeacherPin(t.id, `${t.first_name} ${t.last_name}`)} className="text-[11px] px-2.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 font-medium flex items-center gap-1 transition" title="Réinitialiser le PIN">
                                                             <RefreshCw className="w-3 h-3" /> Reset PIN
                                                         </button>
+                                                        <button onClick={() => setSuspendModal({ id: t.id, name: `${t.first_name} ${t.last_name}`, type: 'teacher', isSuspended: t.is_active === false })}
+                                                            className={`text-[11px] px-2.5 py-2 rounded-xl border font-medium flex items-center gap-1 transition ${t.is_active === false ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/20' : 'bg-red-600/10 hover:bg-red-600/20 text-red-400 border-red-500/20'}`}
+                                                            title={t.is_active === false ? 'Réactiver le compte' : 'Suspendre le compte'}>
+                                                            {t.is_active === false ? '✅ Réactiver' : '🚫 Suspendre'}
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1211,312 +1294,529 @@ ${bodyHtml}
                     </div>}
 
                     {/* ═══ STUDENTS ═══ */}
-                    {tab === 'students' && <div className="space-y-4">
-                        {/* ── DEMANDES EN ATTENTE ── */}
-                        {(() => {
-                            const pending = inscRequests.filter((r: any) => r.status === 'pending' || r.status === 'info_needed');
-                            if (pending.length === 0) return null;
-                            return (
-                                <div className="p-5 rounded-2xl bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 space-y-4 shadow-xl">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xl">📋</span>
-                                            <h3 className="font-bold text-amber-300 text-base">Demandes d'inscription en attente ({pending.length})</h3>
-                                        </div>
-                                        <span className="text-xs text-amber-400/80 font-medium px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20">Action requise</span>
+                    {tab === 'students' && <div className="space-y-5">
+
+                        {/* ─── 3 sous-onglets ─── */}
+                        <div className="flex items-center gap-2 p-1 rounded-2xl bg-black/40 border border-white/10 w-full overflow-x-auto">
+                            {([
+                                { key: 'approved', label: '✅ Approuvés', count: students.filter((s: any) => s.approval_status === 'approved').length, color: 'from-emerald-600 to-teal-600' },
+                                { key: 'pending',  label: '⏳ En attente', count: inscRequests.filter((r: any) => r.status === 'pending' || r.status === 'info_needed').length, color: 'from-amber-600 to-orange-600' },
+                                { key: 'rejected', label: '❌ Rejetés',   count: inscRequests.filter((r: any) => r.status === 'rejected').length + students.filter((s: any) => s.approval_status === 'rejected').length, color: 'from-red-700 to-rose-700' },
+                            ] as const).map(st => (
+                                <button key={st.key} onClick={() => setStudentSubTab(st.key)}
+                                    className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${
+                                        studentSubTab === st.key
+                                            ? `bg-gradient-to-r ${st.color} text-white shadow-lg`
+                                            : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                    }`}>
+                                    {st.label}
+                                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-black ${
+                                        studentSubTab === st.key ? 'bg-white/20' : 'bg-white/5'
+                                    }`}>{st.count}</span>
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* ═══════════════ SOUS-ONGLET : APPROUVÉS ═══════════════ */}
+                        {studentSubTab === 'approved' && (
+                            <div className="space-y-4">
+                                {/* Toolbar */}
+                                <div className="flex items-center gap-3 flex-wrap">
+                                    <div className="relative flex-1 min-w-[200px]">
+                                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
+                                        <Input value={studentSearch} onChange={e => setStudentSearch(e.target.value)} placeholder="Nom, matricule ou code..." className="bg-white/5 border-white/10 text-white h-10 pl-10 rounded-xl" />
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {pending.map((req: any) => (
-                                            <div key={req.id} className="p-4 rounded-xl bg-[#111622] border border-white/10 space-y-3 shadow-md hover:border-amber-500/40 transition">
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <div>
-                                                        <h4 className="font-bold text-white text-base">{req.first_name} {req.last_name}</h4>
-                                                        <p className="text-xs text-slate-400">{req.phone || '—'} · {req.email || '—'}</p>
-                                                        <p className="text-[11px] text-slate-500 mt-0.5">Code: <code className="font-mono text-amber-300 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded">{req.access_code}</code> · {new Date(req.created_at).toLocaleDateString('fr')}</p>
-                                                        {req.document_url && (
-                                                            <a href={req.document_url} target="_blank" rel="noreferrer"
-                                                                className="inline-flex items-center gap-1 mt-1.5 text-xs text-blue-400 hover:text-blue-300 font-medium hover:underline">
-                                                                <FileText className="w-3.5 h-3.5" />Voir le document joint
-                                                            </a>
-                                                        )}
-
-                                                        {/* Réponse de l'étudiant */}
-                                                        {req.student_response && (
-                                                            <div className="mt-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-                                                                <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
-                                                                    💬 Réponse de l'étudiant :
-                                                                </p>
-                                                                <p className="text-xs text-white leading-relaxed">{req.student_response}</p>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex flex-col items-end gap-1.5 shrink-0">
-                                                        <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
-                                                            req.status === 'pending' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                                                        }`}>{req.status === 'pending' ? '⏳ En attente' : '📋 Infos requises'}</span>
-                                                        {req.student_response && (
-                                                            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 animate-pulse">
-                                                                🔔 Réponse reçue
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Zone message admin */}
-                                                {inscActionId === req.id && (
-                                                    <div className="space-y-2 pt-2 border-t border-white/5">
-                                                        <textarea value={inscMsg} onChange={e => setInscMsg(e.target.value)}
-                                                            placeholder="Message pour l'étudiant (optionnel pour approuver, obligatoire pour demander des infos)..."
-                                                            rows={2} className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white resize-none focus:border-amber-500/50 outline-none" />
-                                                    </div>
-                                                )}
-
-                                                {/* Actions */}
-                                                <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
-                                                    <button onClick={async () => {
-                                                        setInscSaving(true);
-                                                        try {
-                                                            // 1. Mettre à jour inscription_requests
-                                                            await supabase.from('inscription_requests').update({ status: 'approved', admin_message: inscMsg || null }).eq('id', req.id);
-                                                            
-                                                            // 2. Mettre à jour student_profiles par access_code
-                                                            let updatedSp: any[] | null = null;
-                                                            if (req.access_code) {
-                                                                const res = await supabase.from('student_profiles')
-                                                                    .update({ approval_status: 'approved' })
-                                                                    .eq('access_code', req.access_code)
-                                                                    .eq('organization_id', org.id)
-                                                                    .select();
-                                                                updatedSp = res.data;
-                                                            }
-
-                                                            // 3. Si student_profile absent, le créer immédiatement avec les infos complètes
-                                                            if (!updatedSp || updatedSp.length === 0) {
-                                                                const mat = `STU${Date.now().toString(36).toUpperCase()}`;
-                                                                await supabase.from('student_profiles').insert({
-                                                                    organization_id: org.id,
-                                                                    first_name:      req.first_name,
-                                                                    last_name:       req.last_name,
-                                                                    phone:           req.phone || null,
-                                                                    email:           req.email || null,
-                                                                    address:         req.address || null,
-                                                                    birth_date:      req.birth_date || null,
-                                                                    gender:          req.gender || null,
-                                                                    classroom_id:    req.classroom_id || null,
-                                                                    filiere_id:      req.filiere_id || null,
-                                                                    access_code:     req.access_code,
-                                                                    pin_code:        req.pin_code || null,
-                                                                    sky_points:      100,
-                                                                    pin_set:         true,
-                                                                    approval_status: 'approved',
-                                                                    matricule:       mat,
-                                                                    nationality:     req.nationality || null,
-                                                                    guardian_name:   req.guardian_name || null,
-                                                                    guardian_phone:  req.guardian_phone || null,
-                                                                    is_active:       true,
-                                                                });
-                                                            }
-
-                                                            setInscRequests(p => p.filter((r: any) => r.id !== req.id));
-                                                            // Refresh list
-                                                            const { data: freshStudents } = await supabase.from('student_profiles').select('*').eq('organization_id', org.id);
-                                                            if (freshStudents) setStudents(freshStudents);
-                                                            
-                                                            setInscActionId(null); setInscMsg('');
-                                                            toast.success(`✅ ${req.first_name} ${req.last_name} approuvé(e) !`);
-                                                        } catch (e: any) { toast.error(e.message); }
-                                                        setInscSaving(false);
-                                                    }} disabled={inscSaving}
-                                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white disabled:opacity-50 transition shadow-sm">
-                                                        {inscSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}Approuver
-                                                    </button>
-
-                                                    <button onClick={async () => {
-                                                        if (!inscMsg.trim()) { toast.error('Écrivez un message pour expliquer ce qui manque'); return; }
-                                                        setInscSaving(true);
-                                                        try {
-                                                            await supabase.from('inscription_requests').update({ status: 'info_needed', admin_message: inscMsg }).eq('id', req.id);
-                                                            await supabase.from('student_profiles').update({ approval_status: 'info_needed' }).or(`access_code.eq.${req.access_code},id.eq.${req.id}`).eq('organization_id', org.id);
-                                                            setInscRequests(p => p.map((r: any) => r.id === req.id ? { ...r, status: 'info_needed', admin_message: inscMsg } : r));
-                                                            setInscActionId(null); setInscMsg('');
-                                                            toast.success('Message envoyé à l\'étudiant');
-                                                        } catch (e: any) { toast.error(e.message); }
-                                                        setInscSaving(false);
-                                                    }} disabled={inscSaving}
-                                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white disabled:opacity-50 transition shadow-sm">
-                                                        <FileText className="w-3.5 h-3.5" />Demander des infos
-                                                    </button>
-
-                                                    <button onClick={async () => {
-                                                        setInscSaving(true);
-                                                        try {
-                                                            await supabase.from('inscription_requests').update({ status: 'rejected', admin_message: inscMsg || 'Demande non acceptée.' }).eq('id', req.id);
-                                                            await supabase.from('student_profiles').update({ approval_status: 'rejected' }).or(`access_code.eq.${req.access_code},id.eq.${req.id}`).eq('organization_id', org.id);
-                                                            setInscRequests(p => p.map((r: any) => r.id === req.id ? { ...r, status: 'rejected' } : r));
-                                                            setInscActionId(null); setInscMsg('');
-                                                            toast.success('Demande rejetée');
-                                                        } catch (e: any) { toast.error(e.message); }
-                                                        setInscSaving(false);
-                                                    }} disabled={inscSaving}
-                                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600/80 hover:bg-red-500 text-xs font-bold text-white disabled:opacity-50 transition shadow-sm">
-                                                        <X className="w-3.5 h-3.5" />Rejeter
-                                                    </button>
-
-                                                    <button onClick={() => { setInscActionId(inscActionId === req.id ? null : req.id); setInscMsg(req.admin_message || ''); }}
-                                                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs text-slate-400 border border-white/10 transition">
-                                                        <Edit className="w-3 h-3" />{inscActionId === req.id ? 'Annuler' : 'Message'}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
+                                    <select value={studentClsFilter} onChange={e => setStudentClsFilter(e.target.value)} className="h-10 rounded-xl bg-white/5 border border-white/10 text-white px-3 text-sm">
+                                        <option value="" className="bg-slate-900">Toutes classes</option>
+                                        {cls.filter(c => c.id).map(c => <option key={c.id} value={c.id!} className="bg-slate-900">{c.name}</option>)}
+                                    </select>
+                                    <Button size="sm" className="bg-teal-600 hover:bg-teal-500 rounded-xl" onClick={() => { setShowAddStudent(!showAddStudent); setSShowCode(''); }}>
+                                        <Plus className="w-4 h-4 mr-1" />{showAddStudent ? 'Fermer' : 'Inscrire'}
+                                    </Button>
                                 </div>
-                            );
-                        })()}
-                        <div className="flex items-center justify-between">
-                            <p className="text-sm text-slate-400">{students.length} étudiant(s)</p>
-                            <Button size="sm" className="bg-blue-600" onClick={() => { setShowAddStudent(!showAddStudent); setSShowCode(''); }}><Plus className="w-4 h-4 mr-1" />{showAddStudent ? 'Fermer' : 'Inscrire un étudiant'}</Button>
-                        </div>
-                        {showAddStudent && <div className="p-5 rounded-xl bg-blue-600/5 border border-blue-500/20 space-y-3">
-                            <h3 className="font-bold text-blue-300">🎓 Nouvel étudiant</h3>
-                            <div className="grid sm:grid-cols-3 gap-3">
-                                <div><Label className="text-slate-400 text-xs">Prénom *</Label><Input value={sFN} onChange={e => setSFN(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
-                                <div><Label className="text-slate-400 text-xs">Nom *</Label><Input value={sLN} onChange={e => setSLN(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
-                                <div><Label className="text-slate-400 text-xs">Sexe</Label><Sel v={sSex} onChange={setSSex} opts={[{ id: 'M', label: 'Masculin' }, { id: 'F', label: 'Féminin' }]} /></div>
-                                <div><Label className="text-slate-400 text-xs">Date de naissance</Label><Input type="date" value={sBirth} onChange={e => setSBirth(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
-                                <div><Label className="text-slate-400 text-xs">Classe *</Label><Sel v={sClsId} onChange={setSClsId} opts={cls.filter(c => c.id).map(c => ({ id: c.id!, label: c.name }))} ph="Choisir..." /></div>
-                                <div><Label className="text-slate-400 text-xs">Nationalité</Label><Input value={sNat} onChange={e => setSNat(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
-                                <div><Label className="text-slate-400 text-xs">Téléphone</Label><Input value={sPhone} onChange={e => setSPhone(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
-                                <div><Label className="text-slate-400 text-xs">Nom du tuteur</Label><Input value={sGuardian} onChange={e => setSGuardian(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
-                                <div><Label className="text-slate-400 text-xs">Tél. tuteur</Label><Input value={sGuardianPhone} onChange={e => setSGuardianPhone(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
-                                <div><Label className="text-slate-400 text-xs">Lieu de résidence</Label><Input value={sRes} onChange={e => setSRes(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
-                            </div>
-                            <Button onClick={createStudent} disabled={saving || !sFN.trim() || !sLN.trim() || !sClsId} className="bg-blue-600">{saving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}<UserPlus className="w-4 h-4 mr-1" />Inscrire l'étudiant</Button>
-                            {sShowCode && <div className="p-4 rounded-xl bg-blue-600/10 border border-blue-500/30 mt-2">
-                                <p className="text-sm font-bold text-blue-300">✅ Étudiant inscrit ! Code d'accès :</p>
-                                <div className="flex items-center gap-3 mt-2"><code className="text-2xl font-mono font-bold tracking-widest text-white bg-white/10 px-4 py-2 rounded-lg">{sShowCode}</code><Button size="sm" variant="outline" className="border-blue-500/20" onClick={() => { navigator.clipboard.writeText(sShowCode); toast.success('Code copié !'); }}>📋 Copier</Button></div>
-                                <p className="text-[10px] text-slate-500 mt-2">⚠️ Ce code unique permet à l'étudiant de se connecter. Transmettez-le de manière sécurisée.</p>
-                            </div>}
-                        </div>}
-                        <div className="flex gap-2">
-                            <div className="relative flex-1"><Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" /><Input value={studentSearch} onChange={e => setStudentSearch(e.target.value)} placeholder="Chercher par nom, matricule ou code..." className="bg-white/5 border-white/10 text-white h-10 pl-10 rounded-lg" /></div>
-                            <select value={studentClsFilter} onChange={e => setStudentClsFilter(e.target.value)} className="h-10 rounded-lg bg-white/5 border border-white/10 text-white px-3 text-sm"><option value="" className="bg-slate-900">Toutes classes</option>{cls.filter(c => c.id).map(c => <option key={c.id} value={c.id!} className="bg-slate-900">{c.name}</option>)}</select>
-                        </div>
-                        <p className="text-xs text-slate-500">{students.length} étudiant(s) • {cls.filter(c => c.id).map(c => `${c.name}: ${students.filter((s: any) => s.classroom_id === c.id).length}`).join(' • ')}</p>
-                        {(() => {
-                            const filtered = students.filter((s: any) => {
-                                const matchSearch = !studentSearch || `${s.first_name} ${s.last_name} ${s.matricule || ''} ${s.access_code || ''}`.toLowerCase().includes(studentSearch.toLowerCase());
-                                const matchCls = !studentClsFilter || s.classroom_id === studentClsFilter;
-                                return matchSearch && matchCls;
-                            });
-                            return filtered.length === 0 ? (
-                                <div className="text-center py-12 text-slate-500"><GraduationCap className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>Aucun étudiant trouvé</p></div>
-                            ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {filtered.map((s: any) => {
-                                        const isPending = s.approval_status === 'pending' || s.approval_status === 'info_needed';
-                                        return (
-                                        <div key={s.id} className={`relative group p-5 rounded-2xl transition-all duration-300 shadow-xl flex flex-col justify-between ${
-                                            isPending
-                                                ? 'bg-gradient-to-br from-amber-500/10 via-[#111622] to-[#0E121B] border-2 border-amber-500/50 hover:border-amber-400'
-                                                : 'bg-gradient-to-br from-[#131927] via-[#111622] to-[#0E121B] border border-white/10 hover:border-blue-500/40 hover:shadow-2xl hover:shadow-blue-500/5'
-                                        }`}>
-                                            <div>
-                                                {isPending && (
-                                                    <div className="mb-3 px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-between">
-                                                        <span className="text-xs text-amber-300 font-bold flex items-center gap-1.5">
-                                                            ⏳ Inscription en attente
-                                                        </span>
-                                                        <span className="text-[10px] text-amber-400/80 uppercase font-semibold">Non approuvé</span>
-                                                    </div>
-                                                )}
 
-                                                <div className="flex items-start justify-between gap-3 mb-3">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-base shadow-inner shrink-0 ${
-                                                            isPending
-                                                                ? 'bg-amber-500/20 border border-amber-500/30 text-amber-300'
-                                                                : 'bg-gradient-to-br from-blue-500/20 to-indigo-500/10 border border-blue-500/30 text-blue-300'
-                                                        }`}>
-                                                            {s.first_name?.[0]}{s.last_name?.[0]}
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <div className="flex items-center gap-1.5">
-                                                                <h4 className="font-bold text-white text-base group-hover:text-blue-300 transition-colors truncate">{s.first_name} {s.last_name}</h4>
-                                                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${s.sex === 'F' ? 'bg-pink-500/20 text-pink-300 border border-pink-500/30' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'}`}>
+                                {/* Formulaire ajout étudiant */}
+                                {showAddStudent && <div className="p-5 rounded-2xl bg-teal-600/5 border border-teal-500/20 space-y-3">
+                                    <h3 className="font-bold text-teal-300">🎓 Nouvel étudiant</h3>
+                                    <div className="grid sm:grid-cols-3 gap-3">
+                                        <div><Label className="text-slate-400 text-xs">Prénom *</Label><Input value={sFN} onChange={e => setSFN(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                        <div><Label className="text-slate-400 text-xs">Nom *</Label><Input value={sLN} onChange={e => setSLN(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                        <div><Label className="text-slate-400 text-xs">Sexe</Label><Sel v={sSex} onChange={setSSex} opts={[{ id: 'M', label: 'Masculin' }, { id: 'F', label: 'Féminin' }]} /></div>
+                                        <div><Label className="text-slate-400 text-xs">Date de naissance</Label><Input type="date" value={sBirth} onChange={e => setSBirth(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                        <div><Label className="text-slate-400 text-xs">Classe *</Label><Sel v={sClsId} onChange={setSClsId} opts={cls.filter(c => c.id).map(c => ({ id: c.id!, label: c.name }))} ph="Choisir..." /></div>
+                                        <div><Label className="text-slate-400 text-xs">Nationalité</Label><Input value={sNat} onChange={e => setSNat(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                        <div><Label className="text-slate-400 text-xs">Téléphone</Label><Input value={sPhone} onChange={e => setSPhone(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                        <div><Label className="text-slate-400 text-xs">Nom du tuteur</Label><Input value={sGuardian} onChange={e => setSGuardian(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                        <div><Label className="text-slate-400 text-xs">Tél. tuteur</Label><Input value={sGuardianPhone} onChange={e => setSGuardianPhone(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                        <div><Label className="text-slate-400 text-xs">Résidence</Label><Input value={sRes} onChange={e => setSRes(e.target.value)} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                    </div>
+                                    <Button onClick={createStudent} disabled={saving || !sFN.trim() || !sLN.trim() || !sClsId} className="bg-teal-600">{saving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}<UserPlus className="w-4 h-4 mr-1" />Inscrire l'étudiant</Button>
+                                    {sShowCode && <div className="p-4 rounded-xl bg-teal-600/10 border border-teal-500/30 mt-2">
+                                        <p className="text-sm font-bold text-teal-300">✅ Étudiant inscrit ! Code d'accès :</p>
+                                        <div className="flex items-center gap-3 mt-2"><code className="text-2xl font-mono font-bold tracking-widest text-white bg-white/10 px-4 py-2 rounded-lg">{sShowCode}</code><Button size="sm" variant="outline" className="border-teal-500/20" onClick={() => { navigator.clipboard.writeText(sShowCode); toast.success('Code copié !'); }}>📋 Copier</Button></div>
+                                    </div>}
+                                </div>}
+
+                                {/* Grille cartes étudiants approuvés */}
+                                {(() => {
+                                    const filtered = students.filter((s: any) => {
+                                        const isApproved = s.approval_status === 'approved' || (!s.approval_status);
+                                        const matchSearch = !studentSearch || `${s.first_name} ${s.last_name} ${s.matricule || ''} ${s.access_code || ''}`.toLowerCase().includes(studentSearch.toLowerCase());
+                                        const matchCls = !studentClsFilter || s.classroom_id === studentClsFilter;
+                                        return isApproved && matchSearch && matchCls;
+                                    });
+                                    if (filtered.length === 0) return (
+                                        <div className="text-center py-16 text-slate-500"><GraduationCap className="w-14 h-14 mx-auto mb-3 opacity-20" /><p className="text-sm">Aucun étudiant approuvé</p></div>
+                                    );
+                                    return (
+                                        <>
+                                            <p className="text-xs text-slate-500">{filtered.length} étudiant(s)</p>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                                                {filtered.map((s: any) => (
+                                                    <div key={s.id} className="group relative rounded-2xl overflow-hidden border border-white/10 hover:border-teal-500/40 bg-gradient-to-br from-[#131927] via-[#111622] to-[#0E121B] shadow-xl hover:shadow-2xl hover:shadow-teal-500/5 transition-all duration-300">
+                                                        {/* Header avec photo */}
+                                                        <div className="relative h-16 bg-gradient-to-r from-teal-600/20 to-indigo-600/10">
+                                                            <div className="absolute -bottom-7 left-4">
+                                                                {s.photo_url ? (
+                                                                    <img src={s.photo_url} alt={s.first_name} className="w-14 h-14 rounded-2xl object-cover border-2 border-[#111622] shadow-lg" />
+                                                                ) : (
+                                                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl border-2 border-[#111622] shadow-lg ${s.sex === 'F' ? 'bg-gradient-to-br from-pink-500/30 to-rose-600/20 text-pink-300' : 'bg-gradient-to-br from-teal-500/30 to-indigo-600/20 text-teal-300'}`}>
+                                                                        {s.first_name?.[0]}{s.last_name?.[0]}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <div className="absolute top-2 right-3 flex items-center gap-1.5">
+                                                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${s.sex === 'F' ? 'bg-pink-500/20 text-pink-300 border border-pink-500/30' : 'bg-teal-500/20 text-teal-300 border border-teal-500/30'}`}>
                                                                     {s.sex === 'F' ? '♀' : '♂'}
                                                                 </span>
+                                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">✓ Approuvé</span>
                                                             </div>
-                                                            <p className="text-xs text-indigo-400 font-medium truncate">
-                                                                {cls.find(c => c.id === s.classroom_id)?.name || 'Sans classe'}
-                                                            </p>
+                                                        </div>
+
+                                                        {/* Corps de la carte */}
+                                                        <div className="pt-9 px-3 pb-3 space-y-2">
+                                                            <div>
+                                                                <h4 className="font-bold text-white text-sm group-hover:text-teal-300 transition-colors truncate">{s.first_name} {s.last_name}</h4>
+                                                                <p className="text-xs text-indigo-400 font-medium truncate">{cls.find(c => c.id === s.classroom_id)?.name || 'Sans classe'}</p>
+                                                            </div>
+                                                            {/* Badge suspendu */}
+                                                            {s.is_active === false && (
+                                                                <div className="px-2 py-1 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center gap-1.5">
+                                                                    <span className="text-[10px] text-red-300 font-bold">🚫 Suspendu</span>
+                                                                    {s.suspension_reason && <span className="text-[9px] text-red-400 truncate">{s.suspension_reason}</span>}
+                                                                </div>
+                                                            )}
+                                                            <div className="space-y-1 text-[11px] text-slate-400 bg-black/30 p-2 rounded-xl border border-white/5">
+                                                                <div className="flex justify-between"><span className="text-slate-500">Matricule</span><span className="font-mono text-slate-200 font-semibold truncate">{s.matricule || '—'}</span></div>
+                                                                {s.phone && <div className="flex justify-between"><span className="text-slate-500">Tél</span><span>{s.phone}</span></div>}
+                                                                {(s.sky_points !== undefined) && <div className="flex justify-between"><span className="text-slate-500">Sky Pts</span><span className="text-amber-300 font-bold">⭐ {s.sky_points}</span></div>}
+                                                            </div>
+
+                                                            {/* Actions — grille compacte */}
+                                                            <div className="grid grid-cols-2 gap-1.5 pt-1">
+                                                                <button onClick={() => { setEditStudentId(s.id); setEditStudentData({ ...s }); }} className="text-[10px] py-1.5 rounded-xl bg-indigo-600/15 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/20 font-semibold flex items-center justify-center gap-1 transition">
+                                                                    <Edit className="w-3 h-3" /> Modifier
+                                                                </button>
+                                                                <button onClick={() => { setMigrateStudentId(s.id); setMigrateStudentName(`${s.first_name} ${s.last_name}`); setMigrateNewFiliereId(s.filiere_id || ''); setMigrateNewClsId(s.classroom_id || ''); }} className="text-[10px] py-1.5 rounded-xl bg-violet-600/15 hover:bg-violet-600/30 text-violet-300 border border-violet-500/20 font-semibold flex items-center justify-center gap-1 transition">
+                                                                    <ArrowRight className="w-3 h-3" /> Migrer
+                                                                </button>
+                                                                <button onClick={() => exportStudentBulletinPdf(s)} className="text-[10px] py-1.5 rounded-xl bg-slate-700/30 hover:bg-slate-600/40 text-slate-300 border border-white/10 font-semibold flex items-center justify-center gap-1 transition">
+                                                                    <Printer className="w-3 h-3" /> Bulletin
+                                                                </button>
+                                                                <button onClick={() => exportReleveNotesPdf(s)} className="text-[10px] py-1.5 rounded-xl bg-blue-600/15 hover:bg-blue-600/30 text-blue-300 border border-blue-500/20 font-semibold flex items-center justify-center gap-1 transition">
+                                                                    <ClipboardList className="w-3 h-3" /> Relevé
+                                                                </button>
+                                                            </div>
+                                                            <div className="flex gap-1.5">
+                                                                <button onClick={() => resetStudentPin(s.id, s.access_code, `${s.first_name} ${s.last_name}`)} className="flex-1 text-[10px] py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 font-medium flex items-center justify-center gap-1 transition">
+                                                                    <RefreshCw className="w-3 h-3" /> Reset PIN
+                                                                </button>
+                                                                <button onClick={() => setSuspendModal({ id: s.id, name: `${s.first_name} ${s.last_name}`, type: 'student', isSuspended: s.is_active === false })}
+                                                                    className={`px-2.5 py-1.5 rounded-xl border font-medium text-[10px] flex items-center gap-1 transition ${s.is_active === false ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/20' : 'bg-red-600/10 hover:bg-red-600/20 text-red-400 border-red-500/20'}`}>
+                                                                    {s.is_active === false ? '✅' : '🚫'}
+                                                                </button>
+                                                                <button onClick={() => deleteStudent(s.id)} className="px-2.5 py-1.5 rounded-xl bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20 transition">
+                                                                    <Trash2 className="w-3 h-3" />
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                    <button onClick={() => deleteStudent(s.id)} className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition" title="Supprimer">
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                </div>
+                                                ))}
+                                            </div>
+                                        </>
+                                    );
+                                })()}
+                            </div>
+                        )}
 
-                                                <div className="space-y-1.5 text-xs text-slate-400 mb-4 bg-black/30 p-2.5 rounded-xl border border-white/5">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-slate-500">Matricule</span>
-                                                        <span className="font-mono text-slate-200 font-semibold">{s.matricule || '—'}</span>
+                        {/* ═══════════════ SOUS-ONGLET : EN ATTENTE ═══════════════ */}
+                        {studentSubTab === 'pending' && (
+                            <div className="space-y-4">
+                                {(() => {
+                                    const pending = inscRequests.filter((r: any) => r.status === 'pending' || r.status === 'info_needed');
+                                    if (pending.length === 0) return (
+                                        <div className="text-center py-16 text-slate-500"><ClipboardList className="w-14 h-14 mx-auto mb-3 opacity-20" /><p className="text-sm">Aucune demande en attente</p></div>
+                                    );
+                                    return (
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                                            {pending.map((req: any) => (
+                                                <div key={req.id} className="rounded-2xl border border-white/10 hover:border-amber-500/30 bg-gradient-to-br from-[#131927] to-[#0E121B] shadow-xl transition-all duration-300 overflow-hidden">
+                                                    {/* Header */}
+                                                    <div className="flex items-center gap-3 p-4 border-b border-white/5">
+                                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-base shrink-0 ${
+                                                            req.status === 'info_needed' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                                        }`}>{req.first_name?.[0]}{req.last_name?.[0]}</div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <h4 className="font-bold text-white text-base truncate">{req.first_name} {req.last_name}</h4>
+                                                            <p className="text-xs text-slate-400">{req.phone || '—'} · {req.email || '—'}</p>
+                                                            <p className="text-[10px] text-slate-500 mt-0.5">Code: <code className="font-mono text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded">{req.access_code}</code> · {new Date(req.created_at).toLocaleDateString('fr')}</p>
+                                                        </div>
+                                                        <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold shrink-0 ${
+                                                            req.status === 'pending' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                                                        }`}>{req.status === 'pending' ? '⏳ En attente' : '📋 Infos requises'}</span>
                                                     </div>
-                                                    {s.phone && <div className="flex items-center justify-between"><span className="text-slate-500">Tél</span><span className="text-slate-300">{s.phone}</span></div>}
-                                                    {s.guardian_name && (
-                                                        <div className="flex items-center justify-between text-[11px] pt-1 border-t border-white/5">
-                                                            <span className="text-slate-500">Tuteur</span>
-                                                            <span className="text-slate-300 truncate max-w-[140px]">{s.guardian_name} {s.guardian_phone ? `(${s.guardian_phone})` : ''}</span>
+
+                                                    {/* Historique Chat */}
+                                                    <div className="px-4 py-3 space-y-2">
+                                                        <button onClick={() => setChatDetailId(chatDetailId === req.id ? null : req.id)} className="w-full flex items-center justify-between text-xs text-slate-400 hover:text-white transition">
+                                                            <span className="font-semibold flex items-center gap-1.5">💬 Historique échanges {(req.admin_message || req.student_response) ? <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span> : null}</span>
+                                                            <span>{chatDetailId === req.id ? '▲' : '▼'}</span>
+                                                        </button>
+
+                                                        {chatDetailId === req.id && (
+                                                            <div className="space-y-2 mt-1">
+                                                                {/* Message admin */}
+                                                                {req.admin_message && (
+                                                                    <div className="flex justify-end">
+                                                                        <div className="max-w-[85%] p-3 rounded-2xl rounded-tr-sm bg-indigo-600/20 border border-indigo-500/30">
+                                                                            <p className="text-[10px] font-bold text-indigo-300 mb-1">👤 Admin</p>
+                                                                            <p className="text-xs text-white leading-relaxed">{req.admin_message}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                                {/* Réponse étudiant */}
+                                                                {req.student_response && (
+                                                                    <div className="flex justify-start">
+                                                                        <div className="max-w-[85%] p-3 rounded-2xl rounded-tl-sm bg-emerald-500/10 border border-emerald-500/30">
+                                                                            <p className="text-[10px] font-bold text-emerald-300 mb-1">🎓 Étudiant</p>
+                                                                            <p className="text-xs text-white leading-relaxed">{req.student_response}</p>
+                                                                            {req.document_url && (
+                                                                                <a href={req.document_url} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 hover:underline">
+                                                                                    <FileText className="w-3 h-3" /> Voir la pièce jointe
+                                                                                </a>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                                {/* Pièce jointe sans texte */}
+                                                                {req.document_url && !req.student_response && (
+                                                                    <div className="flex justify-start">
+                                                                        <div className="p-3 rounded-2xl rounded-tl-sm bg-emerald-500/10 border border-emerald-500/30">
+                                                                            <a href={req.document_url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 hover:underline">
+                                                                                <FileText className="w-3.5 h-3.5" /> Pièce jointe envoyée par l'étudiant
+                                                                            </a>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                                {!req.admin_message && !req.student_response && !req.document_url && (
+                                                                    <p className="text-center text-[11px] text-slate-600 py-2">Aucun échange pour l'instant</p>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Zone message admin */}
+                                                    {inscActionId === req.id && (
+                                                        <div className="px-4 pb-3">
+                                                            <textarea value={inscMsg} onChange={e => setInscMsg(e.target.value)}
+                                                                placeholder="Votre message pour l'étudiant..."
+                                                                rows={2} className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white resize-none focus:border-amber-500/50 outline-none" />
                                                         </div>
                                                     )}
-                                                    {s.residence && <div className="text-[11px] text-slate-400 truncate"><span className="text-slate-500">Résidence: </span>{s.residence}</div>}
-                                                </div>
-                                            </div>
 
-                                            <div className="pt-3 border-t border-white/5 space-y-2">
-                                                {/* Bouton d'approbation directe si l'étudiant est en attente */}
-                                                {isPending && (
+                                                    {/* Actions */}
+                                                    <div className="px-4 pb-4 flex flex-wrap gap-2">
+                                                        <button onClick={async () => {
+                                                            setInscSaving(true);
+                                                            try {
+                                                                const { error: irErr } = await supabase.from('inscription_requests').update({ status: 'approved', admin_message: inscMsg || null }).eq('id', req.id);
+                                                                if (irErr) await supabase.from('inscription_requests').update({ status: 'accepted', admin_message: inscMsg || null }).eq('id', req.id);
+                                                                let updatedSp: any[] | null = null;
+                                                                const { data: resSp } = await supabase.from('student_profiles').update({ approval_status: 'approved' }).or(req.access_code ? `access_code.eq.${req.access_code},id.eq.${req.id}` : `id.eq.${req.id}`).eq('organization_id', org.id).select();
+                                                                updatedSp = resSp;
+                                                                if (!updatedSp || updatedSp.length === 0) {
+                                                                    const mat = `STU${Date.now().toString(36).toUpperCase()}`;
+                                                                    await supabase.from('student_profiles').insert({ organization_id: org.id, first_name: req.first_name, last_name: req.last_name, phone: req.phone || null, email: req.email || null, address: req.address || null, birth_date: req.birth_date || null, gender: req.gender || null, classroom_id: req.classroom_id || null, filiere_id: req.filiere_id || null, access_code: req.access_code, pin_code: req.pin_code || null, sky_points: 100, pin_set: true, approval_status: 'approved', matricule: mat, nationality: req.nationality || null, guardian_name: req.guardian_name || null, guardian_phone: req.guardian_phone || null, is_active: true });
+                                                                }
+                                                                setInscRequests(p => p.filter((r: any) => r.id !== req.id));
+                                                                const { data: freshStudents } = await supabase.from('student_profiles').select('id, organization_id, first_name, last_name, sex, birth_date, classroom_id, filiere_id, phone, guardian_name, guardian_phone, nationality, residence, matricule, access_code, pin_set, approval_status, photo_url, sky_points, created_at, email, address').eq('organization_id', org.id);
+                                                                if (freshStudents) setStudents(freshStudents);
+                                                                setInscActionId(null); setInscMsg('');
+                                                                toast.success(`✅ ${req.first_name} ${req.last_name} approuvé(e) !`);
+                                                            } catch (e: any) { toast.error(e.message); }
+                                                            setInscSaving(false);
+                                                        }} disabled={inscSaving} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white disabled:opacity-50 transition shadow-sm">
+                                                            {inscSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}Approuver
+                                                        </button>
+
+                                                        <button onClick={async () => {
+                                                            if (!inscMsg.trim()) { toast.error('Écrivez un message pour l\'étudiant'); return; }
+                                                            setInscSaving(true);
+                                                            try {
+                                                                await supabase.from('inscription_requests').update({ status: 'info_needed', admin_message: inscMsg }).eq('id', req.id);
+                                                                await supabase.from('student_profiles').update({ approval_status: 'info_needed' }).or(`access_code.eq.${req.access_code},id.eq.${req.id}`).eq('organization_id', org.id);
+                                                                setInscRequests(p => p.map((r: any) => r.id === req.id ? { ...r, status: 'info_needed', admin_message: inscMsg } : r));
+                                                                setInscActionId(null); setInscMsg('');
+                                                                toast.success('Message envoyé à l\'étudiant');
+                                                            } catch (e: any) { toast.error(e.message); }
+                                                            setInscSaving(false);
+                                                        }} disabled={inscSaving} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white disabled:opacity-50 transition shadow-sm">
+                                                            <FileText className="w-3.5 h-3.5" />Demander des infos
+                                                        </button>
+
+                                                        <button onClick={async () => {
+                                                            setInscSaving(true);
+                                                            try {
+                                                                await supabase.from('inscription_requests').update({ status: 'rejected', admin_message: inscMsg || 'Demande non acceptée.' }).eq('id', req.id);
+                                                                await supabase.from('student_profiles').update({ approval_status: 'rejected' }).or(`access_code.eq.${req.access_code},id.eq.${req.id}`).eq('organization_id', org.id);
+                                                                setInscRequests(p => p.map((r: any) => r.id === req.id ? { ...r, status: 'rejected' } : r));
+                                                                setInscActionId(null); setInscMsg('');
+                                                                toast.success('Demande rejetée');
+                                                            } catch (e: any) { toast.error(e.message); }
+                                                            setInscSaving(false);
+                                                        }} disabled={inscSaving} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600/80 hover:bg-red-500 text-xs font-bold text-white disabled:opacity-50 transition shadow-sm">
+                                                            <X className="w-3.5 h-3.5" />Rejeter
+                                                        </button>
+
+                                                        <button onClick={() => { setInscActionId(inscActionId === req.id ? null : req.id); setInscMsg(req.admin_message || ''); }}
+                                                            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs text-slate-400 border border-white/10 transition">
+                                                            <Edit className="w-3 h-3" />{inscActionId === req.id ? 'Annuler' : 'Écrire message'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        )}
+
+                        {/* ═══════════════ SOUS-ONGLET : REJETÉS ═══════════════ */}
+                        {studentSubTab === 'rejected' && (
+                            <div className="space-y-4">
+                                {(() => {
+                                    const rejFromInsc = inscRequests.filter((r: any) => r.status === 'rejected');
+                                    const rejFromStu = students.filter((s: any) => s.approval_status === 'rejected');
+                                    const all = [
+                                        ...rejFromInsc.map((r: any) => ({ ...r, _source: 'request' })),
+                                        ...rejFromStu.filter((s: any) => !rejFromInsc.some((r: any) => r.access_code === s.access_code)).map((s: any) => ({ ...s, _source: 'profile' })),
+                                    ];
+                                    if (all.length === 0) return (
+                                        <div className="text-center py-16 text-slate-500"><X className="w-14 h-14 mx-auto mb-3 opacity-20" /><p className="text-sm">Aucune demande rejetée</p></div>
+                                    );
+                                    return (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {all.map((item: any) => (
+                                                <div key={item.id} className="rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-900/10 to-[#0E121B] shadow-lg p-4 space-y-3">
+                                                    <div className="flex items-start gap-3">
+                                                        <div className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-base bg-red-500/15 text-red-300 border border-red-500/30 shrink-0">
+                                                            {item.first_name?.[0]}{item.last_name?.[0]}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <h4 className="font-bold text-white truncate">{item.first_name} {item.last_name}</h4>
+                                                            <p className="text-xs text-slate-400">{item.phone || item.email || '—'}</p>
+                                                            <p className="text-[10px] text-slate-500">Rejeté le {new Date(item.updated_at || item.created_at).toLocaleDateString('fr')}</p>
+                                                        </div>
+                                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 font-bold shrink-0">❌ Rejeté</span>
+                                                    </div>
+                                                    {item.admin_message && (
+                                                        <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20">
+                                                            <p className="text-[10px] text-red-300 font-bold mb-0.5">Motif :</p>
+                                                            <p className="text-xs text-slate-300">{item.admin_message}</p>
+                                                        </div>
+                                                    )}
+                                                    {/* Re-approuver */}
                                                     <button onClick={async () => {
                                                         try {
-                                                            await supabase.from('student_profiles').update({ approval_status: 'approved' }).eq('id', s.id);
-                                                            if (s.access_code) {
-                                                                await supabase.from('inscription_requests').update({ status: 'approved' }).eq('access_code', s.access_code);
+                                                            if (item._source === 'request') {
+                                                                const { error: irErr } = await supabase.from('inscription_requests').update({ status: 'approved' }).eq('id', item.id);
+                                                                if (irErr) await supabase.from('inscription_requests').update({ status: 'accepted' }).eq('id', item.id);
+                                                                await supabase.from('student_profiles').update({ approval_status: 'approved' }).or(`access_code.eq.${item.access_code},id.eq.${item.id}`).eq('organization_id', org.id);
+                                                                setInscRequests(p => p.filter((r: any) => r.id !== item.id));
+                                                            } else {
+                                                                await supabase.from('student_profiles').update({ approval_status: 'approved' }).eq('id', item.id);
+                                                                setStudents(p => p.map((s: any) => s.id === item.id ? { ...s, approval_status: 'approved' } : s));
                                                             }
-                                                            setStudents(prev => prev.map((st: any) => st.id === s.id ? { ...st, approval_status: 'approved' } : st));
-                                                            setInscRequests(prev => prev.filter((r: any) => r.access_code !== s.access_code));
-                                                            toast.success(`✅ ${s.first_name} ${s.last_name} approuvé(e) !`);
-                                                        } catch (err: any) {
-                                                            toast.error(err.message);
-                                                        }
-                                                    }} className="w-full text-xs py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center justify-center gap-1.5 transition shadow-md shadow-emerald-600/20">
-                                                        <CheckCircle2 className="w-4 h-4" /> Approuver l'inscription
-                                                    </button>
-                                                )}
-                                                
-                                                <button onClick={() => exportStudentBulletinPdf(s)} className="w-full text-xs py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 font-semibold flex items-center justify-center gap-1.5 transition shadow-sm">
-                                                    <Printer className="w-3.5 h-3.5" /> Bulletin PDF
-                                                </button>
-
-                                                <div className="flex items-center gap-2">
-                                                    {s.access_code && (
-                                                        <div className="flex-1 flex items-center justify-between bg-black/40 px-3 py-1.5 rounded-xl border border-white/5">
-                                                            <span className="text-[10px] text-slate-500 uppercase font-semibold">Code</span>
-                                                            <button onClick={() => { navigator.clipboard.writeText(s.access_code); toast.success('Code copié !'); }} className="text-xs font-mono font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1">
-                                                                {s.access_code} <Copy className="w-3 h-3" />
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                    <button onClick={() => resetStudentPin(s.id, s.access_code, `${s.first_name} ${s.last_name}`)} className="text-[11px] px-2.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 font-medium flex items-center gap-1 transition" title="Réinitialiser le PIN">
-                                                        <RefreshCw className="w-3 h-3" /> Reset PIN
+                                                            toast.success(`✅ ${item.first_name} réactivé(e)`);
+                                                        } catch (e: any) { toast.error(e.message); }
+                                                    }} className="w-full text-xs py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 font-semibold flex items-center justify-center gap-1.5 transition">
+                                                        <CheckCircle2 className="w-3.5 h-3.5" /> Ré-approuver
                                                     </button>
                                                 </div>
-                                            </div>
+                                            ))}
                                         </div>
-                                        );
-                                    })}
+                                    );
+                                })()}
+                            </div>
+                        )}
+
+                        {/* ─── MODAL ÉDITION ÉTUDIANT ─── */}
+                        {editStudentId && editStudentData && (
+                            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                                <div className="w-full max-w-xl rounded-3xl bg-[#0E121B] border border-white/15 shadow-2xl p-6 space-y-5 overflow-y-auto max-h-[90vh]">
+                                    <div className="flex items-center justify-between">
+                                        <h2 className="text-lg font-black text-white">✏️ Modifier le profil</h2>
+                                        <button onClick={() => { setEditStudentId(null); setEditStudentData(null); }} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition"><X className="w-5 h-5" /></button>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div><Label className="text-slate-400 text-xs">Prénom *</Label><Input value={editStudentData.first_name || ''} onChange={e => setEditStudentData((p: any) => ({ ...p, first_name: e.target.value }))} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                        <div><Label className="text-slate-400 text-xs">Nom *</Label><Input value={editStudentData.last_name || ''} onChange={e => setEditStudentData((p: any) => ({ ...p, last_name: e.target.value }))} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                        <div><Label className="text-slate-400 text-xs">Téléphone</Label><Input value={editStudentData.phone || ''} onChange={e => setEditStudentData((p: any) => ({ ...p, phone: e.target.value }))} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                        <div><Label className="text-slate-400 text-xs">Email</Label><Input type="email" value={editStudentData.email || ''} onChange={e => setEditStudentData((p: any) => ({ ...p, email: e.target.value }))} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                        <div><Label className="text-slate-400 text-xs">Date de naissance</Label><Input type="date" value={editStudentData.birth_date || ''} onChange={e => setEditStudentData((p: any) => ({ ...p, birth_date: e.target.value }))} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                        <div><Label className="text-slate-400 text-xs">Nationalité</Label><Input value={editStudentData.nationality || ''} onChange={e => setEditStudentData((p: any) => ({ ...p, nationality: e.target.value }))} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                        <div><Label className="text-slate-400 text-xs">Nom du tuteur</Label><Input value={editStudentData.guardian_name || ''} onChange={e => setEditStudentData((p: any) => ({ ...p, guardian_name: e.target.value }))} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                        <div><Label className="text-slate-400 text-xs">Tél. tuteur</Label><Input value={editStudentData.guardian_phone || ''} onChange={e => setEditStudentData((p: any) => ({ ...p, guardian_phone: e.target.value }))} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                        <div className="col-span-2"><Label className="text-slate-400 text-xs">Adresse / Résidence</Label><Input value={editStudentData.address || editStudentData.residence || ''} onChange={e => setEditStudentData((p: any) => ({ ...p, address: e.target.value, residence: e.target.value }))} className="bg-white/5 border-white/10 text-white h-9 rounded-lg text-sm mt-1" /></div>
+                                    </div>
+                                    {/* Option : renvoyer le formulaire à l'étudiant */}
+                                    <div className="p-4 rounded-2xl bg-blue-600/8 border border-blue-500/20 space-y-2">
+                                        <p className="text-xs font-bold text-blue-300">📋 Renvoyer le formulaire d'inscription à l'étudiant</p>
+                                        <p className="text-[11px] text-slate-400">L'étudiant sera invité à corriger ses informations depuis son espace.</p>
+                                        <textarea value={sendFormMsg} onChange={e => setSendFormMsg(e.target.value)} placeholder="Message expliquant ce qui doit être corrigé..." rows={2} className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white resize-none focus:border-blue-500/50 outline-none" />
+                                        <button onClick={async () => {
+                                            if (!sendFormMsg.trim()) { toast.error('Écrivez un message pour guider l\'étudiant'); return; }
+                                            try {
+                                                await supabase.from('inscription_requests').update({ status: 'info_needed', admin_message: sendFormMsg }).or(`access_code.eq.${editStudentData.access_code},id.eq.${editStudentData.id}`);
+                                                await supabase.from('student_profiles').update({ approval_status: 'info_needed' }).eq('id', editStudentData.id);
+                                                setStudents(p => p.map((s: any) => s.id === editStudentData.id ? { ...s, approval_status: 'info_needed' } : s));
+                                                setSendFormMsg('');
+                                                toast.success('Formulaire renvoyé à l\'étudiant');
+                                            } catch (e: any) { toast.error(e.message); }
+                                        }} className="text-xs px-4 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/30 font-semibold flex items-center gap-1.5 transition">
+                                            <FileText className="w-3.5 h-3.5" /> Envoyer le formulaire
+                                        </button>
+                                    </div>
+                                    <div className="flex gap-3 pt-2">
+                                        <button onClick={() => { setEditStudentId(null); setEditStudentData(null); }} className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-semibold transition">Annuler</button>
+                                        <button disabled={savingStudent} onClick={async () => {
+                                            setSavingStudent(true);
+                                            try {
+                                                const { error } = await supabase.from('student_profiles').update({
+                                                    first_name:    editStudentData.first_name,
+                                                    last_name:     editStudentData.last_name,
+                                                    phone:         editStudentData.phone || null,
+                                                    email:         editStudentData.email || null,
+                                                    birth_date:    editStudentData.birth_date || null,
+                                                    nationality:   editStudentData.nationality || null,
+                                                    guardian_name: editStudentData.guardian_name || null,
+                                                    guardian_phone: editStudentData.guardian_phone || null,
+                                                    address:       editStudentData.address || null,
+                                                    residence:     editStudentData.residence || null,
+                                                }).eq('id', editStudentData.id);
+                                                if (error) throw error;
+                                                setStudents(p => p.map((s: any) => s.id === editStudentData.id ? { ...s, ...editStudentData } : s));
+                                                setEditStudentId(null); setEditStudentData(null);
+                                                toast.success('Profil mis à jour ✅');
+                                            } catch (e: any) { toast.error(e.message); }
+                                            setSavingStudent(false);
+                                        }} className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-indigo-600 hover:opacity-90 text-white text-sm font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition shadow-lg">
+                                            {savingStudent ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}Enregistrer
+                                        </button>
+                                    </div>
                                 </div>
-                            );
-                        })()}
+                            </div>
+                        )}
+
+                        {/* ─── MODAL SUSPENSION / RÉACTIVATION ─── */}
+                        {suspendModal && (
+                            <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
+                                <div className="w-full max-w-sm rounded-3xl bg-[#0E121B] border border-white/15 shadow-2xl p-6 space-y-5">
+                                    <div className="flex items-center justify-between">
+                                        <h2 className="text-lg font-black text-white">
+                                            {suspendModal.isSuspended ? '✅ Réactiver le compte' : '🚫 Suspendre le compte'}
+                                        </h2>
+                                        <button onClick={() => { setSuspendModal(null); setSuspendReason(''); }} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition"><X className="w-5 h-5" /></button>
+                                    </div>
+                                    <p className="text-sm text-slate-400">
+                                        {suspendModal.isSuspended
+                                            ? <>Réactiver le compte de <span className="font-bold text-white">{suspendModal.name}</span> ? Il pourra à nouveau se connecter.</>
+                                            : <>Suspendre le compte de <span className="font-bold text-white">{suspendModal.name}</span> ? Il ne pourra plus se connecter.</>}
+                                    </p>
+                                    {!suspendModal.isSuspended && (
+                                        <div className="space-y-2">
+                                            <label className="text-xs text-slate-400 font-semibold">Motif de suspension</label>
+                                            <textarea
+                                                value={suspendReason}
+                                                onChange={e => setSuspendReason(e.target.value)}
+                                                placeholder="Ex: Frais de scolarité impayés, comportement inapproprié..."
+                                                rows={3}
+                                                className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white resize-none focus:border-red-500/50 outline-none placeholder-slate-600"
+                                            />
+                                        </div>
+                                    )}
+                                    <div className="flex gap-3 pt-1">
+                                        <button onClick={() => { setSuspendModal(null); setSuspendReason(''); }} className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-semibold transition">Annuler</button>
+                                        <button onClick={suspendAccount} disabled={savingSuspend}
+                                            className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition flex items-center justify-center gap-2 ${suspendModal.isSuspended ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'}`}>
+                                            {savingSuspend ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                            {suspendModal.isSuspended ? 'Réactiver' : 'Suspendre'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ─── MODAL MIGRATION FILIÈRE ─── */}
+                        {migrateStudentId && (
+                            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                                <div className="w-full max-w-md rounded-3xl bg-[#0E121B] border border-white/15 shadow-2xl p-6 space-y-5">
+                                    <div className="flex items-center justify-between">
+                                        <h2 className="text-lg font-black text-white">🔀 Migration de filière</h2>
+                                        <button onClick={() => setMigrateStudentId(null)} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition"><X className="w-5 h-5" /></button>
+                                    </div>
+                                    <p className="text-sm text-slate-400">Déplacer <span className="font-bold text-white">{migrateStudentName}</span> vers une autre filière / classe.</p>
+                                    <div className="space-y-3">
+                                        {filieres.length > 0 && (
+                                            <div>
+                                                <Label className="text-slate-400 text-xs">Filière cible</Label>
+                                                <select value={migrateNewFiliereId} onChange={e => setMigrateNewFiliereId(e.target.value)} className="mt-1 w-full h-10 rounded-xl bg-white/5 border border-white/10 text-white px-3 text-sm">
+                                                    <option value="" className="bg-slate-900">-- Aucune filière --</option>
+                                                    {filieres.map((f: any) => <option key={f.id} value={f.id} className="bg-slate-900">{f.name}</option>)}
+                                                </select>
+                                            </div>
+                                        )}
+                                        <div>
+                                            <Label className="text-slate-400 text-xs">Classe cible *</Label>
+                                            <select value={migrateNewClsId} onChange={e => setMigrateNewClsId(e.target.value)} className="mt-1 w-full h-10 rounded-xl bg-white/5 border border-white/10 text-white px-3 text-sm">
+                                                <option value="" className="bg-slate-900">-- Choisir une classe --</option>
+                                                {cls.filter(c => c.id && (!migrateNewFiliereId || c.filiere_id === migrateNewFiliereId)).map(c => <option key={c.id} value={c.id!} className="bg-slate-900">{c.name}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3 pt-1">
+                                        <button onClick={() => setMigrateStudentId(null)} className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-semibold transition">Annuler</button>
+                                        <button disabled={savingMigrate || !migrateNewClsId} onClick={async () => {
+                                            if (!migrateNewClsId) { toast.error('Choisissez une classe'); return; }
+                                            setSavingMigrate(true);
+                                            try {
+                                                const updatePayload: any = { classroom_id: migrateNewClsId };
+                                                if (migrateNewFiliereId) updatePayload.filiere_id = migrateNewFiliereId;
+                                                const { error } = await supabase.from('student_profiles').update(updatePayload).eq('id', migrateStudentId!);
+                                                if (error) throw error;
+                                                setStudents(p => p.map((s: any) => s.id === migrateStudentId ? { ...s, ...updatePayload } : s));
+                                                setMigrateStudentId(null);
+                                                toast.success(`✅ ${migrateStudentName} migré(e) avec succès !`);
+                                            } catch (e: any) { toast.error(e.message); }
+                                            setSavingMigrate(false);
+                                        }} className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:opacity-90 text-white text-sm font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 transition shadow-lg">
+                                            {savingMigrate ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}Migrer
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                     </div>}
 
                     {/* ═══ TIMETABLE ═══ */}

@@ -119,7 +119,7 @@ export default function CampusPage() {
 
                 if (ir) {
                     if (!accessCode && ir.access_code) accessCode = ir.access_code;
-                    if (ir.status === 'approved') {
+                    if (ir.status === 'approved' || ir.status === 'accepted') {
                         currentStatus = 'approved';
                         if (sprof && sprof.approval_status !== 'approved') {
                             await supabase.from('student_profiles').update({ approval_status: 'approved' }).eq('id', sprof.id);
