@@ -285,6 +285,9 @@ function AdminPageContent() {
         }
         const newBal = adminSkyPoints - amount;
         setAdminSkyPoints(newBal);
+        if (typeof window !== 'undefined' && org?.id) {
+            localStorage.setItem(`campusflow_admin_points_${org.id}`, newBal.toString());
+        }
         try {
             await supabase.from('organizations').update({ sky_points: newBal }).eq('id', org.id);
         } catch (e: any) {
@@ -571,25 +574,64 @@ function AdminPageContent() {
 
                 if (cancelled) return;
                 setIsAuthorized(true);
+                // ── Fallback Signature & Cachet ──
+                const localSig = typeof window !== 'undefined' ? localStorage.getItem(`campusflow_signature_${o.id}`) : null;
+                const localStp = typeof window !== 'undefined' ? localStorage.getItem(`campusflow_stamp_${o.id}`) : null;
+                if (!o.signature_url && localSig) o.signature_url = localSig;
+                if (!o.stamp_url && localStp) o.stamp_url = localStp;
+
                 setOrg(o);
                 setSession({ id: authUser.id, first_name: authUser.user_metadata?.first_name || 'Admin', last_name: authUser.user_metadata?.last_name || '' });
 
                 // ── Sky Points & PIN Initialisation ──
-                const initialPts = typeof o.sky_points === 'number' && o.sky_points >= 0 ? o.sky_points : 1000;
-                setAdminSkyPoints(initialPts);
-                setMonitoringUnlocked(!!o.monitoring_unlocked);
+                // localStorage prime toujours : si une déduction a été faite localement
+                // (solde local < solde Supabase), on garde le solde local pour éviter
+                // le "reset à 1000" après refresh dû à un cache Supabase obsolète.
+                const localSavedPtsStr = typeof window !== 'undefined' ? localStorage.getItem(`campusflow_admin_points_${o.id}`) : null;
+                const localSavedPts = localSavedPtsStr !== null ? parseInt(localSavedPtsStr, 10) : null;
+                const remotePts = (typeof o.sky_points === 'number' && !isNaN(o.sky_points) && o.sky_points >= 0) ? o.sky_points : null;
+
+                let currentPts = 1000;
+                if (localSavedPts !== null && !isNaN(localSavedPts) && localSavedPts >= 0) {
+                    // Si Supabase a un solde SUPÉRIEUR au local (ex: bonus quotidien crédité
+                    // depuis un autre appareil), on prend le plus grand.
+                    currentPts = (remotePts !== null && remotePts > localSavedPts) ? remotePts : localSavedPts;
+                } else if (remotePts !== null) {
+                    currentPts = remotePts;
+                }
+
+                if (typeof window !== 'undefined') {
+                    localStorage.setItem(`campusflow_admin_points_${o.id}`, currentPts.toString());
+                }
+                // Resynchroniser Supabase si les valeurs divergent (local plus récent)
+                if (remotePts !== null && remotePts !== currentPts) {
+                    supabase.from('organizations').update({ sky_points: currentPts }).eq('id', o.id).catch(() => {});
+                }
+                setAdminSkyPoints(currentPts);
+
+                const localMonitoring = typeof window !== 'undefined' ? localStorage.getItem(`campusflow_monitoring_unlocked_${o.id}`) === 'true' : false;
+                setMonitoringUnlocked(Boolean(o.monitoring_unlocked || localMonitoring));
+
                 const savedPin = o.security_pin || (typeof window !== 'undefined' ? localStorage.getItem(`campusflow_admin_pin_${o.id}`) : null);
                 setAdminSecurityPin(savedPin || null);
 
                 // ── Daily Bonus Check (+1 Sky Point gratuit par jour) ──
                 const todayStr = new Date().toISOString().split('T')[0];
                 const lastClaim = o.last_daily_claim || (typeof window !== 'undefined' ? localStorage.getItem(`campusflow_admin_daily_${o.id}`) : null);
-                if (lastClaim !== todayStr) {
-                    const rewardedPts = initialPts + 1;
+                if (lastClaim && lastClaim !== todayStr) {
+                    const rewardedPts = currentPts + 1;
                     setAdminSkyPoints(rewardedPts);
-                    supabase.from('organizations').update({ sky_points: rewardedPts, last_daily_claim: todayStr }).eq('id', o.id).then(() => {});
-                    if (typeof window !== 'undefined') localStorage.setItem(`campusflow_admin_daily_${o.id}`, todayStr);
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem(`campusflow_admin_points_${o.id}`, rewardedPts.toString());
+                        localStorage.setItem(`campusflow_admin_daily_${o.id}`, todayStr);
+                    }
+                    supabase.from('organizations').update({ sky_points: rewardedPts, last_daily_claim: todayStr }).eq('id', o.id).catch(() => {});
                     toast.success(`⭐ +1 Sky Point quotidien offert ! Solde actuel : ${rewardedPts} pts`, { duration: 5000, icon: '🎁' });
+                } else if (!lastClaim) {
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem(`campusflow_admin_daily_${o.id}`, todayStr);
+                    }
+                    supabase.from('organizations').update({ last_daily_claim: todayStr }).eq('id', o.id).catch(() => {});
                 }
                 const { data: c } = await supabase.from('classrooms').select('*').eq('organization_id', o.id).order('name');
                 if (cancelled) return;
@@ -1240,7 +1282,11 @@ function AdminPageContent() {
             const compressed = await compressImage(file, { maxWidth: 800, quality: 0.8 });
             const r2Res = await uploadToR2(compressed, `orgs/${org.id}`, `signature_${Date.now()}_${file.name}`);
             setSSignatureUrl(r2Res.url);
-            await supabase.from('organizations').update({ signature_url: r2Res.url }).eq('id', org.id);
+            // Persistance localStorage — fallback si colonne Supabase pas encore en cache
+            if (typeof window !== 'undefined') localStorage.setItem(`campusflow_signature_${org.id}`, r2Res.url);
+            try {
+                await supabase.from('organizations').update({ signature_url: r2Res.url }).eq('id', org.id);
+            } catch { /* schema cache pas encore à jour, localStorage suffira */ }
             setOrg({ ...org, signature_url: r2Res.url });
             toast.success('Signature officielle enregistrée ✅');
         } catch (e: any) { toast.error(e.message); }
@@ -1254,7 +1300,11 @@ function AdminPageContent() {
             const compressed = await compressImage(file, { maxWidth: 800, quality: 0.8 });
             const r2Res = await uploadToR2(compressed, `orgs/${org.id}`, `stamp_${Date.now()}_${file.name}`);
             setSStampUrl(r2Res.url);
-            await supabase.from('organizations').update({ stamp_url: r2Res.url }).eq('id', org.id);
+            // Persistance localStorage — fallback si colonne Supabase pas encore en cache
+            if (typeof window !== 'undefined') localStorage.setItem(`campusflow_stamp_${org.id}`, r2Res.url);
+            try {
+                await supabase.from('organizations').update({ stamp_url: r2Res.url }).eq('id', org.id);
+            } catch { /* schema cache pas encore à jour, localStorage suffira */ }
             setOrg({ ...org, stamp_url: r2Res.url });
             toast.success('Cachet officiel enregistré ✅');
         } catch (e: any) { toast.error(e.message); }
@@ -1305,8 +1355,8 @@ function AdminPageContent() {
                 location: certLocation || org.city || '',
                 signatory1_title: certSignatory1Title || 'Directeur Général',
                 signatory1_name: certSignatory1Name || `${org.owner_first_name || ''} ${org.owner_last_name || ''}`.trim() || 'La Direction',
-                signatory2_title: certSignatory2Title || 'Le Formateur Principal',
-                signatory2_name: certSignatory2Name || 'Responsable Pédagogique',
+                signatory2_title: certSignatory2Name?.trim() ? (certSignatory2Title || 'Responsable Pédagogique') : undefined,
+                signatory2_name: certSignatory2Name?.trim() || undefined,
                 show_stamp: certShowStamp,
                 show_signature: certShowSignature,
             }

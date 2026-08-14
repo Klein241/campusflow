@@ -159,6 +159,7 @@ function template1Html(d: CertificateData): string {
     const desc = d.certificate.description || `Pour avoir suivi avec succès et validé avec rigueur l'ensemble des compétences et modules requis pour la formation en <strong>${d.certificate.course_name || d.student.filiere_name || 'Formation Professionnelle'}</strong>.`;
     const dateStr = d.certificate.date_issued || new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const location = d.certificate.location ? `${d.certificate.location}, ` : '';
+    const hasSignatory2 = Boolean(d.certificate.signatory2_name && d.certificate.signatory2_name.trim());
 
     return `
     <div style="position:relative;width:287mm;height:200mm;margin:auto;background:#fafcfb;border:1px solid #e2e8f0;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;padding:22mm 24mm;overflow:hidden;">
@@ -208,12 +209,12 @@ function template1Html(d: CertificateData): string {
         <!-- Footer: Signatures, Medal & Date -->
         <div style="display:flex;align-items:flex-end;justify-content:space-between;position:relative;z-index:2;padding:0 20px;">
             <!-- Left: Signatory 1 -->
-            <div style="text-align:center;width:180px;">
+            <div style="text-align:center;width:200px;">
                 <div style="height:55px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:4px;">
                     ${d.certificate.show_signature !== false && d.org.signature_url ? `<img src="${d.org.signature_url}" style="max-height:50px;max-width:140px;object-fit:contain;" alt="Signature" />` : ''}
                 </div>
                 <div style="border-top:1.5px solid #0f766e;padding-top:4px;">
-                    <p style="font-size:9pt;font-weight:bold;color:#064e3b;">${d.certificate.signatory1_name || 'La Direction'}</p>
+                    <p style="font-size:9.5pt;font-weight:bold;color:#064e3b;">${d.certificate.signatory1_name || 'La Direction'}</p>
                     <p style="font-size:8pt;color:#64748b;">${d.certificate.signatory1_title || 'Directeur Général'}</p>
                 </div>
             </div>
@@ -232,16 +233,24 @@ function template1Html(d: CertificateData): string {
                 </div>
             </div>
 
-            <!-- Right: Date & Signatory 2 -->
-            <div style="text-align:center;width:180px;">
-                <div style="height:55px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;margin-bottom:4px;">
-                    <p style="font-size:8pt;color:#64748b;">Délivré le</p>
-                    <p style="font-size:9pt;font-weight:bold;color:#0f766e;">${location}${dateStr}</p>
-                </div>
-                <div style="border-top:1.5px solid #0f766e;padding-top:4px;">
-                    <p style="font-size:9pt;font-weight:bold;color:#064e3b;">${d.certificate.signatory2_name || d.org.name}</p>
-                    <p style="font-size:8pt;color:#64748b;">${d.certificate.signatory2_title || 'Responsable Académique'}</p>
-                </div>
+            <!-- Right: Date or Signatory 2 -->
+            <div style="text-align:center;width:200px;">
+                ${hasSignatory2 ? `
+                    <div style="margin-bottom:14px;">
+                        <p style="font-size:8pt;color:#64748b;">Délivré le</p>
+                        <p style="font-size:9pt;font-weight:bold;color:#0f766e;">${location}${dateStr}</p>
+                    </div>
+                    <div style="border-top:1.5px solid #0f766e;padding-top:4px;">
+                        <p style="font-size:9.5pt;font-weight:bold;color:#064e3b;">${d.certificate.signatory2_name}</p>
+                        <p style="font-size:8pt;color:#64748b;">${d.certificate.signatory2_title || 'Responsable Pédagogique'}</p>
+                    </div>
+                ` : `
+                    <div style="padding-top:20px;">
+                        <p style="font-size:8.5pt;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Délivré le</p>
+                        <p style="font-size:10pt;font-weight:bold;color:#064e3b;">${location}${dateStr}</p>
+                        <div style="width:130px;height:1.5px;background:#0f766e;margin:8px auto 0;opacity:0.7;"></div>
+                    </div>
+                `}
             </div>
         </div>
     </div>
@@ -259,6 +268,7 @@ function template2Html(d: CertificateData): string {
     const desc = d.certificate.description || `En reconnaissance de l'engagement, de l'assiduité et de l'excellence démontrés lors de la formation <strong>${d.certificate.course_name || d.student.filiere_name || 'Spécialisée'}</strong>.`;
     const dateStr = d.certificate.date_issued || new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const location = d.certificate.location ? `${d.certificate.location}, ` : '';
+    const hasSignatory2 = Boolean(d.certificate.signatory2_name && d.certificate.signatory2_name.trim());
 
     return `
     <div style="position:relative;width:287mm;height:200mm;margin:auto;background:#ffffff;border:1px solid #e2e8f0;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;padding:24mm 28mm;overflow:hidden;">
@@ -307,13 +317,13 @@ function template2Html(d: CertificateData): string {
 
         <!-- Bottom Signatures -->
         <div style="display:flex;align-items:flex-end;justify-content:space-between;position:relative;z-index:2;padding:0 20px;">
-            <div style="text-align:center;width:180px;">
+            <div style="text-align:center;width:200px;">
                 <div style="height:50px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:4px;">
                     ${d.certificate.show_signature !== false && d.org.signature_url ? `<img src="${d.org.signature_url}" style="max-height:48px;max-width:130px;object-fit:contain;" alt="Signature" />` : ''}
                 </div>
                 <div style="border-top:1px solid #94a3b8;padding-top:4px;">
-                    <p style="font-size:9pt;font-weight:bold;color:#0f172a;">${d.certificate.signatory1_name || 'Le Formateur'}</p>
-                    <p style="font-size:8pt;color:#64748b;">${d.certificate.signatory1_title || 'Formateur Principal'}</p>
+                    <p style="font-size:9.5pt;font-weight:bold;color:#0f172a;">${d.certificate.signatory1_name || 'La Direction'}</p>
+                    <p style="font-size:8pt;color:#64748b;">${d.certificate.signatory1_title || 'Directeur de l\'Établissement'}</p>
                 </div>
             </div>
 
@@ -321,18 +331,26 @@ function template2Html(d: CertificateData): string {
             <div style="text-align:center;">
                 ${d.certificate.show_stamp !== false && d.org.stamp_url ? `
                     <img src="${d.org.stamp_url}" style="height:70px;width:70px;object-fit:contain;opacity:0.85;transform:rotate(-4deg);" alt="Cachet" />
-                ` : `<div style="font-size:8pt;color:#94a3b8;">Fait à ${location}${dateStr}</div>`}
+                ` : ''}
             </div>
 
-            <div style="text-align:center;width:180px;">
-                <div style="height:50px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;margin-bottom:4px;">
-                    <p style="font-size:8pt;color:#64748b;">Date de délivrance</p>
-                    <p style="font-size:8.5pt;font-weight:bold;color:#0f172a;">${location}${dateStr}</p>
-                </div>
-                <div style="border-top:1px solid #94a3b8;padding-top:4px;">
-                    <p style="font-size:9pt;font-weight:bold;color:#0f172a;">${d.certificate.signatory2_name || 'Le Directeur'}</p>
-                    <p style="font-size:8pt;color:#64748b;">${d.certificate.signatory2_title || 'Directeur de l\'Établissement'}</p>
-                </div>
+            <div style="text-align:center;width:200px;">
+                ${hasSignatory2 ? `
+                    <div style="margin-bottom:14px;">
+                        <p style="font-size:8pt;color:#64748b;">Date de délivrance</p>
+                        <p style="font-size:8.5pt;font-weight:bold;color:#0f172a;">${location}${dateStr}</p>
+                    </div>
+                    <div style="border-top:1px solid #94a3b8;padding-top:4px;">
+                        <p style="font-size:9.5pt;font-weight:bold;color:#0f172a;">${d.certificate.signatory2_name}</p>
+                        <p style="font-size:8pt;color:#64748b;">${d.certificate.signatory2_title || 'Responsable Pédagogique'}</p>
+                    </div>
+                ` : `
+                    <div style="padding-top:20px;">
+                        <p style="font-size:8pt;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Date de délivrance</p>
+                        <p style="font-size:9.5pt;font-weight:bold;color:#0f172a;">${location}${dateStr}</p>
+                        <div style="width:130px;height:1px;background:#94a3b8;margin:8px auto 0;"></div>
+                    </div>
+                `}
             </div>
         </div>
     </div>
@@ -350,6 +368,7 @@ function template3Html(d: CertificateData): string {
     const desc = d.certificate.description || `Pour avoir complété avec distinction l'ensemble du programme de formation <strong>${d.certificate.course_name || d.student.filiere_name || 'Cursus Professionnel'}</strong>.`;
     const dateStr = d.certificate.date_issued || new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const location = d.certificate.location ? `${d.certificate.location}, ` : '';
+    const hasSignatory2 = Boolean(d.certificate.signatory2_name && d.certificate.signatory2_name.trim());
 
     return `
     <div style="position:relative;width:287mm;height:200mm;margin:auto;background:#ffffff;border:1px solid #cbd5e1;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;padding:22mm 24mm;overflow:hidden;">
@@ -401,10 +420,13 @@ function template3Html(d: CertificateData): string {
 
         <!-- Footer -->
         <div style="display:flex;align-items:flex-end;justify-content:space-between;position:relative;z-index:2;padding:0 30px;">
-            <div style="text-align:center;width:180px;">
-                <p style="font-size:9pt;font-weight:bold;color:#1e3a8a;margin-bottom:30px;">Date</p>
+            <div style="text-align:center;width:200px;">
+                <div style="height:45px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:4px;">
+                    ${d.certificate.show_signature !== false && d.org.signature_url ? `<img src="${d.org.signature_url}" style="max-height:45px;max-width:130px;object-fit:contain;" alt="Signature" />` : ''}
+                </div>
                 <div style="border-top:1px solid #1e3a8a;padding-top:4px;">
-                    <p style="font-size:9pt;color:#334155;">${location}${dateStr}</p>
+                    <p style="font-size:9.5pt;font-weight:bold;color:#1e3a8a;">${d.certificate.signatory1_name || 'La Direction'}</p>
+                    <p style="font-size:8pt;color:#64748b;">${d.certificate.signatory1_title || 'Directeur Général'}</p>
                 </div>
             </div>
 
@@ -415,14 +437,23 @@ function template3Html(d: CertificateData): string {
                 ` : ''}
             </div>
 
-            <div style="text-align:center;width:180px;">
-                <div style="height:45px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:4px;">
-                    ${d.certificate.show_signature !== false && d.org.signature_url ? `<img src="${d.org.signature_url}" style="max-height:45px;max-width:130px;object-fit:contain;" alt="Signature" />` : ''}
-                </div>
-                <div style="border-top:1px solid #1e3a8a;padding-top:4px;">
-                    <p style="font-size:9pt;font-weight:bold;color:#1e3a8a;">${d.certificate.signatory1_name || 'Le Président'}</p>
-                    <p style="font-size:8pt;color:#64748b;">${d.certificate.signatory1_title || 'Signature & Sceau'}</p>
-                </div>
+            <div style="text-align:center;width:200px;">
+                ${hasSignatory2 ? `
+                    <div style="margin-bottom:14px;">
+                        <p style="font-size:8pt;color:#64748b;">Date</p>
+                        <p style="font-size:9pt;font-weight:bold;color:#1e3a8a;">${location}${dateStr}</p>
+                    </div>
+                    <div style="border-top:1px solid #1e3a8a;padding-top:4px;">
+                        <p style="font-size:9.5pt;font-weight:bold;color:#1e3a8a;">${d.certificate.signatory2_name}</p>
+                        <p style="font-size:8pt;color:#64748b;">${d.certificate.signatory2_title || 'Responsable Pédagogique'}</p>
+                    </div>
+                ` : `
+                    <div style="padding-top:20px;">
+                        <p style="font-size:8.5pt;font-weight:bold;color:#1e3a8a;margin-bottom:4px;">Date</p>
+                        <p style="font-size:9.5pt;color:#334155;">${location}${dateStr}</p>
+                        <div style="width:130px;height:1px;background:#1e3a8a;margin:8px auto 0;"></div>
+                    </div>
+                `}
             </div>
         </div>
     </div>
@@ -434,12 +465,13 @@ function template3Html(d: CertificateData): string {
 // ════════════════════════════════════════════════════════════
 function template4Html(d: CertificateData): string {
     const studentName = `${d.student.first_name} ${d.student.last_name}`.trim();
-    const title = d.certificate.title || 'DIPLÔME D\'HONNEUR & DE RÉUSSITE';
-    const subtitle = d.certificate.subtitle || 'ATTESTATION OFFICIELLE';
+    const title = d.certificate.title || 'CERTIFICAT DE FIN DE FORMATION';
+    const subtitle = d.certificate.subtitle || 'ATTESTATION DE RÉUSSITE ACADÉMIQUE';
     const presentedTo = d.certificate.presented_to_label || 'ATTRIBUÉ À';
     const desc = d.certificate.description || `En témoignage de l'accomplissement remarquable et de la pleine validation du programme d'études en <strong>${d.certificate.course_name || d.student.filiere_name || 'Formation Complète'}</strong>.`;
     const dateStr = d.certificate.date_issued || new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const location = d.certificate.location ? `${d.certificate.location}, ` : '';
+    const hasSignatory2 = Boolean(d.certificate.signatory2_name && d.certificate.signatory2_name.trim());
 
     return `
     <div style="position:relative;width:287mm;height:200mm;margin:auto;background:#fffdf7;border:1px solid #e2e8f0;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;padding:24mm 26mm;overflow:hidden;">
@@ -472,13 +504,14 @@ function template4Html(d: CertificateData): string {
 
         <!-- Footer -->
         <div style="display:flex;align-items:flex-end;justify-content:space-between;position:relative;z-index:2;padding:0 25px;">
-            <div style="text-align:center;width:180px;">
+            <!-- Left: Signatory 1 -->
+            <div style="text-align:center;width:200px;">
                 <div style="height:50px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:4px;">
                     ${d.certificate.show_signature !== false && d.org.signature_url ? `<img src="${d.org.signature_url}" style="max-height:48px;max-width:130px;object-fit:contain;" alt="Signature" />` : ''}
                 </div>
                 <div style="border-top:1.5px solid #d97706;padding-top:4px;">
-                    <p style="font-size:9pt;font-weight:bold;color:#78350f;">${d.certificate.signatory1_name || 'Le Formateur'}</p>
-                    <p style="font-size:8pt;color:#92400e;">${d.certificate.signatory1_title || 'Responsable Pédagogique'}</p>
+                    <p style="font-size:9.5pt;font-weight:bold;color:#78350f;">${d.certificate.signatory1_name || 'La Direction'}</p>
+                    <p style="font-size:8pt;color:#92400e;">${d.certificate.signatory1_title || 'Directeur Général'}</p>
                 </div>
             </div>
 
@@ -496,15 +529,24 @@ function template4Html(d: CertificateData): string {
                 </div>
             </div>
 
-            <div style="text-align:center;width:180px;">
-                <div style="height:50px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;margin-bottom:4px;">
-                    <p style="font-size:8pt;color:#92400e;">Fait le</p>
-                    <p style="font-size:8.5pt;font-weight:bold;color:#78350f;">${location}${dateStr}</p>
-                </div>
-                <div style="border-top:1.5px solid #d97706;padding-top:4px;">
-                    <p style="font-size:9pt;font-weight:bold;color:#78350f;">${d.certificate.signatory2_name || 'La Direction'}</p>
-                    <p style="font-size:8pt;color:#92400e;">${d.certificate.signatory2_title || 'Directeur Général'}</p>
-                </div>
+            <!-- Right: Date or Signatory 2 with clean spacing -->
+            <div style="text-align:center;width:200px;">
+                ${hasSignatory2 ? `
+                    <div style="margin-bottom:16px;">
+                        <p style="font-size:8pt;color:#92400e;margin-bottom:2px;">Fait le</p>
+                        <p style="font-size:9pt;font-weight:bold;color:#78350f;">${location}${dateStr}</p>
+                    </div>
+                    <div style="border-top:1.5px solid #d97706;padding-top:4px;">
+                        <p style="font-size:9.5pt;font-weight:bold;color:#78350f;">${d.certificate.signatory2_name}</p>
+                        <p style="font-size:8pt;color:#92400e;">${d.certificate.signatory2_title || 'Responsable Pédagogique'}</p>
+                    </div>
+                ` : `
+                    <div style="padding-top:20px;">
+                        <p style="font-size:8.5pt;color:#92400e;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Fait le</p>
+                        <p style="font-size:10pt;font-weight:bold;color:#78350f;">${location}${dateStr}</p>
+                        <div style="width:130px;height:1.5px;background:#d97706;margin:8px auto 0;opacity:0.7;"></div>
+                    </div>
+                `}
             </div>
         </div>
     </div>
