@@ -19,6 +19,11 @@ import { cn } from '@/lib/utils';
 import { orgPath } from '@/lib/custom-domain';
 import { AdsBanner } from '@/components/campus/ads-banner';
 import { OfficialAnnouncements } from '@/components/campus/official-announcements';
+import { TemplateHubOnglets } from '@/components/campus/landing-templates/template-hub-onglets';
+import { TemplateSegmentedHub } from '@/components/campus/landing-templates/template-segmented-hub';
+import { TemplateGlassShowcase } from '@/components/campus/landing-templates/template-glass-showcase';
+import { TemplateBentoGrid } from '@/components/campus/landing-templates/template-bento-grid';
+import { TemplateBentoBox } from '@/components/campus/landing-templates/template-bento-box';
 
 // ═══════════════════════════════════════════════════════════════════════
 // TYPES
@@ -30,6 +35,7 @@ interface Org {
     phone: string; whatsapp: string; email: string; brand_color: string;
     hero_image_url?: string; hero_title?: string; hero_subtitle?: string;
     hero_template?: 'full' | 'split' | 'minimal';
+    landing_layout?: string;
     about_text?: string; about_image_url?: string;
     gallery_images?: string[];
     social_facebook?: string; social_instagram?: string; social_twitter?: string;
@@ -250,6 +256,8 @@ export default function SchoolLandingPage() {
     const bc   = org.brand_color || '#14b8a6';
     const hero = org.hero_title || org.name;
     const sub  = org.hero_subtitle || org.motto || `Bienvenue sur le portail officiel de ${org.name}`;
+    const heroTemplate = org.hero_template || (typeof window !== 'undefined' ? (localStorage.getItem(`campusflow_hero_template_${org.id}`) || localStorage.getItem(`campusflow_hero_template_${org.slug}`)) : null) || 'full';
+    const landingLayout = org.landing_layout || (typeof window !== 'undefined' ? (localStorage.getItem(`campusflow_landing_layout_${org.id}`) || localStorage.getItem(`campusflow_landing_layout_${org.slug}`)) : null) || 'classic';
     const gallery = org.gallery_images || [];
     const socials = [
         { url: org.social_facebook,  icon: Facebook,  label: 'Facebook' },
@@ -357,7 +365,7 @@ export default function SchoolLandingPage() {
 
             {/* ═══ HERO : 3 MODÈLES PREMIUM ══════════════════════════ */}
             {/* MODÈLE 2 : SPLIT (Deux colonnes avec carte image non déformée) */}
-            {org.hero_template === 'split' ? (
+            {heroTemplate === 'split' ? (
                 <section className="relative z-10 pt-24 pb-16 min-h-[90svh] flex flex-col justify-center overflow-hidden">
                     <div className="absolute inset-0 pointer-events-none">
                         <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full blur-[140px] opacity-25" style={{ background: bc }} />
@@ -453,7 +461,7 @@ export default function SchoolLandingPage() {
                         </div>
                     </div>
                 </section>
-            ) : org.hero_template === 'minimal' ? (
+            ) : heroTemplate === 'minimal' ? (
                 /* MODÈLE 3 : MINIMALISTE LUXE (Mesh Gradient, pur & prestige) */
                 <section className="relative z-10 pt-20 pb-16 min-h-[85svh] flex flex-col justify-center overflow-hidden text-center">
                     <div className="absolute inset-0 pointer-events-none">
@@ -622,10 +630,68 @@ export default function SchoolLandingPage() {
                 </section>
             )}
 
-            {/* ═══ STATS ═════════════════════════════════════════════ */}
-            <section className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 -mt-2 pb-8">
-                <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-                    className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {/* ═══ TEMPLATES COMPLETS MODERNES (ZERO SCROLL) ═══ */}
+            {landingLayout === 'hub_onglets' ? (
+                <TemplateHubOnglets
+                    org={org}
+                    orgSlug={orgSlug}
+                    classrooms={classrooms}
+                    filieres={filieres}
+                    teacherCount={teacherCount}
+                    studentCount={studentCount}
+                    gallery={gallery}
+                    bc={bc}
+                />
+            ) : landingLayout === 'segmented_hub' ? (
+                <TemplateSegmentedHub
+                    org={org}
+                    orgSlug={orgSlug}
+                    classrooms={classrooms}
+                    filieres={filieres}
+                    teacherCount={teacherCount}
+                    studentCount={studentCount}
+                    gallery={gallery}
+                    bc={bc}
+                />
+            ) : landingLayout === 'glass_showcase' ? (
+                <TemplateGlassShowcase
+                    org={org}
+                    orgSlug={orgSlug}
+                    classrooms={classrooms}
+                    filieres={filieres}
+                    teacherCount={teacherCount}
+                    studentCount={studentCount}
+                    gallery={gallery}
+                    bc={bc}
+                />
+            ) : landingLayout === 'bento_grid' ? (
+                <TemplateBentoGrid
+                    org={org}
+                    orgSlug={orgSlug}
+                    classrooms={classrooms}
+                    filieres={filieres}
+                    teacherCount={teacherCount}
+                    studentCount={studentCount}
+                    gallery={gallery}
+                    bc={bc}
+                />
+            ) : landingLayout === 'bento_box' ? (
+                <TemplateBentoBox
+                    org={org}
+                    orgSlug={orgSlug}
+                    classrooms={classrooms}
+                    filieres={filieres}
+                    teacherCount={teacherCount}
+                    studentCount={studentCount}
+                    gallery={gallery}
+                    bc={bc}
+                />
+            ) : (
+                <>
+                    {/* ═══ STATS ═════════════════════════════════════════════ */}
+                    <section className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 -mt-2 pb-8">
+                        <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+                            className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
                         { label: 'Filières',    value: filieres.length,  icon: BookOpen,     suffix: '' },
                         { label: 'Classes',     value: classrooms.length,icon: Users,        suffix: '' },
@@ -876,6 +942,8 @@ export default function SchoolLandingPage() {
                     </motion.div>
                 )}
             </AnimatePresence>
+            </>
+            )}
 
             {/* ═══ INSCRIPTION FORM ══════════════════════════════════ */}
             <section id="inscription" className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-20">

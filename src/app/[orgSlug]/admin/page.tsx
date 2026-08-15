@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils';
 import { isCustomDomain } from '@/lib/custom-domain';
 import { AdsBanner } from '@/components/campus/ads-banner';
 import { OfficialAnnouncements } from '@/components/campus/official-announcements';
+import { AdminPremiumStyles } from '@/components/campus/admin-premium-styles';
 
 // ═══ ERROR BOUNDARY (catches React render errors) ═══
 class AdminErrorBoundary extends Component<{ children: ReactNode; orgSlug: string }, { hasError: boolean; error: Error | null }> {
@@ -70,13 +71,16 @@ const Sel = ({ v, onChange, opts, ph = '—' }: { v: string, onChange: (v: strin
     </select>
 );
 
-type Tab = 'general' | 'landing' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'modeles' | 'cursus' | 'settings' | 'chat' | 'stories' | 'actus' | 'groupes' | 'whatsapp' | 'exam_room' | 'monitoring' | 'certificates';
+type Tab = 'general' | 'landing' | 'premium_styles' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'modeles' | 'cursus' | 'settings' | 'chat' | 'stories' | 'actus' | 'groupes' | 'whatsapp' | 'exam_room' | 'monitoring' | 'certificates';
 interface Cls { id?: string; name: string; cycle: string; filiere_id: string | null; level: number; capacity: number; }
 interface Sub { id?: string; name: string; code: string; coefficient: number; classroom_id: string; teacher_id: string | null; }
 interface Room { id?: string; name: string; }
 
 const SIDES = [
-    { id: 'general' as Tab, icon: Home, label: 'Général' }, { id: 'landing' as Tab, icon: LayoutDashboard, label: 'Page d\'accueil' }, { id: 'setup' as Tab, icon: Settings, label: 'Configuration' },
+    { id: 'general' as Tab, icon: Home, label: 'Général' },
+    { id: 'landing' as Tab, icon: LayoutDashboard, label: 'Page d\'accueil' },
+    { id: 'premium_styles' as Tab, icon: Sparkles, label: '✨ Style Premium' },
+    { id: 'setup' as Tab, icon: Settings, label: 'Configuration' },
     { id: 'classes' as Tab, icon: School, label: 'Classes' }, { id: 'rooms' as Tab, icon: Building2, label: 'Salles' }, { id: 'subjects' as Tab, icon: BookOpen, label: 'Matières' },
     { id: 'teachers' as Tab, icon: Users, label: 'Professeurs' }, { id: 'students' as Tab, icon: GraduationCap, label: 'Étudiants' },
     { id: 'certificates' as Tab, icon: Award, label: '🎓 Certificats' },
@@ -462,8 +466,64 @@ function AdminPageContent() {
         });
     };
     const loadSettings = () => { if (!org) return; setSCustomDomain(org.custom_domain || ''); setSDomainVerified(org.domain_verified || false); setSDomainSsl(org.domain_ssl_status || 'pending'); setSBrandColor(org.brand_color || '#4f46e5'); setSLogoUrl(org.logo_url || ''); setSSignatureUrl(org.signature_url || ''); setSStampUrl(org.stamp_url || ''); setSFaviconUrl(org.favicon_url || ''); setSMetaTitle(org.meta_title || ''); setSMetaDesc(org.meta_description || ''); setSOrgName(org.name || ''); setSOrgPhone(org.phone || ''); setSOrgEmail(org.email || ''); setSOrgWhatsapp(org.whatsapp || ''); };
-    const loadLanding = () => { if (!org) return; setLHeroImage(org.hero_image_url || ''); setLHeroTitle(org.hero_title || ''); setLHeroSubtitle(org.hero_subtitle || ''); setLHeroTemplate((org.hero_template as any) || 'full'); setLAboutText(org.about_text || ''); setLAboutImage(org.about_image_url || ''); setLGalleryImages(org.gallery_images || []); setLSocialFb(org.social_facebook || ''); setLSocialIg(org.social_instagram || ''); setLSocialTw(org.social_twitter || ''); setLSocialTt(org.social_tiktok || ''); setLSocialYt(org.social_youtube || ''); setLSocialLi(org.social_linkedin || ''); setLFooterText(org.footer_text || ''); };
-    const saveLanding = async () => { setLSaving(true); try { const updates: any = { hero_image_url: lHeroImage || null, hero_title: lHeroTitle || null, hero_subtitle: lHeroSubtitle || null, hero_template: lHeroTemplate, about_text: lAboutText || null, about_image_url: lAboutImage || null, gallery_images: lGalleryImages, social_facebook: lSocialFb || null, social_instagram: lSocialIg || null, social_twitter: lSocialTw || null, social_tiktok: lSocialTt || null, social_youtube: lSocialYt || null, social_linkedin: lSocialLi || null, footer_text: lFooterText || null }; const { error } = await supabase.from('organizations').update(updates).eq('id', org.id); if (error) throw error; setOrg({ ...org, ...updates }); toast.success('Page d\'accueil mise à jour ✅'); } catch (e: any) { toast.error(e.message); } setLSaving(false); };
+    const loadLanding = () => {
+        if (!org) return;
+        setLHeroImage(org.hero_image_url || '');
+        setLHeroTitle(org.hero_title || '');
+        setLHeroSubtitle(org.hero_subtitle || '');
+        const localTpl = typeof window !== 'undefined' ? (localStorage.getItem(`campusflow_hero_template_${org.id}`) || localStorage.getItem(`campusflow_hero_template_${org.slug}`)) : null;
+        setLHeroTemplate((org.hero_template as any) || (localTpl as any) || 'full');
+        setLAboutText(org.about_text || '');
+        setLAboutImage(org.about_image_url || '');
+        setLGalleryImages(org.gallery_images || []);
+        setLSocialFb(org.social_facebook || '');
+        setLSocialIg(org.social_instagram || '');
+        setLSocialTw(org.social_twitter || '');
+        setLSocialTt(org.social_tiktok || '');
+        setLSocialYt(org.social_youtube || '');
+        setLSocialLi(org.social_linkedin || '');
+        setLFooterText(org.footer_text || '');
+    };
+    const saveLanding = async () => {
+        setLSaving(true);
+        try {
+            if (typeof window !== 'undefined') {
+                localStorage.setItem(`campusflow_hero_template_${org.id}`, lHeroTemplate);
+                localStorage.setItem(`campusflow_hero_template_${org.slug}`, lHeroTemplate);
+            }
+            const updates: any = {
+                hero_image_url: lHeroImage || null,
+                hero_title: lHeroTitle || null,
+                hero_subtitle: lHeroSubtitle || null,
+                hero_template: lHeroTemplate,
+                about_text: lAboutText || null,
+                about_image_url: lAboutImage || null,
+                gallery_images: lGalleryImages,
+                social_facebook: lSocialFb || null,
+                social_instagram: lSocialIg || null,
+                social_twitter: lSocialTw || null,
+                social_tiktok: lSocialTt || null,
+                social_youtube: lSocialYt || null,
+                social_linkedin: lSocialLi || null,
+                footer_text: lFooterText || null
+            };
+            let { error } = await supabase.from('organizations').update(updates).eq('id', org.id);
+
+            // Fallback si la colonne hero_template n'est pas encore créée en base Supabase
+            if (error && error.message?.includes('hero_template')) {
+                delete updates.hero_template;
+                const retry = await supabase.from('organizations').update(updates).eq('id', org.id);
+                error = retry.error;
+            }
+
+            if (error) throw error;
+            setOrg({ ...org, ...updates, hero_template: lHeroTemplate });
+            toast.success("Page d'accueil mise à jour ✅");
+        } catch (e: any) {
+            toast.error(e.message);
+        }
+        setLSaving(false);
+    };
     // WhatsApp Queue State
     const [waQueue, setWaQueue] = useState<any[]>([]);
     const [waLoaded, setWaLoaded] = useState(false);
@@ -2952,8 +3012,33 @@ ${bodyHtml}
                         </div>
                     </div>}
 
+                    {/* ═══ STYLES PREMIUM (BOUTIQUE & TEMPLATES) ═══ */}
+                    {tab === 'premium_styles' && (
+                        <AdminPremiumStyles
+                            org={org}
+                            orgSlug={orgSlug}
+                            adminSkyPoints={adminSkyPoints}
+                            onUpdateOrg={(updated) => setOrg(updated)}
+                            onUpdatePoints={(pts) => setAdminSkyPoints(pts)}
+                        />
+                    )}
+
                     {/* ═══ LANDING PAGE CONFIG ═══ */}
                     {tab === 'landing' && <div className="space-y-6">
+                        {/* Banner vers Styles Premium */}
+                        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-purple-500/15 to-teal-500/15 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                                <span className="text-2xl">✨</span>
+                                <div>
+                                    <h3 className="font-extrabold text-sm text-white">Envie d&apos;une page d&apos;accueil plus moderne et compacte ?</h3>
+                                    <p className="text-xs text-slate-400 mt-0.5">Explorez nos 5 modèles de landing page interactifs (Hub Onglets, Bento Grid, Glassmorphism).</p>
+                                </div>
+                            </div>
+                            <Button onClick={() => onTab('premium_styles')} className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs h-9 px-4 rounded-xl shrink-0">
+                                Découvrir les Styles Premium →
+                            </Button>
+                        </div>
+
                         <div className="flex items-center justify-between">
                             <h2 className="font-bold text-lg flex items-center gap-2"><LayoutDashboard className="w-5 h-5 text-cyan-400" /> Personnaliser votre page d&apos;accueil</h2>
                             <a href={isCustom ? '/' : `/${orgSlug}`} target="_blank" rel="noreferrer" className="text-xs px-3 py-1.5 rounded-lg bg-teal-600/10 text-teal-300 hover:bg-teal-600/20 flex items-center gap-1 transition"><ExternalLink className="w-3 h-3" />Voir la page</a>

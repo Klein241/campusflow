@@ -4,6 +4,7 @@
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS hero_image_url text;
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS hero_title text;
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS hero_subtitle text;
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS hero_template text DEFAULT 'full';
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS about_text text;
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS about_image_url text;
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS gallery_images jsonb DEFAULT '[]'::jsonb;

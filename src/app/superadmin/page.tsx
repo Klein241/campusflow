@@ -10,7 +10,7 @@ import {
     Mail, Lock, School, UserCheck, Activity,
     BarChart3, Zap, Clock, CheckSquare, Star, Plus, Minus, Menu, X,
     MessageSquare, Send, Crown, CreditCard,
-    Image as ImageIcon, Video as VideoIcon, Link as LinkIcon, Target, Gift, Copy
+    Image as ImageIcon, Video as VideoIcon, Link as LinkIcon, Target, Gift, Copy, Sparkles
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { uploadToR2 } from '@/lib/r2';
+import { SuperadminStylesPricing } from '@/components/superadmin/superadmin-styles-pricing';
 
 // ═══════════════════════════════════════════════════════════════════════
 // CAMPUSFLOW — SUPERADMIN PANEL
@@ -25,7 +26,7 @@ import { uploadToR2 } from '@/lib/r2';
 // Protected by platform_admins table (Supabase Auth + RLS)
 // ═══════════════════════════════════════════════════════════════════════
 
-type Tab = 'overview' | 'orgs' | 'users' | 'domains' | 'announcements' | 'points' | 'requests' | 'ads' | 'email' | 'compte';
+type Tab = 'overview' | 'orgs' | 'users' | 'domains' | 'announcements' | 'points' | 'pricing' | 'requests' | 'ads' | 'email' | 'compte';
 
 interface Stats {
     total_orgs: number;
@@ -74,6 +75,7 @@ const SIDEBAR: { id: Tab; label: string; icon: any; emoji?: string }[] = [
     { id: 'orgs',           label: 'Organisations',    icon: Building2,       emoji: '🏫' },
     { id: 'users',          label: 'Utilisateurs',     icon: Users,           emoji: '👥' },
     { id: 'points',         label: 'Sky Points',       icon: Star,            emoji: '⭐' },
+    { id: 'pricing',        label: 'Tarifs Styles',    icon: Sparkles,        emoji: '✨' },
     { id: 'requests',       label: 'Demandes',         icon: MessageSquare,   emoji: '💬' },
     { id: 'ads',            label: 'Publicités',       icon: Target,          emoji: '📺' },
     { id: 'email',          label: 'Email Providers',  icon: Mail,            emoji: '📧' },
@@ -1332,6 +1334,16 @@ export default function SuperAdminPage() {
                                 )}
                             </motion.div>
                         )}
+
+                        {/* ══════════════════════════════════════════
+                            TARIFS DES STYLES & TEMPLATES (SUPERADMIN)
+                        ══════════════════════════════════════════ */}
+                        {tab === 'pricing' && (
+                            <motion.div key="pricing" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                                <SuperadminStylesPricing />
+                            </motion.div>
+                        )}
+
                         {/* ══════════════════════════════════════════
                             DEMANDES SKY POINTS (Chat persistant)
                         ══════════════════════════════════════════ */}
