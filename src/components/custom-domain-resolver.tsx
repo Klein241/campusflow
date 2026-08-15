@@ -25,10 +25,13 @@ export function CustomDomainResolver() {
     useEffect(() => {
         if (typeof window === 'undefined') return;
 
-        const hostname = window.location.hostname;
+        const hostname = window.location.hostname.toLowerCase();
 
         // Not a custom domain — skip
         if (!isCustomDomain(hostname)) return;
+
+        const cleanHost = hostname.replace(/^www\./, '');
+        const withWww = 'www.' + cleanHost;
 
         // Already cached — fire event immediately so useOrgSlug picks it up
         const cached = getCachedDomainSlug();
@@ -44,16 +47,18 @@ export function CustomDomainResolver() {
         // Resolve hostname → orgSlug via Supabase
         (async () => {
             try {
-                const { data: org, error } = await supabase
+                // Match either gotam.fun, www.gotam.fun, or the exact hostname
+                const { data: orgs, error } = await supabase
                     .from('organizations')
-                    .select('slug, name')
-                    .eq('custom_domain', hostname)
-                    .eq('domain_verified', true)
-                    .single();
+                    .select('slug, name, custom_domain')
+                    .or(`custom_domain.eq.${cleanHost},custom_domain.eq.${withWww},custom_domain.eq.${hostname}`)
+                    .limit(1);
+
+                const org = orgs?.[0];
 
                 if (error || !org?.slug) {
                     console.warn(
-                        `[CampusFlow] Custom domain "${hostname}" not found or not verified.`,
+                        `[CampusFlow] Custom domain "${hostname}" (clean: "${cleanHost}") not found in organizations.`,
                         error?.message ?? ''
                     );
                     window.dispatchEvent(
@@ -64,8 +69,10 @@ export function CustomDomainResolver() {
                     return;
                 }
 
-                // Cache and notify
+                // Cache for both variants
                 setCachedDomainSlug(hostname, org.slug);
+                setCachedDomainSlug(cleanHost, org.slug);
+
                 window.dispatchEvent(
                     new CustomEvent<DomainResolvedDetail>(DOMAIN_RESOLVED_EVENT, {
                         detail: { slug: org.slug, hostname, found: true },
