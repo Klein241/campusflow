@@ -1143,18 +1143,42 @@ function AdminPageContent() {
         if (!sCustomDomain.trim()) { toast.error('Entrez un domaine'); return; }
         setSVerifying(true);
         try {
-            const domain = sCustomDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+            const domain = sCustomDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '').replace(/^www\./, '');
             setSCustomDomain(domain);
             await supabase.from('organizations').update({ custom_domain: domain, domain_verified: true, domain_ssl_status: 'pending' }).eq('id', org.id);
+
+            // Automatisation backend (Worker -> Netlify API)
+            try {
+                const workerUrl = process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL || process.env.NEXT_PUBLIC_WORKER_URL || 'https://campusflow-worker.kleintaptue1.workers.dev';
+                const adminKey = process.env.NEXT_PUBLIC_ADMIN_KEY || 'cf-admin-k3y-campusflow-2026-s3cur3';
+                await fetch(`${workerUrl}/api/domain/register`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${adminKey}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ domain, orgId: org.id })
+                });
+            } catch {}
+
             setSDomainVerified(true); setSDomainSsl('pending');
             setOrg({ ...org, custom_domain: domain, domain_verified: true, domain_ssl_status: 'pending' });
-            toast.success('Domaine enregistré ! Configurez le DNS puis patientez 24-48h pour le SSL 🎉');
+            toast.success('Domaine enregistré ! Configurez le DNS de votre hébergeur (A et CNAME) 🎉');
         } catch (e: any) { toast.error(e.message); }
         setSVerifying(false);
     };
     const removeDomain = async () => {
         if (!confirm('Retirer le domaine personnalisé ?')) return;
+        const prevDomain = sCustomDomain;
         await supabase.from('organizations').update({ custom_domain: null, domain_verified: false, domain_ssl_status: 'pending' }).eq('id', org.id);
+
+        try {
+            const workerUrl = process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL || process.env.NEXT_PUBLIC_WORKER_URL || 'https://campusflow-worker.kleintaptue1.workers.dev';
+            const adminKey = process.env.NEXT_PUBLIC_ADMIN_KEY || 'cf-admin-k3y-campusflow-2026-s3cur3';
+            await fetch(`${workerUrl}/api/domain/remove`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${adminKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domain: prevDomain, orgId: org.id })
+            });
+        } catch {}
+
         setSCustomDomain(''); setSDomainVerified(false); setSDomainSsl('pending');
         setOrg({ ...org, custom_domain: null, domain_verified: false, domain_ssl_status: 'pending' });
         toast.success('Domaine retiré');
@@ -4096,14 +4120,18 @@ function DnsInstructions({ domain }: { domain: string }) {
                 <span className="text-amber-400 font-bold">CNAME</span>
                 <span className="text-white">{isSubdomain ? host : 'www'}</span>
                 <div className="flex items-center gap-1.5">
-                    <span className="text-emerald-400 truncate">{platformDomain || '…'}</span>
-                    {platformDomain && <button onClick={() => copy(platformDomain)} className="text-slate-600 hover:text-white transition-colors"><Copy className="w-3 h-3" /></button>}
+                    <span className="text-emerald-400 truncate">{platformDomain || 'readsgreat.site'}</span>
+                    <button onClick={() => copy(platformDomain || 'readsgreat.site')} className="text-slate-600 hover:text-white transition-colors"><Copy className="w-3 h-3" /></button>
                 </div>
             </div>
 
-            <p className="text-[10px] text-slate-600 leading-relaxed">
-                ⏱ Propagation DNS : <strong className="text-slate-500">10 min à 48h</strong> selon votre registrar.
-                Après propagation, le SSL est généré automatiquement.
+            <p className="text-[11px] text-amber-300/80 bg-amber-500/10 border border-amber-500/20 p-2 rounded-lg leading-relaxed">
+                💡 <strong>Important :</strong> Dans votre hébergeur (Hostinger, OVH...), la valeur cible doit être uniquement le nom d'hôte <code className="text-white bg-black/40 px-1 py-0.5 rounded">{platformDomain || 'readsgreat.site'}</code> (ne mettez pas de <em>https://</em> ni de chemin <em>/</em>).
+            </p>
+
+            <p className="text-[10px] text-slate-500 leading-relaxed">
+                ⏱ Propagation DNS : <strong className="text-slate-400">10 min à 24h</strong> selon votre registrar.
+                Après propagation, le SSL (HTTPS) est activé automatiquement.
             </p>
         </div>
     );
