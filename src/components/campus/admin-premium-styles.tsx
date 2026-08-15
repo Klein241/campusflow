@@ -281,7 +281,37 @@ export function AdminPremiumStyles({
         setLoadingPrices(false);
     }, []);
 
-    useEffect(() => { loadPrices(); }, [loadPrices]);
+    useEffect(() => {
+        loadPrices();
+
+        // 1. Écoute temps réel via Supabase Realtime
+        const channel = supabase
+            .channel('platform_settings_realtime_changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'platform_settings' }, (payload: any) => {
+                if (payload.new && payload.new.key === 'premium_styles_pricing' && payload.new.value) {
+                    setPrices(prev => ({ ...prev, ...payload.new.value }));
+                } else {
+                    loadPrices();
+                }
+            })
+            .subscribe();
+
+        // 2. Écoute immédiate inter-onglets
+        const handleStorage = (e: StorageEvent) => {
+            if (e.key === 'campusflow_premium_styles_pricing' && e.newValue) {
+                try {
+                    const parsed = JSON.parse(e.newValue);
+                    setPrices(prev => ({ ...prev, ...parsed }));
+                } catch {}
+            }
+        };
+        window.addEventListener('storage', handleStorage);
+
+        return () => {
+            supabase.removeChannel(channel);
+            window.removeEventListener('storage', handleStorage);
+        };
+    }, [loadPrices]);
 
     const getPrice = (id: string, def: number) => prices[id] !== undefined ? prices[id] : def;
 

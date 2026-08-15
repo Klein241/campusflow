@@ -208,21 +208,21 @@ export default function LoginPage() {
         setSaving(false);
     };
 
-    // ═══ ACCESS CODE LOGIN ═══
+    // ═══ ACCESS CODE & MATRICULE LOGIN ═══
     const handleAccessCodeLogin = async () => {
-        const code = accessCode.trim().toUpperCase();
-        if (code.length !== 12) { toast.error('Le code doit contenir 12 caractères'); return; }
+        const raw = accessCode.trim().toUpperCase();
+        const code = raw.replace(/\s+/g, '');
+        if (code.length < 3) { toast.error('Code d\'accès ou matricule trop court'); return; }
         if (!org) { toast.error('Établissement non trouvé'); return; }
         setSaving(true);
         try {
-            // Try teacher first — SCOPED to this organization
-            // NOTE: We no longer select pin_code — PIN is verified server-side via RPC
+            // 1. Try teacher first (by access_code)
             const { data: teacher } = await supabase
                 .from('teacher_profiles')
-                .select('id, first_name, last_name, pin_set, organization_id, is_active')
+                .select('id, first_name, last_name, pin_set, organization_id, is_active, access_code')
                 .eq('organization_id', org.id)
                 .eq('access_code', code)
-                .single();
+                .maybeSingle();
 
             if (teacher) {
                 if (teacher.is_active === false) { toast.error('Votre compte a été désactivé. Contactez l\'administration.'); setSaving(false); return; }
@@ -241,14 +241,14 @@ export default function LoginPage() {
                 return;
             }
 
-            // Try student — SCOPED to this organization
-            // NOTE: We no longer select pin_code — PIN is verified server-side via RPC
+            // 2. Try student (by access_code OR by matricule with/without dashes)
+            const cleanMat = code.replace(/-/g, '');
             const { data: student } = await supabase
                 .from('student_profiles')
-                .select('id, first_name, last_name, pin_set, organization_id, classroom_id, is_active')
+                .select('id, first_name, last_name, pin_set, organization_id, classroom_id, is_active, matricule, access_code')
                 .eq('organization_id', org.id)
-                .eq('access_code', code)
-                .single();
+                .or(`access_code.eq.${code},matricule.eq.${code},matricule.ilike.${code},matricule.ilike.%${cleanMat}%`)
+                .maybeSingle();
 
             if (student) {
                 if (student.is_active === false) { toast.error('Votre compte a été désactivé. Contactez l\'administration.'); setSaving(false); return; }
@@ -266,44 +266,41 @@ export default function LoginPage() {
                 return;
             }
 
-            // Fallback : chercher dans inscription_requests (inscription via landing page)
+            // 3. Fallback : chercher dans inscription_requests (inscription via landing page)
             const { data: inscReq } = await supabase
                 .from('inscription_requests')
                 .select('*')
                 .eq('organization_id', org.id)
-                .eq('access_code', code)
+                .or(`access_code.eq.${code},matricule.eq.${code}`)
                 .maybeSingle();
 
             if (inscReq) {
                 // Upsert via RPC server-side : le PIN est hashé bcrypt côté Postgres
                 const { data: spRows } = await supabase.rpc('upsert_student_from_inscription', {
-                    p_access_code: code,
+                    p_access_code: inscReq.access_code || code,
                     p_org_id:      org.id,
                 });
                 const sp = Array.isArray(spRows) ? spRows[0] : spRows;
 
                 if (sp) {
-                    const profile: UserProfile = {
-                        id:              sp.id,
-                        first_name:      sp.first_name,
-                        last_name:       sp.last_name,
-                        role:            'student',
-                        pin_set:         sp.pin_set ?? true,
-                        organization_id: sp.organization_id,
-                        classroom_id:    sp.classroom_id,
-                        approval_status: sp.approval_status || inscReq.status || 'pending',
-                    };
+                    const profile: UserProfile = { id: sp.id, first_name: sp.first_name, last_name: sp.last_name, role: 'student', pin_set: sp.pin_set || false, organization_id: sp.organization_id, classroom_id: sp.classroom_id };
                     setUserProfile(profile);
-                    setMode('pin_verify');
-                    setTimeout(() => pinRefs[0].current?.focus(), 100);
+                    if (!sp.pin_set) {
+                        setMode('pin_create');
+                        setPinStep('create');
+                        setTimeout(() => pinRefs[0].current?.focus(), 100);
+                    } else {
+                        setMode('pin_verify');
+                        setTimeout(() => pinRefs[0].current?.focus(), 100);
+                    }
                     setSaving(false);
                     return;
                 }
             }
 
-            toast.error('Code d\'accès invalide');
+            toast.error('Code d\'accès ou matricule non trouvé');
         } catch (e: any) {
-            toast.error('Erreur de connexion');
+            toast.error(e.message || 'Erreur de connexion');
         }
         setSaving(false);
     };
@@ -784,38 +781,34 @@ export default function LoginPage() {
                         </motion.div>
                     )}
 
-                    {/* ═══ ACCESS CODE ═══ */}
+                    {/* ═══ ACCESS CODE & MATRICULE ═══ */}
                     {mode === 'access_code' && (
                         <motion.div key="access" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
                             <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 space-y-4">
                                 <div className="text-center">
                                     <KeyRound className="w-8 h-8 text-teal-400 mx-auto mb-2" />
-                                    <h2 className="font-bold text-white">Code d'accès</h2>
-                                    <p className="text-xs text-slate-400 mt-1">Entrez le code à 12 caractères fourni par votre administration</p>
+                                    <h2 className="font-bold text-white">Code d&apos;accès ou Matricule</h2>
+                                    <p className="text-xs text-slate-400 mt-1">Entrez votre code d&apos;accès (12 car.) ou votre matricule scolaire (ex: STU-MSRT5NA8)</p>
                                 </div>
 
                                 <Input
                                     value={accessCode}
-                                    onChange={e => setAccessCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12))}
+                                    onChange={e => setAccessCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 24))}
                                     onKeyDown={e => e.key === 'Enter' && handleAccessCodeLogin()}
-                                    placeholder="XXXX XXXX XXXX"
-                                    maxLength={12}
-                                    className="bg-white/5 border-white/10 text-white h-14 rounded-xl text-center text-xl font-mono tracking-[0.3em] placeholder:tracking-[0.2em] placeholder:text-slate-600"
+                                    placeholder="Ex: STUMSRT5NA8 ou CODE..."
+                                    maxLength={24}
+                                    className="bg-white/5 border-white/10 text-white h-14 rounded-xl text-center text-lg font-mono tracking-[0.15em] placeholder:tracking-normal placeholder:text-slate-600"
                                     autoFocus
                                 />
 
                                 <div className="flex items-center justify-between text-xs text-slate-500">
-                                    <span>{accessCode.length}/12 caractères</span>
-                                    <div className="flex gap-1">
-                                        {Array.from({ length: 12 }).map((_, i) => (
-                                            <div key={i} className={`w-1.5 h-1.5 rounded-full transition-colors ${i < accessCode.length ? 'bg-teal-400' : 'bg-white/10'}`} />
-                                        ))}
-                                    </div>
+                                    <span>{accessCode.length} caractère(s) saisi(s)</span>
+                                    <span className="text-[11px] text-teal-400/80">Code d&apos;accès ou Matricule</span>
                                 </div>
 
                                 <Button
                                     onClick={handleAccessCodeLogin}
-                                    disabled={saving || accessCode.length !== 12}
+                                    disabled={saving || accessCode.trim().length < 3}
                                     className="w-full h-12 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-teal-600/25"
                                 >
                                     {saving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <KeyRound className="w-5 h-5 mr-2" />}

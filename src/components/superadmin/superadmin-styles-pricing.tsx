@@ -37,6 +37,9 @@ export function SuperadminStylesPricing() {
         const ok = await savePremiumStylesPricing(prices);
         if (ok) {
             toast.success('Grille tarifaire des Styles Premium enregistrée ✅');
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new Event('storage'));
+            }
         } else {
             toast.error('Erreur lors de la sauvegarde');
         }

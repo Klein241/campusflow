@@ -2124,7 +2124,19 @@ ${bodyHtml}
                                                                     {s.suspension_reason && <span className="text-[9px] text-red-400 truncate">{s.suspension_reason}</span>}
                                                                 </div>
                                                             )}
-                                                            <div className="space-y-1 text-[11px] text-slate-400 bg-black/30 p-2 rounded-xl border border-white/5">
+                                                            <div className="space-y-1 text-[11px] text-slate-400 bg-black/30 p-2.5 rounded-xl border border-white/5">
+                                                                {s.access_code && (
+                                                                    <div className="flex justify-between items-center pb-1 border-b border-white/5">
+                                                                        <span className="text-slate-500 font-medium">Code d&apos;accès</span>
+                                                                        <button
+                                                                            onClick={() => { navigator.clipboard.writeText(s.access_code); toast.success('Code d\'accès copié !'); }}
+                                                                            className="font-mono text-emerald-400 font-bold hover:text-emerald-300 flex items-center gap-1 text-[11px] bg-emerald-500/10 px-1.5 py-0.5 rounded transition-colors"
+                                                                            title="Copier le code d'accès"
+                                                                        >
+                                                                            {s.access_code} <Copy className="w-3 h-3" />
+                                                                        </button>
+                                                                    </div>
+                                                                )}
                                                                 <div className="flex justify-between"><span className="text-slate-500">Matricule</span><span className="font-mono text-slate-200 font-semibold truncate">{s.matricule || '—'}</span></div>
                                                                 {s.phone && <div className="flex justify-between"><span className="text-slate-500">Tél</span><span>{s.phone}</span></div>}
                                                                 {(s.sky_points !== undefined) && <div className="flex justify-between"><span className="text-slate-500">Sky Pts</span><span className="text-amber-300 font-bold">⭐ {s.sky_points}</span></div>}
