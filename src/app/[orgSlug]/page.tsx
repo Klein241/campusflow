@@ -290,13 +290,14 @@ export default function SchoolLandingPage() {
                 <div className="absolute top-[45%] left-[45%] w-[35%] h-[35%] bg-purple-900/10 blur-[180px] rounded-full" />
             </div>
 
-            {/* ═══ NAVBAR ════════════════════════════════════════════ */}
-            <nav className={cn(
-                'fixed top-0 inset-x-0 z-50 transition-all duration-300',
-                scrolled
-                    ? 'bg-[#08090E]/90 backdrop-blur-2xl border-b border-white/[0.06] shadow-xl shadow-black/20'
-                    : 'bg-transparent'
-            )}>
+            {/* ═══ NAVBAR (Affichée en mode classique) ═════════════════ */}
+            {landingLayout === 'classic' && (
+                <nav className={cn(
+                    'fixed top-0 inset-x-0 z-50 transition-all duration-300',
+                    scrolled
+                        ? 'bg-[#08090E]/90 backdrop-blur-2xl border-b border-white/[0.06] shadow-xl shadow-black/20'
+                        : 'bg-transparent'
+                )}>
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
                     {/* Logo */}
                     <div className="flex items-center gap-3 shrink-0">
@@ -363,10 +364,12 @@ export default function SchoolLandingPage() {
                     )}
                 </AnimatePresence>
             </nav>
+            )}
 
-            {/* ═══ HERO : 3 MODÈLES PREMIUM ══════════════════════════ */}
-            {/* MODÈLE 2 : SPLIT (Deux colonnes avec carte image non déformée) */}
-            {heroTemplate === 'split' ? (
+            {/* ═══ HERO : 3 MODÈLES PREMIUM (Affichés uniquement en mode classique) ═══ */}
+            {landingLayout === 'classic' && (
+                <>
+                    {heroTemplate === 'split' ? (
                 <section className="relative z-10 pt-24 pb-16 min-h-[90svh] flex flex-col justify-center overflow-hidden">
                     <div className="absolute inset-0 pointer-events-none">
                         <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full blur-[140px] opacity-25" style={{ background: bc }} />
@@ -629,6 +632,8 @@ export default function SchoolLandingPage() {
                         </motion.div>
                     </div>
                 </section>
+                )}
+                </>
             )}
 
             {/* ═══ TEMPLATES COMPLETS MODERNES (ZERO SCROLL) ═══ */}

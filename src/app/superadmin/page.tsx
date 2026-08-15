@@ -10,7 +10,7 @@ import {
     Mail, Lock, School, UserCheck, Activity,
     BarChart3, Zap, Clock, CheckSquare, Star, Plus, Minus, Menu, X,
     MessageSquare, Send, Crown, CreditCard,
-    Image as ImageIcon, Video as VideoIcon, Link as LinkIcon, Target, Gift, Copy, Sparkles
+    Image as ImageIcon, Video as VideoIcon, Link as LinkIcon, Target, Gift, Copy, Sparkles, Coins
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -162,12 +162,16 @@ export default function SuperAdminPage() {
     const [deleting, setDeleting] = useState(false);
 
     // ── Points management ─────────────────────────────────────────
+    const [pointsTabMode, setPointsTabMode] = useState<'orgs' | 'users'>('orgs');
     const [pointsSearch, setPointsSearch]   = useState('');
     const [pointsResults, setPointsResults] = useState<any[]>([]);
     const [pointsLoading, setPointsLoading] = useState(false);
     const [pointsTarget, setPointsTarget]   = useState<any | null>(null);
     const [pointsDelta, setPointsDelta]     = useState(0);
     const [pointsNote, setPointsNote]       = useState('');
+    const [pointsOrgTarget, setPointsOrgTarget] = useState<OrgItem | null>(null);
+    const [pointsOrgDelta, setPointsOrgDelta]   = useState<number>(500);
+    const [pointsOrgNote, setPointsOrgNote]     = useState<string>('');
     const [sendingPoints, setSendingPoints] = useState(false);
 
     // ── Sky Requests (chat) ───────────────────────────────────────
@@ -409,6 +413,33 @@ export default function SuperAdminPage() {
             setPointsNote('');
         }
         setSendingPoints(false);
+    };
+
+    const applyOrgPoints = async () => {
+        if (!pointsOrgTarget || pointsOrgDelta === 0) return;
+        setSendingPoints(true);
+        try {
+            const current = (pointsOrgTarget as any).sky_points || 0;
+            const newBalance = Math.max(0, current + pointsOrgDelta);
+            const { error } = await supabase
+                .from('organizations')
+                .update({ sky_points: newBalance })
+                .eq('id', pointsOrgTarget.id);
+
+            if (error) {
+                toast.error('Erreur Supabase: ' + error.message);
+            } else {
+                const sign = pointsOrgDelta > 0 ? '+' : '';
+                toast.success(`⭐ ${sign}${pointsOrgDelta.toLocaleString('fr-FR')} Sky Points envoyés à ${pointsOrgTarget.name} (Solde: ${newBalance.toLocaleString('fr-FR')} pts)`);
+                setOrgs(prev => prev.map(o => o.id === pointsOrgTarget.id ? { ...o, sky_points: newBalance } : o));
+                setPointsOrgTarget({ ...pointsOrgTarget, sky_points: newBalance } as any);
+                setPointsOrgNote('');
+            }
+        } catch (e: any) {
+            toast.error('Erreur: ' + e.message);
+        } finally {
+            setSendingPoints(false);
+        }
     };
 
     // ─── Filtered lists (null-safe to prevent TypeError crashes) ─────
@@ -1100,28 +1131,227 @@ export default function SuperAdminPage() {
                         {tab === 'points' && (
                             <motion.div key="points" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-5">
 
-                                {/* Search bar */}
-                                <div className="bg-white/[0.03] border border-white/8 rounded-2xl p-4 space-y-3">
+                                {/* Top Switch: Écoles vs Utilisateurs */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/[0.03] border border-white/8 rounded-2xl p-4">
                                     <div>
-                                        <p className="text-sm font-black text-white mb-1">⭐ Gestion des Sky Points</p>
-                                        <p className="text-xs text-slate-500">Recherchez un étudiant, professeur ou admin et ajustez son solde.</p>
+                                        <h3 className="text-base font-black text-white flex items-center gap-2">
+                                            <Star className="w-5 h-5 text-amber-400" /> Gestion & Envoi des Sky Points
+                                        </h3>
+                                        <p className="text-xs text-slate-400 mt-0.5">
+                                            Transférez des Sky Points directement aux administrateurs d&apos;écoles ou aux utilisateurs.
+                                        </p>
                                     </div>
-                                    <div className="flex gap-2">
-                                        <div className="relative flex-1">
-                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                                            <input
-                                                value={pointsSearch}
-                                                onChange={e => setPointsSearch(e.target.value)}
-                                                onKeyDown={e => e.key === 'Enter' && searchForPoints()}
-                                                placeholder="Nom, prénom ou code accès..."
-                                                className="w-full bg-white/5 border border-white/10 text-white h-10 rounded-xl text-sm pl-9 pr-3 placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40" />
-                                        </div>
-                                        <Button onClick={searchForPoints} disabled={pointsLoading}
-                                            className="bg-violet-600 hover:bg-violet-500 rounded-xl px-4 shrink-0">
-                                            {pointsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                                        </Button>
+                                    <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white/5 border border-white/10 shrink-0">
+                                        <button
+                                            onClick={() => setPointsTabMode('orgs')}
+                                            className={cn(
+                                                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all',
+                                                pointsTabMode === 'orgs'
+                                                    ? 'bg-amber-500 text-slate-950 shadow-md'
+                                                    : 'text-slate-400 hover:text-white'
+                                            )}
+                                        >
+                                            <Building2 className="w-3.5 h-3.5" /> Écoles ({orgs.length})
+                                        </button>
+                                        <button
+                                            onClick={() => setPointsTabMode('users')}
+                                            className={cn(
+                                                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all',
+                                                pointsTabMode === 'users'
+                                                    ? 'bg-amber-500 text-slate-950 shadow-md'
+                                                    : 'text-slate-400 hover:text-white'
+                                            )}
+                                        >
+                                            <Users className="w-3.5 h-3.5" /> Utilisateurs
+                                        </button>
                                     </div>
                                 </div>
+
+                                {/* SECTION 1: ÉCOLES & ADMINISTRATEURS */}
+                                {pointsTabMode === 'orgs' && (
+                                    <div className="space-y-4">
+                                        <div className="grid lg:grid-cols-12 gap-5">
+                                            {/* Liste des Écoles */}
+                                            <div className="lg:col-span-6 space-y-2.5">
+                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">
+                                                    Sélectionnez une école pour lui créditer des Sky Points :
+                                                </p>
+                                                <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                                                    {orgs.map(org => {
+                                                        const isSelected = pointsOrgTarget?.id === org.id;
+                                                        const pts = (org as any).sky_points || 0;
+                                                        return (
+                                                            <motion.button
+                                                                key={org.id}
+                                                                onClick={() => {
+                                                                    setPointsOrgTarget(org);
+                                                                    setPointsOrgDelta(500);
+                                                                    setPointsOrgNote('');
+                                                                }}
+                                                                className={cn(
+                                                                    'w-full flex items-center justify-between p-3.5 rounded-2xl border text-left transition-all',
+                                                                    isSelected
+                                                                        ? 'bg-amber-500/15 border-amber-500/50 shadow-lg shadow-amber-500/10'
+                                                                        : 'bg-white/[0.02] border-white/8 hover:bg-white/[0.05] hover:border-white/15'
+                                                                )}
+                                                            >
+                                                                <div className="flex items-center gap-3 min-w-0">
+                                                                    {org.logo_url ? (
+                                                                        <img src={org.logo_url} alt={org.name} className="w-10 h-10 rounded-xl object-contain bg-white/10 p-1 border border-white/10 shrink-0" />
+                                                                    ) : (
+                                                                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                                                                            <Building2 className="w-5 h-5" />
+                                                                        </div>
+                                                                    )}
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-xs font-black text-white truncate">{org.name}</p>
+                                                                        <p className="text-[10px] text-slate-500 truncate">/{org.slug} • {org.city || 'Cameroun'}</p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right shrink-0 pl-3">
+                                                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/25 text-xs font-black">
+                                                                        <Coins className="w-3 h-3" /> {new Intl.NumberFormat('fr-FR').format(pts)} pts
+                                                                    </span>
+                                                                </div>
+                                                            </motion.button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            {/* Panneau d'envoi de points à l'école */}
+                                            <div className="lg:col-span-6">
+                                                {pointsOrgTarget ? (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, scale: 0.98 }}
+                                                        animate={{ opacity: 1, scale: 1 }}
+                                                        className="p-5 rounded-3xl bg-gradient-to-br from-[#121722] to-[#0A0D14] border border-amber-500/30 shadow-2xl space-y-4 sticky top-4"
+                                                    >
+                                                        <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                                                            <div className="flex items-center gap-3">
+                                                                {pointsOrgTarget.logo_url ? (
+                                                                    <img src={pointsOrgTarget.logo_url} alt={pointsOrgTarget.name} className="w-11 h-11 rounded-xl object-contain bg-white/10 p-1 shrink-0" />
+                                                                ) : (
+                                                                    <div className="w-11 h-11 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                                                                        <Building2 className="w-5 h-5" />
+                                                                    </div>
+                                                                )}
+                                                                <div>
+                                                                    <h4 className="text-sm font-black text-white">{pointsOrgTarget.name}</h4>
+                                                                    <p className="text-[10px] text-slate-400">/{pointsOrgTarget.slug}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <span className="text-[10px] text-slate-400 block">Solde actuel</span>
+                                                                <span className="text-lg font-black text-amber-400">
+                                                                    {new Intl.NumberFormat('fr-FR').format((pointsOrgTarget as any).sky_points || 0)} pts
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Presets rapides pour l'école */}
+                                                        <div>
+                                                            <label className="text-[11px] font-bold text-slate-300 block mb-2">Montants rapides (pts)</label>
+                                                            <div className="grid grid-cols-4 gap-1.5">
+                                                                {[+500, +1000, +2500, +5000, +10000, +25000, +50000, -1000].map(val => (
+                                                                    <button
+                                                                        key={val}
+                                                                        onClick={() => setPointsOrgDelta(val)}
+                                                                        className={cn(
+                                                                            'py-2 px-1 rounded-xl text-xs font-black border transition-all',
+                                                                            pointsOrgDelta === val
+                                                                                ? val > 0
+                                                                                    ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shadow-md shadow-emerald-500/10'
+                                                                                    : 'bg-red-500/20 border-red-500/50 text-red-300'
+                                                                                : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'
+                                                                        )}
+                                                                    >
+                                                                        {val > 0 ? `+${val.toLocaleString('fr-FR')}` : val.toLocaleString('fr-FR')}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Ajustement précis */}
+                                                        <div>
+                                                            <label className="text-[11px] font-bold text-slate-300 block mb-1.5">Montant personnalisé</label>
+                                                            <div className="flex items-center gap-2">
+                                                                <button
+                                                                    onClick={() => setPointsOrgDelta(d => d - 500)}
+                                                                    className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/25 text-red-400 flex items-center justify-center hover:bg-red-500/20"
+                                                                >
+                                                                    <Minus className="w-4 h-4" />
+                                                                </button>
+                                                                <input
+                                                                    type="number"
+                                                                    value={pointsOrgDelta}
+                                                                    onChange={e => setPointsOrgDelta(parseInt(e.target.value) || 0)}
+                                                                    className="flex-1 bg-white/5 border border-white/10 text-white h-10 rounded-xl text-center text-sm font-black focus:outline-none focus:border-amber-500/50"
+                                                                />
+                                                                <button
+                                                                    onClick={() => setPointsOrgDelta(d => d + 500)}
+                                                                    className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 flex items-center justify-center hover:bg-emerald-500/20"
+                                                                >
+                                                                    <Plus className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Prévisualisation nouveau solde */}
+                                                        <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-between text-xs">
+                                                            <span className="text-slate-400">Nouveau solde prévu :</span>
+                                                            <span className="text-base font-black text-amber-300">
+                                                                {new Intl.NumberFormat('fr-FR').format(Math.max(0, ((pointsOrgTarget as any).sky_points || 0) + pointsOrgDelta))} pts
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Bouton d'action */}
+                                                        <Button
+                                                            onClick={applyOrgPoints}
+                                                            disabled={sendingPoints || pointsOrgDelta === 0}
+                                                            className="w-full h-11 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black rounded-xl text-xs shadow-lg shadow-amber-500/20 gap-2"
+                                                        >
+                                                            {sendingPoints ? <Loader2 className="w-4 h-4 animate-spin" /> : <Coins className="w-4 h-4" />}
+                                                            {pointsOrgDelta >= 0 ? `Envoyer +${pointsOrgDelta.toLocaleString('fr-FR')} Sky Points` : `Déduire ${Math.abs(pointsOrgDelta).toLocaleString('fr-FR')} Sky Points`}
+                                                        </Button>
+                                                    </motion.div>
+                                                ) : (
+                                                    <div className="h-full flex flex-col items-center justify-center p-8 rounded-3xl bg-white/[0.02] border border-dashed border-white/10 text-center text-slate-500 space-y-2">
+                                                        <Building2 className="w-8 h-8 text-slate-600" />
+                                                        <p className="text-xs font-bold text-slate-400">Aucune école sélectionnée</p>
+                                                        <p className="text-[11px] text-slate-600 max-w-xs">Cliquez sur une école dans la liste de gauche pour ajuster son solde Sky Points.</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* SECTION 2: ÉTUDIANTS & PROFESSEURS */}
+                                {pointsTabMode === 'users' && (
+                                    <>
+                                        {/* Search bar */}
+                                        <div className="bg-white/[0.03] border border-white/8 rounded-2xl p-4 space-y-3">
+                                            <div>
+                                                <p className="text-sm font-black text-white mb-1">⭐ Recherche d&apos;utilisateurs</p>
+                                                <p className="text-xs text-slate-500">Recherchez un étudiant ou professeur par nom, prénom ou code d&apos;accès.</p>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <div className="relative flex-1">
+                                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                                    <input
+                                                        value={pointsSearch}
+                                                        onChange={e => setPointsSearch(e.target.value)}
+                                                        onKeyDown={e => e.key === 'Enter' && searchForPoints()}
+                                                        placeholder="Nom, prénom ou code accès..."
+                                                        className="w-full bg-white/5 border border-white/10 text-white h-10 rounded-xl text-sm pl-9 pr-3 placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40" />
+                                                </div>
+                                                <Button onClick={searchForPoints} disabled={pointsLoading}
+                                                    className="bg-violet-600 hover:bg-violet-500 rounded-xl px-4 shrink-0">
+                                                    {pointsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                                                </Button>
+                                            </div>
+                                        </div>
 
                                 {/* Results */}
                                 {pointsResults.length > 0 && (
@@ -1241,6 +1471,8 @@ export default function SuperAdminPage() {
                                         <Star className="w-10 h-10 mx-auto mb-3 opacity-30" />
                                         <p className="text-sm">Recherchez un utilisateur pour gérer ses Sky Points</p>
                                     </div>
+                                )}
+                                    </>
                                 )}
                             </motion.div>
                         )}
