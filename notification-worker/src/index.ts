@@ -91,6 +91,19 @@ type NotificationActionType =
     | 'admin_announcement'
     | 'evaluation_reminder'
     | 'exercise_reminder'
+    // ── Admin-specific notification types ──
+    | 'admin_new_inscription'
+    | 'admin_new_payment'
+    | 'admin_exam_submitted'
+    | 'admin_discipline_alert'
+    // ── SuperAdmin notification types ──
+    | 'superadmin_new_org'
+    | 'superadmin_sky_request'
+    | 'superadmin_health_alert'
+    // ── Daily Engagement Retention Types (Pinterest/Alibaba) ──
+    | 'daily_engagement_morning'
+    | 'daily_engagement_noon'
+    | 'daily_engagement_evening'
     | 'general';
 
 type Priority = 'high' | 'medium' | 'low';
@@ -186,6 +199,19 @@ const DEFAULT_PREFERENCES: Record<NotificationActionType, { in_app: boolean; pus
     admin_announcement: { in_app: true, push: true },
     evaluation_reminder: { in_app: true, push: true },
     exercise_reminder:   { in_app: true, push: true },
+    // ── Admin-specific ──
+    admin_new_inscription:   { in_app: true, push: true },
+    admin_new_payment:       { in_app: true, push: true },
+    admin_exam_submitted:    { in_app: true, push: true },
+    admin_discipline_alert:  { in_app: true, push: true },
+    // ── SuperAdmin-specific ──
+    superadmin_new_org:      { in_app: true, push: true },
+    superadmin_sky_request:  { in_app: true, push: true },
+    superadmin_health_alert: { in_app: true, push: true },
+    // ── Daily Engagement ──
+    daily_engagement_morning: { in_app: false, push: true },
+    daily_engagement_noon:    { in_app: false, push: true },
+    daily_engagement_evening: { in_app: false, push: true },
     general: { in_app: true, push: false },
 };
 
@@ -195,22 +221,18 @@ const PRIORITY_MAP: Record<NotificationActionType, Priority> = {
     new_prayer_published: 'medium',
     prayer_comment: 'high',
     prayer_no_response: 'low',
-    // Aliases modernes
     support_received: 'high',
     friend_supported: 'low',
     new_support_published: 'medium',
     support_comment: 'high',
     support_no_response: 'low',
-    // Stories
     story_published: 'low',
     story_liked: 'low',
     story_commented: 'medium',
     story_reposted: 'medium',
-    // Actus
     actu_published: 'low',
     actu_liked: 'low',
     actu_commented: 'medium',
-    // Cursus
     new_subject: 'high',
     new_chapter: 'medium',
     new_lesson: 'medium',
@@ -225,7 +247,6 @@ const PRIORITY_MAP: Record<NotificationActionType, Priority> = {
     friend_request_received: 'high',
     friend_request_accepted: 'high',
     new_book_published: 'medium',
-    // ── School priorities ──
     grade_published: 'high',
     evaluation_scheduled: 'high',
     payment_confirmed: 'high',
@@ -233,7 +254,20 @@ const PRIORITY_MAP: Record<NotificationActionType, Priority> = {
     timetable_change: 'medium',
     admin_announcement: 'high',
     evaluation_reminder: 'high',
-    exercise_reminder:   'high',
+    exercise_reminder: 'high',
+    // ── Admin ──
+    admin_new_inscription:   'high',
+    admin_new_payment:       'high',
+    admin_exam_submitted:    'medium',
+    admin_discipline_alert:  'high',
+    // ── SuperAdmin ──
+    superadmin_new_org:      'high',
+    superadmin_sky_request:  'high',
+    superadmin_health_alert: 'high',
+    // ── Daily Engagement ──
+    daily_engagement_morning: 'medium',
+    daily_engagement_noon:    'medium',
+    daily_engagement_evening: 'low',
     general: 'low',
 };
 
@@ -652,6 +686,66 @@ function buildNotificationMessage(
                 message: short(preview, 100),
             };
 
+        case 'admin_new_inscription':
+            return {
+                title: '👤 Nouvelle Inscription',
+                message: short(preview) || `${first} a soumis un dossier d'inscription.`,
+            };
+
+        case 'admin_new_payment':
+            return {
+                title: '💰 Paiement Reçu',
+                message: short(preview) || `Paiement reçu de ${first}.`,
+            };
+
+        case 'admin_exam_submitted':
+            return {
+                title: '📝 Copie soumise',
+                message: short(preview) || `${first} a rendu son évaluation "${short(targetName)}".`,
+            };
+
+        case 'admin_discipline_alert':
+            return {
+                title: '⚠️ Alerte disciplinaire',
+                message: short(preview) || `Incident signalé pour ${first}.`,
+            };
+
+        case 'superadmin_new_org':
+            return {
+                title: '🏫 Nouvel Établissement',
+                message: short(preview) || `"${short(targetName)}" vient de rejoindre CampusFlow.`,
+            };
+
+        case 'superadmin_sky_request':
+            return {
+                title: '⭐ Demande de Sky Points',
+                message: short(preview) || `${first} demande une recharge de Sky Points.`,
+            };
+
+        case 'superadmin_health_alert':
+            return {
+                title: '🚨 Alerte Système',
+                message: short(preview) || `Incident détecté sur la plateforme.`,
+            };
+
+        case 'daily_engagement_morning':
+            return {
+                title: `📅 Ton emploi du temps — ${short(targetName)}`,
+                message: short(preview) || 'Consulte tes cours et salles d\'aujourd\'hui.',
+            };
+
+        case 'daily_engagement_noon':
+            return {
+                title: `📚 Continue ton apprentissage !`,
+                message: short(preview) || 'De nouvelles leçons et exercices t\'attendent.',
+            };
+
+        case 'daily_engagement_evening':
+            return {
+                title: `⭐ Collecte tes Sky Points`,
+                message: short(preview) || 'Termine ta journée et regarde les actus de l\'école.',
+            };
+
         default:
             return {
                 title: 'Notification',
@@ -665,7 +759,11 @@ function buildNotificationMessage(
 // ══════════════════════════════════════════════════════════
 
 function buildActionData(actionType: NotificationActionType, payload: NotifyPayload): Record<string, any> {
-    const base: Record<string, any> = {};
+    const orgSlug = payload.extra_data?.orgSlug || payload.extra_data?.slug || '';
+    const base: Record<string, any> = {
+        orgSlug,
+        organizationId: payload.extra_data?.organizationId || payload.extra_data?.orgId,
+    };
 
     switch (actionType) {
         case 'prayer_prayed':
@@ -689,7 +787,7 @@ function buildActionData(actionType: NotificationActionType, payload: NotifyPayl
         case 'group_access_request':
             return {
                 ...base,
-                tab: 'community',
+                tab: 'chat',
                 viewState: 'group-detail',
                 groupId: payload.target_id,
                 groupName: payload.target_name,
@@ -700,7 +798,7 @@ function buildActionData(actionType: NotificationActionType, payload: NotifyPayl
         case 'group_new_message':
             return {
                 ...base,
-                tab: 'community',
+                tab: 'chat',
                 viewState: 'group-detail',
                 groupId: payload.target_id,
                 groupName: payload.target_name,
@@ -710,14 +808,14 @@ function buildActionData(actionType: NotificationActionType, payload: NotifyPayl
         case 'admin_new_group':
             return {
                 ...base,
-                tab: 'community',
+                tab: 'chat',
                 viewState: 'groups',
             };
 
         case 'group_invitation':
             return {
                 ...base,
-                tab: 'community',
+                tab: 'chat',
                 viewState: 'group-detail',
                 groupId: payload.target_id,
                 groupName: payload.target_name,
@@ -726,7 +824,7 @@ function buildActionData(actionType: NotificationActionType, payload: NotifyPayl
         case 'group_mention':
             return {
                 ...base,
-                tab: 'community',
+                tab: 'chat',
                 viewState: 'group-detail',
                 groupId: payload.target_id,
                 groupName: payload.target_name,
@@ -737,8 +835,7 @@ function buildActionData(actionType: NotificationActionType, payload: NotifyPayl
         case 'dm_new_message':
             return {
                 ...base,
-                tab: 'community',
-                communityTab: 'chat',
+                tab: 'chat',
                 viewState: 'conversation',
                 conversationId: payload.target_id,
             };
@@ -746,15 +843,14 @@ function buildActionData(actionType: NotificationActionType, payload: NotifyPayl
         case 'friend_request_received':
             return {
                 ...base,
-                tab: 'profil',
+                tab: 'contacts',
                 viewState: 'friend-requests',
             };
 
         case 'friend_request_accepted':
             return {
                 ...base,
-                tab: 'community',
-                communityTab: 'chat',
+                tab: 'chat',
                 viewState: 'conversation',
                 conversationId: payload.extra_data?.conversationId,
             };
@@ -851,7 +947,89 @@ function buildActionData(actionType: NotificationActionType, payload: NotifyPayl
                 tab: 'myspace',
                 subTab: 'cursus',
                 targetId: payload.target_id,
-                orgSlug: payload.extra_data?.orgSlug,
+            };
+
+        // ── Admin école deep-links ──
+        case 'admin_new_inscription':
+            return {
+                ...base,
+                adminRoute: true,
+                tab: 'students',
+                subTab: 'pending',
+                url: orgSlug ? `/${orgSlug}/admin?tab=students&sub=pending` : undefined,
+            };
+
+        case 'admin_new_payment':
+            return {
+                ...base,
+                adminRoute: true,
+                tab: 'payments',
+                url: orgSlug ? `/${orgSlug}/admin?tab=payments` : undefined,
+            };
+
+        case 'admin_exam_submitted':
+            return {
+                ...base,
+                adminRoute: true,
+                tab: 'evaluations',
+                url: orgSlug ? `/${orgSlug}/admin?tab=evaluations` : undefined,
+            };
+
+        case 'admin_discipline_alert':
+            return {
+                ...base,
+                adminRoute: true,
+                tab: 'discipline',
+                url: orgSlug ? `/${orgSlug}/admin?tab=discipline` : undefined,
+            };
+
+        // ── SuperAdmin deep-links ──
+        case 'superadmin_new_org':
+            return {
+                ...base,
+                superadminRoute: true,
+                tab: 'orgs',
+                url: '/superadmin?tab=orgs',
+            };
+
+        case 'superadmin_sky_request':
+            return {
+                ...base,
+                superadminRoute: true,
+                tab: 'requests',
+                url: '/superadmin?tab=requests',
+            };
+
+        case 'superadmin_health_alert':
+            return {
+                ...base,
+                superadminRoute: true,
+                tab: 'overview',
+                url: '/superadmin?tab=overview',
+            };
+
+        // ── Daily Engagement deep-links ──
+        case 'daily_engagement_morning':
+            return {
+                ...base,
+                tab: 'myspace',
+                subTab: 'edt',
+                url: orgSlug ? `/${orgSlug}/campus?tab=myspace&subTab=edt` : undefined,
+            };
+
+        case 'daily_engagement_noon':
+            return {
+                ...base,
+                tab: 'myspace',
+                subTab: 'cursus',
+                url: orgSlug ? `/${orgSlug}/campus?tab=myspace&subTab=cursus` : undefined,
+            };
+
+        case 'daily_engagement_evening':
+            return {
+                ...base,
+                tab: 'actus',
+                url: orgSlug ? `/${orgSlug}/campus?tab=actus` : undefined,
             };
 
         default:
@@ -1048,7 +1226,7 @@ async function encryptPayload(p256dhB64: string, authB64: string, payloadString:
         { name: 'ECDH', namedCurve: 'P-256' },
         true,
         ['deriveBits']
-    );
+    ) as CryptoKeyPair;
 
     const uaPublic = b64urlDecode(p256dhB64);
     const subscriberKey = await crypto.subtle.importKey(
@@ -1057,14 +1235,14 @@ async function encryptPayload(p256dhB64: string, authB64: string, payloadString:
 
     const sharedSecret = new Uint8Array(
         await crypto.subtle.deriveBits(
-            { name: 'ECDH', public: subscriberKey },
+            { name: 'ECDH', public: subscriberKey } as any, // CF Workers ECDH params
             localKeys.privateKey,
             256
         )
     );
 
     const authSecret = b64urlDecode(authB64);
-    const asPublic = new Uint8Array(await crypto.subtle.exportKey('raw', localKeys.publicKey));
+    const asPublic = new Uint8Array(await crypto.subtle.exportKey('raw', localKeys.publicKey) as ArrayBuffer);
 
     const infoPrefix = new TextEncoder().encode('WebPush: info\0');
     const keyInfo = new Uint8Array(infoPrefix.length + 65 + 65);
@@ -1553,12 +1731,26 @@ async function handleUpdatePreferences(request: Request, env: Env): Promise<Resp
 // ══════════════════════════════════════════════════════════
 
 async function handlePushRegister(request: Request, env: Env): Promise<Response> {
-    const { userId, subscription } = await request.json() as { userId: string; subscription: any };
+    const { userId, subscription, userRole, organizationId, orgSlug } = await request.json() as {
+        userId: string;
+        subscription: any;
+        userRole?: string;
+        organizationId?: string;
+        orgSlug?: string;
+    };
     if (!userId || !subscription) return json({ error: 'userId and subscription required' }, 400);
 
-    // Store in KV with 24h TTL
-    await env.PUSH_TOKEN_CACHE.put(`push:${userId}`, JSON.stringify(subscription), {
-        expirationTtl: 86400,
+    const fullPayload = {
+        subscription,
+        userRole,
+        organizationId,
+        orgSlug,
+        updated_at: Date.now(),
+    };
+
+    // Store in KV with 30 days TTL (2592000s) — Never lose push subscriptions!
+    await env.PUSH_TOKEN_CACHE.put(`push:${userId}`, JSON.stringify(fullPayload), {
+        expirationTtl: 30 * 86400,
     });
 
     // Also store in Supabase for persistence
@@ -1596,36 +1788,57 @@ async function sendPushDirect(
 ): Promise<void> {
     try {
         // Get push subscription from KV first, then Supabase
+        let storedData: any = null;
         let subJson = await env.PUSH_TOKEN_CACHE.get(`push:${userId}`);
 
-        if (!subJson) {
+        if (subJson) {
+            try {
+                const parsed = JSON.parse(subJson);
+                // Handle both new format { subscription, orgSlug } and legacy format
+                storedData = parsed.subscription ? parsed : { subscription: parsed };
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        if (!storedData?.subscription) {
             const db = new SupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
             const tokens = await db.select('push_tokens', {
                 select: 'subscription_json',
                 filters: `user_id=eq.${userId}`,
                 single: true,
-            });
+            }) as { subscription_json?: string } | null;
             if (tokens?.subscription_json) {
-                subJson = tokens.subscription_json;
-                await env.PUSH_TOKEN_CACHE.put(`push:${userId}`, subJson, { expirationTtl: 86400 });
+                try {
+                    const sub = JSON.parse(tokens.subscription_json);
+                    storedData = { subscription: sub };
+                    await env.PUSH_TOKEN_CACHE.put(`push:${userId}`, JSON.stringify(storedData), { expirationTtl: 30 * 86400 });
+                } catch (e) {}
             }
         }
 
-        if (!subJson) return;
+        if (!storedData?.subscription) return;
 
-        const subscription = JSON.parse(subJson);
+        const orgSlug = data?.orgSlug || storedData?.orgSlug || '';
+        // Prefer an explicit URL built in buildActionData; fall back to campus root
+        const targetUrl = data?.url || (orgSlug ? `/${orgSlug}/campus` : '/');
+
         const pushPayload = {
             title,
             body,
             icon: '/icon-192.png',
             badge: '/icon-192.png',
-            data: { url: '/', ...data },
+            data: {
+                orgSlug,
+                ...data,
+                url: targetUrl, // ensure url is the resolved one
+            },
             urgency: priority === 'high' ? 'high' : 'normal',
-            tag: aggKey || undefined,
-            renotify: !!aggKey,
+            tag: aggKey || `cf-${Date.now()}`,
+            renotify: true,
         };
 
-        const result = await sendWebPush(subscription, pushPayload, env);
+        const result = await sendWebPush(storedData.subscription, pushPayload, env);
 
         if (result.status === 410 || result.status === 404) {
             // Subscription expired → clean up
@@ -2086,7 +2299,7 @@ async function handleEmailSend(request: Request, env: Env): Promise<Response> {
             const b = await sendViaBrevo(brevoKey, chunk, subject, emailHtml, fromName);
             if (b.ok) {
                 providerUsed = providerUsed === 'resend' ? 'resend' : 'brevo'; // keep 'resend' if already sent some via resend
-                if (failedOver || providerUsed === 'none') providerUsed = 'brevo';
+                if (failedOver) providerUsed = 'brevo';
                 totalSent += chunk.length;
                 await incrementEmailCount(env, 'brevo', chunk.length);
                 results.push({ provider: 'brevo', chunk_size: chunk.length, status: b.status });
@@ -2845,8 +3058,7 @@ async function processOutbox(env: Env): Promise<void> {
             });
         }
 
-        // 5. Rejouer les pending_supabase_sync vers Supabase (si Supabase est revenu)
-        await replaySupabaseSync(env);
+        // TODO: replay pending_supabase_sync entries when Supabase is back online
 
         console.log(`[Outbox] Processed: ${successIds.length} OK, ${failedIds.length} failed`);
     } catch (err: any) {

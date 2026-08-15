@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Outfit } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { CustomDomainResolver } from "@/components/custom-domain-resolver";
+import { PushNotificationManager } from "@/components/push-notification-manager";
+import { NotificationListener } from "@/components/notification-listener";
 import "./globals.css";
 
 const inter = Inter({
@@ -66,9 +68,12 @@ export default function RootLayout({
       </head>
       <body className={`${inter.variable} ${outfit.variable} antialiased bg-[#0B0E14] text-white`}>
         <CustomDomainResolver />
+        <PushNotificationManager />
+        <NotificationListener />
         {children}
         <Toaster position="top-center" richColors />
       </body>
     </html>
   );
 }
+

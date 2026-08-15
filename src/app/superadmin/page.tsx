@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { uploadToR2 } from '@/lib/r2';
 import { SuperadminStylesPricing } from '@/components/superadmin/superadmin-styles-pricing';
 import { SuperadminOrgCards } from '@/components/superadmin/superadmin-org-cards';
+import { SuperadminNotificationBell } from '@/components/superadmin/SuperadminNotificationBell';
 
 // ═══════════════════════════════════════════════════════════════════════
 // CAMPUSFLOW — SUPERADMIN PANEL
@@ -686,6 +687,9 @@ export default function SuperAdminPage() {
                         )}
                     </div>
                     <div className="flex items-center gap-2">
+                        {/* SuperAdmin Realtime Notification Bell */}
+                        <SuperadminNotificationBell onNavigateTab={(targetTab) => setTab(targetTab as Tab)} />
+
                         {dataLoading && <Loader2 className="w-4 h-4 text-violet-400 animate-spin" />}
                         <button onClick={loadAllData} title="Actualiser"
                             className="p-2 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-white/5 transition-all">

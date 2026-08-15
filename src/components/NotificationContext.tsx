@@ -94,16 +94,27 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
         // Service Worker push
         if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            const orgSlug = actionData?.orgSlug || '';
+            const targetUrl = orgSlug
+                ? (actionData?.conversationId
+                    ? `/${orgSlug}/campus?tab=chat&convId=${actionData.conversationId}`
+                    : actionData?.groupId
+                        ? `/${orgSlug}/campus?tab=chat&groupId=${actionData.groupId}`
+                        : `/${orgSlug}/campus`)
+                : (actionData?.conversationId
+                    ? `/?nav=conversation&id=${actionData.conversationId}`
+                    : actionData?.groupId
+                        ? `/?nav=group&id=${actionData.groupId}`
+                        : '/');
+
             navigator.serviceWorker.controller.postMessage({
                 type: 'SHOW_NOTIFICATION',
                 title,
                 body,
                 tag: `notif_${Date.now()}`,
-                url: actionData?.conversationId
-                    ? `/?nav=conversation&id=${actionData.conversationId}`
-                    : actionData?.groupId
-                        ? `/?nav=group&id=${actionData.groupId}`
-                        : '/',
+                url: targetUrl,
+                orgSlug,
+                action_type: actionData?.action_type,
             });
         }
         // Fallback: Notification API

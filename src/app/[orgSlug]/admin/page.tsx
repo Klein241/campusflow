@@ -27,6 +27,7 @@ import { isCustomDomain } from '@/lib/custom-domain';
 import { AdsBanner } from '@/components/campus/ads-banner';
 import { OfficialAnnouncements } from '@/components/campus/official-announcements';
 import { AdminPremiumStyles } from '@/components/campus/admin-premium-styles';
+import { AdminNotificationBell } from '@/components/admin/AdminNotificationBell';
 
 // ═══ ERROR BOUNDARY (catches React render errors) ═══
 class AdminErrorBoundary extends Component<{ children: ReactNode; orgSlug: string }, { hasError: boolean; error: Error | null }> {
@@ -1674,6 +1675,20 @@ ${bodyHtml}
                     </div>
 
                     <div className="flex items-center gap-2 sm:gap-3">
+                        {/* Admin Notification Bell */}
+                        {org && (
+                            <AdminNotificationBell
+                                orgId={org.id}
+                                orgSlug={orgSlug}
+                                onNavigateTab={(targetTab, params) => {
+                                    onTab(targetTab as Tab);
+                                    if (params?.sub && targetTab === 'students') {
+                                        setStudentSubTab(params.sub);
+                                    }
+                                }}
+                            />
+                        )}
+
                         {/* Sky Points Badge */}
                         <button
                             onClick={() => setShowPointsModal(true)}

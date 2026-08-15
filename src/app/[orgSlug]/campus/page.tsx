@@ -90,6 +90,32 @@ export default function CampusPage() {
             setOrg(o);
             setSession(sess);
             if (sess.sky_points !== undefined) setSkyPoints(sess.sky_points);
+
+            // ── Multi-tenant SW Sync & Daily Engagement (Pinterest/Alibaba) ──
+            if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+                navigator.serviceWorker.ready.then(reg => {
+                    if (reg.active) {
+                        reg.active.postMessage({
+                            type: 'SET_ACTIVE_ORG',
+                            orgSlug,
+                            orgName: o.name,
+                        });
+                    }
+                }).catch(() => {});
+
+                // Daily Engagement check (morning / noon / evening)
+                const studentFullName = [sess.first_name, sess.last_name].filter(Boolean).join(' ') || 'Étudiant';
+                import('@/lib/daily-engagement').then(m => {
+                    m.checkAndTriggerDailyEngagement({
+                        userId: sess.profile_id || '',
+                        userName: studentFullName,
+                        orgSlug,
+                        orgName: o.name,
+                        userRole: sess.role,
+                    });
+                });
+            }
+
             // Approbation & profil étudiant
             if (sess.role === 'student') {
                 // 1. Chercher student_profiles par profile_id ou access_code

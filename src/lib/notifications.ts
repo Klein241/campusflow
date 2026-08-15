@@ -54,6 +54,19 @@ export type NotificationActionType =
     | 'timetable_change'
     | 'admin_announcement'
     | 'evaluation_reminder'
+    // ── Admin-specific notification types ──
+    | 'admin_new_inscription'
+    | 'admin_new_payment'
+    | 'admin_exam_submitted'
+    | 'admin_discipline_alert'
+    // ── SuperAdmin notification types ──
+    | 'superadmin_new_org'
+    | 'superadmin_sky_request'
+    | 'superadmin_health_alert'
+    // ── Daily Engagement Retention Types (Pinterest/Alibaba) ──
+    | 'daily_engagement_morning'
+    | 'daily_engagement_noon'
+    | 'daily_engagement_evening'
     | 'general';
 
 
@@ -1324,4 +1337,144 @@ export async function notifyNewExercise({
         extra_data: { orgSlug, tab: 'myspace', subTab: 'cursus' },
     });
 }
+
+// ══════════════════════════════════════════════════════════
+// ADMIN & SUPERADMIN DISPATCHERS
+// ══════════════════════════════════════════════════════════
+
+/**
+ * Notifier l'admin de l'école d'une nouvelle inscription d'étudiant
+ */
+export async function notifyAdminNewInscription({
+    adminId,
+    studentName,
+    classroomName,
+    orgSlug,
+    orgId,
+}: {
+    adminId: string;
+    studentName: string;
+    classroomName?: string;
+    orgSlug: string;
+    orgId?: string;
+}) {
+    await sendToWorker({
+        action_type: 'admin_new_inscription',
+        actor_id: 'system',
+        actor_name: studentName,
+        recipient_id: adminId,
+        target_name: classroomName || 'Nouvelle inscription',
+        message_preview: `L'étudiant(e) ${studentName} a complété son inscription. En attente de validation.`,
+        extra_data: { orgSlug, orgId, tab: 'students', subTab: 'pending' },
+    });
+}
+
+/**
+ * Notifier l'admin d'un nouveau paiement reçu
+ */
+export async function notifyAdminNewPayment({
+    adminId,
+    studentName,
+    amount,
+    label,
+    orgSlug,
+    orgId,
+}: {
+    adminId: string;
+    studentName: string;
+    amount: string;
+    label: string;
+    orgSlug: string;
+    orgId?: string;
+}) {
+    await sendToWorker({
+        action_type: 'admin_new_payment',
+        actor_id: 'system',
+        actor_name: studentName,
+        recipient_id: adminId,
+        target_name: label,
+        message_preview: `Paiement de ${amount} FCFA reçu pour ${studentName} (${label})`,
+        extra_data: { orgSlug, orgId, tab: 'payments' },
+    });
+}
+
+/**
+ * Notifier l'admin qu'un étudiant a soumis une évaluation
+ */
+export async function notifyAdminExamSubmitted({
+    adminId,
+    studentName,
+    examTitle,
+    orgSlug,
+    orgId,
+}: {
+    adminId: string;
+    studentName: string;
+    examTitle: string;
+    orgSlug: string;
+    orgId?: string;
+}) {
+    await sendToWorker({
+        action_type: 'admin_exam_submitted',
+        actor_id: 'system',
+        actor_name: studentName,
+        recipient_id: adminId,
+        target_name: examTitle,
+        message_preview: `${studentName} a terminé et soumis son épreuve : "${examTitle}"`,
+        extra_data: { orgSlug, orgId, tab: 'evaluations' },
+    });
+}
+
+/**
+ * Notifier le superadmin qu'une nouvelle organisation a été créée sur CampusFlow
+ */
+export async function notifySuperadminNewOrg({
+    superadminId,
+    orgName,
+    orgSlug,
+    schoolType,
+    city,
+}: {
+    superadminId: string;
+    orgName: string;
+    orgSlug: string;
+    schoolType?: string;
+    city?: string;
+}) {
+    await sendToWorker({
+        action_type: 'superadmin_new_org',
+        actor_id: 'system',
+        actor_name: orgName,
+        recipient_id: superadminId,
+        target_name: orgName,
+        message_preview: `Nouvel établissement créé : "${orgName}" (${schoolType || 'École'} - ${city || 'Cameroun'})`,
+        extra_data: { orgSlug, tab: 'orgs' },
+    });
+}
+
+/**
+ * Notifier le superadmin d'une nouvelle demande de Sky Points
+ */
+export async function notifySuperadminSkyRequest({
+    superadminId,
+    requesterName,
+    pointsAmount,
+    orgName,
+}: {
+    superadminId: string;
+    requesterName: string;
+    pointsAmount: number;
+    orgName?: string;
+}) {
+    await sendToWorker({
+        action_type: 'superadmin_sky_request',
+        actor_id: 'system',
+        actor_name: requesterName,
+        recipient_id: superadminId,
+        target_name: `${pointsAmount} Sky Points`,
+        message_preview: `${requesterName} (${orgName || 'Établissement'}) demande une recharge de ${pointsAmount} Sky Points.`,
+        extra_data: { tab: 'requests' },
+    });
+}
+
 
