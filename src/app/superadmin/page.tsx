@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { uploadToR2 } from '@/lib/r2';
 import { SuperadminStylesPricing } from '@/components/superadmin/superadmin-styles-pricing';
+import { SuperadminOrgCards } from '@/components/superadmin/superadmin-org-cards';
 
 // ═══════════════════════════════════════════════════════════════════════
 // CAMPUSFLOW — SUPERADMIN PANEL
@@ -409,20 +410,27 @@ export default function SuperAdminPage() {
         setSendingPoints(false);
     };
 
-    // ─── Filtered lists ───────────────────────────────────────────
-    const q = search.toLowerCase();
-    const filteredOrgs = orgs.filter(o =>
-        o.name.toLowerCase().includes(q) ||
-        o.slug.toLowerCase().includes(q) ||
-        (o.city || '').toLowerCase().includes(q) ||
-        (o.school_type || '').toLowerCase().includes(q)
-    );
-    const filteredUsers = users.filter(u =>
-        u.full_name.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q) ||
-        (u.org_name || '').toLowerCase().includes(q)
-    );
-    const domainsOrgs = orgs.filter(o => o.custom_domain);
+    // ─── Filtered lists (null-safe to prevent TypeError crashes) ─────
+    const q = (search || '').toLowerCase().trim();
+    const filteredOrgs = (orgs || []).filter(o => {
+        if (!o) return false;
+        return (
+            (o.name || '').toLowerCase().includes(q) ||
+            (o.slug || '').toLowerCase().includes(q) ||
+            (o.city || '').toLowerCase().includes(q) ||
+            (o.school_type || '').toLowerCase().includes(q) ||
+            (o.custom_domain || '').toLowerCase().includes(q)
+        );
+    });
+    const filteredUsers = (users || []).filter(u => {
+        if (!u) return false;
+        return (
+            (u.full_name || '').toLowerCase().includes(q) ||
+            (u.email || '').toLowerCase().includes(q) ||
+            (u.org_name || '').toLowerCase().includes(q)
+        );
+    });
+    const domainsOrgs = (orgs || []).filter(o => o && o.custom_domain);
     const pendingDomains = domainsOrgs.filter(o => !o.domain_verified);
 
     // ══════════════════════════════════════════════════════════════
@@ -782,117 +790,15 @@ export default function SuperAdminPage() {
                             ORGANISATIONS
                         ══════════════════════════════════════════ */}
                         {tab === 'orgs' && (
-                            <motion.div key="orgs" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-                                {/* Search + count */}
-                                <div className="flex items-center gap-4 flex-wrap">
-                                    <div className="relative">
-                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                                        <input value={search} onChange={e => setSearch(e.target.value)}
-                                            placeholder="Rechercher..." autoFocus
-                                            className="bg-white/5 border border-white/10 text-white pl-9 pr-4 h-9 w-64 rounded-xl text-sm placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40" />
-                                    </div>
-                                    <span className="text-xs text-slate-500">{filteredOrgs.length} organisation(s)</span>
-                                    <span className="text-xs text-slate-600">
-                                        {orgs.filter(o => o.is_active).length} actives ·{' '}
-                                        {orgs.filter(o => !o.is_active).length} suspendues
-                                    </span>
-                                </div>
-
-                                {/* List */}
-                                <div className="space-y-2">
-                                    {filteredOrgs.map(org => (
-                                        <motion.div key={org.id} layout
-                                            className={cn('p-4 rounded-2xl border transition-all duration-200',
-                                                org.is_active
-                                                    ? 'bg-white/[0.025] border-white/8 hover:border-white/15'
-                                                    : 'bg-red-500/[0.04] border-red-500/15'
-                                            )}>
-                                            <div className="flex items-center gap-4">
-                                                {/* Avatar */}
-                                                <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center text-base font-black shrink-0',
-                                                    org.is_active
-                                                        ? 'bg-gradient-to-br from-violet-500/25 to-purple-500/25 text-violet-300'
-                                                        : 'bg-red-500/10 text-red-400'
-                                                )}>
-                                                    {org.name[0]?.toUpperCase()}
-                                                </div>
-
-                                                {/* Info */}
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                                                        <span className="font-bold text-sm">{org.name}</span>
-                                                        <span className="text-[10px] text-slate-600">/{org.slug}</span>
-                                                        {!org.is_active && (
-                                                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-black uppercase tracking-wide">
-                                                                SUSPENDU
-                                                            </span>
-                                                        )}
-                                                        {org.custom_domain && (
-                                                            <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-semibold',
-                                                                org.domain_verified
-                                                                    ? 'bg-emerald-500/15 text-emerald-400'
-                                                                    : 'bg-amber-500/15 text-amber-400'
-                                                            )}>
-                                                                🌐 {org.domain_verified ? 'Vérifié' : 'En attente'}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex items-center gap-3 text-[10px] text-slate-500 flex-wrap">
-                                                        {org.school_type && <span>🏫 {org.school_type}</span>}
-                                                        {org.city && <span>📍 {org.city}</span>}
-                                                        <span>👩‍🎓 {org.student_count} étud.</span>
-                                                        <span>👨‍🏫 {org.teacher_count} profs</span>
-                                                        <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{timeAgo(org.created_at)}</span>
-                                                    </div>
-                                                    {org.custom_domain && (
-                                                        <p className="text-[10px] text-violet-400/70 mt-0.5 font-mono">{org.custom_domain}</p>
-                                                    )}
-                                                </div>
-
-                                                {/* Actions */}
-                                                <div className="flex items-center gap-1.5 shrink-0">
-                                                    <a href={`/${org.slug}/campus`} target="_blank" rel="noreferrer"
-                                                        className="p-2 rounded-lg text-slate-600 hover:text-violet-400 hover:bg-violet-500/10 transition-all" title="Voir le campus">
-                                                        <ExternalLink className="w-3.5 h-3.5" />
-                                                    </a>
-                                                    {org.custom_domain && (
-                                                        <button onClick={() => verifyDomain(org)} title={org.domain_verified ? 'Retirer vérif.' : 'Valider domaine'}
-                                                            className={cn('p-2 rounded-lg transition-all',
-                                                                org.domain_verified
-                                                                    ? 'text-emerald-400 hover:bg-emerald-500/10'
-                                                                    : 'text-amber-400 hover:bg-amber-500/10'
-                                                            )}>
-                                                            {org.domain_verified
-                                                                ? <CheckCircle2 className="w-3.5 h-3.5" />
-                                                                : <Globe className="w-3.5 h-3.5" />
-                                                            }
-                                                        </button>
-                                                    )}
-                                                    <button onClick={() => toggleOrg(org)}
-                                                        className={cn('px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border',
-                                                            org.is_active
-                                                                ? 'text-red-400 border-red-500/20 hover:bg-red-500/10'
-                                                                : 'text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10'
-                                                        )}>
-                                                        {org.is_active
-                                                            ? <><Ban className="w-3 h-3 inline mr-1" />Suspendre</>
-                                                            : <><RotateCcw className="w-3 h-3 inline mr-1" />Réactiver</>
-                                                        }
-                                                    </button>
-                                                    <button onClick={() => setDeleteConfirm(org)}
-                                                        className="p-2 rounded-lg text-slate-700 hover:text-red-400 hover:bg-red-500/10 transition-all" title="Supprimer définitivement">
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </motion.div>
-                                    ))}
-                                    {filteredOrgs.length === 0 && !dataLoading && (
-                                        <div className="text-center py-16 text-slate-500 text-sm">
-                                            {search ? 'Aucun résultat pour cette recherche' : 'Aucune organisation'}
-                                        </div>
-                                    )}
-                                </div>
+                            <motion.div key="orgs" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                                <SuperadminOrgCards
+                                    orgs={orgs as any}
+                                    loading={dataLoading}
+                                    onRefresh={loadAllData}
+                                    onToggleActive={toggleOrg as any}
+                                    onVerifyDomain={verifyDomain as any}
+                                    onDeleteOrg={setDeleteConfirm as any}
+                                />
                             </motion.div>
                         )}
 
