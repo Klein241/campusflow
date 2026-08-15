@@ -23,6 +23,7 @@ import { RichContentRenderer } from '@/components/campus/cursus/rich-content-ren
 import { AdminCursus } from '@/components/campus/cursus/admin-cursus';
 import { queueGradeNotification, queuePaymentReceipt, queueDisciplineAlert, enqueueWhatsAppMessage } from '@/lib/whatsapp-queue';
 import { cn } from '@/lib/utils';
+import { isCustomDomain } from '@/lib/custom-domain';
 import { AdsBanner } from '@/components/campus/ads-banner';
 import { OfficialAnnouncements } from '@/components/campus/official-announcements';
 
@@ -270,6 +271,7 @@ function AdminPageContent() {
     const [editAdminLessonId, setEditAdminLessonId] = useState<string | null>(null);
     const [editAdminLessonContent, setEditAdminLessonContent] = useState('');
     const [lHeroImage, setLHeroImage] = useState(''); const [lHeroTitle, setLHeroTitle] = useState(''); const [lHeroSubtitle, setLHeroSubtitle] = useState('');
+    const [lHeroTemplate, setLHeroTemplate] = useState<'full' | 'split' | 'minimal'>('full');
     const [lAboutText, setLAboutText] = useState(''); const [lAboutImage, setLAboutImage] = useState('');
     const [lGalleryImages, setLGalleryImages] = useState<string[]>([]); const [lGalleryInput, setLGalleryInput] = useState('');
     const [lSocialFb, setLSocialFb] = useState(''); const [lSocialIg, setLSocialIg] = useState(''); const [lSocialTw, setLSocialTw] = useState('');
@@ -460,8 +462,8 @@ function AdminPageContent() {
         });
     };
     const loadSettings = () => { if (!org) return; setSCustomDomain(org.custom_domain || ''); setSDomainVerified(org.domain_verified || false); setSDomainSsl(org.domain_ssl_status || 'pending'); setSBrandColor(org.brand_color || '#4f46e5'); setSLogoUrl(org.logo_url || ''); setSSignatureUrl(org.signature_url || ''); setSStampUrl(org.stamp_url || ''); setSFaviconUrl(org.favicon_url || ''); setSMetaTitle(org.meta_title || ''); setSMetaDesc(org.meta_description || ''); setSOrgName(org.name || ''); setSOrgPhone(org.phone || ''); setSOrgEmail(org.email || ''); setSOrgWhatsapp(org.whatsapp || ''); };
-    const loadLanding = () => { if (!org) return; setLHeroImage(org.hero_image_url || ''); setLHeroTitle(org.hero_title || ''); setLHeroSubtitle(org.hero_subtitle || ''); setLAboutText(org.about_text || ''); setLAboutImage(org.about_image_url || ''); setLGalleryImages(org.gallery_images || []); setLSocialFb(org.social_facebook || ''); setLSocialIg(org.social_instagram || ''); setLSocialTw(org.social_twitter || ''); setLSocialTt(org.social_tiktok || ''); setLSocialYt(org.social_youtube || ''); setLSocialLi(org.social_linkedin || ''); setLFooterText(org.footer_text || ''); };
-    const saveLanding = async () => { setLSaving(true); try { const updates: any = { hero_image_url: lHeroImage || null, hero_title: lHeroTitle || null, hero_subtitle: lHeroSubtitle || null, about_text: lAboutText || null, about_image_url: lAboutImage || null, gallery_images: lGalleryImages, social_facebook: lSocialFb || null, social_instagram: lSocialIg || null, social_twitter: lSocialTw || null, social_tiktok: lSocialTt || null, social_youtube: lSocialYt || null, social_linkedin: lSocialLi || null, footer_text: lFooterText || null }; const { error } = await supabase.from('organizations').update(updates).eq('id', org.id); if (error) throw error; setOrg({ ...org, ...updates }); toast.success('Page d\'accueil mise à jour ✅'); } catch (e: any) { toast.error(e.message); } setLSaving(false); };
+    const loadLanding = () => { if (!org) return; setLHeroImage(org.hero_image_url || ''); setLHeroTitle(org.hero_title || ''); setLHeroSubtitle(org.hero_subtitle || ''); setLHeroTemplate((org.hero_template as any) || 'full'); setLAboutText(org.about_text || ''); setLAboutImage(org.about_image_url || ''); setLGalleryImages(org.gallery_images || []); setLSocialFb(org.social_facebook || ''); setLSocialIg(org.social_instagram || ''); setLSocialTw(org.social_twitter || ''); setLSocialTt(org.social_tiktok || ''); setLSocialYt(org.social_youtube || ''); setLSocialLi(org.social_linkedin || ''); setLFooterText(org.footer_text || ''); };
+    const saveLanding = async () => { setLSaving(true); try { const updates: any = { hero_image_url: lHeroImage || null, hero_title: lHeroTitle || null, hero_subtitle: lHeroSubtitle || null, hero_template: lHeroTemplate, about_text: lAboutText || null, about_image_url: lAboutImage || null, gallery_images: lGalleryImages, social_facebook: lSocialFb || null, social_instagram: lSocialIg || null, social_twitter: lSocialTw || null, social_tiktok: lSocialTt || null, social_youtube: lSocialYt || null, social_linkedin: lSocialLi || null, footer_text: lFooterText || null }; const { error } = await supabase.from('organizations').update(updates).eq('id', org.id); if (error) throw error; setOrg({ ...org, ...updates }); toast.success('Page d\'accueil mise à jour ✅'); } catch (e: any) { toast.error(e.message); } setLSaving(false); };
     // WhatsApp Queue State
     const [waQueue, setWaQueue] = useState<any[]>([]);
     const [waLoaded, setWaLoaded] = useState(false);
@@ -814,6 +816,15 @@ function AdminPageContent() {
 
     const isCL = ['college', 'lycee'].includes(org.type);
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const isCustom = typeof window !== 'undefined' && isCustomDomain();
+    // Sur domaine personnalisé, les chemins internes n'incluent pas le slug
+    const navTo = (path: string) => isCustom ? `/${path}` : `/${orgSlug}/${path}`;
+    // Base URL publique : gotam.fun/ ou readsgreat.site/the-greatsoft-academy/
+    const publicBase = isCustom ? origin : `${origin}/${orgSlug}`;
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
+        router.push(navTo('login'));
+    };
 
     // Setup helpers
     const genCode = () => { const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let code = ''; for (let i = 0; i < 12; i++) code += chars[Math.floor(Math.random() * chars.length)]; return code; };
@@ -1583,12 +1594,15 @@ ${bodyHtml}
                 </div>
                 <nav className="p-2 space-y-0.5 flex-1 overflow-y-auto pb-16">{SIDES.map(i => (<button key={i.id} onClick={() => onTab(i.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${tab === i.id ? 'bg-teal-600/15 text-teal-300 font-medium' : 'text-slate-400 hover:bg-white/5'}`}><i.icon className="w-4 h-4" />{i.label}</button>))}
                     <div className="mt-3 pt-3 border-t border-white/5 space-y-0.5">
-                        <button onClick={() => router.push(`/${orgSlug}/library`)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-emerald-400 hover:bg-emerald-600/10"><BookMarked className="w-4 h-4" />Bibliothèque</button>
-                        <button onClick={() => router.push(`/${orgSlug}/shop`)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-teal-400 hover:bg-teal-600/10"><ShoppingBag className="w-4 h-4" />Marketplace</button>
-                        <button onClick={() => router.push(`/${orgSlug}/messages`)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-indigo-400 hover:bg-indigo-600/10"><MessageSquare className="w-4 h-4" />Messages</button>
+                        <button onClick={() => router.push(navTo('library'))} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-emerald-400 hover:bg-emerald-600/10"><BookMarked className="w-4 h-4" />Bibliothèque</button>
+                        <button onClick={() => router.push(navTo('shop'))} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-teal-400 hover:bg-teal-600/10"><ShoppingBag className="w-4 h-4" />Marketplace</button>
+                        <button onClick={() => router.push(navTo('messages'))} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-indigo-400 hover:bg-indigo-600/10"><MessageSquare className="w-4 h-4" />Messages</button>
                     </div>
                 </nav>
-                <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-white/5"><Button variant="ghost" size="sm" className="w-full text-xs text-slate-500" onClick={() => router.push(`/${orgSlug}`)}><Globe className="w-3 h-3 mr-1" />Page publique</Button></div>
+                <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-white/5 space-y-1">
+                    <Button variant="ghost" size="sm" className="w-full text-xs text-slate-500" onClick={() => router.push(isCustom ? '/' : `/${orgSlug}`)}><Globe className="w-3 h-3 mr-1" />Page publique</Button>
+                    <Button variant="ghost" size="sm" className="w-full text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={handleLogout}><Lock className="w-3 h-3 mr-1" />Se déconnecter</Button>
+                </div>
             </aside>
             {sidebar && <div className="fixed inset-0 bg-black/50 z-30 lg:hidden" onClick={() => setSidebar(false)} />}
 
@@ -1638,6 +1652,16 @@ ${bodyHtml}
                         <span className="text-xs text-slate-500 hidden sm:inline">
                             {students.length} étudiants • {teachers.length} profs
                         </span>
+
+                        {/* Déconnexion rapide */}
+                        <button
+                            onClick={handleLogout}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-semibold transition cursor-pointer"
+                            title="Se déconnecter"
+                        >
+                            <Lock className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Déconnexion</span>
+                        </button>
                     </div>
                 </header>
 
@@ -1656,7 +1680,7 @@ ${bodyHtml}
                     {/* ═══ GENERAL ═══ */}
                     {tab === 'general' && <div className="space-y-6">
                         <div className="p-6 rounded-2xl bg-card/50 backdrop-blur-sm border border-white/10"><h2 className="text-xl font-black mb-4 text-gradient-primary">Informations</h2><div className="grid sm:grid-cols-2 gap-3 text-sm">{[['Nom', org.name], ['Type', org.type], ['Ville', `${org.city}, ${org.country}`], ['Tél', org.phone], ['Email', org.email], ['WhatsApp', org.whatsapp || '—']].map(([k, v], i) => <div key={i}><span className="text-slate-500">{k}:</span> <span className="ml-2">{v}</span></div>)}</div></div>
-                        <div className="p-4 sm:p-6 rounded-2xl bg-teal-500/5 backdrop-blur-sm border border-teal-500/10"><h3 className="font-bold text-teal-300 mb-3 flex items-center gap-2"><Link2 className="w-5 h-5" />Liens</h3><div className="space-y-2 text-sm">{[['Page publique', `${origin}/${orgSlug}`, 'text-teal-300'], ['Inscription prof', `${origin}/${orgSlug}/prof`, 'text-emerald-300'], ['Inscription étudiant', `${origin}/${orgSlug}/student`, 'text-indigo-300']].map(([l, u, c], i) => <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2"><span className="text-slate-400 shrink-0">{l}:</span><code className={`px-2 py-1 rounded-lg bg-white/5 ${c} text-xs break-all`}>{u}</code></div>)}</div></div>
+                        <div className="p-4 sm:p-6 rounded-2xl bg-teal-500/5 backdrop-blur-sm border border-teal-500/10"><h3 className="font-bold text-teal-300 mb-3 flex items-center gap-2"><Link2 className="w-5 h-5" />Liens</h3><div className="space-y-2 text-sm">{[['Page publique', `${publicBase}`, 'text-teal-300'], ['Inscription prof', `${publicBase}/prof`, 'text-emerald-300'], ['Inscription étudiant', `${publicBase}/student`, 'text-indigo-300']].map(([l, u, c], i) => <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2"><span className="text-slate-400 shrink-0">{l}:</span><code className={`px-2 py-1 rounded-lg bg-white/5 ${c} text-xs break-all`}>{u}</code></div>)}</div></div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">{[{ l: 'Classes', v: cls.length, c: 'from-teal-600 to-emerald-600', shadow: 'shadow-teal-600/20' }, { l: 'Matières', v: subs.length, c: 'from-indigo-600 to-blue-600', shadow: 'shadow-indigo-600/20' }, { l: 'Profs', v: teachers.length, c: 'from-amber-600 to-orange-600', shadow: 'shadow-amber-600/20' }, { l: 'Étudiants', v: students.length, c: 'from-purple-600 to-pink-600', shadow: 'shadow-purple-600/20' }].map((s, i) => <div key={i} className={`p-4 rounded-xl bg-gradient-to-br ${s.c} text-center shadow-lg ${s.shadow}`}><div className="text-3xl font-black">{s.v}</div><div className="text-sm text-white/80">{s.l}</div></div>)}</div>
                     </div>}
 
@@ -1669,7 +1693,7 @@ ${bodyHtml}
                         {step === 1 && <div className="space-y-4"><div className="p-5 rounded-xl bg-white/[0.03] border border-white/10"><h3 className="font-bold text-lg mb-3">📖 Matières par classe</h3><Label className="text-slate-400 text-sm mb-1 block">Classe</Label><Sel v={selCls} onChange={setSelCls} opts={cls.filter(c => c.id).map(c => ({ id: c.id!, label: c.name }))} ph="Choisir..." />{selCls && <div className="mt-3"><Button size="sm" variant="outline" className="mb-3 text-xs border-white/10" onClick={addDefs}><Plus className="w-3 h-3 mr-1" />Par défaut</Button><div className="flex gap-2"><Input value={newSub} onChange={e => setNewSub(e.target.value)} onKeyDown={e => e.key === 'Enter' && addSub()} placeholder="Nom matière" className="bg-white/5 border-white/10 text-white h-10 rounded-lg" /><Button onClick={addSub} disabled={!newSub.trim()} className="bg-emerald-600 shrink-0"><Plus className="w-4 h-4" /></Button></div></div>}</div>
                             {cls.filter(c => c.id).map(c => { const cs = subs.filter(s => s.classroom_id === c.id); if (!cs.length) return null; return <div key={c.id} className="p-4 rounded-xl bg-white/[0.02] border border-white/5"><h4 className="font-medium text-sm text-indigo-300 mb-2">{c.name}</h4><div className="flex flex-wrap gap-2">{cs.map((s, i) => <span key={i} className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10">{s.name}</span>)}</div></div>; })}
                             <div className="flex justify-between"><Button variant="ghost" onClick={() => setStep(0)}><ArrowLeft className="w-4 h-4 mr-2" />Retour</Button><Button onClick={() => { saveSubs(); setStep(2); }} disabled={saving} className="bg-indigo-600">{saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Suivant<ArrowRight className="w-4 h-4 ml-2" /></Button></div></div>}
-                        {step === 2 && <div className="space-y-4"><div className="p-5 rounded-xl bg-white/[0.03] border border-white/10 text-center"><UserPlus className="w-12 h-12 text-indigo-400 mx-auto mb-3" /><h3 className="font-bold text-lg mb-2">Invitez vos professeurs</h3><p className="text-sm text-slate-400 mb-4">Partagez ce lien:</p><code className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-emerald-300 text-sm">{origin}/{orgSlug}/prof</code><Button size="sm" variant="outline" className="ml-2 border-white/10" onClick={() => { navigator.clipboard.writeText(`${origin}/${orgSlug}/prof`); toast.success('Copié!'); }}>Copier</Button></div><div className="flex justify-between"><Button variant="ghost" onClick={() => setStep(1)}><ArrowLeft className="w-4 h-4 mr-2" />Retour</Button><Button onClick={finishSetup} disabled={saving} className="bg-gradient-to-r from-indigo-600 to-blue-600">{saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}<CheckCircle2 className="w-4 h-4 mr-2" />Terminer</Button></div></div>}
+                        {step === 2 && <div className="space-y-4"><div className="p-5 rounded-xl bg-white/[0.03] border border-white/10 text-center"><UserPlus className="w-12 h-12 text-indigo-400 mx-auto mb-3" /><h3 className="font-bold text-lg mb-2">Invitez vos professeurs</h3><p className="text-sm text-slate-400 mb-4">Partagez ce lien:</p><code className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-emerald-300 text-sm">{publicBase}/prof</code><Button size="sm" variant="outline" className="ml-2 border-white/10" onClick={() => { navigator.clipboard.writeText(`${publicBase}/prof`); toast.success('Copié!'); }}>Copier</Button></div><div className="flex justify-between"><Button variant="ghost" onClick={() => setStep(1)}><ArrowLeft className="w-4 h-4 mr-2" />Retour</Button><Button onClick={finishSetup} disabled={saving} className="bg-gradient-to-r from-indigo-600 to-blue-600">{saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}<CheckCircle2 className="w-4 h-4 mr-2" />Terminer</Button></div></div>}
                     </div>}
 
                     {/* ═══ CLASSES (groupes d'étudiants) ═══ */}
@@ -2932,17 +2956,49 @@ ${bodyHtml}
                     {tab === 'landing' && <div className="space-y-6">
                         <div className="flex items-center justify-between">
                             <h2 className="font-bold text-lg flex items-center gap-2"><LayoutDashboard className="w-5 h-5 text-cyan-400" /> Personnaliser votre page d&apos;accueil</h2>
-                            <a href={`/${orgSlug}`} target="_blank" rel="noreferrer" className="text-xs px-3 py-1.5 rounded-lg bg-teal-600/10 text-teal-300 hover:bg-teal-600/20 flex items-center gap-1 transition"><ExternalLink className="w-3 h-3" />Voir la page</a>
+                            <a href={isCustom ? '/' : `/${orgSlug}`} target="_blank" rel="noreferrer" className="text-xs px-3 py-1.5 rounded-lg bg-teal-600/10 text-teal-300 hover:bg-teal-600/20 flex items-center gap-1 transition"><ExternalLink className="w-3 h-3" />Voir la page</a>
                         </div>
                         <p className="text-xs text-slate-500 -mt-3">Les coordonnées (téléphone, email, adresse) s&apos;affichent automatiquement depuis vos informations d&apos;inscription.</p>
 
                         {/* Hero */}
-                        <div className="p-5 rounded-xl bg-cyan-600/5 border border-cyan-500/20">
-                            <h3 className="font-bold text-cyan-300 mb-3 flex items-center gap-2"><Upload className="w-4 h-4" /> Hero / Bannière</h3>
+                        <div className="p-5 rounded-xl bg-cyan-600/5 border border-cyan-500/20 space-y-4">
+                            <h3 className="font-bold text-cyan-300 flex items-center gap-2"><Upload className="w-4 h-4" /> Hero / Bannière</h3>
+
+                            {/* Template selector */}
+                            <div>
+                                <Label className="text-slate-400 text-xs mb-2 block">Modèle de bannière</Label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {([
+                                        { id: 'full', label: 'Plein écran', desc: 'Image en fond, texte centré', icon: '🖼️' },
+                                        { id: 'split', label: 'Deux colonnes', desc: 'Texte à gauche, image à droite', icon: '⬛' },
+                                        { id: 'minimal', label: 'Minimaliste', desc: 'Dégradé de couleur, pas d\'image', icon: '✨' },
+                                    ] as const).map(t => (
+                                        <button
+                                            key={t.id}
+                                            onClick={() => setLHeroTemplate(t.id)}
+                                            className={`relative p-3 rounded-xl border-2 text-left transition-all ${
+                                                lHeroTemplate === t.id
+                                                    ? 'border-cyan-400 bg-cyan-500/10'
+                                                    : 'border-white/10 bg-white/[0.02] hover:border-white/20'
+                                            }`}
+                                        >
+                                            <span className="text-xl block mb-1">{t.icon}</span>
+                                            <p className="text-xs font-semibold text-white">{t.label}</p>
+                                            <p className="text-[10px] text-slate-500 leading-tight mt-0.5">{t.desc}</p>
+                                            {lHeroTemplate === t.id && (
+                                                <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-cyan-400 flex items-center justify-center">
+                                                    <span className="text-black text-[8px] font-black">✓</span>
+                                                </span>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
                             <div className="grid sm:grid-cols-2 gap-4">
                                 <div>
-                                    <Label className="text-slate-400 text-xs">Image bannière</Label>
-                                    <div onClick={() => heroImgRef.current?.click()} className="mt-1 w-full p-4 border-2 border-dashed border-white/10 rounded-xl bg-white/[0.02] hover:border-cyan-500/30 transition-colors cursor-pointer text-center">
+                                    <Label className="text-slate-400 text-xs">Image bannière {lHeroTemplate === 'minimal' ? '(non utilisée sur ce modèle)' : ''}</Label>
+                                    <div onClick={() => heroImgRef.current?.click()} className={`mt-1 w-full p-4 border-2 border-dashed rounded-xl bg-white/[0.02] transition-colors cursor-pointer text-center ${ lHeroTemplate === 'minimal' ? 'border-white/5 opacity-40 pointer-events-none' : 'border-white/10 hover:border-cyan-500/30' }`}>
                                         {lHeroImage ? (
                                             <div className="flex flex-col items-center"><img src={lHeroImage} alt="" className="w-full h-28 rounded-lg object-cover mb-2 border border-white/10" /><p className="text-xs text-slate-400">Cliquer pour changer</p></div>
                                         ) : (

@@ -82,3 +82,17 @@ export interface DomainResolvedDetail {
     hostname: string;
     found: boolean;
 }
+
+/**
+ * Builds a clean URL path:
+ * - On custom domains (gotam.fun): returns `/login`, `/campus`, `/admin`, etc. (no slug in URL)
+ * - On platform domain (readsgreat.site): returns `/the-greatsoft-academy/login`, etc.
+ */
+export function orgPath(orgSlug: string, path: string = ''): string {
+    const clean = path.replace(/^\/+/, '');
+    if (typeof window !== 'undefined' && isCustomDomain()) {
+        return clean ? `/${clean}` : '/';
+    }
+    return clean ? `/${orgSlug}/${clean}` : `/${orgSlug}`;
+}
+

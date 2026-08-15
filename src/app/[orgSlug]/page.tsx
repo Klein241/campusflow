@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { orgPath } from '@/lib/custom-domain';
 import { AdsBanner } from '@/components/campus/ads-banner';
 import { OfficialAnnouncements } from '@/components/campus/official-announcements';
 
@@ -28,6 +29,7 @@ interface Org {
     logo_url: string; city: string; country: string; quarter: string;
     phone: string; whatsapp: string; email: string; brand_color: string;
     hero_image_url?: string; hero_title?: string; hero_subtitle?: string;
+    hero_template?: 'full' | 'split' | 'minimal';
     about_text?: string; about_image_url?: string;
     gallery_images?: string[];
     social_facebook?: string; social_instagram?: string; social_twitter?: string;
@@ -314,7 +316,7 @@ export default function SchoolLandingPage() {
                                 S&apos;inscrire
                             </Button>
                         </a>
-                        <Link href={`/${orgSlug}/login`}>
+                        <Link href={orgPath(orgSlug, 'login')}>
                             <Button size="sm" className="font-bold rounded-xl text-white text-xs shadow-lg"
                                 style={{ background: `linear-gradient(135deg,${bc},${bc}bb)`, boxShadow: `0 8px 24px ${bc}35` }}>
                                 <GraduationCap className="w-3.5 h-3.5 mr-1.5" />
@@ -353,111 +355,272 @@ export default function SchoolLandingPage() {
                 </AnimatePresence>
             </nav>
 
-            {/* ═══ HERO ══════════════════════════════════════════════ */}
-            <section className="relative z-10 pt-16 min-h-[100svh] flex flex-col justify-center overflow-hidden">
-                {/* Hero image — responsive, cover sans déformation */}
-                <div className="absolute inset-0 overflow-hidden">
-                    {org.hero_image_url
-                        ? <>
-                            <img
-                                src={org.hero_image_url}
-                                alt={org.name}
-                                className="absolute inset-0 w-full h-full object-cover object-center"
-                                loading="eager"
-                                decoding="async"
-                                style={{ objectPosition: 'center top' }}
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-b from-[#08090E]/60 via-[#08090E]/50 to-[#08090E]" />
-                            <div className="absolute inset-0 bg-gradient-to-r from-[#08090E]/40 via-transparent to-[#08090E]/20" />
-                          </>
-                        : <div className="absolute inset-0">
-                            <div className="absolute inset-0" style={{
-                                backgroundImage: `radial-gradient(ellipse 80% 60% at 50% 30%, ${bc}22 0%, transparent 70%)`
-                            }} />
-                            <div className="absolute inset-0 opacity-[0.03]"
-                                style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.3) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.3) 1px,transparent 1px)', backgroundSize: '60px 60px' }} />
-                          </div>
-                    }
-                </div>
+            {/* ═══ HERO : 3 MODÈLES PREMIUM ══════════════════════════ */}
+            {/* MODÈLE 2 : SPLIT (Deux colonnes avec carte image non déformée) */}
+            {org.hero_template === 'split' ? (
+                <section className="relative z-10 pt-24 pb-16 min-h-[90svh] flex flex-col justify-center overflow-hidden">
+                    <div className="absolute inset-0 pointer-events-none">
+                        <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full blur-[140px] opacity-25" style={{ background: bc }} />
+                        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full blur-[160px] opacity-20 bg-teal-500" />
+                    </div>
 
-                <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-24 text-center">
-                    {/* Logo badge */}
-                    <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6 }}
-                        className="mb-8 flex justify-center">
-                        {org.logo_url
-                            ? <div className="relative">
-                                <div className="absolute inset-0 rounded-3xl blur-2xl scale-110 opacity-30" style={{ background: bc }} />
-                                <img src={org.logo_url} alt={org.name}
-                                    className="relative w-24 h-24 sm:w-32 sm:h-32 rounded-3xl object-contain bg-white/10 backdrop-blur-sm p-2 border border-white/10 shadow-2xl" />
-                              </div>
-                            : <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-3xl flex items-center justify-center border border-white/10 shadow-2xl"
-                                style={{ background: `linear-gradient(135deg,${bc}40,${bc}15)` }}>
-                                <GraduationCap className="w-12 h-12 sm:w-16 sm:h-16" style={{ color: bc }} />
-                              </div>
-                        }
-                    </motion.div>
+                    <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-10 w-full">
+                        <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+                            {/* Left Column: Text & CTA */}
+                            <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.7 }}
+                                className="lg:col-span-7 text-left order-2 lg:order-1">
+                                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold border mb-5"
+                                    style={{ backgroundColor: `${bc}18`, borderColor: `${bc}40`, color: bc }}>
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                    {typeLabels[org.type] || org.type}
+                                    {org.city && <><span className="w-1 h-1 rounded-full bg-current opacity-50 mx-0.5" /><span className="opacity-80">{org.city}</span></>}
+                                </div>
 
-                    {/* Pill badge */}
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-                        className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold border mb-6"
-                        style={{ backgroundColor: `${bc}18`, borderColor: `${bc}40`, color: bc }}>
-                        <Sparkles className="w-3 h-3" />
-                        {typeLabels[org.type] || org.type}
-                        {org.city && <><span className="w-1 h-1 rounded-full bg-current opacity-50 mx-0.5" /><span className="opacity-70">{org.city}</span></>}
-                    </motion.div>
+                                <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black leading-[1.08] tracking-tight mb-5">
+                                    <span className="block text-white">{hero}</span>
+                                    {org.motto && hero !== org.motto && (
+                                        <span className="block text-xl sm:text-2xl lg:text-3xl font-light text-slate-400 mt-2">{org.motto}</span>
+                                    )}
+                                </h1>
 
-                    {/* Title */}
-                    <motion.h1 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.8 }}
-                        className="text-4xl sm:text-6xl lg:text-7xl font-black leading-[1.05] tracking-tight mb-6">
-                        <span className="block">{hero}</span>
-                        {org.motto && hero !== org.motto && (
-                            <span className="block text-2xl sm:text-3xl lg:text-4xl font-light text-slate-400 mt-2">{org.motto}</span>
+                                <p className="text-base sm:text-lg text-slate-300/90 max-w-xl leading-relaxed mb-8">
+                                    {sub}
+                                </p>
+
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                                    <a href="#inscription">
+                                        <Button size="lg" className="w-full sm:w-auto text-base px-8 h-13 font-black rounded-2xl text-white shadow-2xl transition-all hover:scale-[1.02]"
+                                            style={{ background: `linear-gradient(135deg,${bc},${bc}bb)`, boxShadow: `0 16px 40px ${bc}35` }}>
+                                            <FileText className="w-5 h-5 mr-2" />
+                                            Demande d&apos;inscription
+                                            <ArrowRight className="w-5 h-5 ml-2" />
+                                        </Button>
+                                    </a>
+                                    <Link href={orgPath(orgSlug, 'login')}>
+                                        <Button variant="outline" size="lg"
+                                            className="w-full sm:w-auto text-base px-8 h-13 border-white/15 text-white/80 hover:bg-white/5 rounded-2xl transition-all hover:scale-[1.02]">
+                                            <GraduationCap className="w-5 h-5 mr-2" />
+                                            Espace élève
+                                        </Button>
+                                    </Link>
+                                </div>
+
+                                <div className="mt-8 flex items-center gap-2 text-xs text-slate-500">
+                                    <MapPin className="w-3.5 h-3.5" />
+                                    {[org.quarter, org.city, org.country].filter(Boolean).join(', ')}
+                                </div>
+                            </motion.div>
+
+                            {/* Right Column: Image Card with Floating Badges */}
+                            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7, delay: 0.2 }}
+                                className="lg:col-span-5 order-1 lg:order-2">
+                                <div className="relative group">
+                                    <div className="absolute inset-0 rounded-3xl blur-2xl scale-105 opacity-30 group-hover:opacity-40 transition-opacity" style={{ background: bc }} />
+                                    <div className="relative rounded-3xl overflow-hidden border border-white/15 bg-white/[0.04] backdrop-blur-md shadow-2xl p-2.5">
+                                        {org.hero_image_url ? (
+                                            <img
+                                                src={org.hero_image_url}
+                                                alt={org.name}
+                                                className="w-full aspect-[16/10] sm:aspect-[4/3] object-cover rounded-2xl border border-white/10"
+                                            />
+                                        ) : (
+                                            <div className="w-full aspect-[16/10] rounded-2xl flex flex-col items-center justify-center p-6 text-center"
+                                                style={{ background: `linear-gradient(135deg, ${bc}25, rgba(255,255,255,0.02))` }}>
+                                                <GraduationCap className="w-16 h-16 mb-3" style={{ color: bc }} />
+                                                <p className="font-bold text-white text-lg">{org.name}</p>
+                                                <p className="text-xs text-slate-400 mt-1">Excellence & Réussite</p>
+                                            </div>
+                                        )}
+
+                                        {/* Floating Badge */}
+                                        <div className="absolute bottom-5 left-5 right-5 p-3 rounded-xl bg-[#0B0E14]/85 backdrop-blur-md border border-white/10 flex items-center justify-between shadow-xl">
+                                            <div className="flex items-center gap-2.5">
+                                                {org.logo_url ? (
+                                                    <img src={org.logo_url} alt="" className="w-8 h-8 rounded-lg object-contain bg-white/10 p-1" />
+                                                ) : (
+                                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs" style={{ background: bc }}>🎓</div>
+                                                )}
+                                                <div>
+                                                    <p className="text-xs font-bold text-white">{org.name}</p>
+                                                    <p className="text-[10px] text-emerald-400 font-medium">Inscriptions ouvertes 2026</p>
+                                                </div>
+                                            </div>
+                                            <span className="text-xs font-black px-2.5 py-1 rounded-lg bg-white/10 text-white">⭐ 100% Pro</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        </div>
+                    </div>
+                </section>
+            ) : org.hero_template === 'minimal' ? (
+                /* MODÈLE 3 : MINIMALISTE LUXE (Mesh Gradient, pur & prestige) */
+                <section className="relative z-10 pt-20 pb-16 min-h-[85svh] flex flex-col justify-center overflow-hidden text-center">
+                    <div className="absolute inset-0 pointer-events-none">
+                        <div className="absolute inset-0 opacity-40" style={{
+                            backgroundImage: `radial-gradient(ellipse 70% 50% at 50% 40%, ${bc}30 0%, transparent 70%)`
+                        }} />
+                        <div className="absolute inset-0 opacity-[0.04]"
+                            style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.4) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.4) 1px,transparent 1px)', backgroundSize: '40px 40px' }} />
+                    </div>
+
+                    <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 py-16">
+                        {/* Logo emblème */}
+                        <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6 }}
+                            className="mb-8 flex justify-center">
+                            {org.logo_url ? (
+                                <div className="relative">
+                                    <div className="absolute inset-0 rounded-full blur-2xl scale-125 opacity-40" style={{ background: bc }} />
+                                    <img src={org.logo_url} alt={org.name}
+                                        className="relative w-28 h-28 sm:w-36 sm:h-36 rounded-full object-contain bg-[#0F131D] p-3 border-2 border-white/15 shadow-2xl" />
+                                </div>
+                            ) : (
+                                <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-3xl flex items-center justify-center border border-white/15 shadow-2xl"
+                                    style={{ background: `linear-gradient(135deg,${bc}50,${bc}15)` }}>
+                                    <GraduationCap className="w-12 h-12 sm:w-16 sm:h-16" style={{ color: bc }} />
+                                </div>
+                            )}
+                        </motion.div>
+
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+                            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold border mb-6"
+                            style={{ backgroundColor: `${bc}18`, borderColor: `${bc}40`, color: bc }}>
+                            <Sparkles className="w-3.5 h-3.5" />
+                            {typeLabels[org.type] || org.type}
+                            {org.city && <><span className="w-1 h-1 rounded-full bg-current opacity-50 mx-0.5" /><span className="opacity-80">{org.city}</span></>}
+                        </motion.div>
+
+                        <motion.h1 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.8 }}
+                            className="text-4xl sm:text-6xl lg:text-7xl font-black leading-[1.05] tracking-tight mb-6">
+                            <span className="block text-white">{hero}</span>
+                            {org.motto && hero !== org.motto && (
+                                <span className="block text-2xl sm:text-3xl lg:text-4xl font-light text-slate-400 mt-2">{org.motto}</span>
+                            )}
+                        </motion.h1>
+
+                        <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
+                            className="text-lg sm:text-xl text-slate-300/90 max-w-2xl mx-auto leading-relaxed mb-10">
+                            {sub}
+                        </motion.p>
+
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
+                            className="flex flex-col sm:flex-row items-center justify-center gap-3.5">
+                            <a href="#inscription">
+                                <Button size="lg" className="w-full sm:w-auto text-base px-8 h-14 font-black rounded-2xl text-white shadow-2xl transition-all hover:scale-[1.02]"
+                                    style={{ background: `linear-gradient(135deg,${bc},${bc}bb)`, boxShadow: `0 20px 50px ${bc}40` }}>
+                                    <FileText className="w-5 h-5 mr-2" />
+                                    Demande d&apos;inscription
+                                    <ArrowRight className="w-5 h-5 ml-2" />
+                                </Button>
+                            </a>
+                            <Link href={orgPath(orgSlug, 'login')}>
+                                <Button variant="outline" size="lg"
+                                    className="w-full sm:w-auto text-base px-8 h-14 border-white/15 text-white/80 hover:bg-white/5 rounded-2xl transition-all hover:scale-[1.02]">
+                                    <GraduationCap className="w-5 h-5 mr-2" />
+                                    Espace étudiant
+                                </Button>
+                            </Link>
+                        </motion.div>
+                    </div>
+                </section>
+            ) : (
+                /* MODÈLE 1 : PLEIN ÉCRAN IMMERSIF (avec gradients protecteurs multi-écrans) */
+                <section className="relative z-10 pt-20 pb-16 min-h-[95svh] flex flex-col justify-center overflow-hidden">
+                    <div className="absolute inset-0 overflow-hidden">
+                        {org.hero_image_url ? (
+                            <>
+                                <img
+                                    src={org.hero_image_url}
+                                    alt={org.name}
+                                    className="absolute inset-0 w-full h-full object-cover object-center"
+                                    loading="eager"
+                                    decoding="async"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-b from-[#08090E]/80 via-[#08090E]/70 to-[#08090E]" />
+                                <div className="absolute inset-0 bg-gradient-to-r from-[#08090E]/60 via-transparent to-[#08090E]/40" />
+                            </>
+                        ) : (
+                            <div className="absolute inset-0">
+                                <div className="absolute inset-0" style={{
+                                    backgroundImage: `radial-gradient(ellipse 80% 60% at 50% 30%, ${bc}25 0%, transparent 70%)`
+                                }} />
+                                <div className="absolute inset-0 opacity-[0.03]"
+                                    style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.3) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.3) 1px,transparent 1px)', backgroundSize: '60px 60px' }} />
+                            </div>
                         )}
-                    </motion.h1>
+                    </div>
 
-                    {/* Subtitle */}
-                    <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
-                        className="text-lg sm:text-xl text-slate-300/90 max-w-2xl mx-auto leading-relaxed mb-10">
-                        {sub}
-                    </motion.p>
+                    <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-16 text-center">
+                        {/* Logo badge */}
+                        <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6 }}
+                            className="mb-6 flex justify-center">
+                            {org.logo_url ? (
+                                <div className="relative">
+                                    <div className="absolute inset-0 rounded-3xl blur-2xl scale-110 opacity-30" style={{ background: bc }} />
+                                    <img src={org.logo_url} alt={org.name}
+                                        className="relative w-24 h-24 sm:w-32 sm:h-32 rounded-3xl object-contain bg-white/10 backdrop-blur-sm p-2 border border-white/10 shadow-2xl" />
+                                </div>
+                            ) : (
+                                <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-3xl flex items-center justify-center border border-white/10 shadow-2xl"
+                                    style={{ background: `linear-gradient(135deg,${bc}40,${bc}15)` }}>
+                                    <GraduationCap className="w-12 h-12 sm:w-16 sm:h-16" style={{ color: bc }} />
+                                </div>
+                            )}
+                        </motion.div>
 
-                    {/* CTA buttons */}
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
-                        className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                        <a href="#inscription">
-                            <Button size="lg" className="text-base px-8 h-14 font-black rounded-2xl text-white shadow-2xl transition-all hover:scale-[1.02]"
-                                style={{ background: `linear-gradient(135deg,${bc},${bc}bb)`, boxShadow: `0 20px 50px ${bc}40` }}>
-                                <FileText className="w-5 h-5 mr-2" />
-                                Demande d&apos;inscription
-                                <ArrowRight className="w-5 h-5 ml-2" />
-                            </Button>
-                        </a>
-                        <Link href={`/${orgSlug}/login`}>
-                            <Button variant="outline" size="lg"
-                                className="text-base px-8 h-14 border-white/15 text-white/80 hover:bg-white/5 rounded-2xl transition-all hover:scale-[1.02]">
-                                <GraduationCap className="w-5 h-5 mr-2" />
-                                Espace étudiant
-                            </Button>
-                        </Link>
-                    </motion.div>
+                        {/* Pill badge */}
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+                            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold border mb-5"
+                            style={{ backgroundColor: `${bc}18`, borderColor: `${bc}40`, color: bc }}>
+                            <Sparkles className="w-3 h-3" />
+                            {typeLabels[org.type] || org.type}
+                            {org.city && <><span className="w-1 h-1 rounded-full bg-current opacity-50 mx-0.5" /><span className="opacity-70">{org.city}</span></>}
+                        </motion.div>
 
-                    {/* Location */}
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }}
-                        className="mt-10 inline-flex items-center gap-2 text-sm text-slate-500">
-                        <MapPin className="w-3.5 h-3.5" />
-                        {[org.quarter, org.city, org.country].filter(Boolean).join(', ')}
-                    </motion.div>
-                </div>
+                        {/* Title */}
+                        <motion.h1 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.8 }}
+                            className="text-4xl sm:text-6xl lg:text-7xl font-black leading-[1.05] tracking-tight mb-5">
+                            <span className="block text-white">{hero}</span>
+                            {org.motto && hero !== org.motto && (
+                                <span className="block text-2xl sm:text-3xl lg:text-4xl font-light text-slate-300 mt-2">{org.motto}</span>
+                            )}
+                        </motion.h1>
 
-                {/* Scroll cue */}
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }}
-                    className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">
-                    <motion.div animate={{ y: [0, 8, 0] }} transition={{ repeat: Infinity, duration: 2 }}
-                        className="w-8 h-12 rounded-full border border-white/15 flex items-start justify-center pt-2">
-                        <div className="w-1 h-3 rounded-full" style={{ background: bc }} />
-                    </motion.div>
-                </motion.div>
-            </section>
+                        {/* Subtitle */}
+                        <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
+                            className="text-lg sm:text-xl text-slate-200/90 max-w-2xl mx-auto leading-relaxed mb-8">
+                            {sub}
+                        </motion.p>
+
+                        {/* CTA buttons */}
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
+                            className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                            <a href="#inscription">
+                                <Button size="lg" className="text-base px-8 h-14 font-black rounded-2xl text-white shadow-2xl transition-all hover:scale-[1.02]"
+                                    style={{ background: `linear-gradient(135deg,${bc},${bc}bb)`, boxShadow: `0 20px 50px ${bc}40` }}>
+                                    <FileText className="w-5 h-5 mr-2" />
+                                    Demande d&apos;inscription
+                                    <ArrowRight className="w-5 h-5 ml-2" />
+                                </Button>
+                            </a>
+                            <Link href={orgPath(orgSlug, 'login')}>
+                                <Button variant="outline" size="lg"
+                                    className="text-base px-8 h-14 border-white/15 text-white/80 hover:bg-white/5 rounded-2xl transition-all hover:scale-[1.02]">
+                                    <GraduationCap className="w-5 h-5 mr-2" />
+                                    Espace étudiant
+                                </Button>
+                            </Link>
+                        </motion.div>
+
+                        {/* Location */}
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }}
+                            className="mt-8 inline-flex items-center gap-2 text-sm text-slate-400">
+                            <MapPin className="w-3.5 h-3.5" />
+                            {[org.quarter, org.city, org.country].filter(Boolean).join(', ')}
+                        </motion.div>
+                    </div>
+                </section>
+            )}
 
             {/* ═══ STATS ═════════════════════════════════════════════ */}
             <section className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 -mt-2 pb-8">
@@ -1117,7 +1280,7 @@ export default function SchoolLandingPage() {
 
                                 {/* CTA */}
                                 <button disabled={!credSaved}
-                                    onClick={() => { window.location.href = `/${orgSlug}/student`; }}
+                                    onClick={() => { window.location.href = orgPath(orgSlug, 'student'); }}
                                     className={cn(
                                         'w-full py-4 rounded-2xl font-black text-white transition-all text-sm',
                                         credSaved ? 'hover:opacity-90 active:scale-[0.98]' : 'opacity-35 cursor-not-allowed'

@@ -22,6 +22,7 @@ import { SkyPointsStore } from '@/components/campus/sky-points-store';
 import { PwaInstall } from '@/components/campus/pwa-install';
 import { ExamRoomView } from '@/components/campus/exam-room/exam-room-view';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { orgPath } from '@/lib/custom-domain';
 
 // ═══════════════════════════════════════════════════════
 // CAMPUS PAGE
@@ -78,12 +79,12 @@ export default function CampusPage() {
     useEffect(() => {
         (async () => {
             const sess = SessionManager.get();
-            if (!sess) { router.push(`/${orgSlug}/login`); return; }
+            if (!sess) { router.push(orgPath(orgSlug, 'login')); return; }
             const { data: o } = await supabase.from('organizations').select('*').eq('slug', orgSlug).single();
             if (!o) { setLoading(false); return; }
             if (sess.org_id !== o.id) {
                 SessionManager.clear();
-                router.push(`/${orgSlug}/login`);
+                router.push(orgPath(orgSlug, 'login'));
                 return;
             }
             setOrg(o);
@@ -322,11 +323,11 @@ export default function CampusPage() {
             return;
         }
         if (tab === 'marketplace') {
-            router.push(`/${orgSlug}/shop`);
+            router.push(orgPath(orgSlug, 'shop'));
             return;
         }
         if (tab === 'library') {
-            router.push(`/${orgSlug}/library`);
+            router.push(orgPath(orgSlug, 'library'));
             return;
         }
         setActiveTab(tab);
@@ -542,7 +543,7 @@ export default function CampusPage() {
 
                         {/* Logout */}
                         <button
-                            onClick={() => { SessionManager.clear(); router.push(`/${orgSlug}/login`); }}
+                            onClick={() => { SessionManager.clear(); router.push(orgPath(orgSlug, 'login')); }}
                             className="w-full py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-slate-400 transition-all"
                         >
                             Se déconnecter

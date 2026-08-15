@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
 import { SessionManager, buildSessionFromRpc } from '@/lib/session';
+import { isCustomDomain } from '@/lib/custom-domain';
 import { toast } from 'sonner';
 
 type LoginMode = 'choose' | 'admin' | 'access_code' | 'pin_create' | 'pin_verify' | 'dashboard_redirect' | 'forgot_password' | 'reset_password' | 'reset_success';
@@ -148,7 +149,8 @@ export default function LoginPage() {
                 // Check if this user owns the org
                 if (org.owner_id === data.user.id) {
                     toast.success('Bienvenue, administrateur !');
-                    router.push(`/${orgSlug}/admin`);
+                    // Custom domain: navigate without slug in URL
+                    router.push(isCustomDomain() ? '/admin' : `/${orgSlug}/admin`);
                 } else {
                     console.warn('[Login] Owner mismatch. user.id:', data.user.id, '!== owner_id:', org.owner_id);
                     toast.error('Ce compte n\'est pas administrateur de cet établissement');
@@ -462,7 +464,8 @@ export default function LoginPage() {
             });
         }
         // Unified SPA — all roles go to /campus
-        router.push(`/${orgSlug}/campus`);
+        // Custom domain: navigate without slug in URL
+        router.push(isCustomDomain() ? '/campus' : `/${orgSlug}/campus`);
     };
 
     if (loading) return <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center"><Loader2 className="w-8 h-8 text-teal-400 animate-spin" /></div>;
