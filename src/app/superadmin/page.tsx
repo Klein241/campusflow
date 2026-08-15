@@ -10,7 +10,7 @@ import {
     Mail, Lock, School, UserCheck, Activity,
     BarChart3, Zap, Clock, CheckSquare, Star, Plus, Minus, Menu, X,
     MessageSquare, Send, Crown, CreditCard,
-    Image as ImageIcon, Video as VideoIcon, Link as LinkIcon, Target, Gift, Copy, Sparkles, Coins
+    Image as ImageIcon, Video as VideoIcon, Link as LinkIcon, Target, Gift, Copy, Sparkles, Coins, Bug
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -28,7 +28,7 @@ import { SuperadminNotificationBell } from '@/components/superadmin/SuperadminNo
 // Protected by platform_admins table (Supabase Auth + RLS)
 // ═══════════════════════════════════════════════════════════════════════
 
-type Tab = 'overview' | 'orgs' | 'users' | 'domains' | 'announcements' | 'points' | 'pricing' | 'requests' | 'ads' | 'email' | 'compte';
+type Tab = 'overview' | 'orgs' | 'users' | 'domains' | 'announcements' | 'points' | 'pricing' | 'requests' | 'ads' | 'email' | 'bugs' | 'compte';
 
 interface Stats {
     total_orgs: number;
@@ -79,6 +79,7 @@ const SIDEBAR: { id: Tab; label: string; icon: any; emoji?: string }[] = [
     { id: 'points',         label: 'Sky Points',       icon: Star,            emoji: '⭐' },
     { id: 'pricing',        label: 'Tarifs Styles',    icon: Sparkles,        emoji: '✨' },
     { id: 'requests',       label: 'Demandes',         icon: MessageSquare,   emoji: '💬' },
+    { id: 'bugs',           label: 'Bugs & Rapports',  icon: Bug,             emoji: '🐛' },
     { id: 'ads',            label: 'Publicités',       icon: Target,          emoji: '📺' },
     { id: 'email',          label: 'Email Providers',  icon: Mail,            emoji: '📧' },
     { id: 'domains',        label: 'Domaines',         icon: Globe,           emoji: '🌐' },
@@ -155,6 +156,9 @@ export default function SuperAdminPage() {
     const [annTitle, setAnnTitle]   = useState('');
     const [annBody, setAnnBody]     = useState('');
     const [annTarget, setAnnTarget] = useState<'all' | string>('all');
+    const [annType, setAnnType]     = useState<'info' | 'warning' | 'success' | 'urgent'>('info');
+    const [annList, setAnnList]     = useState<any[]>([]);
+    const [annListLoading, setAnnListLoading] = useState(false);
     const [sendingAnn, setSendingAnn] = useState(false);
 
     // ── Confirm delete dialog ─────────────────────────────────────
@@ -162,7 +166,7 @@ export default function SuperAdminPage() {
     const [deleting, setDeleting] = useState(false);
 
     // ── Points management ─────────────────────────────────────────
-    const [pointsTabMode, setPointsTabMode] = useState<'orgs' | 'users'>('orgs');
+    const [pointsTabMode, setPointsTabMode] = useState<'orgs' | 'users' | 'history'>('orgs');
     const [pointsSearch, setPointsSearch]   = useState('');
     const [pointsResults, setPointsResults] = useState<any[]>([]);
     const [pointsLoading, setPointsLoading] = useState(false);
@@ -172,6 +176,8 @@ export default function SuperAdminPage() {
     const [pointsOrgTarget, setPointsOrgTarget] = useState<OrgItem | null>(null);
     const [pointsOrgDelta, setPointsOrgDelta]   = useState<number>(500);
     const [pointsOrgNote, setPointsOrgNote]     = useState<string>('');
+    const [pointsHistory, setPointsHistory] = useState<any[]>([]);
+    const [pointsHistoryLoading, setPointsHistoryLoading] = useState(false);
     const [sendingPoints, setSendingPoints] = useState(false);
 
     // ── Sky Requests (chat) ───────────────────────────────────────
@@ -182,6 +188,13 @@ export default function SuperAdminPage() {
     const [sendingReply, setSendingReply]     = useState(false);
     const [creditingId, setCreditingId]       = useState<string | null>(null);
     const [creditPoints, setCreditPoints]     = useState(0);
+    const [reqStatusFilter, setReqStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'credited' | 'rejected'>('all');
+
+    // ── Bug Reports ───────────────────────────────────────────────
+    const [bugReports, setBugReports]         = useState<any[]>([]);
+    const [bugsLoading, setBugsLoading]       = useState(false);
+    const [bugStatusFilter, setBugStatusFilter] = useState<'all' | 'open' | 'in_progress' | 'resolved'>('all');
+    const [selectedBug, setSelectedBug]       = useState<any | null>(null);
 
     // ─── Mount: check auth ───────────────────────────────────────
     useEffect(() => {
@@ -230,20 +243,105 @@ export default function SuperAdminPage() {
         loadAllData();
     };
 
-    // ─── Load all data ───────────────────────────────────────────
+    // ─── Load all data (with robust table fallback) ───────────────
     const loadAllData = useCallback(async () => {
         setDataLoading(true);
         try {
-            const [statsRes, orgsRes, usersRes, activityRes] = await Promise.all([
+            let statsRes: any = { data: null };
+            let orgsRes: any = { data: null };
+            let usersRes: any = { data: null };
+            let activityRes: any = { data: null };
+
+            const settled = await Promise.allSettled([
                 supabase.rpc('superadmin_get_stats'),
                 supabase.rpc('superadmin_get_orgs'),
                 supabase.rpc('superadmin_get_users', { p_limit: 300, p_offset: 0 }),
                 supabase.rpc('superadmin_get_recent_activity'),
             ]);
-            if (statsRes.data)    setStats(statsRes.data as Stats);
-            if (orgsRes.data)     setOrgs(orgsRes.data as OrgItem[]);
-            if (usersRes.data)    setUsers(usersRes.data as UserItem[]);
-            if (activityRes.data) setActivity(activityRes.data as ActivityItem[]);
+
+            if (settled[0].status === 'fulfilled') statsRes = settled[0].value;
+            if (settled[1].status === 'fulfilled') orgsRes = settled[1].value;
+            if (settled[2].status === 'fulfilled') usersRes = settled[2].value;
+            if (settled[3].status === 'fulfilled') activityRes = settled[3].value;
+
+            // 1. Process or Fallback Organizations
+            let finalOrgs: OrgItem[] = (orgsRes?.data as OrgItem[]) || [];
+            if (!finalOrgs || finalOrgs.length === 0) {
+                const { data: directOrgs } = await supabase
+                    .from('organizations')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+
+                if (directOrgs && directOrgs.length > 0) {
+                    const { data: allStudents } = await supabase.from('student_profiles').select('id, organization_id');
+                    const { data: allTeachers } = await supabase.from('teacher_profiles').select('id, organization_id');
+
+                    finalOrgs = directOrgs.map(o => ({
+                        id: o.id,
+                        name: o.name,
+                        slug: o.slug,
+                        school_type: o.school_type || o.type || 'École',
+                        city: o.city || '',
+                        country: o.country || 'Cameroun',
+                        custom_domain: o.custom_domain,
+                        domain_verified: !!o.domain_verified,
+                        is_active: o.is_active !== false,
+                        created_at: o.created_at,
+                        logo_url: o.logo_url,
+                        student_count: (allStudents || []).filter(s => s.organization_id === o.id).length,
+                        teacher_count: (allTeachers || []).filter(t => t.organization_id === o.id).length,
+                        sky_points: o.sky_points || 0,
+                    }));
+                }
+            }
+            setOrgs(finalOrgs);
+
+            // 2. Process or Fallback Users
+            let finalUsers: UserItem[] = (usersRes?.data as UserItem[]) || [];
+            if (!finalUsers || finalUsers.length === 0) {
+                const { data: stuList } = await supabase.from('student_profiles').select('id, first_name, last_name, email, created_at, organization_id');
+                const { data: profList } = await supabase.from('teacher_profiles').select('id, first_name, last_name, email, created_at, organization_id');
+                const orgMap = new Map((finalOrgs || []).map(o => [o.id, o]));
+
+                const mappedStudents: UserItem[] = (stuList || []).map(s => ({
+                    id: s.id,
+                    full_name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Étudiant',
+                    email: s.email || '',
+                    role: 'student',
+                    org_name: orgMap.get(s.organization_id)?.name || 'Organisation',
+                    org_slug: orgMap.get(s.organization_id)?.slug || '',
+                    created_at: s.created_at || new Date().toISOString(),
+                }));
+
+                const mappedTeachers: UserItem[] = (profList || []).map(t => ({
+                    id: t.id,
+                    full_name: `${t.first_name || ''} ${t.last_name || ''}`.trim() || 'Professeur',
+                    email: t.email || '',
+                    role: 'teacher',
+                    org_name: orgMap.get(t.organization_id)?.name || 'Organisation',
+                    org_slug: orgMap.get(t.organization_id)?.slug || '',
+                    created_at: t.created_at || new Date().toISOString(),
+                }));
+
+                finalUsers = [...mappedStudents, ...mappedTeachers];
+            }
+            setUsers(finalUsers);
+
+            // 3. Process or Fallback Stats
+            if (statsRes?.data) {
+                setStats(statsRes.data as Stats);
+            } else {
+                setStats({
+                    total_orgs: finalOrgs.length,
+                    total_students: finalUsers.filter(u => u.role === 'student').length,
+                    total_teachers: finalUsers.filter(u => u.role === 'teacher').length,
+                    total_users: finalUsers.length,
+                    custom_domains: finalOrgs.filter(o => o.custom_domain).length,
+                    new_orgs_week: finalOrgs.filter(o => (Date.now() - new Date(o.created_at).getTime()) < 7 * 86400000).length,
+                });
+            }
+
+            if (activityRes?.data) setActivity(activityRes.data as ActivityItem[]);
         } catch (e: any) {
             toast.error('Erreur chargement: ' + (e.message ?? 'inconnue'));
         }
@@ -279,28 +377,159 @@ export default function SuperAdminPage() {
         loadAllData(); // refresh stats
     };
 
+    // ─── Announcements Handlers ──────────────────────────────────
+    const loadAnnouncementsHistory = useCallback(async () => {
+        setAnnListLoading(true);
+        try {
+            const { data } = await supabase
+                .from('superadmin_announcements')
+                .select('*')
+                .order('created_at', { ascending: false });
+            if (data && data.length > 0) {
+                setAnnList(data);
+            } else {
+                const { data: directAnn } = await supabase
+                    .from('announcements')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .limit(50);
+                if (directAnn) {
+                    setAnnList(directAnn.map(a => ({
+                        id: a.id,
+                        title: a.title,
+                        body: a.content || a.body || '',
+                        target_type: a.organization_id ? 'org' : 'all',
+                        target_org_id: a.organization_id,
+                        target_org_name: orgs.find(o => o.id === a.organization_id)?.name || 'Établissement',
+                        ann_type: 'info',
+                        sent_to_count: 1,
+                        created_at: a.created_at,
+                    })));
+                }
+            }
+        } catch {}
+        setAnnListLoading(false);
+    }, [orgs]);
+
     const sendAnnouncement = async () => {
         if (!annTitle.trim() || !annBody.trim()) {
             toast.error('Titre et message requis');
             return;
         }
         setSendingAnn(true);
-        const { data, error } = await supabase.rpc('superadmin_send_announcement', {
-            p_title:  annTitle.trim(),
-            p_body:   annBody.trim(),
-            p_org_id: annTarget === 'all' ? null : annTarget,
-        });
+        try {
+            const targetOrg = orgs.find(o => o.id === annTarget);
+            const targetName = annTarget === 'all' ? 'Tous les établissements' : targetOrg?.name || 'Établissement';
 
-        if (error) {
-            toast.error('Erreur: ' + error.message);
-        } else {
-            const count = (data as any)?.sent_to ?? 0;
-            toast.success(`📢 Annonce envoyée à ${count} établissement(s) !`);
+            // 1. Try RPC
+            try {
+                await supabase.rpc('superadmin_send_announcement', {
+                    p_title:  annTitle.trim(),
+                    p_body:   annBody.trim(),
+                    p_org_id: annTarget === 'all' ? null : annTarget,
+                });
+            } catch {}
+
+            // 2. Insert into superadmin_announcements history table
+            try {
+                await supabase.from('superadmin_announcements').insert({
+                    title: annTitle.trim(),
+                    body: annBody.trim(),
+                    target_type: annTarget === 'all' ? 'all' : 'org',
+                    target_org_id: annTarget === 'all' ? null : annTarget,
+                    target_org_name: targetName,
+                    ann_type: annType,
+                    sent_to_count: annTarget === 'all' ? orgs.length : 1,
+                });
+            } catch {}
+
+            // 3. Insert into announcements for target orgs
+            if (annTarget === 'all') {
+                for (const org of orgs) {
+                    try {
+                        await supabase.from('announcements').insert({
+                            organization_id: org.id,
+                            title: `📣 ${annTitle.trim()}`,
+                            content: annBody.trim(),
+                            body: annBody.trim(),
+                            type: 'official',
+                        });
+                    } catch {}
+                }
+            } else {
+                try {
+                    await supabase.from('announcements').insert({
+                        organization_id: annTarget,
+                        title: `📣 ${annTitle.trim()}`,
+                        content: annBody.trim(),
+                        body: annBody.trim(),
+                        type: 'official',
+                    });
+                } catch {}
+            }
+
+            toast.success(`📢 Annonce envoyée avec succès à ${annTarget === 'all' ? orgs.length + ' établissement(s)' : targetName} !`);
             setAnnTitle('');
             setAnnBody('');
             setAnnTarget('all');
+            loadAnnouncementsHistory();
+        } catch (err: any) {
+            toast.error('Erreur envoi: ' + err.message);
+        } finally {
+            setSendingAnn(false);
         }
-        setSendingAnn(false);
+    };
+
+    const deleteAnnouncement = async (id: string) => {
+        try {
+            await supabase.from('superadmin_announcements').delete().eq('id', id);
+            await supabase.from('announcements').delete().eq('id', id);
+            setAnnList(prev => prev.filter(a => a.id !== id));
+            toast.success('Annonce supprimée');
+        } catch (e: any) {
+            toast.error('Erreur: ' + e.message);
+        }
+    };
+
+    // ─── Points History ───────────────────────────────────────────
+    const loadPointsHistory = useCallback(async () => {
+        setPointsHistoryLoading(true);
+        try {
+            const { data } = await supabase
+                .from('sky_points_transactions')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(200);
+            if (data) setPointsHistory(data);
+        } catch {}
+        setPointsHistoryLoading(false);
+    }, []);
+
+    // ─── Bug Reports Handlers ─────────────────────────────────────
+    const loadBugReports = useCallback(async () => {
+        setBugsLoading(true);
+        try {
+            const { data } = await supabase
+                .from('bug_reports')
+                .select('*')
+                .order('created_at', { ascending: false });
+            if (data) setBugReports(data);
+        } catch {}
+        setBugsLoading(false);
+    }, []);
+
+    const updateBugStatus = async (bugId: string, nextStatus: string, adminNote?: string) => {
+        try {
+            const { error } = await supabase
+                .from('bug_reports')
+                .update({ status: nextStatus, admin_note: adminNote || null })
+                .eq('id', bugId);
+            if (error) throw error;
+            setBugReports(prev => prev.map(b => b.id === bugId ? { ...b, status: nextStatus, admin_note: adminNote } : b));
+            toast.success(`Statut du bug mis à jour : ${nextStatus}`);
+        } catch (e: any) {
+            toast.error('Erreur : ' + e.message);
+        }
     };
 
     const handleLogout = async () => {
@@ -324,11 +553,15 @@ export default function SuperAdminPage() {
 
     useEffect(() => {
         if (authStep !== 'dashboard') return;
-        if (tab !== 'requests') return;
-        loadSkyRequests();
-        const interval = setInterval(loadSkyRequests, 5000);
-        return () => clearInterval(interval);
-    }, [tab, authStep]);
+        if (tab === 'requests') {
+            loadSkyRequests();
+            const interval = setInterval(loadSkyRequests, 5000);
+            return () => clearInterval(interval);
+        }
+        if (tab === 'announcements') loadAnnouncementsHistory();
+        if (tab === 'points') loadPointsHistory();
+        if (tab === 'bugs') loadBugReports();
+    }, [tab, authStep, loadAnnouncementsHistory, loadPointsHistory, loadBugReports]);
 
     const adminReplyRequest = async (reqId: string) => {
         if (!adminReply.trim()) return;
@@ -362,6 +595,20 @@ export default function SuperAdminPage() {
             p_points: creditPoints,
             p_response: `✅ ${creditPoints} Sky Points crédités sur votre compte ! Merci 🎉`,
         });
+
+        // Record in transactions history
+        try {
+            await supabase.from('sky_points_transactions').insert({
+                to_entity_type: 'user',
+                to_entity_id: req.user_id,
+                to_entity_name: req.user_name,
+                org_name: req.org_slug || 'Utilisateur',
+                amount: creditPoints,
+                note: `Achat Pack ${req.pack_name || 'Sky Points'}`,
+                performed_by: 'superadmin',
+            });
+        } catch {}
+
         if (error) {
             toast.error('Erreur crédit: ' + error.message);
         } else {
@@ -370,6 +617,7 @@ export default function SuperAdminPage() {
             setCreditingId(null);
             setActiveReqId(null);
             await loadSkyRequests();
+            loadPointsHistory();
         }
         setCreditingId(null);
     };
@@ -378,7 +626,6 @@ export default function SuperAdminPage() {
     const searchForPoints = async () => {
         if (!pointsSearch.trim()) return;
         setPointsLoading(true);
-        // Utilise RPC SECURITY DEFINER pour contourner RLS (pas d'auth Supabase dans superadmin)
         const { data, error } = await supabase.rpc('superadmin_search_users', {
             p_query: pointsSearch.trim()
         });
@@ -402,6 +649,20 @@ export default function SuperAdminPage() {
             p_delta:      pointsDelta,
             p_note:       pointsNote || null
         });
+
+        // Record in transactions history
+        try {
+            await supabase.from('sky_points_transactions').insert({
+                to_entity_type: 'user',
+                to_entity_id: pointsTarget.id,
+                to_entity_name: `${pointsTarget.first_name || ''} ${pointsTarget.last_name || ''}`.trim(),
+                org_name: pointsTarget.org_name || 'Utilisateur',
+                amount: pointsDelta,
+                note: pointsNote || 'Ajustement manuel Superadmin',
+                performed_by: 'superadmin',
+            });
+        } catch {}
+
         if (error || (data && data.success === false)) {
             toast.error('Erreur: ' + (error?.message || data?.error || 'Inconnue'));
         } else {
@@ -411,6 +672,7 @@ export default function SuperAdminPage() {
             setPointsResults(prev => prev.map(u => u.id === pointsTarget.id ? { ...u, sky_points: newBalance } : u));
             setPointsDelta(0);
             setPointsNote('');
+            loadPointsHistory();
         }
         setSendingPoints(false);
     };
@@ -426,6 +688,19 @@ export default function SuperAdminPage() {
                 .update({ sky_points: newBalance })
                 .eq('id', pointsOrgTarget.id);
 
+            // Record in transactions history
+            try {
+                await supabase.from('sky_points_transactions').insert({
+                    to_entity_type: 'org',
+                    to_entity_id: pointsOrgTarget.id,
+                    to_entity_name: pointsOrgTarget.name,
+                    org_name: pointsOrgTarget.name,
+                    amount: pointsOrgDelta,
+                    note: pointsOrgNote || 'Recharge Superadmin Établissement',
+                    performed_by: 'superadmin',
+                });
+            } catch {}
+
             if (error) {
                 toast.error('Erreur Supabase: ' + error.message);
             } else {
@@ -434,6 +709,7 @@ export default function SuperAdminPage() {
                 setOrgs(prev => prev.map(o => o.id === pointsOrgTarget.id ? { ...o, sky_points: newBalance } : o));
                 setPointsOrgTarget({ ...pointsOrgTarget, sky_points: newBalance } as any);
                 setPointsOrgNote('');
+                loadPointsHistory();
             }
         } catch (e: any) {
             toast.error('Erreur: ' + e.message);
@@ -838,87 +1114,136 @@ export default function SuperAdminPage() {
                         )}
 
                         {/* ══════════════════════════════════════════
-                            UTILISATEURS
+                            UTILISATEURS & ANALYTIQUE TRAFIC (Feature 4)
                         ══════════════════════════════════════════ */}
                         {tab === 'users' && (
-                            <motion.div key="users" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-                                <div className="flex items-center gap-4 flex-wrap">
-                                    <div className="relative">
+                            <motion.div key="users" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-5">
+                                {/* ── Top Traffic KPIs ── */}
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/8">
+                                        <p className="text-[10px] uppercase font-bold text-slate-400">Total Utilisateurs</p>
+                                        <p className="text-2xl font-black text-white mt-1">{users.length}</p>
+                                        <p className="text-[10px] text-slate-500 mt-0.5">Sur l&apos;ensemble du réseau</p>
+                                    </div>
+                                    <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20">
+                                        <p className="text-[10px] uppercase font-bold text-emerald-400 flex items-center gap-1">
+                                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" /> Actifs Récents
+                                        </p>
+                                        <p className="text-2xl font-black text-emerald-300 mt-1">
+                                            {users.filter(u => (Date.now() - new Date(u.created_at).getTime()) < 14 * 86400000).length}
+                                        </p>
+                                        <p className="text-[10px] text-emerald-400/70 mt-0.5">Connexions &lt; 14 jours</p>
+                                    </div>
+                                    <div className="p-4 rounded-2xl bg-teal-500/5 border border-teal-500/20">
+                                        <p className="text-[10px] uppercase font-bold text-teal-400">🎓 Étudiants</p>
+                                        <p className="text-2xl font-black text-teal-300 mt-1">
+                                            {users.filter(u => u.role === 'student').length}
+                                        </p>
+                                        <p className="text-[10px] text-teal-400/70 mt-0.5">Apprenants inscrits</p>
+                                    </div>
+                                    <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/20">
+                                        <p className="text-[10px] uppercase font-bold text-indigo-400">👨‍🏫 Enseignants</p>
+                                        <p className="text-2xl font-black text-indigo-300 mt-1">
+                                            {users.filter(u => u.role === 'teacher').length}
+                                        </p>
+                                        <p className="text-[10px] text-indigo-400/70 mt-0.5">Corps professoral</p>
+                                    </div>
+                                </div>
+
+                                {/* ── Filters & Search ── */}
+                                <div className="flex items-center justify-between gap-4 flex-wrap p-4 rounded-2xl bg-white/[0.02] border border-white/8">
+                                    <div className="relative flex-1 max-w-sm">
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                                         <input value={search} onChange={e => setSearch(e.target.value)}
                                             placeholder="Nom, email, organisation..." autoFocus
-                                            className="bg-white/5 border border-white/10 text-white pl-9 pr-4 h-9 w-72 rounded-xl text-sm placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40" />
+                                            className="w-full bg-white/5 border border-white/10 text-white pl-9 pr-4 h-10 rounded-xl text-xs placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40" />
                                     </div>
-                                    <span className="text-xs text-slate-500">{filteredUsers.length} / {users.length} utilisateurs</span>
+                                    <span className="text-xs text-slate-400 font-bold">{filteredUsers.length} / {users.length} membres</span>
                                     <div className="flex gap-2">
-                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-400">
+                                        <span className="text-xs px-3 py-1 rounded-xl bg-teal-500/15 text-teal-300 border border-teal-500/25 font-bold">
                                             {users.filter(u => u.role === 'student').length} étudiants
                                         </span>
-                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400">
+                                        <span className="text-xs px-3 py-1 rounded-xl bg-indigo-500/15 text-indigo-300 border border-indigo-500/25 font-bold">
                                             {users.filter(u => u.role === 'teacher').length} professeurs
                                         </span>
                                     </div>
                                 </div>
 
                                 {/* Table */}
-                                <div className="rounded-2xl border border-white/8 overflow-hidden">
+                                <div className="rounded-2xl border border-white/8 overflow-hidden bg-white/[0.01]">
                                     <div className="overflow-x-auto">
-                                        <table className="w-full text-sm min-w-[700px]">
+                                        <table className="w-full text-sm min-w-[750px]">
                                             <thead>
                                                 <tr className="border-b border-white/5 bg-white/[0.02]">
-                                                    {['Utilisateur', 'Email', 'Rôle', 'Organisation', 'Inscrit le'].map(h => (
+                                                    {['Utilisateur', 'Email', 'Rôle', 'Organisation', 'Trafic / Statut', 'Date Inscription'].map(h => (
                                                         <th key={h} className="text-left px-4 py-3 text-[10px] text-slate-500 font-bold uppercase tracking-wide">{h}</th>
                                                     ))}
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {filteredUsers.map((user, i) => (
-                                                    <tr key={user.id}
-                                                        className={cn('border-b border-white/[0.04] hover:bg-white/[0.025] transition-colors',
-                                                            i % 2 !== 0 ? 'bg-white/[0.01]' : ''
-                                                        )}>
-                                                        <td className="px-4 py-3">
-                                                            <div className="flex items-center gap-2.5">
-                                                                <div className={cn('w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black text-white shrink-0',
-                                                                    user.role === 'teacher' ? 'bg-indigo-500' : 'bg-teal-500'
-                                                                )}>
-                                                                    {user.full_name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
-                                                                </div>
-                                                                <span className="font-semibold text-xs truncate max-w-[130px]">{user.full_name}</span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-4 py-3 text-xs text-slate-400 max-w-[180px] truncate">{user.email}</td>
-                                                        <td className="px-4 py-3">
-                                                            <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-semibold',
-                                                                user.role === 'teacher'
-                                                                    ? 'bg-indigo-500/15 text-indigo-400'
-                                                                    : 'bg-teal-500/15 text-teal-400'
+                                                {filteredUsers.map((user, i) => {
+                                                    const isRecent = (Date.now() - new Date(user.created_at).getTime()) < 14 * 86400000;
+                                                    return (
+                                                        <tr key={user.id}
+                                                            className={cn('border-b border-white/[0.04] hover:bg-white/[0.025] transition-colors',
+                                                                i % 2 !== 0 ? 'bg-white/[0.01]' : ''
                                                             )}>
-                                                                {user.role === 'teacher' ? '👨‍🏫 Prof' : '👩‍🎓 Étud.'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-4 py-3 text-xs text-slate-500 max-w-[160px] truncate">
-                                                            {user.org_slug ? (
-                                                                <a href={`/${user.org_slug}/campus`} target="_blank" rel="noreferrer"
-                                                                    className="hover:text-violet-400 transition-colors flex items-center gap-1 group">
-                                                                    {user.org_name}
-                                                                    <ExternalLink className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                                </a>
-                                                            ) : (
-                                                                <span className="text-slate-700">N/A</span>
-                                                            )}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-[10px] text-slate-600">
-                                                            {new Date(user.created_at).toLocaleDateString('fr-FR')}
-                                                        </td>
-                                                    </tr>
-                                                ))}
+                                                            <td className="px-4 py-3">
+                                                                <div className="flex items-center gap-2.5">
+                                                                    <div className={cn('w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-black text-white shrink-0 shadow-md',
+                                                                        user.role === 'teacher' ? 'bg-indigo-600' : 'bg-teal-600'
+                                                                    )}>
+                                                                        {user.full_name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="font-bold text-xs text-white block">{user.full_name}</span>
+                                                                        <span className="text-[10px] text-slate-500 font-mono">ID: {user.id.slice(0, 8)}...</span>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-4 py-3 text-xs text-slate-400 font-mono max-w-[180px] truncate">{user.email || 'Non renseigné'}</td>
+                                                            <td className="px-4 py-3">
+                                                                <span className={cn('text-[10px] px-2.5 py-1 rounded-full font-bold',
+                                                                    user.role === 'teacher'
+                                                                        ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/25'
+                                                                        : 'bg-teal-500/15 text-teal-300 border border-teal-500/25'
+                                                                )}>
+                                                                    {user.role === 'teacher' ? '👨‍🏫 Professeur' : '🎓 Étudiant'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-4 py-3 text-xs text-slate-400 max-w-[160px] truncate">
+                                                                {user.org_slug ? (
+                                                                    <a href={`/${user.org_slug}/campus`} target="_blank" rel="noreferrer"
+                                                                        className="hover:text-violet-300 transition-colors flex items-center gap-1 group font-medium">
+                                                                        {user.org_name}
+                                                                        <ExternalLink className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                                    </a>
+                                                                ) : (
+                                                                    <span className="text-slate-600">{user.org_name || 'N/A'}</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-4 py-3">
+                                                                <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 w-fit',
+                                                                    isRecent
+                                                                        ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+                                                                        : 'bg-slate-500/15 text-slate-400 border border-slate-500/25'
+                                                                )}>
+                                                                    <span className={cn('w-1.5 h-1.5 rounded-full', isRecent ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500')} />
+                                                                    {isRecent ? '🟢 En ligne récent' : '⚪ Standard'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-4 py-3 text-[11px] text-slate-400">
+                                                                {new Date(user.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
                                             </tbody>
                                         </table>
                                     </div>
                                     {filteredUsers.length === 0 && !dataLoading && (
                                         <div className="text-center py-12 text-slate-500 text-sm">
-                                            {search ? 'Aucun résultat' : 'Aucun utilisateur'}
+                                            {search ? 'Aucun résultat correspondant' : 'Aucun utilisateur'}
                                         </div>
                                     )}
                                 </div>
@@ -1048,97 +1373,191 @@ export default function SuperAdminPage() {
                             </motion.div>
                         )}
                         {/* ══════════════════════════════════════════
-                            ANNONCES GLOBALES
+                            ANNONCES GLOBALES & HISTORIQUE (Feature 7)
                         ══════════════════════════════════════════ */}
                         {tab === 'announcements' && (
-                            <motion.div key="announcements" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6 max-w-2xl">
+                            <motion.div key="announcements" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
 
-                                {/* Info */}
-                                <div className="p-4 rounded-2xl bg-violet-500/5 border border-violet-500/15 text-xs text-violet-300 space-y-1">
-                                    <p className="font-bold flex items-center gap-2"><BarChart3 className="w-3.5 h-3.5" /> Comment ça fonctionne</p>
-                                    <p className="text-slate-400 leading-relaxed">
-                                        Les annonces apparaissent dans l&apos;onglet <strong className="text-white">Actus officielles</strong> de chaque
-                                        établissement cible avec le badge <strong className="text-amber-400">📣 OFFICIEL</strong>.
-                                        Elles sont publiées via la fonction RPC <code className="text-violet-300 bg-black/30 px-1 rounded">superadmin_send_announcement</code>.
-                                    </p>
+                                {/* Top Info */}
+                                <div className="p-4 rounded-2xl bg-violet-500/5 border border-violet-500/15 text-xs text-violet-300 flex items-center justify-between gap-4">
+                                    <div className="space-y-1">
+                                        <p className="font-bold flex items-center gap-2"><Megaphone className="w-4 h-4 text-violet-400" /> Gestion & Diffusion des Annonces Officielles</p>
+                                        <p className="text-slate-400 leading-relaxed">
+                                            Les annonces publiées apparaissent instantanément dans l&apos;onglet <strong className="text-white">Actus officielles</strong> des élèves, professeurs et administrateurs avec le badge officiel.
+                                        </p>
+                                    </div>
+                                    <button onClick={loadAnnouncementsHistory} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white shrink-0 border border-white/10">
+                                        <RefreshCw className={cn('w-4 h-4', annListLoading && 'animate-spin')} />
+                                    </button>
                                 </div>
 
-                                {/* Form */}
-                                <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/8 space-y-4">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <Megaphone className="w-5 h-5 text-violet-400" />
-                                        <h2 className="font-bold text-sm">Nouvelle annonce</h2>
-                                    </div>
+                                <div className="grid lg:grid-cols-12 gap-6 items-start">
+                                    {/* ── Formulaire (Gauche) ── */}
+                                    <div className="lg:col-span-5 p-5 rounded-3xl bg-white/[0.03] border border-white/8 space-y-4 shadow-xl">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Megaphone className="w-5 h-5 text-violet-400" />
+                                            <h2 className="font-black text-sm text-white">Nouvelle annonce</h2>
+                                        </div>
 
-                                    <div>
-                                        <label className="text-xs text-slate-400 mb-1.5 block font-medium">Cible</label>
-                                        <select value={annTarget} onChange={e => setAnnTarget(e.target.value)}
-                                            className="w-full bg-white/5 border border-white/10 text-white h-9 rounded-xl text-sm px-3 focus:outline-none focus:border-violet-500/40 cursor-pointer">
-                                            <option value="all">📢 Toutes les organisations actives ({orgs.filter(o => o.is_active).length})</option>
-                                            <optgroup label="Organisation spécifique">
-                                                {orgs.map(o => (
-                                                    <option key={o.id} value={o.id}>{o.name} ({o.student_count + o.teacher_count} membres)</option>
+                                        {/* Type d'annonce */}
+                                        <div>
+                                            <label className="text-xs text-slate-400 mb-1.5 block font-bold">Type / Priorité</label>
+                                            <div className="grid grid-cols-4 gap-1.5">
+                                                {([
+                                                    { id: 'info', label: '📢 Info', color: 'bg-blue-500/20 text-blue-300 border-blue-500/40' },
+                                                    { id: 'warning', label: '⚠️ Alerte', color: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
+                                                    { id: 'success', label: '🎉 Fête', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
+                                                    { id: 'urgent', label: '🚨 Urgent', color: 'bg-red-500/20 text-red-300 border-red-500/40' },
+                                                ] as const).map(t => (
+                                                    <button
+                                                        key={t.id}
+                                                        type="button"
+                                                        onClick={() => setAnnType(t.id)}
+                                                        className={cn(
+                                                            'py-2 px-1 rounded-xl text-[11px] font-bold border transition-all',
+                                                            annType === t.id
+                                                                ? `${t.color} shadow-sm`
+                                                                : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                                                        )}
+                                                    >
+                                                        {t.label}
+                                                    </button>
                                                 ))}
-                                            </optgroup>
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="text-xs text-slate-400 mb-1.5 block font-medium">Titre <span className="text-red-400">*</span></label>
-                                        <input value={annTitle} onChange={e => setAnnTitle(e.target.value)}
-                                            placeholder="Ex: Maintenance prévue le 25 Juillet à 02h00..."
-                                            className="w-full bg-white/5 border border-white/10 text-white h-9 rounded-xl text-sm px-3 placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40" />
-                                    </div>
-
-                                    <div>
-                                        <label className="text-xs text-slate-400 mb-1.5 block font-medium">Message <span className="text-red-400">*</span></label>
-                                        <textarea value={annBody} onChange={e => setAnnBody(e.target.value)}
-                                            placeholder="Détails complets de l'annonce..."
-                                            rows={5}
-                                            className="w-full bg-white/5 border border-white/10 text-white rounded-xl text-sm px-3 py-2.5 placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40 resize-none" />
-                                        <p className="text-[10px] text-slate-600 mt-1">{annBody.length} caractères</p>
-                                    </div>
-
-                                    {/* Preview */}
-                                    {(annTitle || annBody) && (
-                                        <div className="p-3 rounded-xl bg-black/30 border border-white/5">
-                                            <p className="text-[10px] text-slate-500 mb-2 font-semibold uppercase tracking-wide">Aperçu</p>
-                                            <div className="flex items-start gap-2">
-                                                <span className="text-lg">📣</span>
-                                                <div>
-                                                    <p className="text-xs font-bold text-white">{annTitle || 'Titre...'}</p>
-                                                    <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed whitespace-pre-line">{annBody || 'Message...'}</p>
-                                                </div>
                                             </div>
                                         </div>
-                                    )}
 
-                                    <Button onClick={sendAnnouncement}
-                                        disabled={sendingAnn || !annTitle.trim() || !annBody.trim()}
-                                        className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 font-bold rounded-xl h-10 shadow-lg shadow-violet-500/20">
-                                        {sendingAnn
-                                            ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Envoi en cours...</>
-                                            : <><Megaphone className="w-4 h-4 mr-2" />Envoyer l&apos;annonce</>
-                                        }
-                                    </Button>
+                                        {/* Cible */}
+                                        <div>
+                                            <label className="text-xs text-slate-400 mb-1.5 block font-bold">Établissement cible</label>
+                                            <select value={annTarget} onChange={e => setAnnTarget(e.target.value)}
+                                                className="w-full bg-white/5 border border-white/10 text-white h-10 rounded-xl text-xs px-3 focus:outline-none focus:border-violet-500/40 cursor-pointer">
+                                                <option value="all">📢 Tous les établissements ({orgs.filter(o => o.is_active).length})</option>
+                                                <optgroup label="Organisation spécifique">
+                                                    {orgs.map(o => (
+                                                        <option key={o.id} value={o.id}>{o.name} ({o.student_count + o.teacher_count} membres)</option>
+                                                    ))}
+                                                </optgroup>
+                                            </select>
+                                        </div>
+
+                                        {/* Titre */}
+                                        <div>
+                                            <label className="text-xs text-slate-400 mb-1.5 block font-bold">Titre de l&apos;annonce <span className="text-red-400">*</span></label>
+                                            <input value={annTitle} onChange={e => setAnnTitle(e.target.value)}
+                                                placeholder="Ex: Mise à jour système ou fête de l'école..."
+                                                className="w-full bg-white/5 border border-white/10 text-white h-10 rounded-xl text-sm px-3 placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40" />
+                                        </div>
+
+                                        {/* Message */}
+                                        <div>
+                                            <label className="text-xs text-slate-400 mb-1.5 block font-bold">Message complet <span className="text-red-400">*</span></label>
+                                            <textarea value={annBody} onChange={e => setAnnBody(e.target.value)}
+                                                placeholder="Détails complets de l'annonce..."
+                                                rows={4}
+                                                className="w-full bg-white/5 border border-white/10 text-white rounded-xl text-sm px-3 py-2.5 placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40 resize-none" />
+                                            <p className="text-[10px] text-slate-600 mt-1">{annBody.length} caractères</p>
+                                        </div>
+
+                                        {/* Preview */}
+                                        {(annTitle || annBody) && (
+                                            <div className="p-3 rounded-2xl bg-black/40 border border-white/10 space-y-1">
+                                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wide">Aperçu en direct</p>
+                                                <div className="flex items-start gap-2 pt-1">
+                                                    <span className="text-lg">
+                                                        {annType === 'urgent' ? '🚨' : annType === 'warning' ? '⚠️' : annType === 'success' ? '🎉' : '📣'}
+                                                    </span>
+                                                    <div>
+                                                        <p className="text-xs font-bold text-white">{annTitle || 'Titre...'}</p>
+                                                        <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed whitespace-pre-line">{annBody || 'Message...'}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <Button onClick={sendAnnouncement}
+                                            disabled={sendingAnn || !annTitle.trim() || !annBody.trim()}
+                                            className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 font-black rounded-xl h-11 shadow-lg shadow-violet-500/20 text-sm">
+                                            {sendingAnn
+                                                ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Diffusion en cours...</>
+                                                : <><Megaphone className="w-4 h-4 mr-2" />Publier l&apos;annonce officielle</>
+                                            }
+                                        </Button>
+                                    </div>
+
+                                    {/* ── Liste des annonces envoyées (Droite) ── */}
+                                    <div className="lg:col-span-7 space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                                                <Clock className="w-4 h-4 text-violet-400" /> Annonces publiées ({annList.length})
+                                            </h3>
+                                        </div>
+
+                                        {annListLoading ? (
+                                            <div className="p-12 text-center">
+                                                <Loader2 className="w-6 h-6 animate-spin text-slate-500 mx-auto" />
+                                            </div>
+                                        ) : annList.length === 0 ? (
+                                            <div className="p-12 rounded-3xl bg-white/[0.02] border border-white/5 text-center space-y-2">
+                                                <Megaphone className="w-8 h-8 text-slate-600 mx-auto" />
+                                                <p className="text-sm font-bold text-slate-400">Aucune annonce publiée pour l&apos;instant</p>
+                                                <p className="text-xs text-slate-600">Remplissez le formulaire de gauche pour envoyer votre première annonce officielle.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+                                                {annList.map(a => (
+                                                    <motion.div key={a.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                                                        className="p-4 rounded-2xl bg-white/[0.03] border border-white/8 hover:border-white/15 transition-all space-y-2">
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            <div className="flex items-start gap-2.5 min-w-0">
+                                                                <span className="text-lg shrink-0 mt-0.5">
+                                                                    {a.ann_type === 'urgent' ? '🚨' : a.ann_type === 'warning' ? '⚠️' : a.ann_type === 'success' ? '🎉' : '📣'}
+                                                                </span>
+                                                                <div className="min-w-0">
+                                                                    <p className="font-black text-sm text-white truncate">{a.title}</p>
+                                                                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                                                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-300 font-bold">
+                                                                            {a.target_type === 'all' ? '📢 Tous les établissements' : `🏫 ${a.target_org_name || 'Établissement'}`}
+                                                                        </span>
+                                                                        <span className="text-[10px] text-slate-500">
+                                                                            {new Date(a.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => deleteAnnouncement(a.id)}
+                                                                className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0"
+                                                                title="Supprimer cette annonce"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                        <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line pl-7">
+                                                            {a.body}
+                                                        </p>
+                                                    </motion.div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </motion.div>
                         )}
 
                         {/* ══════════════════════════════════════════
-                            SKY POINTS
+                            SKY POINTS & HISTORIQUE DES TRANSACTIONS (Feature 5)
                         ══════════════════════════════════════════ */}
                         {tab === 'points' && (
                             <motion.div key="points" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-5">
 
-                                {/* Top Switch: Écoles vs Utilisateurs */}
+                                {/* Top Switch: Écoles vs Utilisateurs vs Historique */}
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/[0.03] border border-white/8 rounded-2xl p-4">
                                     <div>
                                         <h3 className="text-base font-black text-white flex items-center gap-2">
                                             <Star className="w-5 h-5 text-amber-400" /> Gestion & Envoi des Sky Points
                                         </h3>
                                         <p className="text-xs text-slate-400 mt-0.5">
-                                            Transférez des Sky Points directement aux administrateurs d&apos;écoles ou aux utilisateurs.
+                                            Transférez des Sky Points directement aux administrateurs d&apos;écoles, aux utilisateurs et suivez l&apos;historique complet.
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white/5 border border-white/10 shrink-0">
@@ -1163,6 +1582,17 @@ export default function SuperAdminPage() {
                                             )}
                                         >
                                             <Users className="w-3.5 h-3.5" /> Utilisateurs
+                                        </button>
+                                        <button
+                                            onClick={() => { setPointsTabMode('history'); loadPointsHistory(); }}
+                                            className={cn(
+                                                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all',
+                                                pointsTabMode === 'history'
+                                                    ? 'bg-amber-500 text-slate-950 shadow-md'
+                                                    : 'text-slate-400 hover:text-white'
+                                            )}
+                                        >
+                                            <Clock className="w-3.5 h-3.5" /> Historique ({pointsHistory.length})
                                         </button>
                                     </div>
                                 </div>
@@ -1305,6 +1735,17 @@ export default function SuperAdminPage() {
                                                             </span>
                                                         </div>
 
+                                                        {/* Note */}
+                                                        <div>
+                                                            <label className="text-[11px] font-bold text-slate-300 block mb-1">Motif / Note de transfert</label>
+                                                            <input
+                                                                value={pointsOrgNote}
+                                                                onChange={e => setPointsOrgNote(e.target.value)}
+                                                                placeholder="Ex: Dotation rentrée scolaire, Pack Pro..."
+                                                                className="w-full bg-white/5 border border-white/10 text-white h-9 rounded-xl text-xs px-3 placeholder:text-slate-600 focus:outline-none focus:border-amber-500/40"
+                                                            />
+                                                        </div>
+
                                                         {/* Bouton d'action */}
                                                         <Button
                                                             onClick={applyOrgPoints}
@@ -1316,7 +1757,7 @@ export default function SuperAdminPage() {
                                                         </Button>
                                                     </motion.div>
                                                 ) : (
-                                                    <div className="h-full flex flex-col items-center justify-center p-8 rounded-3xl bg-white/[0.02] border border-dashed border-white/10 text-center text-slate-500 space-y-2">
+                                                    <div className="h-full flex flex-col items-center justify-center p-8 rounded-3xl bg-white/[0.02] border border-dashed border-white/10 text-center text-slate-500 space-y-2 min-h-[300px]">
                                                         <Building2 className="w-8 h-8 text-slate-600" />
                                                         <p className="text-xs font-bold text-slate-400">Aucune école sélectionnée</p>
                                                         <p className="text-[11px] text-slate-600 max-w-xs">Cliquez sur une école dans la liste de gauche pour ajuster son solde Sky Points.</p>
@@ -1329,7 +1770,7 @@ export default function SuperAdminPage() {
 
                                 {/* SECTION 2: ÉTUDIANTS & PROFESSEURS */}
                                 {pointsTabMode === 'users' && (
-                                    <>
+                                    <div className="space-y-4">
                                         {/* Search bar */}
                                         <div className="bg-white/[0.03] border border-white/8 rounded-2xl p-4 space-y-3">
                                             <div>
@@ -1353,126 +1794,202 @@ export default function SuperAdminPage() {
                                             </div>
                                         </div>
 
-                                {/* Results */}
-                                {pointsResults.length > 0 && (
-                                    <div className="space-y-2">
-                                        <p className="text-xs text-slate-500 font-semibold">{pointsResults.length} résultat(s)</p>
-                                        {pointsResults.map(u => (
-                                            <motion.button key={u.id}
-                                                initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                                                onClick={() => { setPointsTarget(u); setPointsDelta(0); setPointsNote(''); }}
-                                                className={cn(
-                                                    'w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all',
-                                                    pointsTarget?.id === u.id
-                                                        ? 'bg-amber-500/10 border-amber-500/30 shadow-sm shadow-amber-500/10'
-                                                        : 'bg-white/[0.03] border-white/[0.06] hover:bg-white/[0.06]'
-                                                )}>
-                                                <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black shrink-0',
-                                                    u.role === 'student' ? 'bg-teal-500/20 text-teal-300' : 'bg-indigo-500/20 text-indigo-300')}>
-                                                    {u.first_name?.[0]}{u.last_name?.[0]}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-bold text-white truncate">{u.first_name} {u.last_name}</p>
-                                                    <p className="text-[10px] text-slate-500">
-                                                        {u.role === 'student' ? '🎓 Étudiant' : '👨‍🏫 Prof'} · {u.org_name || u.organization_id}
-                                                    </p>
-                                                </div>
-                                                <div className="text-right shrink-0">
-                                                    <p className="text-sm font-black text-amber-400">{u.sky_points ?? 0}</p>
-                                                    <p className="text-[9px] text-slate-600">pts</p>
-                                                </div>
-                                            </motion.button>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {/* Points editor */}
-                                {pointsTarget && (
-                                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                                        className="bg-gradient-to-br from-amber-500/[0.07] to-orange-500/[0.04] border border-amber-500/20 rounded-2xl p-5 space-y-4">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <p className="text-sm font-black text-white">{pointsTarget.first_name} {pointsTarget.last_name}</p>
-                                                <p className="text-[10px] text-slate-500">{pointsTarget.role === 'student' ? '🎓 Étudiant' : '👨‍🏫 Professeur'}</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-xs text-slate-400">Solde actuel</p>
-                                                <p className="text-2xl font-black text-amber-400">{pointsTarget.sky_points ?? 0} <span className="text-sm font-normal text-slate-500">pts</span></p>
-                                            </div>
-                                        </div>
-
-                                        {/* Quick presets */}
-                                        <div>
-                                            <p className="text-xs text-slate-400 mb-2">Montants rapides</p>
-                                            <div className="grid grid-cols-4 gap-2">
-                                                {[-50, -10, +10, +25, +50, +100, +200, +500].map(v => (
-                                                    <button key={v} onClick={() => setPointsDelta(v)}
+                                        {/* Results */}
+                                        {pointsResults.length > 0 && (
+                                            <div className="space-y-2">
+                                                <p className="text-xs text-slate-500 font-semibold">{pointsResults.length} résultat(s)</p>
+                                                {pointsResults.map(u => (
+                                                    <motion.button key={u.id}
+                                                        initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                                                        onClick={() => { setPointsTarget(u); setPointsDelta(0); setPointsNote(''); }}
                                                         className={cn(
-                                                            'py-2 rounded-xl text-xs font-black border transition-all',
-                                                            pointsDelta === v
-                                                                ? v > 0 ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300' : 'bg-red-500/20 border-red-500/40 text-red-300'
-                                                                : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                                                            'w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all',
+                                                            pointsTarget?.id === u.id
+                                                                ? 'bg-amber-500/10 border-amber-500/30 shadow-sm shadow-amber-500/10'
+                                                                : 'bg-white/[0.03] border-white/[0.06] hover:bg-white/[0.06]'
                                                         )}>
-                                                        {v > 0 ? '+' : ''}{v}
-                                                    </button>
+                                                        <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black shrink-0',
+                                                            u.role === 'student' ? 'bg-teal-500/20 text-teal-300' : 'bg-indigo-500/20 text-indigo-300')}>
+                                                            {u.first_name?.[0]}{u.last_name?.[0]}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-bold text-white truncate">{u.first_name} {u.last_name}</p>
+                                                            <p className="text-[10px] text-slate-500">
+                                                                {u.role === 'student' ? '🎓 Étudiant' : '👨‍🏫 Prof'} · {u.org_name || u.organization_id}
+                                                            </p>
+                                                        </div>
+                                                        <div className="text-right shrink-0">
+                                                            <p className="text-sm font-black text-amber-400">{u.sky_points ?? 0}</p>
+                                                            <p className="text-[9px] text-slate-600">pts</p>
+                                                        </div>
+                                                    </motion.button>
                                                 ))}
                                             </div>
-                                        </div>
+                                        )}
 
-                                        {/* Custom amount */}
-                                        <div>
-                                            <p className="text-xs text-slate-400 mb-1.5">Montant personnalisé</p>
-                                            <div className="flex items-center gap-2">
-                                                <button onClick={() => setPointsDelta(d => d - 10)}
-                                                    className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center hover:bg-red-500/20 transition-all">
-                                                    <Minus className="w-4 h-4" />
-                                                </button>
-                                                <input type="number" value={pointsDelta}
-                                                    onChange={e => setPointsDelta(parseInt(e.target.value) || 0)}
-                                                    className="flex-1 bg-white/5 border border-white/10 text-white h-10 rounded-xl text-center text-sm font-black focus:outline-none focus:border-amber-500/40" />
-                                                <button onClick={() => setPointsDelta(d => d + 10)}
-                                                    className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center hover:bg-emerald-500/20 transition-all">
-                                                    <Plus className="w-4 h-4" />
-                                                </button>
+                                        {/* Points editor */}
+                                        {pointsTarget && (
+                                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                                                className="bg-gradient-to-br from-amber-500/[0.07] to-orange-500/[0.04] border border-amber-500/20 rounded-2xl p-5 space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="text-sm font-black text-white">{pointsTarget.first_name} {pointsTarget.last_name}</p>
+                                                        <p className="text-[10px] text-slate-500">{pointsTarget.role === 'student' ? '🎓 Étudiant' : '👨‍🏫 Professeur'}</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-xs text-slate-400">Solde actuel</p>
+                                                        <p className="text-2xl font-black text-amber-400">{pointsTarget.sky_points ?? 0} <span className="text-sm font-normal text-slate-500">pts</span></p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Quick presets */}
+                                                <div>
+                                                    <p className="text-xs text-slate-400 mb-2">Montants rapides</p>
+                                                    <div className="grid grid-cols-4 gap-2">
+                                                        {[-50, -10, +10, +25, +50, +100, +200, +500].map(v => (
+                                                            <button key={v} onClick={() => setPointsDelta(v)}
+                                                                className={cn(
+                                                                    'py-2 rounded-xl text-xs font-black border transition-all',
+                                                                    pointsDelta === v
+                                                                        ? v > 0 ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300' : 'bg-red-500/20 border-red-500/40 text-red-300'
+                                                                        : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                                                                )}>
+                                                                {v > 0 ? '+' : ''}{v}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* Custom amount */}
+                                                <div>
+                                                    <p className="text-xs text-slate-400 mb-1.5">Montant personnalisé</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <button onClick={() => setPointsDelta(d => d - 10)}
+                                                            className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center hover:bg-red-500/20 transition-all">
+                                                            <Minus className="w-4 h-4" />
+                                                        </button>
+                                                        <input type="number" value={pointsDelta}
+                                                            onChange={e => setPointsDelta(parseInt(e.target.value) || 0)}
+                                                            className="flex-1 bg-white/5 border border-white/10 text-white h-10 rounded-xl text-center text-sm font-black focus:outline-none focus:border-amber-500/40" />
+                                                        <button onClick={() => setPointsDelta(d => d + 10)}
+                                                            className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center hover:bg-emerald-500/20 transition-all">
+                                                            <Plus className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                    {pointsDelta !== 0 && (
+                                                        <p className="text-xs text-center mt-1.5">
+                                                            <span className="text-slate-400">Nouveau solde :</span>{' '}
+                                                            <span className="font-black text-amber-300">{Math.max(0, (pointsTarget.sky_points || 0) + pointsDelta)} pts</span>
+                                                        </p>
+                                                    )}
+                                                </div>
+
+                                                {/* Note optionnelle */}
+                                                <div>
+                                                    <p className="text-xs text-slate-400 mb-1.5">Note (optionnelle)</p>
+                                                    <input value={pointsNote} onChange={e => setPointsNote(e.target.value)}
+                                                        placeholder="Ex: Récompense pour..."
+                                                        className="w-full bg-white/5 border border-white/10 text-white h-9 rounded-xl text-sm px-3 placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40" />
+                                                </div>
+
+                                                <Button onClick={applyPoints}
+                                                    disabled={sendingPoints || pointsDelta === 0}
+                                                    className={cn('w-full h-11 font-black rounded-xl shadow-lg transition-all',
+                                                        pointsDelta > 0
+                                                            ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 shadow-amber-500/25'
+                                                            : 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 shadow-red-500/25'
+                                                    )}>
+                                                    {sendingPoints
+                                                        ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Application...</>
+                                                        : <>⭐ {pointsDelta > 0 ? `Ajouter +${pointsDelta} pts` : `Retirer ${pointsDelta} pts`}</>
+                                                    }
+                                                </Button>
+                                            </motion.div>
+                                        )}
+
+                                        {pointsResults.length === 0 && !pointsLoading && (
+                                            <div className="text-center py-12 text-slate-600">
+                                                <Star className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                                                <p className="text-sm">Recherchez un utilisateur pour gérer ses Sky Points</p>
                                             </div>
-                                            {pointsDelta !== 0 && (
-                                                <p className="text-xs text-center mt-1.5">
-                                                    <span className="text-slate-400">Nouveau solde :</span>{' '}
-                                                    <span className="font-black text-amber-300">{Math.max(0, (pointsTarget.sky_points || 0) + pointsDelta)} pts</span>
-                                                </p>
-                                            )}
-                                        </div>
-
-                                        {/* Note optionnelle */}
-                                        <div>
-                                            <p className="text-xs text-slate-400 mb-1.5">Note (optionnelle)</p>
-                                            <input value={pointsNote} onChange={e => setPointsNote(e.target.value)}
-                                                placeholder="Ex: Récompense pour..."
-                                                className="w-full bg-white/5 border border-white/10 text-white h-9 rounded-xl text-sm px-3 placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40" />
-                                        </div>
-
-                                        <Button onClick={applyPoints}
-                                            disabled={sendingPoints || pointsDelta === 0}
-                                            className={cn('w-full h-11 font-black rounded-xl shadow-lg transition-all',
-                                                pointsDelta > 0
-                                                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 shadow-amber-500/25'
-                                                    : 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 shadow-red-500/25'
-                                            )}>
-                                            {sendingPoints
-                                                ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Application...</>
-                                                : <>⭐ {pointsDelta > 0 ? `Ajouter +${pointsDelta} pts` : `Retirer ${pointsDelta} pts`}</>
-                                            }
-                                        </Button>
-                                    </motion.div>
-                                )}
-
-                                {pointsResults.length === 0 && !pointsLoading && (
-                                    <div className="text-center py-12 text-slate-600">
-                                        <Star className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                                        <p className="text-sm">Recherchez un utilisateur pour gérer ses Sky Points</p>
+                                        )}
                                     </div>
                                 )}
-                                    </>
+
+                                {/* SECTION 3: HISTORIQUE DES TRANSACTIONS */}
+                                {pointsTabMode === 'history' && (
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                                Historique des transferts et crédits de Sky Points :
+                                            </p>
+                                            <button onClick={loadPointsHistory} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white shrink-0 border border-white/10">
+                                                <RefreshCw className={cn('w-4 h-4', pointsHistoryLoading && 'animate-spin')} />
+                                            </button>
+                                        </div>
+
+                                        {pointsHistoryLoading ? (
+                                            <div className="p-12 text-center">
+                                                <Loader2 className="w-6 h-6 animate-spin text-slate-500 mx-auto" />
+                                            </div>
+                                        ) : pointsHistory.length === 0 ? (
+                                            <div className="p-12 rounded-3xl bg-white/[0.02] border border-white/5 text-center space-y-2">
+                                                <Coins className="w-8 h-8 text-slate-600 mx-auto" />
+                                                <p className="text-sm font-bold text-slate-400">Aucune transaction enregistrée</p>
+                                                <p className="text-xs text-slate-600">Les transferts de points vers des écoles ou utilisateurs apparaîtront ici.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="rounded-2xl border border-white/8 overflow-hidden bg-white/[0.01]">
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full text-sm min-w-[700px]">
+                                                        <thead>
+                                                            <tr className="border-b border-white/5 bg-white/[0.02]">
+                                                                {['Date', 'Type', 'Bénéficiaire', 'Organisation', 'Montant', 'Motif / Note', 'Par'].map(h => (
+                                                                    <th key={h} className="text-left px-4 py-3 text-[10px] text-slate-500 font-bold uppercase tracking-wide">{h}</th>
+                                                                ))}
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {pointsHistory.map((tx, idx) => (
+                                                                <tr key={tx.id || idx} className="border-b border-white/[0.04] hover:bg-white/[0.025] transition-colors">
+                                                                    <td className="px-4 py-3 text-xs text-slate-400 font-mono">
+                                                                        {new Date(tx.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                                                    </td>
+                                                                    <td className="px-4 py-3">
+                                                                        <span className={cn(
+                                                                            'text-[10px] px-2 py-0.5 rounded-full font-bold',
+                                                                            tx.to_entity_type === 'org'
+                                                                                ? 'bg-amber-500/15 text-amber-300 border border-amber-500/25'
+                                                                                : 'bg-teal-500/15 text-teal-300 border border-teal-500/25'
+                                                                        )}>
+                                                                            {tx.to_entity_type === 'org' ? '🏫 École' : '👤 Utilisateur'}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-4 py-3 font-bold text-xs text-white">
+                                                                        {tx.to_entity_name || '—'}
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-xs text-slate-400">
+                                                                        {tx.org_name || '—'}
+                                                                    </td>
+                                                                    <td className="px-4 py-3 font-black text-xs">
+                                                                        <span className={tx.amount > 0 ? 'text-emerald-400' : 'text-red-400'}>
+                                                                            {tx.amount > 0 ? `+${tx.amount.toLocaleString('fr-FR')}` : tx.amount.toLocaleString('fr-FR')} pts
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-xs text-slate-300 max-w-[200px] truncate">
+                                                                        {tx.note || 'Transfert direct'}
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-[10px] text-slate-500 font-mono">
+                                                                        {tx.performed_by || 'superadmin'}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
                             </motion.div>
                         )}
@@ -1487,175 +2004,429 @@ export default function SuperAdminPage() {
                         )}
 
                         {/* ══════════════════════════════════════════
-                            DEMANDES SKY POINTS (Chat persistant)
+                            DEMANDES SKY POINTS (Chat & Crédit — Clean Design)
                         ══════════════════════════════════════════ */}
-                        {tab === 'requests' && (
-                            <motion.div key="requests" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+                        {tab === 'requests' && (() => {
+                            const pendingReqs = skyRequests.filter(r => r.status === 'pending');
+                            const confirmedReqs = skyRequests.filter(r => r.status === 'confirmed');
+                            const creditedReqs = skyRequests.filter(r => r.status === 'credited');
+                            const rejectedReqs = skyRequests.filter(r => r.status === 'rejected');
 
-                                {/* Header */}
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm font-black text-white flex items-center gap-2">
-                                            <MessageSquare className="w-4 h-4 text-amber-400" />
-                                            Demandes Sky Points
-                                        </p>
-                                        <p className="text-xs text-slate-500 mt-0.5">
-                                            {skyRequests.length} demande(s) · Auto-refresh 5s
-                                        </p>
-                                    </div>
-                                    <button onClick={loadSkyRequests}
-                                        className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all">
-                                        <RefreshCw className={`w-4 h-4 text-slate-400 ${reqLoading ? 'animate-spin' : ''}`} />
-                                    </button>
-                                </div>
+                            const filteredSkyReqs = skyRequests.filter(r => {
+                                if (reqStatusFilter === 'pending') return r.status === 'pending';
+                                if (reqStatusFilter === 'confirmed') return r.status === 'confirmed';
+                                if (reqStatusFilter === 'credited') return r.status === 'credited';
+                                if (reqStatusFilter === 'rejected') return r.status === 'rejected';
+                                return true;
+                            });
 
-                                {/* Empty state */}
-                                {!reqLoading && skyRequests.length === 0 && (
-                                    <div className="text-center py-16">
-                                        <Crown className="w-12 h-12 text-slate-700 mx-auto mb-3" />
-                                        <p className="text-slate-500 text-sm">Aucune demande Sky Points</p>
-                                        <p className="text-slate-700 text-xs mt-1">Les demandes des utilisateurs apparaîtront ici</p>
-                                    </div>
-                                )}
+                            const selectedReq = skyRequests.find(r => r.id === activeReqId) || filteredSkyReqs[0] || null;
 
-                                {/* Request cards */}
-                                <div className="space-y-3">
-                                    {skyRequests.map((req) => {
-                                        const isActive = activeReqId === req.id;
-                                        const statusColors: Record<string, string> = {
-                                            pending: 'bg-amber-500/15 text-amber-400',
-                                            confirmed: 'bg-blue-500/15 text-blue-400',
-                                            credited: 'bg-emerald-500/15 text-emerald-400',
-                                            rejected: 'bg-red-500/15 text-red-400',
-                                        };
-                                        return (
-                                            <motion.div key={req.id}
-                                                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                                                className={cn('rounded-2xl border transition-all',
-                                                    isActive
-                                                        ? 'border-amber-500/30 bg-amber-500/5'
-                                                        : 'border-white/8 bg-white/[0.02] hover:bg-white/[0.04]'
-                                                )}>
+                            return (
+                                <motion.div key="requests" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-5">
+                                    {/* ── Top Filter Bar ── */}
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-white/[0.02] border border-white/8">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-xl bg-amber-500/15 flex items-center justify-center text-amber-400">
+                                                <Crown className="w-4 h-4" />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-sm font-black text-white">Centre des Demandes Sky Points</h3>
+                                                <p className="text-[11px] text-slate-400">Gérez et répondez aux requêtes d&apos;achat et de crédits.</p>
+                                            </div>
+                                        </div>
 
-                                                {/* Card header */}
-                                                <button className="w-full p-4 flex items-start gap-3 text-left"
-                                                    onClick={() => setActiveReqId(isActive ? null : req.id)}>
-                                                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400/20 to-orange-500/20 flex items-center justify-center shrink-0">
-                                                        <Crown className="w-4 h-4 text-amber-400" />
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                            <p className="text-sm font-bold text-white">{req.user_name}</p>
-                                                            <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-semibold',
-                                                                statusColors[req.status] || 'bg-slate-700 text-slate-400'
-                                                            )}>
-                                                                {req.status === 'pending' ? '⏳ En attente' :
-                                                                 req.status === 'confirmed' ? '✉️ Répondu' :
-                                                                 req.status === 'credited' ? '✅ Crédité' : '❌ Refusé'}
-                                                            </span>
-                                                            {req.pack_name && (
-                                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 font-medium">
-                                                                    {req.pack_name}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{req.message}</p>
-                                                        <p className="text-[10px] text-slate-600 mt-1">
-                                                            {req.org_slug && <span className="mr-2">/{req.org_slug}</span>}
-                                                            {new Date(req.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                                                        </p>
-                                                    </div>
-                                                    <ChevronRight className={cn('w-4 h-4 text-slate-600 transition-transform shrink-0', isActive && 'rotate-90')} />
+                                        {/* Status Filter Buttons */}
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            {([
+                                                { id: 'all', label: `Toutes (${skyRequests.length})` },
+                                                { id: 'pending', label: `⏳ En attente (${pendingReqs.length})` },
+                                                { id: 'confirmed', label: `✉️ Répondu (${confirmedReqs.length})` },
+                                                { id: 'credited', label: `⭐ Crédité (${creditedReqs.length})` },
+                                                { id: 'rejected', label: `❌ Refusé (${rejectedReqs.length})` },
+                                            ] as const).map(f => (
+                                                <button
+                                                    key={f.id}
+                                                    onClick={() => setReqStatusFilter(f.id)}
+                                                    className={cn(
+                                                        'px-3 py-1.5 rounded-xl text-xs font-bold transition-all',
+                                                        reqStatusFilter === f.id
+                                                            ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                                                            : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
+                                                    )}
+                                                >
+                                                    {f.label}
                                                 </button>
+                                            ))}
+                                            <button onClick={loadSkyRequests} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white shrink-0 border border-white/10 ml-1">
+                                                <RefreshCw className={cn('w-4 h-4', reqLoading && 'animate-spin')} />
+                                            </button>
+                                        </div>
+                                    </div>
 
-                                                {/* Expanded panel */}
-                                                <AnimatePresence>
-                                                    {isActive && (
-                                                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                                                            className="overflow-hidden">
-                                                            <div className="px-4 pb-4 space-y-4 border-t border-white/[0.05] pt-3">
-
-                                                                {/* Full message */}
-                                                                <div className="bg-white/5 rounded-xl p-3">
-                                                                    <p className="text-[10px] text-slate-500 mb-1 font-semibold uppercase">Message complet</p>
-                                                                    <p className="text-xs text-white/80 leading-relaxed whitespace-pre-wrap">{req.message}</p>
+                                    {/* ── Main 2-Column Conversational Layout ── */}
+                                    {filteredSkyReqs.length === 0 ? (
+                                        <div className="p-16 rounded-3xl bg-white/[0.02] border border-white/5 text-center space-y-2">
+                                            <MessageSquare className="w-10 h-10 text-slate-600 mx-auto" />
+                                            <p className="text-sm font-bold text-slate-400">Aucune demande dans cette catégorie</p>
+                                            <p className="text-xs text-slate-600">Sélectionnez un autre filtre pour voir les demandes.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="grid lg:grid-cols-12 gap-5 items-start">
+                                            {/* Left Column: Requests List */}
+                                            <div className="lg:col-span-5 space-y-2 max-h-[620px] overflow-y-auto pr-1">
+                                                {filteredSkyReqs.map(req => {
+                                                    const isSelected = selectedReq?.id === req.id;
+                                                    const statusColors: Record<string, string> = {
+                                                        pending: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+                                                        confirmed: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+                                                        credited: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+                                                        rejected: 'bg-red-500/15 text-red-300 border-red-500/30',
+                                                    };
+                                                    return (
+                                                        <button
+                                                            key={req.id}
+                                                            onClick={() => setActiveReqId(req.id)}
+                                                            className={cn(
+                                                                'w-full text-left p-3.5 rounded-2xl border transition-all space-y-2',
+                                                                isSelected
+                                                                    ? 'bg-gradient-to-r from-amber-500/15 to-transparent border-amber-500/40 shadow-lg shadow-amber-500/5'
+                                                                    : 'bg-white/[0.02] border-white/8 hover:bg-white/[0.05]'
+                                                            )}
+                                                        >
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                    <div className={cn(
+                                                                        'w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0',
+                                                                        req.user_role === 'teacher' ? 'bg-indigo-600/30 text-indigo-300' : 'bg-teal-600/30 text-teal-300'
+                                                                    )}>
+                                                                        {req.user_name?.[0]?.toUpperCase() || 'U'}
+                                                                    </div>
+                                                                    <div className="min-w-0">
+                                                                        <p className="font-bold text-xs text-white truncate">{req.user_name}</p>
+                                                                        <p className="text-[10px] text-slate-500 truncate">/{req.org_slug || 'école'}</p>
+                                                                    </div>
                                                                 </div>
+                                                                <span className={cn('text-[9px] px-2 py-0.5 rounded-full font-bold border shrink-0', statusColors[req.status])}>
+                                                                    {req.status === 'pending' ? '⏳ En attente' :
+                                                                     req.status === 'confirmed' ? '✉️ Répondu' :
+                                                                     req.status === 'credited' ? '⭐ Crédité' : '❌ Refusé'}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs text-slate-300 line-clamp-1 pl-10">{req.message}</p>
+                                                            <div className="flex items-center justify-between text-[10px] text-slate-500 pl-10">
+                                                                <span>{req.pack_name ? `📦 ${req.pack_name}` : 'Demande générale'}</span>
+                                                                <span>{new Date(req.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
 
-                                                                {/* Current response */}
-                                                                {req.response && (
-                                                                    <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-3">
-                                                                        <p className="text-[10px] text-emerald-500 mb-1 font-semibold uppercase flex items-center gap-1">
-                                                                            <Crown className="w-2.5 h-2.5" /> Réponse envoyée
-                                                                        </p>
-                                                                        <p className="text-xs text-emerald-300 leading-relaxed">{req.response}</p>
-                                                                        {req.points_credited && (
-                                                                            <p className="text-[10px] text-amber-400 mt-1 font-bold">⭐ {req.points_credited} pts crédités</p>
+                                            {/* Right Column: Active Thread & Actions */}
+                                            <div className="lg:col-span-7">
+                                                {selectedReq ? (
+                                                    <div className="p-5 rounded-3xl bg-[#0E131F] border border-white/10 shadow-2xl space-y-4">
+                                                        {/* Header */}
+                                                        <div className="flex items-center justify-between pb-3 border-b border-white/8">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 flex items-center justify-center font-black text-amber-400">
+                                                                    {selectedReq.user_name?.[0]?.toUpperCase() || 'U'}
+                                                                </div>
+                                                                <div>
+                                                                    <p className="font-black text-sm text-white">{selectedReq.user_name}</p>
+                                                                    <p className="text-[11px] text-slate-400">
+                                                                        {selectedReq.user_role === 'teacher' ? '👨‍🏫 Professeur' : '🎓 Étudiant'} • /{selectedReq.org_slug || 'école'}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <span className="text-[10px] text-slate-500 block">Date demande</span>
+                                                                <span className="text-xs text-slate-300 font-mono">
+                                                                    {new Date(selectedReq.created_at).toLocaleString('fr-FR')}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Pack badge info */}
+                                                        {selectedReq.pack_name && (
+                                                            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-xs">
+                                                                <span className="text-amber-300 font-bold flex items-center gap-1.5">
+                                                                    <Crown className="w-3.5 h-3.5" /> Pack souhaité : {selectedReq.pack_name}
+                                                                </span>
+                                                                {selectedReq.pack_price && (
+                                                                    <span className="font-mono text-amber-400 font-bold">{selectedReq.pack_price}</span>
+                                                                )}
+                                                            </div>
+                                                        )}
+
+                                                        {/* Conversation Chat Bubbles */}
+                                                        <div className="space-y-3 p-4 rounded-2xl bg-black/40 border border-white/5 min-h-[160px]">
+                                                            {/* User bubble */}
+                                                            <div className="flex items-start gap-2.5 max-w-[85%]">
+                                                                <div className="w-6 h-6 rounded-lg bg-teal-500/20 text-teal-300 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                                                                    {selectedReq.user_name?.[0] || 'U'}
+                                                                </div>
+                                                                <div className="p-3 rounded-2xl rounded-tl-sm bg-white/5 border border-white/10 text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
+                                                                    {selectedReq.message}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Admin reply bubble */}
+                                                            {selectedReq.response && (
+                                                                <div className="flex items-start gap-2.5 max-w-[85%] ml-auto flex-row-reverse">
+                                                                    <div className="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-300 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                                                                        👑
+                                                                    </div>
+                                                                    <div className="p-3 rounded-2xl rounded-tr-sm bg-amber-500/10 border border-amber-500/25 text-xs text-amber-200 leading-relaxed whitespace-pre-wrap text-right">
+                                                                        {selectedReq.response}
+                                                                        {selectedReq.responded_at && (
+                                                                            <span className="block text-[9px] text-amber-400/60 mt-1">
+                                                                                {new Date(selectedReq.responded_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                                                            </span>
                                                                         )}
                                                                     </div>
-                                                                )}
+                                                                </div>
+                                                            )}
+                                                        </div>
 
-                                                                {/* Credit section */}
-                                                                {req.status !== 'credited' && (
-                                                                    <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 space-y-2">
-                                                                        <p className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-                                                                            <Star className="w-3 h-3 fill-amber-400" /> Créditer des Sky Points
-                                                                        </p>
-                                                                        <div className="flex items-center gap-2">
-                                                                            <div className="flex gap-1.5 flex-1">
-                                                                                {[50, 100, 200, 500].map(v => (
-                                                                                    <button key={v} onClick={() => setCreditPoints(v)}
-                                                                                        className={cn('flex-1 py-2 rounded-lg text-xs font-black border transition-all',
-                                                                                            creditPoints === v
-                                                                                                ? 'bg-amber-500/30 border-amber-500/50 text-amber-300'
-                                                                                                : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
-                                                                                        )}>+{v}</button>
-                                                                                ))}
-                                                                            </div>
-                                                                            <input type="number" value={creditPoints || ''}
-                                                                                onChange={e => setCreditPoints(parseInt(e.target.value) || 0)}
-                                                                                placeholder="Custom"
-                                                                                className="w-20 bg-white/5 border border-white/10 text-white h-9 rounded-lg text-sm px-2 text-center focus:outline-none focus:border-amber-500/50" />
-                                                                        </div>
-                                                                        <Button onClick={() => adminCreditRequest(req)}
-                                                                            disabled={!creditPoints || creditPoints <= 0 || creditingId === req.id}
-                                                                            className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 font-black rounded-xl shadow-lg shadow-amber-500/20">
-                                                                            {creditingId === req.id
-                                                                                ? <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />Créditement...</>
-                                                                                : <><CreditCard className="w-3.5 h-3.5 mr-1.5" />Créditer {creditPoints > 0 ? `${creditPoints} pts` : '...'} à {req.user_name}</>
-                                                                            }
-                                                                        </Button>
-                                                                    </div>
-                                                                )}
-
-                                                                {/* Reply */}
-                                                                {req.status !== 'credited' && (
-                                                                    <div className="space-y-2">
-                                                                        <p className="text-[10px] text-slate-500 font-semibold uppercase">Répondre manuellement</p>
-                                                                        <textarea
-                                                                            value={adminReply}
-                                                                            onChange={e => setAdminReply(e.target.value)}
-                                                                            placeholder="Tapez votre réponse..."
-                                                                            rows={3}
-                                                                            className="w-full bg-white/5 border border-white/10 text-white rounded-xl text-xs px-3 py-2 placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40 resize-none" />
-                                                                        <Button onClick={() => adminReplyRequest(req.id)}
-                                                                            disabled={!adminReply.trim() || sendingReply}
-                                                                            className="bg-violet-600 hover:bg-violet-500 rounded-xl font-bold">
-                                                                            {sendingReply ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5 mr-1.5" />}
-                                                                            Envoyer
-                                                                        </Button>
-                                                                    </div>
-                                                                )}
-
+                                                        {/* Quick Credit Tool */}
+                                                        {selectedReq.status !== 'credited' && (
+                                                            <div className="p-4 rounded-2xl bg-amber-500/[0.04] border border-amber-500/20 space-y-3">
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                                                                        <Coins className="w-3.5 h-3.5" /> Créditer instantanément :
+                                                                    </span>
+                                                                </div>
+                                                                <div className="grid grid-cols-5 gap-1.5">
+                                                                    {[50, 100, 250, 500, 1000].map(val => (
+                                                                        <button
+                                                                            key={val}
+                                                                            onClick={() => setCreditPoints(val)}
+                                                                            className={cn(
+                                                                                'py-2 rounded-xl text-xs font-black border transition-all',
+                                                                                creditPoints === val
+                                                                                    ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md'
+                                                                                    : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'
+                                                                            )}
+                                                                        >
+                                                                            +{val}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                                <div className="flex gap-2">
+                                                                    <input
+                                                                        type="number"
+                                                                        value={creditPoints || ''}
+                                                                        onChange={e => setCreditPoints(parseInt(e.target.value) || 0)}
+                                                                        placeholder="Montant libre (ex: 750)"
+                                                                        className="flex-1 bg-white/5 border border-white/10 text-white h-10 rounded-xl px-3 text-xs focus:outline-none focus:border-amber-500/40"
+                                                                    />
+                                                                    <Button
+                                                                        onClick={() => adminCreditRequest(selectedReq)}
+                                                                        disabled={!creditPoints || creditPoints <= 0 || creditingId === selectedReq.id}
+                                                                        className="h-10 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black rounded-xl text-xs px-5 shadow-lg shadow-amber-500/20"
+                                                                    >
+                                                                        {creditingId === selectedReq.id ? <Loader2 className="w-4 h-4 animate-spin" /> : `⭐ Créditer ${creditPoints > 0 ? creditPoints + ' pts' : ''}`}
+                                                                    </Button>
+                                                                </div>
                                                             </div>
-                                                        </motion.div>
+                                                        )}
+
+                                                        {/* Fast Reply Box */}
+                                                        <div className="space-y-2">
+                                                            <label className="text-xs font-bold text-slate-300 block">Envoyer un message de réponse</label>
+                                                            <div className="flex gap-2">
+                                                                <input
+                                                                    value={adminReply}
+                                                                    onChange={e => setAdminReply(e.target.value)}
+                                                                    onKeyDown={e => e.key === 'Enter' && adminReplyRequest(selectedReq.id)}
+                                                                    placeholder="Tapez un message personnalisé..."
+                                                                    className="flex-1 bg-white/5 border border-white/10 text-white h-10 rounded-xl px-3 text-xs placeholder:text-slate-600 focus:outline-none focus:border-violet-500/40"
+                                                                />
+                                                                <Button
+                                                                    onClick={() => adminReplyRequest(selectedReq.id)}
+                                                                    disabled={!adminReply.trim() || sendingReply}
+                                                                    className="bg-violet-600 hover:bg-violet-500 h-10 rounded-xl text-xs font-bold px-4"
+                                                                >
+                                                                    {sendingReply ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                        </div>
+                                    )}
+                                </motion.div>
+                            );
+                        })()}
+
+                        {/* ══════════════════════════════════════════
+                            BUGS & RAPPORTS AVEC CAPTURES (Feature 2)
+                        ══════════════════════════════════════════ */}
+                        {tab === 'bugs' && (() => {
+                            const openBugs = bugReports.filter(b => b.status === 'open');
+                            const inProgBugs = bugReports.filter(b => b.status === 'in_progress');
+                            const resolvedBugs = bugReports.filter(b => b.status === 'resolved');
+
+                            const filteredBugs = bugReports.filter(b => {
+                                if (bugStatusFilter === 'open') return b.status === 'open';
+                                if (bugStatusFilter === 'in_progress') return b.status === 'in_progress';
+                                if (bugStatusFilter === 'resolved') return b.status === 'resolved';
+                                return true;
+                            });
+
+                            return (
+                                <motion.div key="bugs" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-5">
+                                    {/* ── Top Header & Filter Bar ── */}
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-white/[0.02] border border-white/8">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-9 h-9 rounded-xl bg-red-500/15 flex items-center justify-center text-red-400">
+                                                <Bug className="w-4 h-4" />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-sm font-black text-white">Signalements de Bugs & Retours</h3>
+                                                <p className="text-[11px] text-slate-400">Rapports envoyés par les élèves, enseignants et administrateurs avec capture d&apos;écran.</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            {([
+                                                { id: 'all', label: `Tous (${bugReports.length})` },
+                                                { id: 'open', label: `🔴 Ouverts (${openBugs.length})` },
+                                                { id: 'in_progress', label: `🟡 En cours (${inProgBugs.length})` },
+                                                { id: 'resolved', label: `🟢 Résolus (${resolvedBugs.length})` },
+                                            ] as const).map(f => (
+                                                <button
+                                                    key={f.id}
+                                                    onClick={() => setBugStatusFilter(f.id)}
+                                                    className={cn(
+                                                        'px-3 py-1.5 rounded-xl text-xs font-bold transition-all',
+                                                        bugStatusFilter === f.id
+                                                            ? 'bg-red-500 text-white font-black shadow-md shadow-red-500/20'
+                                                            : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
                                                     )}
-                                                </AnimatePresence>
-                                            </motion.div>
-                                        );
-                                    })}
-                                </div>
-                            </motion.div>
-                        )}
+                                                >
+                                                    {f.label}
+                                                </button>
+                                            ))}
+                                            <button onClick={loadBugReports} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white shrink-0 border border-white/10 ml-1">
+                                                <RefreshCw className={cn('w-4 h-4', bugsLoading && 'animate-spin')} />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* ── Bug Reports Grid ── */}
+                                    {bugsLoading ? (
+                                        <div className="p-16 text-center">
+                                            <Loader2 className="w-6 h-6 animate-spin text-slate-500 mx-auto" />
+                                        </div>
+                                    ) : filteredBugs.length === 0 ? (
+                                        <div className="p-16 rounded-3xl bg-white/[0.02] border border-white/5 text-center space-y-2">
+                                            <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
+                                            <p className="text-sm font-bold text-slate-300">Aucun bug signalé dans cette section</p>
+                                            <p className="text-xs text-slate-500">Tous les dysfonctionnements signalés avec capture s&apos;afficheront ici.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {filteredBugs.map(bug => (
+                                                <div key={bug.id} className="p-4 rounded-3xl bg-[#0F1420] border border-white/10 hover:border-white/20 transition-all flex flex-col justify-between space-y-3">
+                                                    <div className="space-y-2.5">
+                                                        {/* Header reporter */}
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <div>
+                                                                <p className="font-bold text-xs text-white">{bug.user_name || 'Utilisateur'}</p>
+                                                                <p className="text-[10px] text-slate-400">
+                                                                    {bug.user_role === 'student' ? '🎓 Étudiant' : bug.user_role === 'teacher' ? '👨‍🏫 Professeur' : '🛡️ Admin'} • {bug.org_name || bug.org_slug || 'école'}
+                                                                </p>
+                                                            </div>
+                                                            <span className={cn(
+                                                                'text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0',
+                                                                bug.status === 'resolved' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' :
+                                                                bug.status === 'in_progress' ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' :
+                                                                'bg-red-500/15 text-red-300 border border-red-500/30'
+                                                            )}>
+                                                                {bug.status === 'resolved' ? '🟢 Résolu' : bug.status === 'in_progress' ? '🟡 En cours' : '🔴 Ouvert'}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Title & Desc */}
+                                                        <div>
+                                                            <h4 className="font-black text-xs text-slate-200">{bug.title}</h4>
+                                                            <p className="text-xs text-slate-400 mt-1 leading-relaxed whitespace-pre-wrap">{bug.description}</p>
+                                                        </div>
+
+                                                        {/* Screenshot Thumbnail */}
+                                                        {bug.screenshot_url && (
+                                                            <div className="relative rounded-xl overflow-hidden border border-white/10 group cursor-pointer" onClick={() => setSelectedBug(bug)}>
+                                                                <img src={bug.screenshot_url} alt="Capture d'écran du bug" className="w-full h-36 object-cover bg-black/40 group-hover:scale-105 transition-transform" />
+                                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-xs text-white font-bold">
+                                                                    <Eye className="w-4 h-4" /> Agrandir la capture
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Status Action Bar */}
+                                                    <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-2">
+                                                        <span className="text-[10px] text-slate-500">
+                                                            {new Date(bug.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+                                                        </span>
+                                                        <div className="flex gap-1">
+                                                            {bug.status !== 'in_progress' && bug.status !== 'resolved' && (
+                                                                <button
+                                                                    onClick={() => updateBugStatus(bug.id, 'in_progress')}
+                                                                    className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-[10px] font-bold border border-amber-500/30 transition-all"
+                                                                >
+                                                                    Traiter
+                                                                </button>
+                                                            )}
+                                                            {bug.status !== 'resolved' && (
+                                                                <button
+                                                                    onClick={() => updateBugStatus(bug.id, 'resolved')}
+                                                                    className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-[10px] font-bold border border-emerald-500/30 transition-all"
+                                                                >
+                                                                    Résoudre
+                                                                </button>
+                                                            )}
+                                                            {bug.status === 'resolved' && (
+                                                                <button
+                                                                    onClick={() => updateBugStatus(bug.id, 'open')}
+                                                                    className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 text-[10px] font-bold transition-all"
+                                                                >
+                                                                    Rouvrir
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* ── Screenshot Lightbox Modal ── */}
+                                    {selectedBug && (
+                                        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setSelectedBug(null)}>
+                                            <div className="relative max-w-4xl max-h-[90vh] bg-[#0E131F] border border-white/15 rounded-3xl p-5 overflow-hidden shadow-2xl space-y-3" onClick={e => e.stopPropagation()}>
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <h3 className="font-bold text-sm text-white">{selectedBug.title}</h3>
+                                                        <p className="text-[11px] text-slate-400">Capture fournie par {selectedBug.user_name}</p>
+                                                    </div>
+                                                    <button onClick={() => setSelectedBug(null)} className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white">
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                                <div className="max-h-[70vh] overflow-auto rounded-2xl border border-white/10">
+                                                    <img src={selectedBug.screenshot_url} alt="Capture" className="w-full object-contain" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </motion.div>
+                            );
+                        })()}
 
                     </AnimatePresence>
 

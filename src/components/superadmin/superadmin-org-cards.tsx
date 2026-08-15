@@ -65,6 +65,50 @@ export function SuperadminOrgCards({
     const [pointsDelta, setPointsDelta] = useState(1000);
     const [savingPoints, setSavingPoints] = useState(false);
 
+    // Detail Modal (Feature 3: Full school roster & management)
+    const [detailOrg, setDetailOrg] = useState<OrgCardItem | null>(null);
+    const [detailStudents, setDetailStudents] = useState<any[]>([]);
+    const [detailTeachers, setDetailTeachers] = useState<any[]>([]);
+    const [detailPrograms, setDetailPrograms] = useState<any[]>([]);
+    const [detailLoading, setDetailLoading] = useState(false);
+    const [detailTab, setDetailTab] = useState<'overview' | 'students' | 'teachers' | 'programs'>('overview');
+
+    // Open detail modal & load rosters
+    const openDetailModal = async (org: OrgCardItem) => {
+        setDetailOrg(org);
+        setDetailTab('overview');
+        setDetailLoading(true);
+        try {
+            // Load students
+            const { data: stData } = await supabase
+                .from('student_profiles')
+                .select('*')
+                .or(`organization_id.eq.${org.id},org_slug.eq.${org.slug}`)
+                .order('created_at', { ascending: false });
+            setDetailStudents(stData || []);
+
+            // Load teachers
+            const { data: tcData } = await supabase
+                .from('teacher_profiles')
+                .select('*')
+                .or(`organization_id.eq.${org.id},org_slug.eq.${org.slug}`)
+                .order('created_at', { ascending: false });
+            setDetailTeachers(tcData || []);
+
+            // Load programs
+            const { data: prData } = await supabase
+                .from('programs')
+                .select('*')
+                .or(`organization_id.eq.${org.id},org_slug.eq.${org.slug}`)
+                .order('created_at', { ascending: false });
+            setDetailPrograms(prData || []);
+        } catch (err: any) {
+            console.error('Error loading org details:', err);
+        } finally {
+            setDetailLoading(false);
+        }
+    };
+
     // Edit form fields
     const [editName, setEditName] = useState('');
     const [editSlug, setEditSlug] = useState('');
@@ -381,35 +425,44 @@ export function SuperadminOrgCards({
                                 </div>
 
                                 {/* ── GESTION COMPLÈTE & ACTIONS RAPIDES ── */}
+                                {/* ── GESTION COMPLÈTE & ACTIONS RAPIDES ── */}
                                 <div className="space-y-2 pt-3 border-t border-white/10">
+                                    {/* Primary button: Fiche Complète & Roster */}
+                                    <Button
+                                        onClick={() => openDetailModal(org)}
+                                        className="w-full h-8 rounded-xl bg-violet-600/30 hover:bg-violet-600 text-violet-200 hover:text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all border border-violet-500/30"
+                                    >
+                                        <Users className="w-3.5 h-3.5" /> Fiche & Roster ({org.student_count || 0} élèves)
+                                    </Button>
+
                                     {/* Primary links */}
                                     <div className="grid grid-cols-3 gap-1.5">
                                         <a
                                             href={`/${org.slug}/admin`}
                                             target="_blank"
                                             rel="noreferrer"
-                                            className="h-8 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-[11px] flex items-center justify-center gap-1 transition-all shadow-lg shadow-violet-600/20"
+                                            className="h-7 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white font-bold text-[10px] flex items-center justify-center gap-1 transition-all border border-white/10"
                                             title="Accéder au backoffice de l'école"
                                         >
-                                            <ShieldCheck className="w-3 h-3" /> Admin
+                                            <ShieldCheck className="w-3 h-3 text-violet-400" /> Admin
                                         </a>
                                         <a
                                             href={`/${org.slug}`}
                                             target="_blank"
                                             rel="noreferrer"
-                                            className="h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white font-bold text-[11px] flex items-center justify-center gap-1 transition-all border border-white/10"
+                                            className="h-7 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white font-bold text-[10px] flex items-center justify-center gap-1 transition-all border border-white/10"
                                             title="Voir le portail public"
                                         >
-                                            <Eye className="w-3 h-3" /> Portail
+                                            <Eye className="w-3 h-3 text-teal-400" /> Portail
                                         </a>
                                         <a
                                             href={`/${org.slug}/campus`}
                                             target="_blank"
                                             rel="noreferrer"
-                                            className="h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white font-bold text-[11px] flex items-center justify-center gap-1 transition-all border border-white/10"
+                                            className="h-7 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white font-bold text-[10px] flex items-center justify-center gap-1 transition-all border border-white/10"
                                             title="Voir l'espace campus"
                                         >
-                                            <School className="w-3 h-3" /> Campus
+                                            <School className="w-3 h-3 text-amber-400" /> Campus
                                         </a>
                                     </div>
 
@@ -471,6 +524,274 @@ export function SuperadminOrgCards({
                     })}
                 </div>
             )}
+
+            {/* ═══ MODALE FICHE COMPLÈTE & ROSTER DE L'ÉCOLE (Feature 3) ═══ */}
+            <AnimatePresence>
+                {detailOrg && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="w-full max-w-4xl bg-[#0E121B] border border-white/15 rounded-3xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto space-y-5"
+                        >
+                            {/* Modal Header */}
+                            <div className="flex items-start justify-between pb-4 border-b border-white/10">
+                                <div className="flex items-center gap-3.5">
+                                    {detailOrg.logo_url ? (
+                                        <img src={detailOrg.logo_url} alt={detailOrg.name} className="w-14 h-14 rounded-2xl object-cover bg-white/10 p-1 border border-white/10 shrink-0" />
+                                    ) : (
+                                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center font-black text-xl text-white shrink-0">
+                                            {(detailOrg.name || 'E')[0]}
+                                        </div>
+                                    )}
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-lg font-black text-white">{detailOrg.name}</h3>
+                                            <span className={cn(
+                                                'px-2 py-0.5 rounded-full text-[10px] font-bold border',
+                                                detailOrg.is_active ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-red-500/15 text-red-400 border-red-500/30'
+                                            )}>
+                                                {detailOrg.is_active ? '🟢 Établissement Actif' : '🔴 Suspendu'}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                                            <span className="font-mono text-violet-300">/{detailOrg.slug}</span>
+                                            <span>•</span>
+                                            <span>{detailOrg.school_type || 'Lycée'}</span>
+                                            <span>•</span>
+                                            <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {detailOrg.city || 'Cameroun'}, {detailOrg.country || 'Cameroun'}</span>
+                                            {detailOrg.email && <span>• ✉️ {detailOrg.email}</span>}
+                                            {detailOrg.phone && <span>• 📞 {detailOrg.phone}</span>}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setDetailOrg(null)}
+                                    className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* Stat Counter Strip */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/8 text-center">
+                                    <p className="text-[10px] text-slate-400 uppercase font-bold">Étudiants</p>
+                                    <p className="text-xl font-black text-teal-400 mt-0.5">{detailStudents.length}</p>
+                                </div>
+                                <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/8 text-center">
+                                    <p className="text-[10px] text-slate-400 uppercase font-bold">Professeurs</p>
+                                    <p className="text-xl font-black text-indigo-400 mt-0.5">{detailTeachers.length}</p>
+                                </div>
+                                <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/8 text-center">
+                                    <p className="text-[10px] text-slate-400 uppercase font-bold">Filières / Offres</p>
+                                    <p className="text-xl font-black text-violet-400 mt-0.5">{detailPrograms.length}</p>
+                                </div>
+                                <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/8 text-center">
+                                    <p className="text-[10px] text-slate-400 uppercase font-bold">Sky Points</p>
+                                    <p className="text-xl font-black text-amber-400 mt-0.5">{new Intl.NumberFormat('fr-FR').format(detailOrg.sky_points || 0)} pts</p>
+                                </div>
+                            </div>
+
+                            {/* Navigation Tabs inside Detail Modal */}
+                            <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-white/5 border border-white/10">
+                                <button
+                                    onClick={() => setDetailTab('overview')}
+                                    className={cn('flex-1 py-2 rounded-xl text-xs font-bold transition-all',
+                                        detailTab === 'overview' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                                    )}
+                                >
+                                    📊 Vue Générale & Actions
+                                </button>
+                                <button
+                                    onClick={() => setDetailTab('students')}
+                                    className={cn('flex-1 py-2 rounded-xl text-xs font-bold transition-all',
+                                        detailTab === 'students' ? 'bg-teal-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                                    )}
+                                >
+                                    🎓 Étudiants ({detailStudents.length})
+                                </button>
+                                <button
+                                    onClick={() => setDetailTab('teachers')}
+                                    className={cn('flex-1 py-2 rounded-xl text-xs font-bold transition-all',
+                                        detailTab === 'teachers' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                                    )}
+                                >
+                                    👨‍🏫 Professeurs ({detailTeachers.length})
+                                </button>
+                                <button
+                                    onClick={() => setDetailTab('programs')}
+                                    className={cn('flex-1 py-2 rounded-xl text-xs font-bold transition-all',
+                                        detailTab === 'programs' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                                    )}
+                                >
+                                    📚 Filières ({detailPrograms.length})
+                                </button>
+                            </div>
+
+                            {/* Tab Content */}
+                            {detailLoading ? (
+                                <div className="p-12 text-center">
+                                    <Loader2 className="w-6 h-6 animate-spin text-slate-500 mx-auto" />
+                                </div>
+                            ) : (
+                                <>
+                                    {/* ── 1. Vue Générale & Quick Tools ── */}
+                                    {detailTab === 'overview' && (
+                                        <div className="space-y-4">
+                                            <div className="grid md:grid-cols-2 gap-4">
+                                                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/8 space-y-3">
+                                                    <h4 className="text-xs font-black uppercase text-slate-400">Liens directs d&apos;accès</h4>
+                                                    <div className="space-y-2">
+                                                        <a href={`/${detailOrg.slug}/admin`} target="_blank" rel="noreferrer"
+                                                            className="flex items-center justify-between p-3 rounded-xl bg-violet-600/10 border border-violet-500/20 hover:bg-violet-600/20 transition-all text-xs font-bold text-violet-300">
+                                                            <span className="flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Panneau Administration École</span>
+                                                            <ExternalLink className="w-3.5 h-3.5" />
+                                                        </a>
+                                                        <a href={`/${detailOrg.slug}`} target="_blank" rel="noreferrer"
+                                                            className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-xs font-bold text-slate-300">
+                                                            <span className="flex items-center gap-2"><Eye className="w-4 h-4 text-teal-400" /> Portail Public (Landing)</span>
+                                                            <ExternalLink className="w-3.5 h-3.5" />
+                                                        </a>
+                                                        <a href={`/${detailOrg.slug}/campus`} target="_blank" rel="noreferrer"
+                                                            className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-xs font-bold text-slate-300">
+                                                            <span className="flex items-center gap-2"><School className="w-4 h-4 text-amber-400" /> Espace Campus / Cours</span>
+                                                            <ExternalLink className="w-3.5 h-3.5" />
+                                                        </a>
+                                                    </div>
+                                                </div>
+
+                                                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/8 space-y-3">
+                                                    <h4 className="text-xs font-black uppercase text-slate-400">Actions Superadmin rapides</h4>
+                                                    <div className="space-y-2">
+                                                        <Button
+                                                            onClick={() => { setPointsModalOrg(detailOrg); setDetailOrg(null); }}
+                                                            className="w-full h-10 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs gap-2"
+                                                        >
+                                                            <Coins className="w-4 h-4" /> Créditer / Débiter des Sky Points
+                                                        </Button>
+                                                        <Button
+                                                            onClick={async () => {
+                                                                await onToggleActive(detailOrg);
+                                                                setDetailOrg(d => d ? { ...d, is_active: !d.is_active } : null);
+                                                            }}
+                                                            className={cn(
+                                                                'w-full h-10 font-bold rounded-xl text-xs gap-2',
+                                                                detailOrg.is_active ? 'bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30' : 'bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30'
+                                                            )}
+                                                        >
+                                                            {detailOrg.is_active ? <><Ban className="w-4 h-4" /> Suspendre cet établissement</> : <><RotateCcw className="w-4 h-4" /> Réactiver cet établissement</>}
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* ── 2. Liste des Étudiants ── */}
+                                    {detailTab === 'students' && (
+                                        <div className="space-y-2">
+                                            {detailStudents.length === 0 ? (
+                                                <p className="text-center py-10 text-xs text-slate-500">Aucun étudiant inscrit pour le moment.</p>
+                                            ) : (
+                                                <div className="rounded-2xl border border-white/8 overflow-hidden bg-white/[0.01]">
+                                                    <table className="w-full text-xs">
+                                                        <thead>
+                                                            <tr className="border-b border-white/5 bg-white/[0.02]">
+                                                                <th className="text-left px-4 py-2.5 text-slate-500 font-bold">Étudiant</th>
+                                                                <th className="text-left px-4 py-2.5 text-slate-500 font-bold">Matricule / Contact</th>
+                                                                <th className="text-left px-4 py-2.5 text-slate-500 font-bold">Points</th>
+                                                                <th className="text-left px-4 py-2.5 text-slate-500 font-bold">Statut</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {detailStudents.map((st, idx) => (
+                                                                <tr key={st.id || idx} className="border-b border-white/[0.03] hover:bg-white/[0.02]">
+                                                                    <td className="px-4 py-2.5 font-bold text-white">
+                                                                        {st.first_name} {st.last_name}
+                                                                        <span className="block text-[10px] text-slate-400 font-normal">{st.email || '—'}</span>
+                                                                    </td>
+                                                                    <td className="px-4 py-2.5 text-slate-400 font-mono text-[11px]">
+                                                                        {st.matricule || st.access_code || '—'}
+                                                                    </td>
+                                                                    <td className="px-4 py-2.5 font-bold text-amber-400">
+                                                                        {st.sky_points || 0} pts
+                                                                    </td>
+                                                                    <td className="px-4 py-2.5">
+                                                                        <span className={cn('text-[9px] px-2 py-0.5 rounded-full font-bold',
+                                                                            st.is_active !== false ? 'bg-emerald-500/15 text-emerald-300' : 'bg-red-500/15 text-red-300')}>
+                                                                            {st.is_active !== false ? 'Actif' : 'Inactif'}
+                                                                        </span>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* ── 3. Liste des Professeurs ── */}
+                                    {detailTab === 'teachers' && (
+                                        <div className="space-y-2">
+                                            {detailTeachers.length === 0 ? (
+                                                <p className="text-center py-10 text-xs text-slate-500">Aucun enseignant configuré pour le moment.</p>
+                                            ) : (
+                                                <div className="rounded-2xl border border-white/8 overflow-hidden bg-white/[0.01]">
+                                                    <table className="w-full text-xs">
+                                                        <thead>
+                                                            <tr className="border-b border-white/5 bg-white/[0.02]">
+                                                                <th className="text-left px-4 py-2.5 text-slate-500 font-bold">Enseignant</th>
+                                                                <th className="text-left px-4 py-2.5 text-slate-500 font-bold">Matière / Rôle</th>
+                                                                <th className="text-left px-4 py-2.5 text-slate-500 font-bold">Contact</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {detailTeachers.map((tc, idx) => (
+                                                                <tr key={tc.id || idx} className="border-b border-white/[0.03] hover:bg-white/[0.02]">
+                                                                    <td className="px-4 py-2.5 font-bold text-white">
+                                                                        {tc.first_name} {tc.last_name}
+                                                                    </td>
+                                                                    <td className="px-4 py-2.5 text-indigo-300">
+                                                                        {tc.subject || tc.specialty || 'Professeur'}
+                                                                    </td>
+                                                                    <td className="px-4 py-2.5 text-slate-400">
+                                                                        {tc.email || tc.phone || '—'}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* ── 4. Liste des Filières / Offres ── */}
+                                    {detailTab === 'programs' && (
+                                        <div className="space-y-2">
+                                            {detailPrograms.length === 0 ? (
+                                                <p className="text-center py-10 text-xs text-slate-500">Aucune filière déclarée pour le moment.</p>
+                                            ) : (
+                                                <div className="grid sm:grid-cols-2 gap-3">
+                                                    {detailPrograms.map((pr, idx) => (
+                                                        <div key={pr.id || idx} className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/8 space-y-1">
+                                                            <h5 className="font-bold text-white text-xs">{pr.name || pr.title}</h5>
+                                                            <p className="text-[11px] text-slate-400 line-clamp-2">{pr.description || 'Filière d\'études'}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             {/* ═══ MODALE D'ÉDITION DE L'ÉTABLISSEMENT ═══ */}
             <AnimatePresence>

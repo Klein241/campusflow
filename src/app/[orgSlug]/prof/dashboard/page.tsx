@@ -25,6 +25,8 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { AdsBanner } from '@/components/campus/ads-banner';
 import { OfficialAnnouncements } from '@/components/campus/official-announcements';
+import { ReviewSection } from '@/components/shared/ReviewSection';
+import { BugReportButton } from '@/components/shared/BugReportButton';
 
 // ═══════════════════════════════════════════════════════
 // CAMPUSFLOW — DASHBOARD PROFESSEUR (holographic-ring design)
@@ -996,6 +998,27 @@ export default function TeacherDashboard() {
                                     ))}
                                 </CardContent>
                             </Card>
+
+                            {/* ── Mon Avis sur l'école ── */}
+                            <ReviewSection
+                                userId={teacher.id}
+                                userName={`${teacher.first_name || ''} ${teacher.last_name || ''}`.trim()}
+                                userRole="teacher"
+                                orgId={teacher.organization_id}
+                                orgName={org.name}
+                            />
+
+                            {/* ── Signaler un bug ── */}
+                            <div className="flex justify-center pt-2 pb-6">
+                                <BugReportButton
+                                    userId={teacher.id}
+                                    userName={`${teacher.first_name || ''} ${teacher.last_name || ''}`.trim()}
+                                    userRole="teacher"
+                                    orgId={teacher.organization_id}
+                                    orgName={org.name}
+                                    orgSlug={orgSlug}
+                                />
+                            </div>
                         </motion.div>
                     )}
                 </AnimatePresence>

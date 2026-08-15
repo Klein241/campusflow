@@ -24,6 +24,8 @@ import { compressImage } from '@/lib/compress';
 import { uploadToR2 } from '@/lib/r2';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { ReviewSection } from '@/components/shared/ReviewSection';
+import { BugReportButton } from '@/components/shared/BugReportButton';
 
 // ═══════════════════════════════════════════════════════
 // CAMPUSFLOW — DASHBOARD ÉTUDIANT (holographic-ring design)
@@ -822,6 +824,27 @@ export default function StudentDashboard() {
                                     </CardContent>
                                 </Card>
                             )}
+
+                            {/* ── Mon Avis sur l'école ── */}
+                            <ReviewSection
+                                userId={student.id}
+                                userName={`${student.first_name || ''} ${student.last_name || ''}`.trim()}
+                                userRole="student"
+                                orgId={student.organization_id}
+                                orgName={org.name}
+                            />
+
+                            {/* ── Signaler un bug ── */}
+                            <div className="flex justify-center pt-2 pb-6">
+                                <BugReportButton
+                                    userId={student.id}
+                                    userName={`${student.first_name || ''} ${student.last_name || ''}`.trim()}
+                                    userRole="student"
+                                    orgId={student.organization_id}
+                                    orgName={org.name}
+                                    orgSlug={orgSlug}
+                                />
+                            </div>
                         </motion.div>
                     )}
                 </AnimatePresence>

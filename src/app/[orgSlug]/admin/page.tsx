@@ -28,6 +28,8 @@ import { AdsBanner } from '@/components/campus/ads-banner';
 import { OfficialAnnouncements } from '@/components/campus/official-announcements';
 import { AdminPremiumStyles } from '@/components/campus/admin-premium-styles';
 import { AdminNotificationBell } from '@/components/admin/AdminNotificationBell';
+import { ReviewSection } from '@/components/shared/ReviewSection';
+import { BugReportButton } from '@/components/shared/BugReportButton';
 
 // ═══ ERROR BOUNDARY (catches React render errors) ═══
 class AdminErrorBoundary extends Component<{ children: ReactNode; orgSlug: string }, { hasError: boolean; error: Error | null }> {
@@ -3498,8 +3500,35 @@ ${bodyHtml}
                             </div>
                         </div>
 
+                        {/* ── Mon Avis & Témoignage ── */}
+                        {org && (
+                            <div className="pt-2">
+                                <ReviewSection
+                                    userId={session?.user?.id || org.id}
+                                    userName={org.name}
+                                    userRole="admin"
+                                    orgId={org.id}
+                                    orgName={org.name}
+                                />
+                            </div>
+                        )}
+
+                        {/* ── Signaler un bug ── */}
+                        {org && (
+                            <div className="flex justify-start pt-1">
+                                <BugReportButton
+                                    userId={session?.user?.id || org.id}
+                                    userName={`Admin (${org.name})`}
+                                    userRole="admin"
+                                    orgId={org.id}
+                                    orgName={org.name}
+                                    orgSlug={org.slug}
+                                />
+                            </div>
+                        )}
+
                         {/* Save button */}
-                        <div className="flex justify-end">
+                        <div className="flex justify-end pt-4">
                             <Button onClick={saveSettings} disabled={sSavingSettings} className="bg-gradient-to-r from-purple-600 to-indigo-600 px-8">
                                 {sSavingSettings ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                                 Sauvegarder tous les paramètres
