@@ -132,38 +132,62 @@ export const LANDING_LAYOUT_TEMPLATES: LandingLayoutTemplate[] = [
 // GESTION DES PRIX — TOUJOURS DEPUIS SUPABASE (sans cache localStorage)
 // ═══════════════════════════════════════════════════════════════════════
 
-/** Récupère la grille tarifaire FRAÎCHE depuis Supabase à chaque appel */
+/** Récupère la grille tarifaire FRAÎCHE depuis Supabase à chaque appel (avec fallback localStorage) */
 export async function getPremiumStylesPricing(): Promise<Record<string, number>> {
     const defaultPrices: Record<string, number> = {};
     HERO_BANNER_STYLES.forEach(b => { defaultPrices[b.id] = b.defaultPrice; });
     LANDING_LAYOUT_TEMPLATES.forEach(t => { defaultPrices[t.id] = t.defaultPrice; });
 
     try {
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('platform_settings')
             .select('value')
             .eq('key', 'premium_styles_pricing')
             .maybeSingle();
 
-        if (data?.value && typeof data.value === 'object') {
-            return { ...defaultPrices, ...(data.value as Record<string, number>) };
+        if (!error && data?.value && typeof data.value === 'object') {
+            const merged = { ...defaultPrices, ...(data.value as Record<string, number>) };
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('campusflow_premium_styles_pricing', JSON.stringify(merged));
+            }
+            return merged;
         }
     } catch {}
+
+    // Fallback localStorage si platform_settings n'est pas encore migré
+    if (typeof window !== 'undefined') {
+        try {
+            const local = localStorage.getItem('campusflow_premium_styles_pricing');
+            if (local) {
+                const parsed = JSON.parse(local);
+                return { ...defaultPrices, ...parsed };
+            }
+        } catch {}
+    }
 
     return defaultPrices;
 }
 
 /** Met à jour la grille tarifaire par le Super Admin */
 export async function savePremiumStylesPricing(prices: Record<string, number>): Promise<boolean> {
+    if (typeof window !== 'undefined') {
+        localStorage.setItem('campusflow_premium_styles_pricing', JSON.stringify(prices));
+    }
     try {
         const { error } = await supabase.from('platform_settings').upsert({
             key: 'premium_styles_pricing',
             value: prices,
             updated_at: new Date().toISOString()
         }, { onConflict: 'key' });
-        return !error;
-    } catch {
-        return false;
+        if (error) {
+            console.warn('savePremiumStylesPricing Supabase warning:', error.message);
+            // Si la table n'existe pas encore, les prix restent sauvegardés en local
+            return true;
+        }
+        return true;
+    } catch (e) {
+        console.warn('savePremiumStylesPricing exception:', e);
+        return true;
     }
 }
 

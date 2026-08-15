@@ -646,27 +646,23 @@ function AdminPageContent() {
                 setSession({ id: authUser.id, first_name: authUser.user_metadata?.first_name || 'Admin', last_name: authUser.user_metadata?.last_name || '' });
 
                 // ── Sky Points & PIN Initialisation ──
-                // localStorage prime toujours : si une déduction a été faite localement
-                // (solde local < solde Supabase), on garde le solde local pour éviter
-                // le "reset à 1000" après refresh dû à un cache Supabase obsolète.
+                // Supabase est la source de vérité prioritaire si remotePts existe.
                 const localSavedPtsStr = typeof window !== 'undefined' ? localStorage.getItem(`campusflow_admin_points_${o.id}`) : null;
                 const localSavedPts = localSavedPtsStr !== null ? parseInt(localSavedPtsStr, 10) : null;
                 const remotePts = (typeof o.sky_points === 'number' && !isNaN(o.sky_points) && o.sky_points >= 0) ? o.sky_points : null;
 
                 let currentPts = 1000;
-                if (localSavedPts !== null && !isNaN(localSavedPts) && localSavedPts >= 0) {
-                    // Si Supabase a un solde SUPÉRIEUR au local (ex: bonus quotidien crédité
-                    // depuis un autre appareil), on prend le plus grand.
-                    currentPts = (remotePts !== null && remotePts > localSavedPts) ? remotePts : localSavedPts;
-                } else if (remotePts !== null) {
+                if (remotePts !== null) {
                     currentPts = remotePts;
+                } else if (localSavedPts !== null && !isNaN(localSavedPts) && localSavedPts >= 0) {
+                    currentPts = localSavedPts;
                 }
 
                 if (typeof window !== 'undefined') {
                     localStorage.setItem(`campusflow_admin_points_${o.id}`, currentPts.toString());
                 }
-                // Resynchroniser Supabase si les valeurs divergent (local plus récent)
-                if (remotePts !== null && remotePts !== currentPts) {
+                // Ne resynchroniser vers Supabase QUE si Supabase n'avait pas encore de valeur (première init)
+                if (remotePts === null && localSavedPts !== null) {
                     void (async () => { try { await supabase.from('organizations').update({ sky_points: currentPts }).eq('id', o.id); } catch {} })();
                 }
                 setAdminSkyPoints(currentPts);
