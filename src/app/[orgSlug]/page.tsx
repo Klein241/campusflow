@@ -24,6 +24,7 @@ import { TemplateSegmentedHub } from '@/components/campus/landing-templates/temp
 import { TemplateGlassShowcase } from '@/components/campus/landing-templates/template-glass-showcase';
 import { TemplateBentoGrid } from '@/components/campus/landing-templates/template-bento-grid';
 import { TemplateBentoBox } from '@/components/campus/landing-templates/template-bento-box';
+import { SchoolReviewsSection } from '@/components/campus/school-reviews';
 
 // ═══════════════════════════════════════════════════════════════════════
 // TYPES
@@ -944,6 +945,11 @@ export default function SchoolLandingPage() {
             </AnimatePresence>
             </>
             )}
+
+            {/* ═══ AVIS DES ÉLÈVES & ENSEIGNANTS ════════════════════ */}
+            <div id="reviews">
+                <SchoolReviewsSection org={org} orgSlug={orgSlug} brandColor={bc} />
+            </div>
 
             {/* ═══ INSCRIPTION FORM ══════════════════════════════════ */}
             <section id="inscription" className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-20">

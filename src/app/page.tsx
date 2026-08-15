@@ -8,6 +8,7 @@ import {
   Globe, Smartphone, Star, ChevronRight, Sparkles, Building2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PlatformReviewsSection } from '@/components/platform-reviews';
 
 // ═══════════════════════════════════════════════
 // CAMPUSFLOW — LANDING PAGE
@@ -76,6 +77,7 @@ export default function LandingPage() {
           <div className="hidden md:flex items-center gap-8 text-sm text-slate-400">
             <a href="#features" className="hover:text-white transition-colors">Fonctionnalités</a>
             <a href="#marketplace" className="hover:text-white transition-colors flex items-center gap-1">🛍️ Marketplace</a>
+            <a href="#reviews" className="hover:text-white transition-colors flex items-center gap-1">⭐ Avis</a>
             <a href="#types" className="hover:text-white transition-colors">Établissements</a>
             <a href="#how" className="hover:text-white transition-colors">Comment ça marche</a>
           </div>
@@ -264,6 +266,11 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* ═════ AVIS UTILISATEURS (5 ÉTOILES + 10 SKY POINTS) ═════ */}
+      <div id="reviews">
+        <PlatformReviewsSection />
+      </div>
 
       {/* ═════ CTA FINAL ═════ */}
       <section className="py-24 px-4 sm:px-6 lg:px-8">
