@@ -667,7 +667,7 @@ function AdminPageContent() {
                 }
                 // Resynchroniser Supabase si les valeurs divergent (local plus récent)
                 if (remotePts !== null && remotePts !== currentPts) {
-                    supabase.from('organizations').update({ sky_points: currentPts }).eq('id', o.id).catch(() => {});
+                    void (async () => { try { await supabase.from('organizations').update({ sky_points: currentPts }).eq('id', o.id); } catch {} })();
                 }
                 setAdminSkyPoints(currentPts);
 
@@ -687,13 +687,13 @@ function AdminPageContent() {
                         localStorage.setItem(`campusflow_admin_points_${o.id}`, rewardedPts.toString());
                         localStorage.setItem(`campusflow_admin_daily_${o.id}`, todayStr);
                     }
-                    supabase.from('organizations').update({ sky_points: rewardedPts, last_daily_claim: todayStr }).eq('id', o.id).catch(() => {});
+                    void (async () => { try { await supabase.from('organizations').update({ sky_points: rewardedPts, last_daily_claim: todayStr }).eq('id', o.id); } catch {} })();
                     toast.success(`⭐ +1 Sky Point quotidien offert ! Solde actuel : ${rewardedPts} pts`, { duration: 5000, icon: '🎁' });
                 } else if (!lastClaim) {
                     if (typeof window !== 'undefined') {
                         localStorage.setItem(`campusflow_admin_daily_${o.id}`, todayStr);
                     }
-                    supabase.from('organizations').update({ last_daily_claim: todayStr }).eq('id', o.id).catch(() => {});
+                    void (async () => { try { await supabase.from('organizations').update({ last_daily_claim: todayStr }).eq('id', o.id); } catch {} })();
                 }
                 const { data: c } = await supabase.from('classrooms').select('*').eq('organization_id', o.id).order('name');
                 if (cancelled) return;

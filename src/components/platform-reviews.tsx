@@ -273,7 +273,7 @@ export function PlatformReviewsSection() {
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-1.5">
                                         <h4 className="font-bold text-xs text-white truncate">{rev.author_name}</h4>
-                                        <ShieldCheck className="w-3.5 h-3.5 text-teal-400 shrink-0" title="Vérifié" />
+                                        <ShieldCheck className="w-3.5 h-3.5 text-teal-400 shrink-0" aria-label="Vérifié" />
                                     </div>
                                     <p className="text-[10px] text-slate-400 truncate">
                                         {rev.author_role} {rev.school_name ? `• ${rev.school_name}` : ''}
