@@ -289,14 +289,31 @@ export function AdminPremiumStyles({
             .channel('platform_settings_realtime_changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'platform_settings' }, (payload: any) => {
                 if (payload.new && payload.new.key === 'premium_styles_pricing' && payload.new.value) {
-                    setPrices(prev => ({ ...prev, ...payload.new.value }));
+                    let val = payload.new.value;
+                    if (typeof val === 'string') {
+                        try { val = JSON.parse(val); } catch {}
+                    }
+                    if (val && typeof val === 'object') {
+                        setPrices(prev => ({ ...prev, ...val }));
+                    }
                 } else {
                     loadPrices();
                 }
             })
             .subscribe();
 
-        // 2. Écoute immédiate inter-onglets
+        // 2. Écoute immédiate BroadcastChannel
+        let bc: BroadcastChannel | null = null;
+        try {
+            bc = new BroadcastChannel('campusflow_pricing_sync');
+            bc.onmessage = (event) => {
+                if (event.data?.type === 'PRICING_UPDATED' && event.data.prices) {
+                    setPrices(prev => ({ ...prev, ...event.data.prices }));
+                }
+            };
+        } catch {}
+
+        // 3. Écoute immédiate inter-onglets
         const handleStorage = (e: StorageEvent) => {
             if (e.key === 'campusflow_premium_styles_pricing' && e.newValue) {
                 try {
@@ -309,6 +326,7 @@ export function AdminPremiumStyles({
 
         return () => {
             supabase.removeChannel(channel);
+            if (bc) bc.close();
             window.removeEventListener('storage', handleStorage);
         };
     }, [loadPrices]);

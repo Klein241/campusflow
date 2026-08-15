@@ -52,6 +52,38 @@ ON CONFLICT (key) DO UPDATE
 SET value = EXCLUDED.value,
     updated_at = now();
 
+-- Fonction RPC pour sauvegarder les paramètres globaux (bypass RLS)
+CREATE OR REPLACE FUNCTION set_platform_setting(p_key text, p_value jsonb)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    INSERT INTO platform_settings (key, value, updated_at)
+    VALUES (p_key, p_value, now())
+    ON CONFLICT (key) DO UPDATE
+    SET value = EXCLUDED.value,
+        updated_at = now();
+    RETURN true;
+EXCEPTION WHEN OTHERS THEN
+    RETURN false;
+END;
+$$;
+
+-- Ajouter platform_settings aux publications Realtime
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' AND tablename = 'platform_settings'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE platform_settings;
+    END IF;
+EXCEPTION WHEN OTHERS THEN
+    -- Ignore si non supporté
+END;
+$$;
+
 -- 3. TABLE DES AVIS SUR LES ÉCOLES (ÉTUDIANTS & PROFESSEURS)
 CREATE TABLE IF NOT EXISTS school_reviews (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

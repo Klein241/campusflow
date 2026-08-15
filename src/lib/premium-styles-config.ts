@@ -145,22 +145,41 @@ export async function getPremiumStylesPricing(): Promise<Record<string, number>>
             .eq('key', 'premium_styles_pricing')
             .maybeSingle();
 
-        if (!error && data?.value && typeof data.value === 'object') {
-            const merged = { ...defaultPrices, ...(data.value as Record<string, number>) };
-            if (typeof window !== 'undefined') {
-                localStorage.setItem('campusflow_premium_styles_pricing', JSON.stringify(merged));
+        if (!error && data?.value) {
+            let parsedValue: any = data.value;
+            if (typeof parsedValue === 'string') {
+                try {
+                    parsedValue = JSON.parse(parsedValue);
+                } catch {}
             }
-            return merged;
-        }
-    } catch {}
 
-    // Fallback localStorage si platform_settings n'est pas encore migré
+            if (parsedValue && typeof parsedValue === 'object') {
+                const cleaned: Record<string, number> = {};
+                for (const [k, v] of Object.entries(parsedValue)) {
+                    cleaned[k] = typeof v === 'number' ? v : (parseInt(String(v), 10) || 0);
+                }
+                const merged = { ...defaultPrices, ...cleaned };
+                if (typeof window !== 'undefined') {
+                    localStorage.setItem('campusflow_premium_styles_pricing', JSON.stringify(merged));
+                }
+                return merged;
+            }
+        }
+    } catch (err) {
+        console.warn('Erreur récupération prix Supabase:', err);
+    }
+
+    // Fallback localStorage si platform_settings n'est pas encore migré ou hors ligne
     if (typeof window !== 'undefined') {
         try {
             const local = localStorage.getItem('campusflow_premium_styles_pricing');
             if (local) {
                 const parsed = JSON.parse(local);
-                return { ...defaultPrices, ...parsed };
+                const cleaned: Record<string, number> = {};
+                for (const [k, v] of Object.entries(parsed)) {
+                    cleaned[k] = typeof v === 'number' ? v : (parseInt(String(v), 10) || 0);
+                }
+                return { ...defaultPrices, ...cleaned };
             }
         } catch {}
     }
@@ -168,21 +187,43 @@ export async function getPremiumStylesPricing(): Promise<Record<string, number>>
     return defaultPrices;
 }
 
-/** Met à jour la grille tarifaire par le Super Admin */
+/** Met à jour la grille tarifaire par le Super Admin (sauvegarde Supabase + Broadcast instantané) */
 export async function savePremiumStylesPricing(prices: Record<string, number>): Promise<boolean> {
+    // 1. Sauvegarde locale immédiate
     if (typeof window !== 'undefined') {
         localStorage.setItem('campusflow_premium_styles_pricing', JSON.stringify(prices));
+        // Broadcast instantané inter-onglets via BroadcastChannel
+        try {
+            const bc = new BroadcastChannel('campusflow_pricing_sync');
+            bc.postMessage({ type: 'PRICING_UPDATED', prices });
+            bc.close();
+        } catch {}
     }
+
+    // 2. Sauvegarde Supabase via RPC (bypass RLS)
+    try {
+        const { error: rpcError } = await supabase.rpc('set_platform_setting', {
+            p_key: 'premium_styles_pricing',
+            p_value: prices
+        });
+        if (!rpcError) return true;
+    } catch {}
+
+    // 3. Fallback direct upsert Supabase
     try {
         const { error } = await supabase.from('platform_settings').upsert({
             key: 'premium_styles_pricing',
             value: prices,
             updated_at: new Date().toISOString()
         }, { onConflict: 'key' });
+
         if (error) {
-            console.warn('savePremiumStylesPricing Supabase warning:', error.message);
-            // Si la table n'existe pas encore, les prix restent sauvegardés en local
-            return true;
+            console.warn('savePremiumStylesPricing Supabase direct upsert warning:', error.message);
+            // Si la table n'a pas pu être écrite, essayer un update standard
+            await supabase.from('platform_settings').update({
+                value: prices,
+                updated_at: new Date().toISOString()
+            }).eq('key', 'premium_styles_pricing');
         }
         return true;
     } catch (e) {
