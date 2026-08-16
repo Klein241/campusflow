@@ -143,6 +143,7 @@ $$;
 
 -- 8. Update organizations select to fix the orgs loading issue
 -- Fixed superadmin_get_orgs with all required columns
+DROP FUNCTION IF EXISTS superadmin_get_orgs();
 CREATE OR REPLACE FUNCTION superadmin_get_orgs()
 RETURNS TABLE (
     id UUID,

@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, Component, type ReactNode, type ErrorInfo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOrgSlug } from '@/hooks/use-org-slug';
-import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus, Building2, FileText, Receipt, PhoneCall, ClipboardCheck, Eye, Award, Volume2, Play, Pause, Maximize2, FileDown, Lock, KeyRound, Coins, Sparkles, Ban, CheckCircle, LogOut, AlertCircle, Send } from 'lucide-react';
+import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus, Building2, FileText, Receipt, PhoneCall, ClipboardCheck, Eye, Award, Volume2, Play, Pause, Maximize2, FileDown, Lock, KeyRound, Coins, Sparkles, Ban, CheckCircle, LogOut, AlertCircle, Send, Mail } from 'lucide-react';
 import { ExamRoomView } from '@/components/campus/exam-room/exam-room-view';
 import { BULLETIN_TEMPLATES, generateBulletinPDF, type BulletinData } from '@/lib/bulletin-pdf';
 import { RECEIPT_TEMPLATES, generateReceiptPDF, generateReceiptNumber, type ReceiptData } from '@/lib/receipt-pdf';
@@ -30,6 +30,7 @@ import { AdminPremiumStyles } from '@/components/campus/admin-premium-styles';
 import { AdminNotificationBell } from '@/components/admin/AdminNotificationBell';
 import { ReviewSection } from '@/components/shared/ReviewSection';
 import { BugReportButton } from '@/components/shared/BugReportButton';
+import { EmailModal } from '@/components/campus/email-modal';
 
 // ═══ ERROR BOUNDARY (catches React render errors) ═══
 class AdminErrorBoundary extends Component<{ children: ReactNode; orgSlug: string }, { hasError: boolean; error: Error | null }> {
@@ -145,6 +146,8 @@ function AdminPageContent() {
     const [appealMessage, setAppealMessage] = useState('');
     const [appealSubmitted, setAppealSubmitted] = useState(false);
     const [submittingAppeal, setSubmittingAppeal] = useState(false);
+    // ── Email notification modal ──
+    const [emailModalOpen, setEmailModalOpen] = useState(false);
     // ── Inscription requests (demandes en attente) ──
     const [inscRequests, setInscRequests] = useState<any[]>([]);
     const [inscLoaded, setInscLoaded] = useState(false);
@@ -2286,7 +2289,10 @@ ${bodyHtml}
                                         <option value="" className="bg-slate-900">Toutes classes</option>
                                         {cls.filter(c => c.id).map(c => <option key={c.id} value={c.id!} className="bg-slate-900">{c.name}</option>)}
                                     </select>
-                                    <Button size="sm" className="bg-teal-600 hover:bg-teal-500 rounded-xl" onClick={() => { setShowAddStudent(!showAddStudent); setSShowCode(''); }}>
+                                    <Button size="sm" variant="outline" className="h-10 border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 rounded-xl font-bold" onClick={() => setEmailModalOpen(true)}>
+                                        <Mail className="w-4 h-4 mr-1.5 text-indigo-400" />Notifier par Email
+                                    </Button>
+                                    <Button size="sm" className="h-10 bg-teal-600 hover:bg-teal-500 rounded-xl font-bold" onClick={() => { setShowAddStudent(!showAddStudent); setSShowCode(''); }}>
                                         <Plus className="w-4 h-4 mr-1" />{showAddStudent ? 'Fermer' : 'Inscrire'}
                                     </Button>
                                 </div>
@@ -4492,6 +4498,17 @@ ${bodyHtml}
                     </div>
                 </div>
             )}
+
+            {/* Email notification modal with anti-spam smart batching */}
+            <EmailModal
+                open={emailModalOpen}
+                onClose={() => setEmailModalOpen(false)}
+                students={students}
+                orgName={org?.name || ''}
+                orgLogo={org?.logo_url || ''}
+                senderName={org?.name || 'Administration'}
+                senderRole="admin"
+            />
 
         </div>
     );

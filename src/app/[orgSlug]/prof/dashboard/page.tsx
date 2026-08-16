@@ -8,7 +8,8 @@ import {
     BookOpen, Calendar, Users, GraduationCap, ClipboardList, Trophy,
     Home, MessageSquare, Loader2, Clock, CheckCircle2,
     Save, X, BarChart3, FileText, PenSquare, LogOut, User, AlertCircle,
-    Layers, Plus, ChevronDown, ChevronUp, Trash2, Eye, EyeOff, Lock, Camera, ClipboardCheck
+    Layers, Plus, ChevronDown, ChevronUp, Trash2, Eye, EyeOff, Lock, Camera, ClipboardCheck,
+    Mail, Send, Sparkles
 } from 'lucide-react';
 import { ExamRoomView } from '@/components/campus/exam-room/exam-room-view';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,7 @@ import { AdsBanner } from '@/components/campus/ads-banner';
 import { OfficialAnnouncements } from '@/components/campus/official-announcements';
 import { ReviewSection } from '@/components/shared/ReviewSection';
 import { BugReportButton } from '@/components/shared/BugReportButton';
+import { EmailModal } from '@/components/campus/email-modal';
 
 // ═══════════════════════════════════════════════════════
 // CAMPUSFLOW — DASHBOARD PROFESSEUR (holographic-ring design)
@@ -100,6 +102,7 @@ export default function TeacherDashboard() {
     const [myClasses, setMyClasses] = useState<any[]>([]);
     const [evaluations, setEvaluations] = useState<any[]>([]);
     const [students, setStudents] = useState<any[]>([]);
+    const [emailModalOpen, setEmailModalOpen] = useState(false);
 
     const [selEval, setSelEval] = useState<any>(null);
     const [grades, setGrades] = useState<Record<string, string>>({});
@@ -540,6 +543,32 @@ export default function TeacherDashboard() {
                                     </Card>
                                 </motion.div>
                             </div>
+
+                            {/* Email notification action card */}
+                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+                                <Card 
+                                    className="bg-linear-to-r from-indigo-950/60 via-violet-950/40 to-slate-900/60 border-indigo-500/30 cursor-pointer group hover:border-indigo-500/60 transition-all backdrop-blur-sm shadow-lg"
+                                    onClick={() => setEmailModalOpen(true)}
+                                >
+                                    <CardContent className="p-4 flex items-center justify-between">
+                                        <div className="flex items-center gap-3.5">
+                                            <div className="w-11 h-11 rounded-2xl bg-indigo-600/25 border border-indigo-500/30 text-indigo-300 flex items-center justify-center shrink-0 shadow-inner">
+                                                <Mail className="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <p className="font-black text-sm text-white">Notifier les Étudiants par Email</p>
+                                                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold">
+                                                        Gmail / Yahoo / Outlook
+                                                    </span>
+                                                </div>
+                                                <p className="text-[11px] text-slate-400 mt-0.5">Envoi groupé anti-spam par vagues avec cours, devoirs et pièces jointes</p>
+                                            </div>
+                                        </div>
+                                        <Send className="w-4 h-4 text-indigo-400 group-hover:translate-x-1 transition-transform shrink-0 ml-2" />
+                                    </CardContent>
+                                </Card>
+                            </motion.div>
                         </motion.div>
                     )}
 
@@ -1036,6 +1065,18 @@ export default function TeacherDashboard() {
                     />
                 </div>
             )}
+
+            {/* ── EMAIL NOTIFICATION MODAL (Gmail, Yahoo, Outlook Batching) ── */}
+            <EmailModal
+                open={emailModalOpen}
+                onClose={() => setEmailModalOpen(false)}
+                students={students}
+                orgName={org?.name || ''}
+                orgLogo={org?.logo_url || ''}
+                senderId={teacher?.id}
+                senderName={`${teacher?.first_name || ''} ${teacher?.last_name || ''}`.trim() || 'Professeur'}
+                senderRole="teacher"
+            />
 
             <BottomNav activeTab={tab} onTabChange={setTab} />
         </main>

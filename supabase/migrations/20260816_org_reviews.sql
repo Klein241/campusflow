@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS org_reviews (
     organization_id uuid REFERENCES organizations(id) ON DELETE CASCADE,
     user_id text NOT NULL,
     author_name text NOT NULL,
-    author_role text NOT NULL DEFAULT ''student'', -- ''student'' | ''teacher'' | ''admin''
+    author_role text NOT NULL DEFAULT 'student', -- 'student' | 'teacher' | 'admin'
     author_avatar text,
     rating integer NOT NULL CHECK (rating >= 1 AND rating <= 5),
     title text,
@@ -57,10 +57,11 @@ DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM pg_publication_tables
-        WHERE pubname = ''supabase_realtime'' AND tablename = ''org_reviews''
+        WHERE pubname = 'supabase_realtime' AND tablename = 'org_reviews'
     ) THEN
         ALTER PUBLICATION supabase_realtime ADD TABLE org_reviews;
     END IF;
 END $$;
 
-NOTIFY pgrst, ''reload schema'';
+NOTIFY pgrst, 'reload schema';
+
