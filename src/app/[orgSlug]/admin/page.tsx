@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, Component, type ReactNode, type ErrorInfo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOrgSlug } from '@/hooks/use-org-slug';
-import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus, Building2, FileText, Receipt, PhoneCall, ClipboardCheck, Eye, Award, Volume2, Play, Pause, Maximize2, FileDown, Lock, KeyRound, Coins, Sparkles } from 'lucide-react';
+import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus, Building2, FileText, Receipt, PhoneCall, ClipboardCheck, Eye, Award, Volume2, Play, Pause, Maximize2, FileDown, Lock, KeyRound, Coins, Sparkles, Ban, CheckCircle, LogOut, AlertCircle, Send } from 'lucide-react';
 import { ExamRoomView } from '@/components/campus/exam-room/exam-room-view';
 import { BULLETIN_TEMPLATES, generateBulletinPDF, type BulletinData } from '@/lib/bulletin-pdf';
 import { RECEIPT_TEMPLATES, generateReceiptPDF, generateReceiptNumber, type ReceiptData } from '@/lib/receipt-pdf';
@@ -141,6 +141,10 @@ function AdminPageContent() {
     const [sPhone, setSPhone] = useState(''); const [sGuardian, setSGuardian] = useState(''); const [sGuardianPhone, setSGuardianPhone] = useState(''); const [sNat, setSNat] = useState('Camerounaise'); const [sRes, setSRes] = useState('');
     const [sShowCode, setSShowCode] = useState(''); const [showAddTeacher, setShowAddTeacher] = useState(false); const [showAddStudent, setShowAddStudent] = useState(false);
     const [sidebar, setSidebar] = useState(false);
+    // ── Suspension Appeal state ──
+    const [appealMessage, setAppealMessage] = useState('');
+    const [appealSubmitted, setAppealSubmitted] = useState(false);
+    const [submittingAppeal, setSubmittingAppeal] = useState(false);
     // ── Inscription requests (demandes en attente) ──
     const [inscRequests, setInscRequests] = useState<any[]>([]);
     const [inscLoaded, setInscLoaded] = useState(false);
@@ -869,6 +873,57 @@ function AdminPageContent() {
         return () => { supabase.removeChannel(chatChannel); };
     }, [org?.id, monitoringActiveConv?.id, students, teachers]);
 
+    // ── SUPABASE REALTIME & AUTO-SYNC : Écoute des mises à jour de l'organisation (Sky Points, statut actif) ──
+    useEffect(() => {
+        if (!org?.id) return;
+
+        // 1. Realtime postgres changes on organizations
+        const orgSub = supabase
+            .channel(`admin_org_realtime_${org.id}`)
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'organizations',
+                filter: `id=eq.${org.id}`
+            }, (payload: any) => {
+                if (payload.new) {
+                    if (typeof payload.new.sky_points === 'number') {
+                        setAdminSkyPoints(payload.new.sky_points);
+                        if (typeof window !== 'undefined') {
+                            localStorage.setItem(`campusflow_admin_points_${org.id}`, payload.new.sky_points.toString());
+                        }
+                    }
+                    if (typeof payload.new.is_active === 'boolean') {
+                        setOrg((prev: any) => prev ? { ...prev, is_active: payload.new.is_active, suspension_reason: payload.new.suspension_reason } : prev);
+                    }
+                }
+            })
+            .subscribe();
+
+        // 2. Periodic sync every 15s for rock-solid consistency
+        const pollTimer = setInterval(async () => {
+            const { data: freshOrg } = await supabase
+                .from('organizations')
+                .select('sky_points, is_active, suspension_reason')
+                .eq('id', org.id)
+                .single();
+            if (freshOrg) {
+                if (typeof freshOrg.sky_points === 'number') {
+                    setAdminSkyPoints(freshOrg.sky_points);
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem(`campusflow_admin_points_${org.id}`, freshOrg.sky_points.toString());
+                    }
+                }
+                setOrg((prev: any) => prev ? { ...prev, is_active: freshOrg.is_active, suspension_reason: freshOrg.suspension_reason } : prev);
+            }
+        }, 15000);
+
+        return () => {
+            supabase.removeChannel(orgSub);
+            clearInterval(pollTimer);
+        };
+    }, [org?.id]);
+
     if (loading || !authChecked) return <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center"><Loader2 className="w-8 h-8 text-teal-400 animate-spin" /></div>;
     if (!isAuthorized) return <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center text-white"><div className="text-center"><h1 className="text-2xl font-black mb-2">🔒 Accès refusé</h1><p className="text-slate-400 text-sm mb-4">Vous devez être connecté en tant que propriétaire de cet établissement.</p><button onClick={() => router.push(`/${orgSlug}/login`)} className="px-4 py-2 bg-indigo-600 rounded-xl text-sm hover:bg-indigo-500 transition">Se connecter</button></div></div>;
     if (!org) return <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center text-white"><h1 className="text-2xl font-black">Introuvable</h1></div>;
@@ -885,6 +940,116 @@ function AdminPageContent() {
         router.push(navTo('login'));
     };
 
+    // ── ÉCRAN ROUGE DE SUSPENSION COMPTE ──
+    if (org && org.is_active === false) {
+        return (
+            <div className="min-h-screen bg-[#0E0608] text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-red-600/10 blur-[160px] rounded-full pointer-events-none" />
+
+                <div className="relative z-10 w-full max-w-xl bg-[#170C10] border border-red-500/30 rounded-3xl p-8 shadow-2xl space-y-6 text-center">
+                    <div className="w-20 h-20 rounded-3xl bg-red-500/15 border border-red-500/30 flex items-center justify-center mx-auto shadow-2xl shadow-red-500/20">
+                        <Ban className="w-10 h-10 text-red-400" />
+                    </div>
+
+                    <div>
+                        <span className="px-3.5 py-1 rounded-full bg-red-500/20 text-red-300 text-xs font-black uppercase tracking-wider border border-red-500/30">
+                            Compte Suspendu
+                        </span>
+                        <h1 className="text-2xl font-black text-white mt-3">
+                            L'accès à votre établissement est suspendu
+                        </h1>
+                        <p className="text-slate-400 text-xs mt-1 font-mono">
+                            {org.name} (/{org.slug})
+                        </p>
+                    </div>
+
+                    {/* Suspension reason box */}
+                    <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-left space-y-1">
+                        <p className="text-[11px] font-bold text-red-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <AlertCircle className="w-4 h-4 text-red-400 shrink-0" /> Motif notifié par la plateforme :
+                        </p>
+                        <p className="text-sm text-white font-medium pl-5">
+                            {org.suspension_reason || "Vérification administrative de conformité ou défaut de pièces justificatives."}
+                        </p>
+                    </div>
+
+                    {/* Appeal / Justification form */}
+                    <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/10 text-left space-y-3">
+                        <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-amber-400" /> Formulaire de réexamen & justificatifs
+                        </h3>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                            Fournissez des explications ou transmettez vos précisions à l&apos;équipe Superadmin pour demander la levée de la suspension.
+                        </p>
+
+                        {!appealSubmitted ? (
+                            <div className="space-y-3 pt-1">
+                                <textarea
+                                    value={appealMessage}
+                                    onChange={e => setAppealMessage(e.target.value)}
+                                    placeholder="Expliquez votre situation ou collez les références de vos justificatifs..."
+                                    rows={3}
+                                    className="w-full p-3 rounded-xl bg-white/5 border border-white/10 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-red-500/50"
+                                />
+                                <Button
+                                    onClick={async () => {
+                                        if (!appealMessage.trim()) { toast.error('Veuillez saisir votre message d\'explication'); return; }
+                                        setSubmittingAppeal(true);
+                                        try {
+                                            await supabase.from('admin_recovery_requests').insert({
+                                                org_id: org.id,
+                                                org_slug: org.slug,
+                                                org_name: org.name,
+                                                owner_first_name: session?.first_name || 'Admin',
+                                                owner_last_name: session?.last_name || '',
+                                                what_lost: 'both',
+                                                new_email: org.email || '',
+                                                superadmin_note: `CONTESTATION SUSPENSION : ${appealMessage.trim()}`,
+                                                status: 'pending'
+                                            });
+                                            setAppealSubmitted(true);
+                                            toast.success('Demande de réexamen transmise au Superadmin.');
+                                        } catch (e: any) {
+                                            toast.error(e.message);
+                                        } finally {
+                                            setSubmittingAppeal(false);
+                                        }
+                                    }}
+                                    disabled={submittingAppeal || !appealMessage.trim()}
+                                    className="w-full h-10 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs shadow-lg shadow-red-600/25"
+                                >
+                                    {submittingAppeal ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+                                    Transmettre mon dossier de réexamen
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2">
+                                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                                Votre demande de réexamen a bien été transmise au Superadmin. Vous serez notifié dès son traitement.
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Footer buttons */}
+                    <div className="flex items-center justify-between gap-3 pt-2">
+                        <button
+                            onClick={handleLogout}
+                            className="text-xs text-slate-400 hover:text-white transition flex items-center gap-1.5"
+                        >
+                            <LogOut className="w-3.5 h-3.5" /> Se déconnecter
+                        </button>
+                        <a
+                            href="mailto:contact@campusflow.fun"
+                            className="text-xs text-red-400 hover:text-red-300 transition underline"
+                        >
+                            Assistance d'urgence
+                        </a>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     // Setup helpers
     const genCode = () => { const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let code = ''; for (let i = 0; i < 12; i++) code += chars[Math.floor(Math.random() * chars.length)]; return code; };
     const addClass = () => { if (!newName.trim()) return; setCls(p => [...p, { name: newName.trim(), cycle: '', filiere_id: null, level: 1, capacity: 50 }]); setNewName(''); };
@@ -894,8 +1059,89 @@ function AdminPageContent() {
     const saveCls = async (): Promise<Cls[]> => { setSaving(true); try { const unsaved = cls.filter(c => !c.id); if (unsaved.length > 0) { const { data, error } = await supabase.from('classrooms').insert(unsaved.map(c => ({ organization_id: org.id, name: c.name, cycle: c.cycle || null, filiere_id: c.filiere_id, level: c.level, capacity: c.capacity }))).select(); if (error) throw error; const saved = (data || []).map((d: any) => ({ id: d.id, name: d.name, cycle: d.cycle || '', filiere_id: d.filiere_id, level: d.level, capacity: d.capacity })); const merged = [...cls.filter(c => c.id), ...saved]; setCls(merged); toast.success('Classes sauvegardées !'); setSaving(false); return merged; } toast.success('Classes OK'); setSaving(false); return cls; } catch (e: any) { toast.error(e.message); setSaving(false); return cls; } };
     const saveSubs = async () => { setSaving(true); try { const u = subs.filter(s => !s.id); if (u.length > 0) { const { error } = await supabase.from('subjects').insert(u.map(s => ({ organization_id: org.id, name: s.name, code: s.code, coefficient: s.coefficient, classroom_id: s.classroom_id, teacher_id: s.teacher_id }))); if (error) throw error; } const { data } = await supabase.from('subjects').select('*').eq('organization_id', org.id); setSubs((data || []).map((x: any) => ({ id: x.id, name: x.name, code: x.code, coefficient: x.coefficient, classroom_id: x.classroom_id, teacher_id: x.teacher_id }))); toast.success('Matières sauvegardées !'); } catch (e: any) { toast.error(e.message); } finally { setSaving(false); } };
     const finishSetup = async () => { await saveCls(); await saveSubs(); await supabase.from('organizations').update({ setup_completed: true }).eq('id', org.id); setOrg({ ...org, setup_completed: true }); setTab('general'); toast.success('🎉 Configuration terminée !'); };
-    const createTeacher = async () => { if (!tFN.trim() || !tLN.trim()) { toast.error('Nom et prénom obligatoires'); return; } setSaving(true); try { const code = genCode(); const { data, error } = await supabase.from('teacher_profiles').insert({ organization_id: org.id, first_name: tFN.trim(), last_name: tLN.trim(), speciality: tSpec || null, email: tEmail || null, phone: tPhone || null, nationality: tNat, marital_status: tMarital, children_count: parseInt(tChildren) || 0, residence: tRes || null, access_code: code, pin_set: false }).select().single(); if (error) throw error; setTeachers(p => [...p, data]); setTShowCode(code); setTFN(''); setTLN(''); setTSpec(''); setTEmail(''); setTPhone(''); setTRes(''); toast.success('Professeur créé ! Code: ' + code); } catch (e: any) { toast.error(e.message); } setSaving(false); };
-    const createStudent = async () => { if (!sFN.trim() || !sLN.trim() || !sClsId) { toast.error('Nom, prénom et classe obligatoires'); return; } setSaving(true); try { const code = genCode(); const mat = `STU${Date.now().toString(36).toUpperCase()}`; const { data, error } = await supabase.from('student_profiles').insert({ organization_id: org.id, first_name: sFN.trim(), last_name: sLN.trim(), sex: sSex, birth_date: sBirth || null, classroom_id: sClsId, phone: sPhone || null, guardian_name: sGuardian || null, guardian_phone: sGuardianPhone || null, nationality: sNat, residence: sRes || null, matricule: mat, access_code: code, pin_set: false, approval_status: 'approved' }).select().single(); if (error) throw error; setStudents(p => [...p, data]); setSShowCode(code); setSFN(''); setSLN(''); setSBirth(''); setSPhone(''); setSGuardian(''); setSGuardianPhone(''); setSRes(''); toast.success('Étudiant créé ! Code: ' + code); } catch (e: any) { toast.error(e.message); } setSaving(false); };
+    const createTeacher = async () => {
+        if (!tFN.trim() || !tLN.trim()) { toast.error('Nom et prénom obligatoires'); return; }
+        const fnTrim = tFN.trim();
+        const lnTrim = tLN.trim();
+        const dupTeacher = teachers.some((t: any) =>
+            (t.first_name || '').trim().toLowerCase() === fnTrim.toLowerCase() &&
+            (t.last_name || '').trim().toLowerCase() === lnTrim.toLowerCase()
+        );
+        if (dupTeacher) {
+            toast.error(`Un professeur nommé "${fnTrim} ${lnTrim}" existe déjà dans cet établissement.`);
+            return;
+        }
+        setSaving(true);
+        try {
+            const code = genCode();
+            const { data, error } = await supabase.from('teacher_profiles').insert({
+                organization_id: org.id,
+                first_name: fnTrim,
+                last_name: lnTrim,
+                speciality: tSpec || null,
+                email: tEmail || null,
+                phone: tPhone || null,
+                nationality: tNat,
+                marital_status: tMarital,
+                children_count: parseInt(tChildren) || 0,
+                residence: tRes || null,
+                access_code: code,
+                pin_set: false
+            }).select().single();
+            if (error) throw error;
+            setTeachers(p => [...p, data]);
+            setTShowCode(code);
+            setTFN(''); setTLN(''); setTSpec(''); setTEmail(''); setTPhone(''); setTRes('');
+            toast.success('Professeur créé ! Code: ' + code);
+        } catch (e: any) {
+            toast.error(e.message);
+        }
+        setSaving(false);
+    };
+
+    const createStudent = async () => {
+        if (!sFN.trim() || !sLN.trim() || !sClsId) { toast.error('Nom, prénom et classe obligatoires'); return; }
+        const fnTrim = sFN.trim();
+        const lnTrim = sLN.trim();
+        const dupStudent = students.some((s: any) =>
+            (s.first_name || '').trim().toLowerCase() === fnTrim.toLowerCase() &&
+            (s.last_name || '').trim().toLowerCase() === lnTrim.toLowerCase()
+        );
+        if (dupStudent) {
+            toast.error(`Un étudiant nommé "${fnTrim} ${lnTrim}" existe déjà dans cet établissement.`);
+            return;
+        }
+        setSaving(true);
+        try {
+            const code = genCode();
+            const mat = `STU${Date.now().toString(36).toUpperCase()}`;
+            const { data, error } = await supabase.from('student_profiles').insert({
+                organization_id: org.id,
+                first_name: fnTrim,
+                last_name: lnTrim,
+                sex: sSex,
+                birth_date: sBirth || null,
+                classroom_id: sClsId,
+                phone: sPhone || null,
+                guardian_name: sGuardian || null,
+                guardian_phone: sGuardianPhone || null,
+                nationality: sNat,
+                residence: sRes || null,
+                matricule: mat,
+                access_code: code,
+                pin_set: false,
+                approval_status: 'approved'
+            }).select().single();
+            if (error) throw error;
+            setStudents(p => [...p, data]);
+            setSShowCode(code);
+            setSFN(''); setSLN(''); setSBirth(''); setSPhone(''); setSGuardian(''); setSGuardianPhone(''); setSRes('');
+            toast.success('Étudiant créé ! Code: ' + code);
+        } catch (e: any) {
+            toast.error(e.message);
+        }
+        setSaving(false);
+    };
 
     // Module loaders
     const loadTT = async () => { const { data } = await supabase.from('timetable_slots').select('*,classrooms:classroom_id(name),subjects:subject_id(name)').eq('organization_id', org.id).order('start_time'); setTtSlots(data || []); setTtLoaded(true); };

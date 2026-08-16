@@ -42,6 +42,8 @@ interface Org {
     social_facebook?: string; social_instagram?: string; social_twitter?: string;
     social_tiktok?: string; social_youtube?: string; social_linkedin?: string;
     footer_text?: string;
+    is_active?: boolean;
+    suspension_reason?: string;
 }
 
 const typeLabels: Record<string, string> = {
@@ -161,14 +163,28 @@ export default function SchoolLandingPage() {
 
         setInscSubmitting(true);
 
-        // ── Vérification doublon (même nom + téléphone dans la même école) ──
+        // ── Vérification doublon d'identité (étudiant déjà existant dans l'école) ──
+        const { data: existingStudent } = await supabase
+            .from('student_profiles')
+            .select('id')
+            .eq('organization_id', org.id)
+            .ilike('first_name', inscForm.first_name.trim())
+            .ilike('last_name', inscForm.last_name.trim())
+            .limit(1);
+
+        if (existingStudent && existingStudent.length > 0) {
+            toast.error(`Un étudiant nommé "${inscForm.first_name.trim()} ${inscForm.last_name.trim()}" existe déjà dans cet établissement.`);
+            setInscSubmitting(false);
+            return;
+        }
+
+        // ── Vérification doublon dans les demandes en attente ──
         const { data: existing } = await supabase
             .from('inscription_requests')
             .select('id, status')
             .eq('organization_id', org.id)
             .eq('first_name', inscForm.first_name.trim())
             .eq('last_name', inscForm.last_name.trim())
-            .eq('phone', inscForm.phone.trim())
             .limit(1);
 
         if (existing && existing.length > 0) {
@@ -183,7 +199,7 @@ export default function SchoolLandingPage() {
         }
 
         const code = generateAccessCode();
-        const payload: any = {
+        const payload = {
             organization_id: org.id,
             first_name:  inscForm.first_name.trim(),
             last_name:   inscForm.last_name.trim(),
@@ -251,6 +267,37 @@ export default function SchoolLandingPage() {
             <h1 className="text-3xl font-black mb-3">Établissement introuvable</h1>
             <p className="text-slate-400 mb-8 max-w-sm">L&apos;URL <code className="text-teal-400 bg-teal-400/10 px-2 py-0.5 rounded-lg">/{orgSlug}</code> ne correspond à aucun établissement.</p>
             <Link href="/"><Button className="rounded-2xl px-8">Retour à l&apos;accueil</Button></Link>
+        </div>
+    );
+
+    // ── Suspension : Portail Indisponible ───────────────────────────────
+    if (org.is_active === false) return (
+        <div className="min-h-screen bg-[#08090E] flex flex-col items-center justify-center text-white p-8 text-center relative overflow-hidden">
+            <div className="absolute w-[500px] h-[500px] rounded-full bg-red-600/10 blur-[150px] pointer-events-none -top-32" />
+            <div className="w-20 h-20 rounded-3xl bg-red-500/10 border border-red-500/25 flex items-center justify-center mb-6 shadow-2xl shadow-red-500/10">
+                <AlertCircle className="w-10 h-10 text-red-400" />
+            </div>
+            <span className="px-3.5 py-1 rounded-full bg-red-500/10 text-red-400 text-xs font-bold border border-red-500/25 mb-3">
+                Portail Actuellement Indisponible
+            </span>
+            <h1 className="text-3xl font-black mb-3 text-white max-w-lg">
+                {org.name} est temporairement indisponible
+            </h1>
+            <p className="text-slate-400 mb-8 max-w-md text-sm leading-relaxed">
+                Ce portail d&apos;établissement est momentanément suspendu ou fait l&apos;objet d&apos;une vérification administrative. Si vous êtes l&apos;administrateur de cette école, veuillez vous connecter pour consulter les détails.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+                <Link href={orgPath(orgSlug, '/login')}>
+                    <Button className="rounded-2xl px-6 bg-red-600 hover:bg-red-500 text-white font-bold h-11 shadow-lg shadow-red-600/20">
+                        Espace Administration
+                    </Button>
+                </Link>
+                <Link href="/">
+                    <Button variant="outline" className="rounded-2xl px-6 border-white/10 text-slate-300 hover:text-white h-11">
+                        Retour à CampusFlow
+                    </Button>
+                </Link>
+            </div>
         </div>
     );
 

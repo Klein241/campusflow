@@ -4,16 +4,17 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOrgSlug } from '@/hooks/use-org-slug';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GraduationCap, Loader2, Eye, EyeOff, KeyRound, ShieldCheck, ArrowLeft, Lock, UserCircle, Mail, CheckCircle2 } from 'lucide-react';
+import { GraduationCap, Loader2, Eye, EyeOff, KeyRound, ShieldCheck, ArrowLeft, Lock, UserCircle, Mail, CheckCircle2, ShieldAlert, Upload, Image, FileText, Send, CheckCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
 import { SessionManager, buildSessionFromRpc } from '@/lib/session';
 import { isCustomDomain } from '@/lib/custom-domain';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
-type LoginMode = 'choose' | 'admin' | 'access_code' | 'pin_create' | 'pin_verify' | 'dashboard_redirect' | 'forgot_password' | 'reset_password' | 'reset_success';
+type LoginMode = 'choose' | 'admin' | 'access_code' | 'pin_create' | 'pin_verify' | 'dashboard_redirect' | 'forgot_password' | 'reset_password' | 'reset_success' | 'admin_recovery';
 
 /** Check if an existing session is still valid (not expired) */
 export function isSessionValid(): boolean {
@@ -59,6 +60,80 @@ export default function LoginPage() {
 
     // Access code login
     const [accessCode, setAccessCode] = useState('');
+
+    // Admin recovery form states
+    const [recFirstName, setRecFirstName] = useState('');
+    const [recLastName, setRecLastName] = useState('');
+    const [recWhatLost, setRecWhatLost] = useState<'email' | 'password' | 'both'>('password');
+    const [recNewEmail, setRecNewEmail] = useState('');
+    const [recIdPhoto, setRecIdPhoto] = useState<string | null>(null);
+    const [recSubmitting, setRecSubmitting] = useState(false);
+    const [recSubmitted, setRecSubmitted] = useState(false);
+    const photoInputRef = useRef<HTMLInputElement>(null);
+
+    const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            toast.error('Veuillez sélectionner un fichier image valide (JPG, PNG, WEBP).');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setRecIdPhoto(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleAdminRecoverySubmit = async () => {
+        if (!recFirstName.trim() || !recLastName.trim()) {
+            toast.error('Prénom et nom obligatoires.');
+            return;
+        }
+        if ((recWhatLost === 'email' || recWhatLost === 'both') && !recNewEmail.trim()) {
+            toast.error('Veuillez renseigner votre nouvel e-mail de remplacement.');
+            return;
+        }
+        if (!recIdPhoto) {
+            toast.error('Veuillez joindre la photo claire de votre pièce d\'identité.');
+            return;
+        }
+
+        setRecSubmitting(true);
+        try {
+            const { data: inserted, error: insertErr } = await supabase
+                .from('admin_recovery_requests')
+                .insert({
+                    org_id: org.id,
+                    org_slug: org.slug,
+                    org_name: org.name,
+                    owner_first_name: recFirstName.trim(),
+                    owner_last_name: recLastName.trim(),
+                    what_lost: recWhatLost,
+                    new_email: recNewEmail.trim() || null,
+                    status: 'pending'
+                })
+                .select()
+                .single();
+
+            if (insertErr) throw insertErr;
+
+            // Stockage éphémère local pour vérification visuelle unique
+            if (typeof window !== 'undefined') {
+                const reqId = inserted?.id || org.id;
+                localStorage.setItem(`campusflow_recovery_id_photo_${reqId}`, recIdPhoto);
+                localStorage.setItem(`campusflow_recovery_id_photo_${org.id}`, recIdPhoto);
+                localStorage.setItem(`campusflow_recovery_id_photo_${org.slug}`, recIdPhoto);
+            }
+
+            setRecSubmitted(true);
+            toast.success('Demande transmise au Superadmin avec succès !');
+        } catch (err: any) {
+            toast.error('Erreur : ' + err.message);
+        } finally {
+            setRecSubmitting(false);
+        }
+    };
 
     // PIN
     const [pin, setPin] = useState(['', '', '', '']);
@@ -869,12 +944,20 @@ export default function LoginPage() {
                                     Connexion admin
                                 </Button>
 
-                                <button
-                                    onClick={() => setMode('forgot_password')}
-                                    className="w-full text-xs text-indigo-400 hover:text-indigo-300 transition-colors mt-1"
-                                >
-                                    Mot de passe oublié ?
-                                </button>
+                                <div className="space-y-1.5 pt-1">
+                                    <button
+                                        onClick={() => setMode('forgot_password')}
+                                        className="w-full text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                                    >
+                                        Mot de passe oublié ?
+                                    </button>
+                                    <button
+                                        onClick={() => { setMode('admin_recovery'); setRecSubmitted(false); }}
+                                        className="w-full text-[11px] text-amber-400 hover:text-amber-300 transition-colors flex items-center justify-center gap-1 font-semibold"
+                                    >
+                                        <ShieldAlert className="w-3.5 h-3.5" /> Identifiants perdus (Assistance Superadmin)
+                                    </button>
+                                </div>
                             </div>
 
                             <Button variant="ghost" className="w-full text-slate-400" onClick={() => { setMode('choose'); setEmail(''); setPassword(''); }}>
@@ -940,6 +1023,175 @@ export default function LoginPage() {
 
                             <Button variant="ghost" className="w-full text-slate-400" onClick={() => { setMode('admin'); setResetSent(false); }}>
                                 <ArrowLeft className="w-4 h-4 mr-2" /> Retour à la connexion
+                            </Button>
+                        </motion.div>
+                    )}
+
+                    {/* ═══ ADMIN RECOVERY (Feature 2) ═══ */}
+                    {mode === 'admin_recovery' && (
+                        <motion.div key="recovery" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+                            <div className="p-6 rounded-2xl bg-white/[0.03] border border-amber-500/20 space-y-4">
+                                {!recSubmitted ? (
+                                    <>
+                                        <div className="text-center">
+                                            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 flex items-center justify-center mx-auto mb-2 text-amber-400 shadow-lg shadow-amber-500/10">
+                                                <ShieldAlert className="w-6 h-6" />
+                                            </div>
+                                            <h2 className="font-bold text-white text-base">Récupérer mes accès admin</h2>
+                                            <p className="text-xs text-slate-400 mt-1">
+                                                Fournissez une pièce d'identité pour certification visuelle par le Superadmin.
+                                            </p>
+                                        </div>
+
+                                        <div className="space-y-3 text-xs">
+                                            {/* Noms du créateur */}
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <Label className="text-slate-300 text-[11px] mb-1 block">Prénom</Label>
+                                                    <Input
+                                                        value={recFirstName}
+                                                        onChange={e => setRecFirstName(e.target.value)}
+                                                        placeholder="Prénom déclaré"
+                                                        className="h-10 bg-white/5 border-white/10 text-white rounded-xl text-xs"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <Label className="text-slate-300 text-[11px] mb-1 block">Nom</Label>
+                                                    <Input
+                                                        value={recLastName}
+                                                        onChange={e => setRecLastName(e.target.value)}
+                                                        placeholder="Nom déclaré"
+                                                        className="h-10 bg-white/5 border-white/10 text-white rounded-xl text-xs"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Élément perdu */}
+                                            <div>
+                                                <Label className="text-slate-300 text-[11px] mb-1.5 block font-bold">
+                                                    Que souhaitez-vous réinitialiser ?
+                                                </Label>
+                                                <div className="grid grid-cols-3 gap-1.5">
+                                                    {([
+                                                        { id: 'password', label: 'Mot de passe' },
+                                                        { id: 'email', label: 'E-mail' },
+                                                        { id: 'both', label: 'Les deux' },
+                                                    ] as const).map(item => (
+                                                        <button
+                                                            key={item.id}
+                                                            type="button"
+                                                            onClick={() => setRecWhatLost(item.id)}
+                                                            className={cn(
+                                                                "p-2 rounded-xl text-[10px] font-bold border transition text-center",
+                                                                recWhatLost === item.id
+                                                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md shadow-amber-500/10"
+                                                                    : "bg-white/5 text-slate-400 border-white/10 hover:text-white"
+                                                            )}
+                                                        >
+                                                            {item.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* Nouvel email si concerné */}
+                                            {(recWhatLost === 'email' || recWhatLost === 'both') && (
+                                                <div>
+                                                    <Label className="text-slate-300 text-[11px] mb-1 block">
+                                                        Nouvel e-mail de remplacement :
+                                                    </Label>
+                                                    <Input
+                                                        type="email"
+                                                        value={recNewEmail}
+                                                        onChange={e => setRecNewEmail(e.target.value)}
+                                                        placeholder="nouveau-contact@ecole.com"
+                                                        className="h-10 bg-white/5 border-white/10 text-white rounded-xl text-xs"
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {/* Upload photo pièce d'identité */}
+                                            <div>
+                                                <Label className="text-slate-300 text-[11px] mb-1.5 block font-bold">
+                                                    Photo claire de votre pièce d'identité :
+                                                </Label>
+                                                <input
+                                                    type="file"
+                                                    ref={photoInputRef}
+                                                    accept="image/*"
+                                                    onChange={handlePhotoSelect}
+                                                    className="hidden"
+                                                />
+                                                {!recIdPhoto ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => photoInputRef.current?.click()}
+                                                        className="w-full p-4 rounded-xl border border-dashed border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10 transition text-center space-y-1.5"
+                                                    >
+                                                        <Upload className="w-5 h-5 text-amber-400 mx-auto" />
+                                                        <span className="text-[11px] font-bold text-amber-300 block">
+                                                            Ajouter une photo (CNI, Passeport...)
+                                                        </span>
+                                                        <span className="text-[10px] text-slate-500 block">
+                                                            Format JPG, PNG (Max 5 Mo)
+                                                        </span>
+                                                    </button>
+                                                ) : (
+                                                    <div className="space-y-2">
+                                                        <div className="relative rounded-xl overflow-hidden border border-white/10 bg-black/40 h-28 flex items-center justify-center">
+                                                            <img
+                                                                src={recIdPhoto}
+                                                                alt="Aperçu pièce"
+                                                                className="h-full w-auto object-contain"
+                                                            />
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => photoInputRef.current?.click()}
+                                                            className="text-[10px] text-amber-400 hover:text-amber-300 underline block mx-auto"
+                                                        >
+                                                            Changer la photo
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Reassuring privacy notice */}
+                                            <div className="p-3 rounded-xl bg-white/[0.02] border border-white/8 text-[10px] text-slate-400 leading-relaxed">
+                                                🔒 Votre pièce d&apos;identité est traitée de manière éphémère et sécurisée sur votre appareil pour attester de l&apos;authenticité de votre demande. Elle ne sera jamais conservée de manière permanente sur nos serveurs ni stockée dans une base de données.
+                                            </div>
+
+                                            <Button
+                                                onClick={handleAdminRecoverySubmit}
+                                                disabled={recSubmitting || !recIdPhoto}
+                                                className="w-full h-11 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-amber-600/25 mt-2"
+                                            >
+                                                {recSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+                                                Transmettre ma demande au Superadmin
+                                            </Button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="text-center py-4 space-y-3">
+                                        <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto text-emerald-400">
+                                            <CheckCircle2 className="w-8 h-8" />
+                                        </div>
+                                        <h3 className="text-base font-bold text-white">Demande transmise avec succès !</h3>
+                                        <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
+                                            Votre demande a été envoyée pour {org.name}. Le Superadmin vérifiera visuellement l'authenticité de votre pièce et appliquera la réinitialisation demandée.
+                                        </p>
+                                        <Button
+                                            onClick={() => setMode('admin')}
+                                            className="w-full h-10 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs mt-2"
+                                        >
+                                            Retour à la connexion
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+
+                            <Button variant="ghost" className="w-full text-slate-400" onClick={() => setMode('admin')}>
+                                <ArrowLeft className="w-4 h-4 mr-2" /> Annuler
                             </Button>
                         </motion.div>
                     )}

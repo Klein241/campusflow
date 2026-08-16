@@ -32,6 +32,22 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        // Vérification doublon étudiant
+        const { data: existingStudent } = await supabaseAdmin
+            .from('student_profiles')
+            .select('id')
+            .eq('organization_id', organization_id)
+            .ilike('first_name', first_name.trim())
+            .ilike('last_name', last_name.trim())
+            .limit(1);
+
+        if (existingStudent && existingStudent.length > 0) {
+            return NextResponse.json(
+                { error: `Un profil étudiant avec le nom "${first_name.trim()} ${last_name.trim()}" existe déjà dans cet établissement.` },
+                { status: 409 }
+            );
+        }
+
         const payload: Record<string, unknown> = {
             organization_id,
             first_name,

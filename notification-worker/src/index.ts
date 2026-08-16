@@ -2391,6 +2391,20 @@ async function handleInscription(request: Request, env: Env): Promise<Response> 
         'Prefer': 'return=minimal',
     };
 
+    // 0. Vérification doublon étudiant
+    try {
+        const checkRes = await fetch(
+            `${supabaseUrl}/rest/v1/student_profiles?organization_id=eq.${organization_id}&first_name=ilike.${encodeURIComponent(first_name.trim())}&last_name=ilike.${encodeURIComponent(last_name.trim())}&select=id&limit=1`,
+            { headers: { 'apikey': serviceKey, 'Authorization': `Bearer ${serviceKey}` } }
+        );
+        if (checkRes.ok) {
+            const existing: any = await checkRes.json();
+            if (Array.isArray(existing) && existing.length > 0) {
+                return json({ error: `Un étudiant nommé "${first_name.trim()} ${last_name.trim()}" existe déjà dans cet établissement.` }, 409);
+            }
+        }
+    } catch {}
+
     // 1. Insert dans inscription_requests
     const inscPayload: any = { organization_id, first_name, last_name, phone, access_code, pin_code };
     if (birth_date)      inscPayload.birth_date      = birth_date;

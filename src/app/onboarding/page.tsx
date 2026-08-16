@@ -147,7 +147,23 @@ export default function OnboardingPage() {
     const handleSubmit = async () => {
         setIsSubmitting(true);
         try {
-            const slug = generateSlug(data.schoolName);
+            const trimmedSchoolName = data.schoolName.trim();
+            if (!trimmedSchoolName) {
+                throw new Error('Le nom de l\'établissement est obligatoire');
+            }
+
+            // ═══ STEP 0: Check uniqueness of organization name ═══
+            const { data: existingOrgs } = await supabase
+                .from('organizations')
+                .select('id, name')
+                .ilike('name', trimmedSchoolName)
+                .limit(1);
+
+            if (existingOrgs && existingOrgs.length > 0) {
+                throw new Error(`Un établissement nommé "${trimmedSchoolName}" est déjà enregistré sur CampusFlow. Veuillez choisir une dénomination distincte.`);
+            }
+
+            const slug = generateSlug(trimmedSchoolName);
             const password = data.password;
 
             // ═══ STEP 1: Create auth account ═══

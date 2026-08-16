@@ -1,13 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Building2, Search, Globe, CheckCircle2, AlertTriangle,
     Ban, RotateCcw, ExternalLink, Trash2, Edit3, ShieldCheck,
     Coins, Users, GraduationCap, School, Clock, Activity,
     Sparkles, ArrowRight, Eye, Phone, Mail, MapPin, X,
-    Plus, Minus, Save, Loader2, Link2, Check
+    Plus, Minus, Save, Loader2, Link2, Check, KeyRound,
+    ShieldAlert, FileText, AlertCircle, RefreshCw, Lock,
+    CheckCircle, UserCheck, EyeOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -138,13 +140,27 @@ export function SuperadminOrgCards({
         if (!editOrg) return;
         setSavingEdit(true);
         try {
+            // Check uniqueness of name if changed
+            if (editName.trim().toLowerCase() !== (editOrg.name || '').toLowerCase()) {
+                const { data: dup } = await supabase
+                    .from('organizations')
+                    .select('id')
+                    .ilike('name', editName.trim())
+                    .neq('id', editOrg.id)
+                    .limit(1);
+                if (dup && dup.length > 0) {
+                    toast.error(`Un établissement portant le nom "${editName.trim()}" existe déjà.`);
+                    setSavingEdit(false);
+                    return;
+                }
+            }
+
             const { error } = await supabase
                 .from('organizations')
                 .update({
                     name: editName.trim(),
                     slug: editSlug.trim().toLowerCase(),
                     type: editType,
-                    school_type: editType,
                     city: editCity.trim(),
                     country: editCountry.trim(),
                     phone: editPhone.trim(),
@@ -167,6 +183,242 @@ export function SuperadminOrgCards({
         }
     };
 
+    // ═══ RECOVERY REQUESTS STATE & HANDLERS ═══
+    const [recoveryRequests, setRecoveryRequests] = useState<any[]>([]);
+    const [recoveryModalOrg, setRecoveryModalOrg] = useState<OrgCardItem | null>(null);
+    const [activeRecoveryReq, setActiveRecoveryReq] = useState<any | null>(null);
+    const [recoveryPhotoUrl, setRecoveryPhotoUrl] = useState<string | null>(null);
+    const [singleViewDestroyed, setSingleViewDestroyed] = useState(false);
+    const [replacingEmail, setReplacingEmail] = useState('');
+    const [processingRecovery, setProcessingRecovery] = useState(false);
+
+    // ═══ SUSPENSION MODAL STATE ═══
+    const [suspendModalOrg, setSuspendModalOrg] = useState<OrgCardItem | null>(null);
+    const [suspendReason, setSuspendReason] = useState('');
+    const [savingSuspend, setSavingSuspend] = useState(false);
+
+    // Load pending recovery requests
+    useEffect(() => {
+        const loadRecovery = async () => {
+            try {
+                const { data } = await supabase
+                    .from('admin_recovery_requests')
+                    .select('*')
+                    .eq('status', 'pending')
+                    .order('created_at', { ascending: false });
+                setRecoveryRequests(data || []);
+            } catch (e) {
+                console.error('Error loading recovery requests:', e);
+            }
+        };
+        loadRecovery();
+        const ch = supabase
+            .channel('admin_rec_watch')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_recovery_requests' }, () => {
+                loadRecovery();
+            })
+            .subscribe();
+        return () => {
+            supabase.removeChannel(ch);
+        };
+    }, []);
+
+    // Open recovery modal for an org
+    const openRecoveryModal = async (org: OrgCardItem) => {
+        setRecoveryModalOrg(org);
+        setSingleViewDestroyed(false);
+        setProcessingRecovery(true);
+        try {
+            const { data: reqs } = await supabase
+                .from('admin_recovery_requests')
+                .select('*')
+                .eq('org_id', org.id)
+                .eq('status', 'pending')
+                .order('created_at', { ascending: false })
+                .limit(1);
+
+            const active = reqs?.[0] || null;
+            setActiveRecoveryReq(active);
+            setReplacingEmail(active?.new_email || org.email || '');
+
+            // Single-view photo: check local storage keys
+            const keyById = active ? `campusflow_recovery_id_photo_${active.id}` : null;
+            const keyByOrg = `campusflow_recovery_id_photo_${org.id}`;
+            const keyBySlug = `campusflow_recovery_id_photo_${org.slug}`;
+
+            const photo = (typeof window !== 'undefined')
+                ? ((keyById && localStorage.getItem(keyById)) || localStorage.getItem(keyByOrg) || localStorage.getItem(keyBySlug))
+                : null;
+            setRecoveryPhotoUrl(photo);
+        } catch (err: any) {
+            console.error('Error fetching recovery data:', err);
+        } finally {
+            setProcessingRecovery(false);
+        }
+    };
+
+    // Single-view photo destruction
+    const handleDestroyPhoto = () => {
+        if (typeof window !== 'undefined') {
+            if (activeRecoveryReq) {
+                localStorage.removeItem(`campusflow_recovery_id_photo_${activeRecoveryReq.id}`);
+            }
+            if (recoveryModalOrg) {
+                localStorage.removeItem(`campusflow_recovery_id_photo_${recoveryModalOrg.id}`);
+                localStorage.removeItem(`campusflow_recovery_id_photo_${recoveryModalOrg.slug}`);
+            }
+        }
+        setRecoveryPhotoUrl(null);
+        setSingleViewDestroyed(true);
+        toast.info('🔒 Photo de la pièce d\'identité détruite définitivement sans trace');
+    };
+
+    // Apply new email from recovery request
+    const handleApplyRecoveryEmail = async () => {
+        if (!recoveryModalOrg || !replacingEmail.trim()) {
+            toast.error('Veuillez spécifier une adresse email valide.');
+            return;
+        }
+        setProcessingRecovery(true);
+        try {
+            const { error: orgErr } = await supabase
+                .from('organizations')
+                .update({ email: replacingEmail.trim() })
+                .eq('id', recoveryModalOrg.id);
+
+            if (orgErr) throw orgErr;
+
+            if (activeRecoveryReq) {
+                await supabase
+                    .from('admin_recovery_requests')
+                    .update({ status: 'resolved', resolved_at: new Date().toISOString() })
+                    .eq('id', activeRecoveryReq.id);
+            }
+
+            handleDestroyPhoto();
+            toast.success(`✅ E-mail administrateur mis à jour : ${replacingEmail.trim()}`);
+            setRecoveryModalOrg(null);
+            onRefresh();
+        } catch (err: any) {
+            toast.error('Erreur: ' + err.message);
+        } finally {
+            setProcessingRecovery(false);
+        }
+    };
+
+    // Trigger password reset email
+    const handleResetPasswordEmail = async () => {
+        if (!recoveryModalOrg) return;
+        setProcessingRecovery(true);
+        try {
+            const targetEmail = replacingEmail.trim() || recoveryModalOrg.email;
+            if (!targetEmail) {
+                toast.error("Aucune adresse e-mail trouvée.");
+                setProcessingRecovery(false);
+                return;
+            }
+
+            const { error: resetErr } = await supabase.auth.resetPasswordForEmail(targetEmail, {
+                redirectTo: `${window.location.origin}/${recoveryModalOrg.slug}/login?mode=reset_password`,
+            });
+
+            if (resetErr) {
+                toast.warning(`Note : ${resetErr.message}. Le mot de passe devra être changé à la prochaine connexion.`);
+            } else {
+                toast.success(`📧 Lien de réinitialisation envoyé à ${targetEmail}`);
+            }
+
+            if (activeRecoveryReq) {
+                await supabase
+                    .from('admin_recovery_requests')
+                    .update({
+                        status: 'resolved',
+                        resolved_at: new Date().toISOString(),
+                        superadmin_note: 'Lien de réinitialisation envoyé par Superadmin'
+                    })
+                    .eq('id', activeRecoveryReq.id);
+            }
+
+            handleDestroyPhoto();
+            setRecoveryModalOrg(null);
+            onRefresh();
+        } catch (err: any) {
+            toast.error('Erreur: ' + err.message);
+        } finally {
+            setProcessingRecovery(false);
+        }
+    };
+
+    // Reject recovery request
+    const handleRejectRecovery = async () => {
+        if (!activeRecoveryReq) {
+            setRecoveryModalOrg(null);
+            return;
+        }
+        setProcessingRecovery(true);
+        try {
+            await supabase
+                .from('admin_recovery_requests')
+                .update({ status: 'rejected', resolved_at: new Date().toISOString() })
+                .eq('id', activeRecoveryReq.id);
+
+            handleDestroyPhoto();
+            toast.info('Demande de récupération rejetée.');
+            setRecoveryModalOrg(null);
+            onRefresh();
+        } catch (err: any) {
+            toast.error('Erreur: ' + err.message);
+        } finally {
+            setProcessingRecovery(false);
+        }
+    };
+
+    // ═══ SUSPENSION HANDLERS ═══
+    const handleConfirmSuspend = async () => {
+        if (!suspendModalOrg) return;
+        setSavingSuspend(true);
+        try {
+            const reason = suspendReason.trim() || 'Vérification administrative et conformité requise';
+            const { error } = await supabase
+                .from('organizations')
+                .update({
+                    is_active: false,
+                    suspension_reason: reason
+                })
+                .eq('id', suspendModalOrg.id);
+
+            if (error) throw error;
+
+            toast.error(`🚫 "${suspendModalOrg.name}" suspendue (${reason})`);
+            setSuspendModalOrg(null);
+            setSuspendReason('');
+            onRefresh();
+        } catch (err: any) {
+            toast.error('Erreur: ' + err.message);
+        } finally {
+            setSavingSuspend(false);
+        }
+    };
+
+    const handleReactivateOrg = async (org: OrgCardItem) => {
+        try {
+            const { error } = await supabase
+                .from('organizations')
+                .update({
+                    is_active: true,
+                    suspension_reason: null
+                })
+                .eq('id', org.id);
+
+            if (error) throw error;
+
+            toast.success(`✅ "${org.name}" réactivée avec succès !`);
+            onRefresh();
+        } catch (err: any) {
+            toast.error('Erreur: ' + err.message);
+        }
+    };
+
     // Adjust Sky Points for org
     const handleAdjustPoints = async (action: 'add' | 'remove') => {
         if (!pointsModalOrg) return;
@@ -185,6 +437,19 @@ export function SuperadminOrgCards({
                 toast.error('Erreur Supabase : ' + error.message);
             } else {
                 toast.success(`⭐ Solde de ${pointsModalOrg.name} mis à jour : ${new Intl.NumberFormat('fr-FR').format(newBal)} pts`);
+
+                // Insert transaction record for audit
+                try {
+                    await supabase.from('sky_points_transactions').insert({
+                        target_type: 'organization',
+                        target_id: pointsModalOrg.id,
+                        target_name: pointsModalOrg.name,
+                        amount: delta,
+                        balance_after: newBal,
+                        reason: `Ajustement Superadmin (${action === 'add' ? '+' : '-'}${Math.abs(pointsDelta)} pts)`,
+                    });
+                } catch {}
+
                 setPointsModalOrg(null);
                 onRefresh();
             }
@@ -424,8 +689,7 @@ export function SuperadminOrgCards({
                                     </div>
                                 </div>
 
-                                {/* ── GESTION COMPLÈTE & ACTIONS RAPIDES ── */}
-                                {/* ── GESTION COMPLÈTE & ACTIONS RAPIDES ── */}
+                                 {/* ── GESTION COMPLÈTE & ACTIONS RAPIDES ── */}
                                 <div className="space-y-2 pt-3 border-t border-white/10">
                                     {/* Primary button: Fiche Complète & Roster */}
                                     <Button
@@ -437,15 +701,27 @@ export function SuperadminOrgCards({
 
                                     {/* Primary links */}
                                     <div className="grid grid-cols-3 gap-1.5">
-                                        <a
-                                            href={`/${org.slug}/admin`}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="h-7 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white font-bold text-[10px] flex items-center justify-center gap-1 transition-all border border-white/10"
-                                            title="Accéder au backoffice de l'école"
-                                        >
-                                            <ShieldCheck className="w-3 h-3 text-violet-400" /> Admin
-                                        </a>
+                                        <div className="relative">
+                                            <a
+                                                href={`/${org.slug}/admin`}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="w-full h-7 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white font-bold text-[10px] flex items-center justify-center gap-1 transition-all border border-white/10"
+                                                title="Accéder au backoffice de l'école"
+                                            >
+                                                <ShieldCheck className="w-3 h-3 text-violet-400" /> Admin
+                                            </a>
+                                            {/* Recovery request indicator button */}
+                                            {recoveryRequests.some(r => r.org_id === org.id) && (
+                                                <button
+                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); openRecoveryModal(org); }}
+                                                    className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-amber-500 text-black font-black text-[9px] flex items-center justify-center animate-bounce shadow-md shadow-amber-500/50"
+                                                    title="Demande de récupération d'accès en attente !"
+                                                >
+                                                    !
+                                                </button>
+                                            )}
+                                        </div>
                                         <a
                                             href={`/${org.slug}`}
                                             target="_blank"
@@ -468,6 +744,22 @@ export function SuperadminOrgCards({
 
                                     {/* Secondary tools */}
                                     <div className="flex items-center justify-between gap-1.5 pt-1">
+                                        {/* Recovery direct button */}
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => openRecoveryModal(org)}
+                                            className={cn(
+                                                "h-7 px-2 text-[10px] rounded-lg gap-1",
+                                                recoveryRequests.some(r => r.org_id === org.id)
+                                                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30"
+                                                    : "text-slate-400 hover:text-white hover:bg-white/10"
+                                            )}
+                                            title="Gestion des identifiants & récupération admin"
+                                        >
+                                            <KeyRound className="w-3 h-3 text-amber-400" /> Récup
+                                        </Button>
+
                                         {/* Sky Points button */}
                                         <Button
                                             size="sm"
@@ -494,7 +786,7 @@ export function SuperadminOrgCards({
                                         <Button
                                             size="sm"
                                             variant="ghost"
-                                            onClick={() => onToggleActive(org)}
+                                            onClick={() => org.is_active ? setSuspendModalOrg(org) : handleReactivateOrg(org)}
                                             className={cn(
                                                 'h-7 px-2 text-[10px] font-bold rounded-lg gap-1',
                                                 org.is_active
@@ -947,6 +1239,283 @@ export function SuperadminOrgCards({
                                     </Button>
                                 </div>
                             </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* ═══ MODALE DE SUSPENSION AVEC MOTIF ═══ */}
+            <AnimatePresence>
+                {suspendModalOrg && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="w-full max-w-md bg-[#150D11] border border-red-500/30 rounded-3xl p-6 shadow-2xl relative"
+                        >
+                            <div className="flex items-center justify-between pb-4 border-b border-red-500/20 mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-2xl bg-red-500/20 flex items-center justify-center text-red-400">
+                                        <Ban className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-sm font-black text-white">Suspendre l'établissement</h3>
+                                        <p className="text-[11px] text-red-400/80 font-mono">{suspendModalOrg.name}</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setSuspendModalOrg(null)}
+                                    className="p-1.5 rounded-xl bg-white/5 text-slate-400 hover:text-white"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="p-3 rounded-2xl bg-red-500/10 border border-red-500/20 text-xs text-red-300">
+                                    ⚠️ La suspension bloque immédiatement l'accès au portail public (landing page) et redirige l'administration vers la page rouge de contestation.
+                                </div>
+
+                                <div>
+                                    <Label className="text-xs text-slate-300 block mb-1.5 font-bold">
+                                        Motif de la suspension (notifié à l'école) :
+                                    </Label>
+                                    <textarea
+                                        value={suspendReason}
+                                        onChange={e => setSuspendReason(e.target.value)}
+                                        placeholder="Ex: Non-conformité des justificatifs, défaut de paiement, vérification d'identité..."
+                                        rows={3}
+                                        className="w-full p-3 rounded-xl bg-white/5 border border-white/10 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-red-500/50"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3 pt-2">
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() => setSuspendModalOrg(null)}
+                                        className="h-10 rounded-xl text-slate-400 hover:text-white border border-white/5"
+                                    >
+                                        Annuler
+                                    </Button>
+                                    <Button
+                                        onClick={handleConfirmSuspend}
+                                        disabled={savingSuspend}
+                                        className="h-10 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-red-600/30 gap-1"
+                                    >
+                                        {savingSuspend ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
+                                        Confirmer la suspension
+                                    </Button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* ═══ MODALE DE RÉCUPÉRATION D'IDENTIFIANTS ADMIN (Feature 2) ═══ */}
+            <AnimatePresence>
+                {recoveryModalOrg && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="w-full max-w-xl bg-[#0F131D] border border-amber-500/30 rounded-3xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto space-y-5"
+                        >
+                            {/* Header */}
+                            <div className="flex items-start justify-between pb-4 border-b border-white/10">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/10">
+                                        <KeyRound className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-base font-black text-white flex items-center gap-2">
+                                            Récupération d'Accès Admin
+                                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-mono">
+                                                Superadmin
+                                            </span>
+                                        </h3>
+                                        <p className="text-xs text-slate-400 mt-0.5">
+                                            {recoveryModalOrg.name} (/{recoveryModalOrg.slug})
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => { setRecoveryModalOrg(null); handleDestroyPhoto(); }}
+                                    className="p-1.5 rounded-xl bg-white/5 text-slate-400 hover:text-white"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            {/* Details of Request */}
+                            {activeRecoveryReq ? (
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 text-xs">
+                                        <div>
+                                            <span className="text-[10px] text-slate-400 block uppercase font-bold">Demandeur déclaré</span>
+                                            <span className="text-sm font-black text-white mt-0.5 block">
+                                                {activeRecoveryReq.owner_first_name} {activeRecoveryReq.owner_last_name}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] text-slate-400 block uppercase font-bold">Élément perdu</span>
+                                            <span className="text-xs font-bold text-amber-400 mt-0.5 block">
+                                                {activeRecoveryReq.what_lost === 'email' && '✉️ Adresse E-mail'}
+                                                {activeRecoveryReq.what_lost === 'password' && '🔒 Mot de passe'}
+                                                {activeRecoveryReq.what_lost === 'both' && '⚡ E-mail & Mot de passe'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* PIÈCE D'IDENTIFICATION — VUE UNIQUE & AUTO-SUPPRESSION */}
+                                    <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                                                <ShieldAlert className="w-4 h-4 text-amber-400" /> Pièce d'identification officielle
+                                            </span>
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold">
+                                                🔒 Vue Unique Éphémère
+                                            </span>
+                                        </div>
+
+                                        {recoveryPhotoUrl ? (
+                                            <div className="space-y-3">
+                                                <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-black/40 max-h-60 flex items-center justify-center">
+                                                    <img
+                                                        src={recoveryPhotoUrl}
+                                                        alt="Pièce d'identité"
+                                                        className="max-h-60 w-auto object-contain rounded-xl"
+                                                    />
+                                                </div>
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <p className="text-[11px] text-slate-400">
+                                                        Vérifiez la concordance avec les noms fournis lors de la création.
+                                                    </p>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={handleDestroyPhoto}
+                                                        className="h-7 text-[10px] text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg gap-1 shrink-0"
+                                                    >
+                                                        <Trash2 className="w-3 h-3" /> Détruire la pièce
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ) : singleViewDestroyed ? (
+                                            <div className="p-4 text-center rounded-xl bg-white/[0.02] border border-white/5 text-xs text-emerald-400 flex items-center justify-center gap-2">
+                                                <CheckCircle className="w-4 h-4 text-emerald-400" />
+                                                Photo détruite définitivement sans trace sur cet appareil.
+                                            </div>
+                                        ) : (
+                                            <div className="p-4 text-center rounded-xl bg-white/[0.02] border border-white/5 text-xs text-slate-400">
+                                                🔒 La pièce d'identité a été vérifiée de façon éphémère sur l'appareil du demandeur. Aucun fichier n'est conservé dans la base de données.
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Action forms according to what_lost */}
+                                    {(activeRecoveryReq.what_lost === 'email' || activeRecoveryReq.what_lost === 'both') && (
+                                        <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 space-y-3">
+                                            <Label className="text-xs text-slate-300 block font-bold">
+                                                Nouvelle adresse e-mail de remplacement :
+                                            </Label>
+                                            <div className="flex items-center gap-2">
+                                                <Input
+                                                    type="email"
+                                                    value={replacingEmail}
+                                                    onChange={e => setReplacingEmail(e.target.value)}
+                                                    placeholder="nouvel-email@ecole.com"
+                                                    className="h-10 bg-white/5 border-white/10 rounded-xl text-white text-xs font-mono"
+                                                />
+                                                <Button
+                                                    onClick={handleApplyRecoveryEmail}
+                                                    disabled={processingRecovery || !replacingEmail.trim()}
+                                                    className="h-10 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/25 shrink-0"
+                                                >
+                                                    <Save className="w-3.5 h-3.5 mr-1" /> Mettre à jour l'e-mail
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {(activeRecoveryReq.what_lost === 'password' || activeRecoveryReq.what_lost === 'both') && (
+                                        <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2">
+                                            <p className="text-xs text-slate-300 font-bold">Réinitialisation du mot de passe :</p>
+                                            <p className="text-[11px] text-slate-400">
+                                                Un lien sécurisé de réinitialisation sera transmis à l'adresse e-mail de l'administrateur afin qu'il définisse lui-même son nouveau mot de passe.
+                                            </p>
+                                            <Button
+                                                onClick={handleResetPasswordEmail}
+                                                disabled={processingRecovery}
+                                                className="w-full h-10 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/25 gap-1.5"
+                                            >
+                                                <KeyRound className="w-3.5 h-3.5" /> Envoyer le lien de réinitialisation
+                                            </Button>
+                                        </div>
+                                    )}
+
+                                    {/* Resolution Controls */}
+                                    <div className="flex items-center justify-between gap-3 pt-3 border-t border-white/10">
+                                        <Button
+                                            variant="ghost"
+                                            onClick={handleRejectRecovery}
+                                            disabled={processingRecovery}
+                                            className="h-9 px-3 rounded-xl text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs"
+                                        >
+                                            <X className="w-3.5 h-3.5 mr-1" /> Rejeter la demande
+                                        </Button>
+                                        <Button
+                                            onClick={() => { handleApplyRecoveryEmail(); }}
+                                            disabled={processingRecovery}
+                                            className="h-9 px-4 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-bold"
+                                        >
+                                            <CheckCircle className="w-3.5 h-3.5 mr-1" /> Clôturer la demande
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 text-center space-y-2">
+                                        <ShieldCheck className="w-8 h-8 text-slate-500 mx-auto" />
+                                        <p className="text-sm font-bold text-white">Aucune demande en attente</p>
+                                        <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                                            L'administrateur de cet établissement n'a pas soumis de requête de récupération récente. Vous pouvez néanmoins modifier ses accès manuellement ci-dessous.
+                                        </p>
+                                    </div>
+
+                                    <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 space-y-3">
+                                        <Label className="text-xs text-slate-300 block font-bold">
+                                            Adresse e-mail actuelle de l'établissement :
+                                        </Label>
+                                        <div className="flex items-center gap-2">
+                                            <Input
+                                                type="email"
+                                                value={replacingEmail}
+                                                onChange={e => setReplacingEmail(e.target.value)}
+                                                placeholder="email@ecole.com"
+                                                className="h-10 bg-white/5 border-white/10 rounded-xl text-white text-xs font-mono"
+                                            />
+                                            <Button
+                                                onClick={handleApplyRecoveryEmail}
+                                                disabled={processingRecovery || !replacingEmail.trim()}
+                                                className="h-10 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/25 shrink-0"
+                                            >
+                                                Mettre à jour
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    <Button
+                                        onClick={handleResetPasswordEmail}
+                                        disabled={processingRecovery}
+                                        className="w-full h-10 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/25 gap-1.5"
+                                    >
+                                        <KeyRound className="w-3.5 h-3.5" /> Envoyer un lien de réinitialisation du mot de passe
+                                    </Button>
+                                </div>
+                            )}
                         </motion.div>
                     </div>
                 )}
