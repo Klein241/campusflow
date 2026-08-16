@@ -31,6 +31,22 @@ const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL
 const PRIMARY_TIMEOUT_MS = 6000;
 const MIRROR_TIMEOUT_MS  = 5000;
 
+// ── getD1AuthHeaders : session_token pour authentifier les appels D1 ─
+// Lit directement localStorage pour éviter une dépendance circulaire
+// avec SessionManager (qui importe supabase qui importe ce fichier).
+function getD1AuthHeaders(): Record<string, string> {
+    try {
+        if (typeof window === 'undefined') return {};
+        const raw = localStorage.getItem('campusflow_session');
+        if (!raw) return {};
+        const session = JSON.parse(raw) as { session_token?: string };
+        if (session?.session_token) {
+            return { 'X-CampusFlow-Token': session.session_token };
+        }
+    } catch { /* silencieux — ne bloque jamais une écriture */ }
+    return {};
+}
+
 // ── withTimeout ───────────────────────────────────────────
 async function withTimeout<T>(
     promise: Promise<T>,
@@ -61,7 +77,7 @@ async function criticalFallbackLog(event: string, table: string, error: string):
     try {
         await fetch(`${WORKER_URL}/api/d1/system_alerts`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...getD1AuthHeaders() },
             body: JSON.stringify({
                 id: crypto.randomUUID(),
                 service: 'DataProvider',
@@ -97,10 +113,11 @@ async function writeToMirror(
     payload: Record<string, unknown>
 ): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> {
     try {
+        const authHeaders = getD1AuthHeaders();
         if (operationType === 'DELETE') {
             const res = await fetch(`${WORKER_URL}/api/d1/${table}`, {
                 method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...authHeaders },
                 body: JSON.stringify({ id: payload.id }),
             });
             if (!res.ok) throw new Error(`DELETE failed: HTTP ${res.status}`);
@@ -111,7 +128,7 @@ async function writeToMirror(
         // construise le bon dedup_key (table::id::INSERT vs ::UPDATE)
         const res = await fetch(`${WORKER_URL}/api/d1/${table}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
             body: JSON.stringify({ ...payload, __operation: operationType }),
         });
         if (!res.ok) {
@@ -134,7 +151,7 @@ async function registerPendingSync(params: {
     const dedupKey = `${params.table}::${params.idempotencyKey}::${params.operationType}`;
     const res = await fetch(`${WORKER_URL}/api/d1/pending_supabase_sync`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getD1AuthHeaders() },
         body: JSON.stringify({
             id: crypto.randomUUID(),
             table_name: params.table,

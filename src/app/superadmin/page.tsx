@@ -1334,7 +1334,6 @@ export default function SuperAdminPage() {
                         {tab === 'email' && (
                             <EmailProvidersPanel
                                 workerUrl="https://campusflow-worker.kleintaptue1.workers.dev"
-                                adminKey={process.env.NEXT_PUBLIC_ADMIN_KEY}
                             />
                         )}
 
@@ -2965,7 +2964,7 @@ function AdsTab({ supabase }: { supabase: any }) {
 }
 
 // ─── EmailProvidersPanel ──────────────────────────────────────────────────────
-function EmailProvidersPanel({ workerUrl, adminKey }: { workerUrl: string; adminKey?: string }) {
+function EmailProvidersPanel({ workerUrl }: { workerUrl: string }) {
     const [status, setStatus] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -2973,8 +2972,10 @@ function EmailProvidersPanel({ workerUrl, adminKey }: { workerUrl: string; admin
     const load = async () => {
         setLoading(true); setError(null);
         try {
+            const { data: { session: authSession } } = await supabase.auth.getSession();
+            const token = authSession?.access_token || '';
             const res = await fetch(`${workerUrl}/api/email/status`, {
-                headers: adminKey ? { 'x-admin-key': adminKey } : {}
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             setStatus(await res.json());

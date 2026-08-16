@@ -1469,10 +1469,11 @@ function AdminPageContent() {
             // Automatisation backend (Worker -> Netlify API)
             try {
                 const workerUrl = process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL || process.env.NEXT_PUBLIC_WORKER_URL || 'https://campusflow-worker.kleintaptue1.workers.dev';
-                const adminKey = process.env.NEXT_PUBLIC_ADMIN_KEY || 'cf-admin-k3y-campusflow-2026-s3cur3';
+                const { data: { session: authSession } } = await supabase.auth.getSession();
+                const authToken = authSession?.access_token || '';
                 await fetch(`${workerUrl}/api/domain/register`, {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${adminKey}`, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ domain, orgId: org.id })
                 });
             } catch {}
@@ -1490,10 +1491,11 @@ function AdminPageContent() {
 
         try {
             const workerUrl = process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL || process.env.NEXT_PUBLIC_WORKER_URL || 'https://campusflow-worker.kleintaptue1.workers.dev';
-            const adminKey = process.env.NEXT_PUBLIC_ADMIN_KEY || 'cf-admin-k3y-campusflow-2026-s3cur3';
+            const { data: { session: authSession } } = await supabase.auth.getSession();
+            const authToken = authSession?.access_token || '';
             await fetch(`${workerUrl}/api/domain/remove`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${adminKey}`, 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ domain: prevDomain, orgId: org.id })
             });
         } catch {}

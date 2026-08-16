@@ -2326,8 +2326,9 @@ async function handleEmailSend(request: Request, env: Env): Promise<Response> {
 
 // ── Statut email providers (superadmin only) ─────────────
 async function handleEmailStatus(request: Request, env: Env): Promise<Response> {
-    // Vérification superadmin via header secret
-    const adminKey = request.headers.get('x-admin-key');
+    // Vérification superadmin via header secret ou Bearer token
+    const authHeader = request.headers.get('Authorization') || '';
+    const adminKey = request.headers.get('x-admin-key') || (authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '').trim() : '');
     const expectedKey = (env as any).ADMIN_KEY as string | undefined;
     if (expectedKey && adminKey !== expectedKey) {
         return json({ error: 'Unauthorized' }, 401);
@@ -2520,8 +2521,7 @@ async function handleInscription(request: Request, env: Env): Promise<Response> 
 /** POST /api/domain/register — Ajout automatique d'alias de domaine sur Netlify */
 async function handleDomainRegister(request: Request, env: Env): Promise<Response> {
     const authHeader = request.headers.get('Authorization') || '';
-    const adminKey = env.ADMIN_KEY || 'cf-admin-k3y-campusflow-2026-s3cur3';
-    if (!authHeader.includes(adminKey)) {
+    if (!authHeader || !env.ADMIN_KEY || !authHeader.includes(env.ADMIN_KEY)) {
         return json({ error: 'Non autorisé' }, 401);
     }
 
@@ -2585,8 +2585,7 @@ async function handleDomainRegister(request: Request, env: Env): Promise<Respons
 /** POST /api/domain/remove — Retrait automatique d'alias de domaine sur Netlify */
 async function handleDomainRemove(request: Request, env: Env): Promise<Response> {
     const authHeader = request.headers.get('Authorization') || '';
-    const adminKey = env.ADMIN_KEY || 'cf-admin-k3y-campusflow-2026-s3cur3';
-    if (!authHeader.includes(adminKey)) {
+    if (!authHeader || !env.ADMIN_KEY || !authHeader.includes(env.ADMIN_KEY)) {
         return json({ error: 'Non autorisé' }, 401);
     }
 
@@ -2670,9 +2669,13 @@ export default {
             if (pathname === '/health' || pathname === '/api/status') return handleHealthWithD1(request, env);
 
             // ── D1 Failover API ──
-            if (pathname.startsWith('/api/d1/') && method === 'POST')   return handleD1Write(request, env, pathname);
-            if (pathname.startsWith('/api/d1/') && method === 'GET')    return handleD1Read(request, env, pathname);
-            if (pathname.startsWith('/api/d1/') && method === 'DELETE') return handleD1Delete(request, env, pathname);
+            if (pathname.startsWith('/api/d1/')) {
+                const authError = await requireD1Auth(request, env);
+                if (authError) return authError;
+                if (method === 'POST')   return handleD1Write(request, env, pathname);
+                if (method === 'GET')    return handleD1Read(request, env, pathname);
+                if (method === 'DELETE') return handleD1Delete(request, env, pathname);
+            }
 
             // ── Email (Resend API) ──
             if (pathname === '/api/email/send'   && method === 'POST') return handleEmailSend(request, env);
@@ -2710,7 +2713,7 @@ export default {
                 ],
             }, 404);
         } catch (e: any) {
-            return json({ error: e.message, stack: e.stack }, 500);
+            return json({ error: 'Internal server error' }, 500);
         }
     },
 
@@ -2790,6 +2793,39 @@ function getTableFromPath(pathname: string): string | null {
     const parts = pathname.split('/');
     const table = parts[parts.length - 1];
     return D1_ALLOWED_TABLES.has(table) ? table : null;
+}
+
+/**
+ * Vérifie que la requête contient un session_token CampusFlow valide.
+ * Le token est lu depuis l'en-tête X-CampusFlow-Token et vérifié
+ * contre la table D1 locale session_tokens (miroir de Supabase).
+ * Fonctionne en mode failover (Supabase down) car D1 est local.
+ * Retourne null si l'auth est OK, ou une Response HTTP 401 sinon.
+ */
+async function requireD1Auth(
+    request: Request,
+    env: Env
+): Promise<Response | null> {
+    const token = request.headers.get('X-CampusFlow-Token');
+    if (!token || token.length < 32) {
+        return json({ error: 'Unauthorized — missing or invalid session token' }, 401);
+    }
+    try {
+        const row = await env.CAMPUSFLOW_DB
+            .prepare('SELECT expires_at FROM session_tokens WHERE token = ?1 LIMIT 1')
+            .bind(token)
+            .first<{ expires_at: string }>();
+        if (!row) return json({ error: 'Unauthorized — session not found' }, 401);
+        if (new Date(row.expires_at).getTime() < Date.now()) {
+            return json({ error: 'Unauthorized — session expired' }, 401);
+        }
+    } catch {
+        // Si la table session_tokens n'existe pas encore dans D1
+        // (premier déploiement ou base vide), on laisse passer
+        // pour ne pas bloquer le failover. Ce cas est temporaire.
+        return null;
+    }
+    return null; // Token valide → continuer
 }
 
 /** POST /api/d1/:table — Upsert idempotent dans D1 */

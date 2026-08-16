@@ -13,10 +13,6 @@ function getWorkerUrl(): string {
         || 'https://campusflow-worker.kleintaptue1.workers.dev';
 }
 
-function getAdminKey(): string {
-    return process.env.ADMIN_KEY || 'cf-admin-k3y-campusflow-2026-s3cur3';
-}
-
 export interface R2UploadResult {
     url: string;
     key: string;
@@ -34,10 +30,9 @@ export async function uploadToR2(
     fileName?: string
 ): Promise<R2UploadResult> {
     const workerUrl = getWorkerUrl();
-    const adminKey = getAdminKey();
 
     const formData = new FormData();
-    
+
     // Ensure File object has a name
     let fileToUpload: File;
     if (file instanceof File) {
@@ -51,17 +46,19 @@ export async function uploadToR2(
     formData.append('file', fileToUpload);
     formData.append('folder', folder);
 
-    const headers: Record<string, string> = {
-        'Authorization': `Bearer ${adminKey}`,
-    };
-
-    // Inclure le profile_id de la session courante pour traçabilité
+    // Auth : on utilise le session_token de l'utilisateur connecté comme Bearer token.
+    // C'est plus sûr qu'une clé statique : le token expire automatiquement après 8h.
+    const headers: Record<string, string> = {};
     try {
         const session = SessionManager.get();
+        if (session?.session_token) {
+            headers['Authorization'] = `Bearer ${session.session_token}`;
+            headers['X-CampusFlow-Token'] = session.session_token;
+        }
         if (session?.profile_id) {
             headers['X-User-Id'] = session.profile_id;
         }
-    } catch {}
+    } catch { /* silencieux */ }
 
     const response = await fetch(`${workerUrl}/api/r2/upload`, {
         method: 'POST',
