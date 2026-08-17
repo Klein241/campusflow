@@ -22,6 +22,8 @@ import { compressImage } from '@/lib/compress';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { generateBulletinPDF, type BulletinData, computeSubjectAverage, computeOverallAverage } from '@/lib/bulletin-pdf';
+import { generateCertificatePDF, type CertificateData } from '@/lib/certificate-pdf';
+import { fetchSkyPoints, deductSkyPoints } from '@/lib/sky-points-service';
 import { TeacherCursus } from './cursus/teacher-cursus';
 import { StudentCursus } from './cursus/student-cursus';
 import { AdminCursus } from './cursus/admin-cursus';
@@ -113,6 +115,17 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
     // Cursus State
     const [allTeachers, setAllTeachers] = useState<any[]>([]);
     const [skyPoints, setSkyPoints] = useState(0);
+    const [publishedDocs, setPublishedDocs] = useState<any[]>([]);
+    const [confirmDocModal, setConfirmDocModal] = useState<{
+        type: 'bulletin' | 'certificat' | 'releve';
+        title: string;
+        docData?: any;
+        templateId?: number;
+        docId?: string;
+    } | null>(null);
+    const [previewDocModal, setPreviewDocModal] = useState<any | null>(null);
+    const [downloadingDoc, setDownloadingDoc] = useState(false);
+    const [unlockedDocs, setUnlockedDocs] = useState<Record<string, boolean>>({});
 
     
     const printRef = useRef<HTMLDivElement>(null);
@@ -401,6 +414,145 @@ export function MySpaceView({ orgId, orgSlug, userId, userName, userRole, orgNam
         pw.document.write(`<!DOCTYPE html><html><head><title>EDT — ${orgName}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;color:#1a1a1a;padding:20mm;font-size:11pt}table{width:100%;border-collapse:collapse;margin:12px 0}th{background:#0d9488;color:white;padding:10px 8px;text-align:left}td{padding:8px;border-bottom:1px solid #e2e8f0}@media print{body{padding:15mm}}</style></head><body><h1 style="color:#0d9488;margin-bottom:20px">${orgName} — Emploi du temps</h1><table><thead><tr><th>Horaire</th><th>Matière</th><th>Salle</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);
         pw.document.close();
         setTimeout(() => pw.print(), 500);
+    };
+
+    // ═══ STUDENT: Official Documents & Sky Points PDF Download (3 Sky Points) ═══
+    const printReleveNotes = () => {
+        const pw = window.open('', '_blank');
+        if (!pw) { alert('Veuillez autoriser les pop-ups'); return; }
+        const rows = gradesBySubject.map(gs => {
+            const score = gs.count > 0 ? gs.average.toFixed(2) : '—';
+            const ok = gs.average >= 10;
+            return `<tr>
+                <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;"><strong>${gs.subject.name}</strong></td>
+                <td style="text-align:center;padding:10px 12px;border-bottom:1px solid #e2e8f0;">${gs.subject.coefficient || 1}</td>
+                <td style="text-align:center;padding:10px 12px;border-bottom:1px solid #e2e8f0;">${gs.evalCount} éval(s)</td>
+                <td style="text-align:center;padding:10px 12px;border-bottom:1px solid #e2e8f0;font-weight:bold;color:${ok ? '#16a34a' : '#dc2626'}">${score}/20</td>
+            </tr>`;
+        }).join('');
+
+        pw.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Relevé de notes — ${profile?.first_name} ${profile?.last_name}</title><style>
+            body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;padding:36px;max-width:820px;margin:auto;background:#fff}
+            h1{font-size:22px;font-weight:900;color:#0f172a;margin:0 0 4px;text-transform:uppercase}
+            p.sub{color:#64748b;font-size:13px;margin:2px 0}
+            table{width:100%;border-collapse:collapse;margin-top:20px;font-size:13px}
+            th{background:#0f172a;color:#fff;padding:10px 12px;text-align:left;font-weight:700}
+            .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0f172a;padding-bottom:16px}
+            .org{text-align:right;font-size:12px;color:#475569}
+            .moy{margin-top:20px;text-align:right;font-size:16px;font-weight:bold;background:#f1f5f9;padding:14px 18px;border-radius:10px}
+        </style></head><body>
+            <div class="header">
+                <div>
+                    ${orgLogo ? `<img src="${orgLogo}" style="height:48px;max-width:160px;object-fit:contain;margin-bottom:8px;" />` : ''}
+                    <h1>Relevé de notes officiel</h1>
+                    <p class="sub"><strong>${profile?.first_name} ${profile?.last_name}</strong> — Matricule : ${profile?.matricule || '—'}</p>
+                    <p class="sub">Classe : <strong>${classroom?.name || '—'}</strong> ${filiere?.nom ? `• Filière : ${filiere.nom}` : ''}</p>
+                </div>
+                <div class="org">
+                    <p style="font-size:14px;font-weight:bold;color:#0f172a;margin-bottom:4px;">${orgName}</p>
+                    ${orgPhone ? `<p style="margin:2px 0">${orgPhone}</p>` : ''}
+                    ${orgEmail ? `<p style="margin:2px 0">${orgEmail}</p>` : ''}
+                    <p style="color:#94a3b8;margin-top:4px;"><small>Délivré le ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</small></p>
+                </div>
+            </div>
+            <table>
+                <thead><tr><th>Matière</th><th style="text-align:center">Coefficient</th><th style="text-align:center">Évaluations</th><th style="text-align:center">Moyenne / 20</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+            <div class="moy">Moyenne générale : <span style="color:${overallAvg >= 10 ? '#16a34a' : '#dc2626'}">${overallAvg > 0 ? overallAvg.toFixed(2) : '—'}/20</span></div>
+        </body></html>`);
+        pw.document.close();
+        setTimeout(() => pw.print(), 500);
+    };
+
+    const triggerDocumentExport = (doc: { type: string; docData?: any; templateId?: number }) => {
+        if (doc.type === 'bulletin') {
+            exportBulletinPDF();
+        } else if (doc.type === 'certificat') {
+            if (doc.docData) {
+                generateCertificatePDF(doc.docData, doc.templateId || 1);
+            } else {
+                const certData: CertificateData = {
+                    org: { name: orgName, logo_url: orgLogo, phone: orgPhone, email: orgEmail, city: orgCity, country: orgCountry },
+                    student: { first_name: profile.first_name, last_name: profile.last_name, matricule: profile.matricule, classroom_name: classroom?.name, filiere_name: filiere?.nom },
+                    certificate: {
+                        title: 'CERTIFICAT DE SCOLARITÉ & RÉUSSITE',
+                        subtitle: 'ATTESTATION OFFICIELLE',
+                        course_name: filiere?.nom || classroom?.name || 'Cycle d\'Études',
+                        date_issued: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
+                        location: orgCity || 'Campus',
+                        signatory1_title: 'La Direction',
+                        signatory1_name: orgName,
+                        show_stamp: true,
+                        show_signature: true,
+                    }
+                };
+                generateCertificatePDF(certData, doc.templateId || 1);
+            }
+        } else if (doc.type === 'releve') {
+            printReleveNotes();
+        }
+    };
+
+    const handleDownloadDocument = (doc: {
+        id?: string;
+        type: 'bulletin' | 'certificat' | 'releve';
+        title: string;
+        data?: any;
+        templateId?: number;
+        isUnlocked?: boolean;
+    }) => {
+        const isAlreadyUnlocked = doc.isUnlocked || (doc.id && unlockedDocs[doc.id]);
+        if (isAlreadyUnlocked) {
+            triggerDocumentExport({ type: doc.type, docData: doc.data, templateId: doc.templateId });
+            return;
+        }
+        setConfirmDocModal({
+            type: doc.type,
+            title: doc.title,
+            docData: doc.data,
+            templateId: doc.templateId || 1,
+            docId: doc.id,
+        });
+    };
+
+    const confirmAndDeductSkyPoints = async () => {
+        if (!confirmDocModal) return;
+        setDownloadingDoc(true);
+        try {
+            const ok = await deductSkyPoints(
+                userId,
+                3,
+                'telechargement_document',
+                `Téléchargement PDF officiel : ${confirmDocModal.title}`,
+                'student',
+                orgId
+            );
+
+            if (ok === null) {
+                toast.error('Solde insuffisant (3 Sky Points requis). Regardez une publicité ou rechargez vos points !');
+                setDownloadingDoc(false);
+                return;
+            }
+
+            setSkyPoints(ok);
+            if (confirmDocModal.docId) {
+                setUnlockedDocs(prev => ({ ...prev, [confirmDocModal.docId!]: true }));
+                try {
+                    await supabase
+                        .from('student_documents')
+                        .update({ unlocked_by_student: true })
+                        .eq('id', confirmDocModal.docId);
+                } catch {}
+            }
+
+            toast.success('⭐ 3 Sky Points déduits ! Téléchargement en cours...');
+            triggerDocumentExport(confirmDocModal);
+            setConfirmDocModal(null);
+        } catch (e: any) {
+            toast.error(e.message || 'Erreur lors du téléchargement');
+        }
+        setDownloadingDoc(false);
     };
 
     // ═══ STUDENT: Export Bulletin PDF ═══

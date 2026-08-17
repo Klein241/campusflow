@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Search, BookOpen, Award, Star, ShoppingBag,
+    BookOpen, Award, Star, ShoppingBag,
     MapPin, Sparkles, GraduationCap, ChevronRight,
     CheckCircle2, ArrowRight, FileText, Send,
     Shield, Briefcase, Globe, Cpu, Users, ChevronDown,
-    ChevronUp, MessageCircle, Calendar, Phone
+    ChevronUp, MessageCircle, Calendar, Phone, LogIn
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -40,32 +40,32 @@ export function TemplateSegmentedHub({
     const [openAccordion, setOpenAccordion] = useState<string>('mission');
 
     const programCards = filieres && filieres.length > 0 ? filieres : [
-        { id: '1', nom: 'MBA Excellence & Management', duree_mois: 24, description: 'Programme intensif pour leaders stratégiques et cadres dirigeants.', icon: Briefcase },
-        { id: '2', nom: 'Global Health & Sciences', duree_mois: 36, description: 'Santé publique, épidémiologie et biotechnologies avancées.', icon: Globe },
-        { id: '3', nom: 'Tech Innovation & IA', duree_mois: 24, description: 'Ingénierie logicielle, cybersécurité et intelligence artificielle.', icon: Cpu },
-        { id: '4', nom: 'Humanities & Leadership', duree_mois: 12, description: 'Communication politique, relations internationales et éthique.', icon: Users },
+        { id: '1', nom: 'Excellence & Management', duree_mois: 24, description: 'Programme intensif pour leaders stratégiques et cadres dirigeants.', icon: Briefcase },
+        { id: '2', nom: 'Santé & Sciences Biomédicales', duree_mois: 36, description: 'Santé publique, soins infirmiers et technologies médicales.', icon: Globe },
+        { id: '3', nom: 'Ingénierie, Numérique & IA', duree_mois: 24, description: 'Développement logiciel, cybersécurité et intelligence artificielle.', icon: Cpu },
+        { id: '4', nom: 'Lettres, Droit & Sciences Humaines', duree_mois: 12, description: 'Communication, relations publiques, droit et gouvernance.', icon: Users },
     ];
 
     const accordionItems = [
         {
             id: 'mission',
-            title: 'Our Mission & Academic Vision',
-            content: org.about_text || `${org.name} forme les bâtisseurs de demain à travers des programmes rigoureux, dispensés par un corps professoral international de premier plan.`
+            title: '🎯 Notre Mission & Vision Académique',
+            content: org.about_text || `${org.name} forme les bâtisseurs de demain à travers des programmes rigoureux, dispensés par un corps professoral hautement qualifié.`
         },
         {
             id: 'faculty',
-            title: 'Prestigious Faculty & Mentors',
-            content: `Plus de ${teacherCount || 50} enseignants-chercheurs et experts de l'industrie accompagnent chaque étudiant vers l'excellence professionnelle.`
+            title: '👨‍🏫 Corps Professoral & Encadrement d\'Excellence',
+            content: `Plus de ${teacherCount || 30} enseignants certifiés et experts de l'industrie accompagnent chaque étudiant vers la réussite et l'insertion professionnelle.`
         },
         {
             id: 'research',
-            title: 'Research Focus & Innovation Labs',
-            content: 'Des infrastructures de pointe et des partenariats avec les plus grandes institutions pour développer des projets à fort impact.'
+            title: '🔬 Infrastructures & Salles Spécialisées',
+            content: 'Des salles modernes, une bibliothèque connectée et des équipements pratiques pour un apprentissage concret et orienté compétences.'
         },
         {
             id: 'legacy',
-            title: 'Campus Legacy & Global Network',
-            content: 'Rejoignez un réseau de milliers d\'alumni actifs dans les entreprises majeures et organisations internationales.'
+            title: '🌐 Réseau des Diplômés & Perspectives',
+            content: 'Rejoignez un réseau dynamique d\'étudiants et diplômés insérés dans les secteurs clés d\'activité et les organisations internationales.'
         },
     ];
 
@@ -77,7 +77,7 @@ export function TemplateSegmentedHub({
                 <div className="absolute bottom-10 right-10 w-[600px] h-[400px] bg-amber-600/10 blur-[180px] rounded-full" />
             </div>
 
-            {/* ═══ Top Navbar Ivy Luxury ═══ */}
+            {/* ═══ Top Navbar Luxury ═══ */}
             <nav className="relative z-20 max-w-7xl mx-auto px-4 sm:px-8 py-5">
                 <div className="flex items-center justify-between gap-4 p-3.5 px-6 rounded-2xl bg-[#06180F]/90 backdrop-blur-2xl border border-amber-500/30 shadow-2xl">
                     {/* Logo & Crest */}
@@ -90,36 +90,35 @@ export function TemplateSegmentedHub({
                             </div>
                         )}
                         <div>
-                            <h2 className="text-sm sm:text-base font-black tracking-wide text-white uppercase">{org.name}</h2>
-                            <p className="text-[10px] text-amber-400/80 font-medium tracking-wider uppercase">{org.motto || 'Excellence • Tradition • Avenir'}</p>
+                            <h2 className="text-sm sm:text-base font-black tracking-wide text-white uppercase truncate max-w-[200px] sm:max-w-none">{org.name}</h2>
+                            <p className="text-[10px] text-amber-400/80 font-medium tracking-wider uppercase">{org.motto || 'Excellence • Rigueur • Réussite'}</p>
                         </div>
                     </div>
 
                     {/* Nav Links */}
                     <div className="hidden md:flex items-center gap-7 text-xs font-bold text-slate-300 tracking-wider">
-                        <a href="#admissions" onClick={onOpenInscription} className="hover:text-amber-300 transition-colors">Admissions</a>
-                        <a href="#programs" className="hover:text-amber-300 transition-colors">Programs</a>
-                        <a href="#research" className="hover:text-amber-300 transition-colors">Research</a>
-                        <a href="#campus" className="hover:text-amber-300 transition-colors">Campus</a>
+                        <button onClick={onOpenInscription} className="hover:text-amber-300 transition-colors">Admissions</button>
+                        <a href="#programs" className="hover:text-amber-300 transition-colors">Formations</a>
+                        <a href="#about" onClick={() => setOpenAccordion('research')} className="hover:text-amber-300 transition-colors">Infrastructures</a>
+                        <a href="#campus" onClick={() => setOpenAccordion('faculty')} className="hover:text-amber-300 transition-colors">Campus</a>
                     </div>
 
                     {/* Contact & Espace élève CTA */}
                     <div className="flex items-center gap-2.5">
                         <Link href={orgPath(orgSlug, 'login')}>
-                            <Button size="sm" className="bg-white/10 hover:bg-white/15 text-white font-bold text-xs rounded-xl border border-white/15 h-9 px-4">
+                            <Button size="sm" className="bg-white/10 hover:bg-white/15 text-white font-bold text-xs rounded-xl border border-white/15 h-9 px-4 flex items-center gap-1.5">
+                                <LogIn className="w-3.5 h-3.5" />
                                 Connexion
                             </Button>
                         </Link>
-                        <a href="#inscription" onClick={onOpenInscription}>
-                            <Button size="sm" className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/25 h-9 px-4">
-                                Contact
-                            </Button>
-                        </a>
+                        <Button size="sm" onClick={onOpenInscription} className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/25 h-9 px-4">
+                            S'inscrire
+                        </Button>
                     </div>
                 </div>
             </nav>
 
-            {/* ═══ Main Ivy Content ═══ */}
+            {/* ═══ Main Content ═══ */}
             <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-8 pt-8 space-y-12">
                 {/* ═══ Hero Headline & Split Showcase ═══ */}
                 <div className="grid lg:grid-cols-12 gap-8 items-center">
@@ -130,24 +129,23 @@ export function TemplateSegmentedHub({
                             animate={{ opacity: 1, y: 0 }}
                             className="text-3xl sm:text-5xl lg:text-6xl font-black text-amber-400 uppercase tracking-tight leading-[1.08]"
                         >
-                            Ignite Your Potential. <br />
-                            <span className="text-white">Lead the Future.</span>
+                            Révélez Votre Potentiel. <br />
+                            <span className="text-white">Guidez l'Avenir.</span>
                         </motion.h1>
                         <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-lg font-light">
-                            Experience World-Class Education, certified international curriculums, and prestigious leadership training at <strong className="text-amber-300">{org.name}</strong>.
+                            Bénéficiez d'une éducation de haut niveau, de parcours certifiés et d'un encadrement rigoureux à <strong className="text-amber-300">{org.name}</strong>.
                         </p>
                         <div className="flex items-center gap-3 pt-2">
-                            <a href="#inscription" onClick={onOpenInscription}>
-                                <Button className="h-12 px-7 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-xl shadow-amber-500/30 gap-2">
-                                    <span>Explore Programs</span>
-                                    <ArrowRight className="w-4 h-4" />
-                                </Button>
-                            </a>
-                            <a href="#contact">
+                            <Button onClick={onOpenInscription} className="h-12 px-7 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-xl shadow-amber-500/30 gap-2">
+                                <FileText className="w-4 h-4" />
+                                <span>Demande d'Admission</span>
+                                <ArrowRight className="w-4 h-4" />
+                            </Button>
+                            <Link href={orgPath(orgSlug, 'library')}>
                                 <Button variant="outline" className="h-12 px-6 rounded-xl border-amber-500/30 text-amber-300 hover:bg-amber-500/10 font-bold text-xs">
-                                    Schedule Tour
+                                    Bibliothèque & Livres
                                 </Button>
-                            </a>
+                            </Link>
                         </div>
                     </div>
 
@@ -155,8 +153,8 @@ export function TemplateSegmentedHub({
                     <div className="lg:col-span-6 relative">
                         <div className="rounded-3xl overflow-hidden border border-amber-500/30 shadow-2xl aspect-[16/10] bg-[#07190F]">
                             <img
-                                src={org.about_image_url || 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=1000&auto=format&fit=crop&q=80'}
-                                alt="Ivy Campus"
+                                src={org.about_image_url || (gallery && gallery[0]) || 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=1000&auto=format&fit=crop&q=80'}
+                                alt="Campus"
                                 className="w-full h-full object-cover"
                             />
                         </div>
@@ -165,7 +163,7 @@ export function TemplateSegmentedHub({
                         <div className="absolute top-1/2 left-6 -translate-y-1/2 p-3.5 px-5 rounded-2xl bg-[#06180F]/90 backdrop-blur-2xl border border-amber-400/50 shadow-2xl flex items-center gap-3">
                             <div>
                                 <span className="text-2xl font-black text-white tracking-tight">98%</span>
-                                <span className="text-[10px] text-amber-400 block font-bold uppercase tracking-wider">Success Rate</span>
+                                <span className="text-[10px] text-amber-400 block font-bold uppercase tracking-wider">Taux de Réussite</span>
                             </div>
                             <Shield className="w-6 h-6 text-amber-400" />
                         </div>
@@ -173,14 +171,14 @@ export function TemplateSegmentedHub({
                 </div>
 
                 {/* ═══ Split Section: Programs & Campus (Left) | About Us Accordion (Right) ═══ */}
-                <div className="grid lg:grid-cols-12 gap-8 pt-4">
-                    {/* LEFT (Col 7): PROGRAMS & CAMPUS CAROUSEL */}
+                <div id="programs" className="grid lg:grid-cols-12 gap-8 pt-4">
+                    {/* LEFT (Col 7): PROGRAMS & CAMPUS */}
                     <div className="lg:col-span-7 space-y-4">
                         <div className="flex items-center justify-between">
                             <h3 className="text-xs font-black uppercase text-amber-400 tracking-widest flex items-center gap-2">
-                                <BookOpen className="w-4 h-4" /> Programs & Campus
+                                <BookOpen className="w-4 h-4" /> Filières & Formations Disponibles
                             </h3>
-                            <span className="text-xs text-slate-400">{programCards.length} Curriculums</span>
+                            <span className="text-xs text-slate-400 font-bold">{programCards.length} Cursus Actifs</span>
                         </div>
 
                         <div className="grid sm:grid-cols-2 gap-4">
@@ -188,7 +186,7 @@ export function TemplateSegmentedHub({
                                 <motion.div
                                     key={p.id || idx}
                                     onClick={() => setSelectedProgramIdx(idx)}
-                                    className={`p-5 rounded-3xl border transition-all cursor-pointer flex flex-col justify-between h-48 group ${
+                                    className={`p-5 rounded-3xl border transition-all cursor-pointer flex flex-col justify-between h-52 group ${
                                         selectedProgramIdx === idx
                                             ? 'bg-gradient-to-br from-[#0D2418] to-[#06180F] border-amber-400/60 shadow-xl shadow-amber-500/10'
                                             : 'bg-[#06180F]/80 border-white/10 hover:border-amber-500/30'
@@ -199,11 +197,13 @@ export function TemplateSegmentedHub({
                                             <Briefcase className="w-5 h-5" />
                                         </div>
                                         <h4 className="font-black text-sm text-white group-hover:text-amber-300 transition-colors">{p.nom}</h4>
-                                        <p className="text-[11px] text-slate-400 line-clamp-2 mt-1.5 leading-relaxed">{p.description || 'Cursus d\'excellence certifié.'}</p>
+                                        <p className="text-[11px] text-slate-400 line-clamp-2 mt-1.5 leading-relaxed">{p.description || 'Cursus certifié avec suivi pédagogique complet.'}</p>
                                     </div>
-                                    <div className="flex items-center justify-between pt-2 text-xs">
-                                        <span className="text-amber-400/80 font-bold">{p.duree_mois || 24} mois</span>
-                                        <ArrowRight className="w-4 h-4 text-amber-400 group-hover:translate-x-1 transition-transform" />
+                                    <div className="flex items-center justify-between pt-2 text-xs border-t border-white/5">
+                                        <span className="text-amber-400/80 font-bold">{p.duree_mois ? `${p.duree_mois} mois` : 'Cursus complet'}</span>
+                                        <button onClick={(e) => { e.stopPropagation(); onOpenInscription?.(); }} className="text-[11px] font-bold text-amber-300 hover:text-white flex items-center gap-1">
+                                            Postuler <ArrowRight className="w-3.5 h-3.5" />
+                                        </button>
                                     </div>
                                 </motion.div>
                             ))}
@@ -211,9 +211,9 @@ export function TemplateSegmentedHub({
                     </div>
 
                     {/* RIGHT (Col 5): ABOUT US ACCORDIONS */}
-                    <div className="lg:col-span-5 space-y-4">
+                    <div id="about" className="lg:col-span-5 space-y-4">
                         <h3 className="text-xs font-black uppercase text-amber-400 tracking-widest flex items-center gap-2">
-                            <Sparkles className="w-4 h-4" /> About Us
+                            <Sparkles className="w-4 h-4" /> Informations & Atouts
                         </h3>
 
                         <div className="space-y-2.5">
@@ -249,21 +249,19 @@ export function TemplateSegmentedHub({
             <div className="fixed bottom-6 inset-x-0 z-40 flex justify-center px-4 pointer-events-none">
                 <div className="pointer-events-auto flex items-center gap-3 p-2 px-4 rounded-full bg-[#06180F]/95 backdrop-blur-2xl border border-amber-500/30 shadow-2xl shadow-black/80">
                     <a
-                        href={`https://wa.me/${org.phone?.replace(/[^0-9]/g, '') || '237000000000'}`}
+                        href={`https://wa.me/${org.phone?.replace(/[^0-9]/g, '') || org.whatsapp?.replace(/[^0-9]/g, '') || '237000000000'}`}
                         target="_blank"
                         rel="noreferrer"
                         className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#128C7E]/20 border border-[#128C7E]/40 text-[#25D366] text-xs font-bold hover:bg-[#128C7E]/30 transition"
                     >
                         <MessageCircle className="w-4 h-4" />
-                        <span>WhatsApp Chat</span>
+                        <span>WhatsApp Direct</span>
                     </a>
 
-                    <a href="#inscription" onClick={onOpenInscription}>
-                        <Button className="h-10 px-6 rounded-full bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/30 gap-1.5">
-                            <span>APPLY NOW / INSCRIPTION</span>
-                            <span>⭐</span>
-                        </Button>
-                    </a>
+                    <Button onClick={onOpenInscription} className="h-10 px-6 rounded-full bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/30 gap-1.5">
+                        <span>INSCRIPTION EN LIGNE</span>
+                        <span>⭐</span>
+                    </Button>
                 </div>
             </div>
         </div>

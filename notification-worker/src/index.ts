@@ -278,7 +278,7 @@ const PRIORITY_MAP: Record<NotificationActionType, Priority> = {
 const CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-User-Id',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-User-Id, X-CampusFlow-Token',
 };
 
 function json(data: any, status = 200) {

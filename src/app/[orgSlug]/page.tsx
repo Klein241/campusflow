@@ -116,6 +116,13 @@ export default function SchoolLandingPage() {
         return () => window.removeEventListener('scroll', onScroll);
     }, []);
 
+    const scrollToInscription = () => {
+        const el = document.getElementById('inscription');
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth' });
+        }
+    };
+
     // Data fetch
     useEffect(() => {
         async function load() {
@@ -654,7 +661,7 @@ export default function SchoolLandingPage() {
                         {/* CTA buttons */}
                         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
                             className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                            <a href="#inscription">
+                            <a href="#inscription" onClick={scrollToInscription}>
                                 <Button size="lg" className="text-base px-8 h-14 font-black rounded-2xl text-white shadow-2xl transition-all hover:scale-[1.02]"
                                     style={{ background: `linear-gradient(135deg,${bc},${bc}bb)`, boxShadow: `0 20px 50px ${bc}40` }}>
                                     <FileText className="w-5 h-5 mr-2" />
@@ -694,6 +701,7 @@ export default function SchoolLandingPage() {
                     studentCount={studentCount}
                     gallery={gallery}
                     bc={bc}
+                    onOpenInscription={scrollToInscription}
                 />
             ) : landingLayout === 'segmented_hub' ? (
                 <TemplateSegmentedHub
@@ -705,6 +713,7 @@ export default function SchoolLandingPage() {
                     studentCount={studentCount}
                     gallery={gallery}
                     bc={bc}
+                    onOpenInscription={scrollToInscription}
                 />
             ) : landingLayout === 'glass_showcase' ? (
                 <TemplateGlassShowcase
@@ -716,6 +725,7 @@ export default function SchoolLandingPage() {
                     studentCount={studentCount}
                     gallery={gallery}
                     bc={bc}
+                    onOpenInscription={scrollToInscription}
                 />
             ) : landingLayout === 'bento_grid' ? (
                 <TemplateBentoGrid
@@ -727,6 +737,7 @@ export default function SchoolLandingPage() {
                     studentCount={studentCount}
                     gallery={gallery}
                     bc={bc}
+                    onOpenInscription={scrollToInscription}
                 />
             ) : landingLayout === 'bento_box' ? (
                 <TemplateBentoBox
@@ -738,6 +749,7 @@ export default function SchoolLandingPage() {
                     studentCount={studentCount}
                     gallery={gallery}
                     bc={bc}
+                    onOpenInscription={scrollToInscription}
                 />
             ) : (
                 <>
