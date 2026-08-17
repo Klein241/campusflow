@@ -229,7 +229,7 @@ interface StoryCommentItem {
     avatarUrl?: string;
 }
 
-export function ActusView({ orgId, orgSlug, userId, userName, userRole, onSkyUpdate, allStudents = [], orgName = 'CampusFlow', orgLogo }: ActusViewProps) {
+export function ActusView({ orgId, orgSlug, userId, userName, userRole, onSkyUpdate, allStudents = [], orgName = 'IziTeach', orgLogo }: ActusViewProps) {
     const [posts, setPosts] = useState<PostItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [showNewPost, setShowNewPost] = useState(false);
@@ -516,7 +516,7 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole, onSkyUpd
             if (isAdminOrOwner || userRole === 'teacher') {
                 const preview = newPostContent.trim().slice(0, 150);
                 setEmailSubject(`Nouvelle annonce de ${userName}`);
-                setEmailBody(`${preview}${newPostContent.length > 150 ? '...' : ''}\n\nConnectez-vous à CampusFlow pour lire la suite et réagir.`);
+                setEmailBody(`${preview}${newPostContent.length > 150 ? '...' : ''}\n\nConnectez-vous à IziTeach pour lire la suite et réagir.`);
                 setEmailModalOpen(true);
             }
             loadPosts();
@@ -575,7 +575,7 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole, onSkyUpd
         const url = `${window.location.origin}/${orgSlug}/campus`;
         const text = `${post.senderName || 'Utilisateur'}: ${post.content.slice(0, 100)}...`;
         if (navigator.share) {
-            try { await navigator.share({ title: 'CampusFlow', text, url }); } catch { }
+            try { await navigator.share({ title: 'IziTeach', text, url }); } catch { }
         } else {
             await navigator.clipboard.writeText(`${text}\n${url}`);
             toast.success('Lien copié ! 📋');

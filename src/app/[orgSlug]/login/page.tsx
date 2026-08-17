@@ -779,7 +779,7 @@ export default function LoginPage() {
                                     <div className="text-center space-y-2">
                                         <h3 className="font-bold text-white text-lg">PIN oublié ?</h3>
                                         <p className="text-xs text-slate-300 leading-relaxed">
-                                            Contactez la direction ou un administrateur de votre établissement <strong>({org?.name || 'CampusFlow'})</strong>.
+                                            Contactez la direction ou un administrateur de votre établissement <strong>({org?.name || 'IziTeach'})</strong>.
                                         </p>
                                         <div className="bg-black/30 p-3 rounded-xl border border-white/5 text-left text-xs text-slate-400 space-y-1.5 mt-2">
                                             <p className="font-semibold text-amber-300">Procédure simple :</p>
@@ -816,7 +816,7 @@ export default function LoginPage() {
                     ) : (
                         <img
                             src="/logo-campusflow.png"
-                            alt="CampusFlow"
+                            alt="IziTeach"
                             className="w-16 h-16 object-contain mx-auto mb-4 drop-shadow-[0_0_16px_rgba(99,102,241,0.5)]"
                         />
                     )}
@@ -1197,11 +1197,11 @@ export default function LoginPage() {
                     )}
                 </AnimatePresence>
 
-                {/* Footer — Powered by CampusFlow */}
+                {/* Footer — Powered by IziTeach */}
                 <div className="flex items-center justify-center gap-2 mt-6">
-                    <img src="/logo-campusflow.png" alt="CampusFlow" className="w-4 h-4 object-contain opacity-50" />
+                    <img src="/logo-campusflow.png" alt="IziTeach" className="w-4 h-4 object-contain opacity-50" />
                     <p className="text-[10px] text-slate-600">
-                        Propulsé par <span className="text-teal-500 font-semibold">CampusFlow</span>
+                        Propulsé par <span className="text-teal-500 font-semibold">IziTeach</span> • Enseigner simplement
                     </p>
                 </div>
             </motion.div>

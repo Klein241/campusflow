@@ -109,7 +109,7 @@ export async function notifyAdmin(payload: AlertPayload): Promise<void> {
                 body: JSON.stringify({
                     action_type: 'general',
                     actor_id: 'system',
-                    actor_name: 'CampusFlow System',
+                    actor_name: 'IziTeach System',
                     recipient_id: SUPERADMIN_ID,
                     target_name: title,
                     message_preview: body,

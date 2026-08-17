@@ -21,23 +21,23 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "CampusFlow",
-  description: "CampusFlow — Plateforme SaaS de gestion scolaire. Cursus, notes, paiements et marketplace.",
+  title: "IziTeach — Enseigner simplement",
+  description: "IziTeach — Plateforme SaaS de gestion d'écoles physiques et académies en ligne. Enseigner simplement.",
   manifest: "/manifest.json",
   icons: {
     icon: "/logo-campusflow.png",
     apple: "/logo-campusflow.png",
   },
   openGraph: {
-    title: "CampusFlow",
-    description: "Plateforme SaaS de gestion scolaire & universitaire.",
+    title: "IziTeach — Enseigner simplement",
+    description: "Plateforme tout-en-un pour établissements scolaires et académies en ligne.",
     images: ["/logo-campusflow.png"],
     type: "website",
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "CampusFlow",
+    title: "IziTeach",
   },
 };
 
@@ -61,7 +61,7 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/logo-campusflow.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="CampusFlow" />
+        <meta name="apple-mobile-web-app-title" content="IziTeach" />
         <meta name="msapplication-TileImage" content="/logo-campusflow.png" />
         <meta name="msapplication-TileColor" content="#0B0E14" />
         <meta name="color-scheme" content="dark" />

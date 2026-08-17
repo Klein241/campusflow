@@ -101,7 +101,7 @@ interface TeacherCursusProps {
     orgSlug?: string;
 }
 
-export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, onOpenGroupChat, allStudents = [], orgName = 'CampusFlow', orgLogo, orgSlug }: TeacherCursusProps) {
+export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, onOpenGroupChat, allStudents = [], orgName = 'IziTeach', orgLogo, orgSlug }: TeacherCursusProps) {
     const [subjects,    setSubjects]    = useState<any[]>([]);
     const [chapters,    setChapters]    = useState<any[]>([]);
     const [lessons,     setLessons]     = useState<any[]>([]);
@@ -155,7 +155,7 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
         setEmailSubject(`${labels[type] || 'Nouveau contenu'} : ${name}`);
         setEmailBody(`${userName} vient de publier "${name}".
 
-Connectez-vous à CampusFlow pour accéder au nouveau contenu dès maintenant.`);
+Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
         setEmailModalOpen(true);
     };
 

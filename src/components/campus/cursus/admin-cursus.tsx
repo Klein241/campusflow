@@ -87,7 +87,7 @@ interface AdminCursusProps {
     orgLogo?: string;     // Logo URL
 }
 
-export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], orgName = 'CampusFlow', orgLogo }: AdminCursusProps) {
+export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], orgName = 'IziTeach', orgLogo }: AdminCursusProps) {
     const [subjects,    setSubjects]    = useState<any[]>([]);
     const [chapters,    setChapters]    = useState<any[]>([]);
     const [lessons,     setLessons]     = useState<any[]>([]);
@@ -289,7 +289,7 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
                 const classStudents = allStudents.filter(s => s.classroom_id === selectedSub.classroom_id);
                 setEmailStudents(classStudents);
                 setEmailSubject(`Nouveau chapitre : ${data.title}`);
-                setEmailBody(`Un nouveau chapitre vient d'être publié dans votre cours.\n\n📚 Chapitre : ${data.title}\n🏫 Matière : ${selectedSub?.name || ''}\n\nConnectez-vous à CampusFlow pour accéder au contenu.`);
+                setEmailBody(`Un nouveau chapitre vient d'être publié dans votre cours.\n\n📚 Chapitre : ${data.title}\n🏫 Matière : ${selectedSub?.name || ''}\n\nConnectez-vous à IziTeach pour accéder au contenu.`);
                 setEmailModalOpen(true);
             }
         }
@@ -363,7 +363,7 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
                 const classStudents = allStudents.filter(s => s.classroom_id === subject.classroom_id);
                 setEmailStudents(classStudents);
                 setEmailSubject(`Nouvelle leçon : ${data.title}`);
-                setEmailBody(`Une nouvelle leçon vient d'être publiée.\n\n📚 Leçon : ${data.title}\n📖 Chapitre : ${chapter?.title || ''}\n🏫 Matière : ${subject?.name || ''}\n\nConnectez-vous à CampusFlow pour l'étudier.`);
+                setEmailBody(`Une nouvelle leçon vient d'être publiée.\n\n📚 Leçon : ${data.title}\n📖 Chapitre : ${chapter?.title || ''}\n🏫 Matière : ${subject?.name || ''}\n\nConnectez-vous à IziTeach pour l'étudier.`);
                 setEmailModalOpen(true);
             }
         }
@@ -413,7 +413,7 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
                 const classStudents = allStudents.filter(s => s.classroom_id === subject.classroom_id);
                 setEmailStudents(classStudents);
                 setEmailSubject(`Nouvel exercice disponible : ${data.title}`);
-                setEmailBody(`Un nouvel exercice vous attend sur CampusFlow !\\n\\n🏋️ Exercice : ${data.title}\\n📖 Chapitre : ${chapter?.title || ''}\\n🏫 Matière : ${subject?.name || ''}\\n⏱️ Durée : ${data.duration_minutes} min · 🏆 ${data.max_score} pts\\n\\nConnectez-vous pour le commencer.`);
+                setEmailBody(`Un nouvel exercice vous attend sur IziTeach !\\n\\n🏋️ Exercice : ${data.title}\\n📖 Chapitre : ${chapter?.title || ''}\\n🏫 Matière : ${subject?.name || ''}\\n⏱️ Durée : ${data.duration_minutes} min · 🏆 ${data.max_score} pts\\n\\nConnectez-vous pour le commencer.`);
                 setEmailModalOpen(true);
             }
         }

@@ -1426,7 +1426,7 @@ export async function notifyAdminExamSubmitted({
 }
 
 /**
- * Notifier le superadmin qu'une nouvelle organisation a été créée sur CampusFlow
+ * Notifier le superadmin qu'une nouvelle organisation a été créée sur IziTeach
  */
 export async function notifySuperadminNewOrg({
     superadminId,

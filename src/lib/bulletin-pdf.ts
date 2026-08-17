@@ -218,7 +218,7 @@ function template1Html(d: BulletinData): string {
         </div>
 
         <div style="text-align:center;margin-top:20px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">
-            Document généré le ${dateNow()} — ${d.org.name} — CampusFlow
+            Document généré le ${dateNow()} — ${d.org.name} — IziTeach
         </div>
     </div>`;
 }
@@ -304,7 +304,7 @@ function template2Html(d: BulletinData): string {
         </div>
 
         <div style="text-align:center;margin-top:20px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">
-            Document généré le ${dateNow()} — ${d.org.name} — CampusFlow
+            Document généré le ${dateNow()} — ${d.org.name} — IziTeach
         </div>
     </div>`;
 }
@@ -392,7 +392,7 @@ function template3Html(d: BulletinData): string {
         </div>
 
         <div style="text-align:center;margin-top:20px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">
-            Document généré le ${dateNow()} — ${d.org.name} — CampusFlow
+            Document généré le ${dateNow()} — ${d.org.name} — IziTeach
         </div>
     </div>`;
 }
@@ -482,7 +482,7 @@ function template4Html(d: BulletinData): string {
         </div>
 
         <div style="text-align:center;margin-top:20px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">
-            Generated on ${dateNow()} — ${d.org.name} — CampusFlow
+            Generated on ${dateNow()} — ${d.org.name} — IziTeach
         </div>
     </div>`;
 }
@@ -591,7 +591,7 @@ function template5Html(d: BulletinData): string {
         </div>
 
         <div style="text-align:center;margin-top:15px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px">
-            🔗 Document généré le ${dateNow()} — ${d.org.name} — CampusFlow
+            🔗 Document généré le ${dateNow()} — ${d.org.name} — IziTeach
         </div>
     </div>`;
 }

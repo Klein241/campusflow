@@ -78,7 +78,7 @@ export function useWhiteLabel(orgSlug: string) {
 
     /**
      * Generate a URL that uses the custom domain when in white-label mode.
-     * Instead of campusflow.app/mon-ecole/library → institutformation.com/library
+     * Instead of iziteach.com/mon-ecole/library → institutformation.com/library
      */
     const buildUrl = (path: string = '') => {
         if (branding.isWhiteLabel && branding.customDomain) {

@@ -25,7 +25,7 @@ const DEFAULT_REVIEWS: Review[] = [
         author_role: 'Professeur',
         school_name: 'Lycée d\'Excellence',
         rating: 5,
-        comment: 'CampusFlow a totalement transformé la saisie des notes et le suivi de mes élèves. Le gain de temps est exceptionnel !',
+        comment: 'IziTeach a totalement transformé la saisie des notes et le suivi de mes élèves. Le gain de temps est exceptionnel !',
         created_at: new Date(Date.now() - 2 * 86400000).toISOString()
     },
     {
@@ -43,7 +43,7 @@ const DEFAULT_REVIEWS: Review[] = [
         author_role: 'Directeur d\'école',
         school_name: 'GreatSoft Academy',
         rating: 5,
-        comment: 'La personnalisation des pages d\'accueil et la gestion des paiements Mobile Money font de CampusFlow la meilleure plateforme scolaire.',
+        comment: 'La personnalisation des pages d\'accueil et la gestion des paiements Mobile Money font d\'IziTeach la meilleure plateforme.',
         created_at: new Date(Date.now() - 8 * 86400000).toISOString()
     },
     {

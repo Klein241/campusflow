@@ -241,7 +241,7 @@ export function SkyPointsStore({
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                                     <span className="text-[10px] text-emerald-400">En ligne</span>
                                 </div>
-                                <p className="text-[10px] text-slate-500">Gestionnaire Sky Points · CampusFlow</p>
+                                <p className="text-[10px] text-slate-500">Gestionnaire Sky Points · IziTeach</p>
                             </div>
                             <div className="flex items-center gap-1">
                                 {/* Tabs */}

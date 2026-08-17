@@ -186,7 +186,7 @@ export function BugReportButton({ userId, userName, userRole, orgId, orgName, or
                                     {/* Info */}
                                     <div className="flex items-start gap-2 p-3 rounded-xl bg-blue-500/5 border border-blue-500/15 text-xs text-blue-300">
                                         <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                                        <span>Ce rapport sera envoyé anonymement à l&apos;équipe CampusFlow avec vos informations de compte pour le suivi.</span>
+                                        <span>Ce rapport sera envoyé à l&apos;équipe technique IziTeach pour analyse et résolution rapide.</span>
                                     </div>
 
                                     {/* Submit */}

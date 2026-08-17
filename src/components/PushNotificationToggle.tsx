@@ -138,7 +138,7 @@ export function PushNotificationToggle({
                     <Smartphone className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
                     <p className="text-xs text-amber-400">
                         <strong>iPhone/iPad :</strong> Pour recevoir les notifications,
-                        ajoutez d&apos;abord CampusFlow à votre écran d&apos;accueil
+                        ajoutez d&apos;abord IziTeach à votre écran d&apos;accueil
                         (Safari → <em>Partager</em> → <em>Sur l&apos;écran d&apos;accueil</em>).
                     </p>
                 </div>

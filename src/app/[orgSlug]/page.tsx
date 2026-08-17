@@ -301,7 +301,7 @@ export default function SchoolLandingPage() {
                 </Link>
                 <Link href="/">
                     <Button variant="outline" className="rounded-2xl px-6 border-white/10 text-slate-300 hover:text-white h-11">
-                        Retour à CampusFlow
+                        Retour à IziTeach
                     </Button>
                 </Link>
             </div>
@@ -1543,7 +1543,7 @@ export default function SchoolLandingPage() {
                             <p>{org.footer_text || `© ${new Date().getFullYear()} ${org.name}. Tous droits réservés.`}</p>
                             <p>
                                 Propulsé par{' '}
-                                <Link href="/" className="font-bold transition-colors hover:text-slate-400" style={{ color: bc }}>CampusFlow</Link>
+                                <Link href="/" className="font-bold transition-colors hover:text-slate-400" style={{ color: bc }}>IziTeach</Link>
                             </p>
                         </div>
                     </div>

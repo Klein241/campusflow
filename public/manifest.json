@@ -1,7 +1,7 @@
 {
-  "name": "CampusFlow",
-  "short_name": "CampusFlow",
-  "description": "CampusFlow — Plateforme SaaS de gestion scolaire & universitaire multi-tenant. Chaque établissement dispose de son propre espace personnalisé.",
+  "name": "IziTeach — Enseigner simplement",
+  "short_name": "IziTeach",
+  "description": "IziTeach — Plateforme SaaS pour écoles physiques et académies en ligne. Enseigner simplement.",
   "start_url": "/",
   "id": "/",
   "display": "standalone",

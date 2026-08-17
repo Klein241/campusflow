@@ -6,9 +6,11 @@
 
 /** Suffixes that identify the CampusFlow platform — NOT school custom domains */
 const PLATFORM_SUFFIXES = [
-    'netlify.app',    // catches campusflw.netlify.app, mycampusfl.netlify.app, preview URLs
+    'netlify.app',    // catches netlify subdomains and preview URLs
     'netlify.live',   // Netlify preview links
-    'campusflow.app', // production domain
+    'iziteach.com',   // official production domain
+    'iziteach.app',
+    'campusflow.app', // legacy fallback
     'readsgreat.site', // primary production domain
     'localhost',
     '127.0.0.1',

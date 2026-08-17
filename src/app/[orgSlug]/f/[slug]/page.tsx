@@ -480,7 +480,7 @@ export default function PublicFormPage() {
                         }
                     </button>
                     <p className="text-center text-[10px] text-slate-600 mt-3">
-                        Propulsé par CampusFlow
+                        Propulsé par IziTeach • Enseigner simplement
                     </p>
                 </div>
             </div>

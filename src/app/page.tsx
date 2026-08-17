@@ -101,10 +101,10 @@ export default function LandingPage() {
             </div>
             <div>
               <span className="text-xl font-black tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
-                CampusFlow
+                IziTeach
               </span>
               <span className="hidden sm:inline-block ml-2 text-[10px] uppercase font-bold text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-500/20">
-                SaaS Écoles & Académies
+                Enseigner simplement
               </span>
             </div>
           </div>
@@ -144,7 +144,7 @@ export default function LandingPage() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-indigo-500/15 to-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-xs font-bold mb-8 shadow-inner">
             <Sparkles className="w-4 h-4 text-cyan-400 animate-pulse" />
-            <span>Pour Établissements Scolaires Physiques & Académies 100% en Ligne</span>
+            <span>IziTeach • Enseigner simplement • Écoles Physiques & Académies en Ligne</span>
           </motion.div>
 
           <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.7 }}
@@ -157,7 +157,7 @@ export default function LandingPage() {
 
           <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.6 }}
             className="mt-6 text-base sm:text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed font-normal">
-            Que vous dirigiez un <strong className="text-white">établissement physique</strong> (Lycée, Collège, Université) ou que vous soyez un <strong className="text-cyan-300">expert, formateur ou docteur</strong> souhaitant lancer son <strong className="text-teal-300">académie 100% en ligne sans bâtiment</strong> : CampusFlow vous offre un campus digital complet en 5 minutes.
+            Que vous dirigiez un <strong className="text-white">établissement physique</strong> (Lycée, Collège, Université) ou que vous soyez un <strong className="text-cyan-300">expert, formateur ou docteur</strong> souhaitant lancer son <strong className="text-teal-300">académie 100% en ligne sans bâtiment</strong> : IziTeach vous offre un campus digital complet en 5 minutes.
           </motion.p>
 
           {/* Dual CTA Buttons */}
@@ -207,7 +207,7 @@ export default function LandingPage() {
               Deux Modèles, Une Plateforme Sur-Mesure
             </h2>
             <p className="text-slate-400 max-w-2xl mx-auto text-sm sm:text-base">
-              CampusFlow s'adapte précisément à votre infrastructure, qu'elle soit implantée physiquement ou 100% dématérialisée.
+              IziTeach s'adapte précisément à votre infrastructure, qu'elle soit implantée physiquement ou 100% dématérialisée.
             </p>
           </div>
 
@@ -319,7 +319,7 @@ export default function LandingPage() {
                 Établissements & Académies Partenaires
               </h2>
               <p className="text-slate-400 text-xs sm:text-sm mt-1">
-                Découvrez les écoles physiques et académies en ligne créées sur CampusFlow avec leurs badges de certification.
+                Découvrez les écoles physiques et académies en ligne créées sur IziTeach avec leurs badges de certification.
               </p>
             </div>
             <Link href="/onboarding">
@@ -437,7 +437,7 @@ export default function LandingPage() {
               Pour toutes les disciplines & structures
             </h2>
             <p className="text-slate-400 max-w-lg mx-auto text-xs sm:text-sm">
-              Que vous enseigniez les mathématiques, la médecine, le code ou les langues, CampusFlow s'adapte à votre pédagogie.
+              Que vous enseigniez les mathématiques, la médecine, le code ou les langues, IziTeach s'adapte à votre pédagogie.
             </p>
           </div>
 
@@ -489,7 +489,7 @@ export default function LandingPage() {
             Prêt à lancer votre école ou académie ?
           </h2>
           <p className="text-slate-300 max-w-xl mx-auto text-xs sm:text-base leading-relaxed">
-            Rejoignez dès aujourd'hui les directeurs d'établissements et formateurs experts qui font confiance à CampusFlow.
+            Rejoignez dès aujourd'hui les directeurs d'établissements et formateurs experts qui font confiance à IziTeach.
           </p>
           <Link href="/onboarding">
             <Button size="lg" className="h-14 px-8 sm:px-10 rounded-2xl bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white font-black text-sm sm:text-base shadow-2xl shadow-indigo-500/30 gap-2">
@@ -508,8 +508,8 @@ export default function LandingPage() {
             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center text-white font-bold">
               <GraduationCap className="w-4 h-4" />
             </div>
-            <span className="font-bold text-slate-300">CampusFlow</span>
-            <span>• Plateforme SaaS pour Écoles Physiques & Académies en Ligne</span>
+            <span className="font-bold text-slate-300">IziTeach</span>
+            <span>• Enseigner simplement</span>
           </div>
           <p>© 2026 SYGMA-TECH. Tous droits réservés.</p>
         </div>

@@ -1042,7 +1042,7 @@ function AdminPageContent() {
                             <LogOut className="w-3.5 h-3.5" /> Se déconnecter
                         </button>
                         <a
-                            href="mailto:contact@campusflow.fun"
+                            href="mailto:contact@iziteach.com"
                             className="text-xs text-red-400 hover:text-red-300 transition underline"
                         >
                             Assistance d'urgence
@@ -1761,7 +1761,7 @@ ${bodyHtml}
         <div class="line" style="border-top:1px solid #94a3b8;padding-top:4px;font-size:8pt;color:#64748b">Cachet & Signature</div>
     </div>
 </div>
-<div class="footer"><p>Document généré le ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} — ${org.name} — CampusFlow</p></div>
+<div class="footer"><p>Document généré le ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} — ${org.name} — IziTeach</p></div>
 </body></html>`);
         printWindow.document.close();
         setTimeout(() => printWindow.print(), 500);
@@ -1897,7 +1897,7 @@ ${bodyHtml}
             <aside className={`fixed lg:static inset-y-0 left-0 z-40 w-60 bg-[#0F1219]/90 backdrop-blur-xl border-r border-white/5 transform transition-transform lg:transform-none flex flex-col ${sidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
                 <div className="p-4 border-b border-white/5">
                     <div className="flex items-center gap-2">
-                        <img src="/logo-campusflow.png" alt="CampusFlow" className="w-8 h-8 object-contain drop-shadow-[0_0_8px_rgba(20,184,166,0.4)]" />
+                        <img src="/logo-campusflow.png" alt="IziTeach" className="w-8 h-8 object-contain drop-shadow-[0_0_8px_rgba(20,184,166,0.4)]" />
                         <span className="font-bold text-sm truncate">{org.name}</span>
                     </div>
                     <p className="text-xs text-slate-500 mt-1">Backoffice</p>
@@ -3636,7 +3636,7 @@ ${bodyHtml}
                                 <div className="p-3 rounded-lg bg-white/5 border border-white/5">
                                     <p className="text-xs text-slate-500 mb-1">Aperçu Google</p>
                                     <p className="text-blue-400 text-sm font-medium">{sMetaTitle || `${org.name} — Portail`}</p>
-                                    <p className="text-emerald-500 text-xs">{sCustomDomain ? `https://${sCustomDomain}` : `https://campusflow.app/${orgSlug}`}</p>
+                                    <p className="text-emerald-500 text-xs">{sCustomDomain ? `https://${sCustomDomain}` : `https://iziteach.com/${orgSlug}`}</p>
                                     <p className="text-xs text-slate-400 mt-0.5">{sMetaDesc || `Portail en ligne de ${org.name}. Accédez à vos cours, notes et informations.`}</p>
                                 </div>
                             </div>
@@ -4419,7 +4419,7 @@ ${bodyHtml}
                         <div className="px-6 pt-7 pb-4 text-center border-b border-white/[0.06]">
                             <div className="text-4xl mb-3">⭐</div>
                             <h3 className="text-lg font-black text-white">Sky Points</h3>
-                            <p className="text-xs text-slate-500 mt-1">Votre monnaie numérique CampusFlow</p>
+                            <p className="text-xs text-slate-500 mt-1">Votre monnaie numérique IziTeach</p>
                         </div>
 
                         <div className="px-6 py-5 space-y-4">
@@ -4532,11 +4532,11 @@ function DnsInstructions({ domain }: { domain: string }) {
                     setPlatformDomain(data.value);
                 } else {
                     const h = typeof window !== 'undefined' ? window.location.hostname : '';
-                    setPlatformDomain(h || 'campusflow.app');
+                    setPlatformDomain(h || 'iziteach.com');
                 }
             } catch {
                 const h = typeof window !== 'undefined' ? window.location.hostname : '';
-                setPlatformDomain(h || 'campusflow.app');
+                setPlatformDomain(h || 'iziteach.com');
             }
         })();
     }, []);

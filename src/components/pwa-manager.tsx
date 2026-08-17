@@ -149,7 +149,7 @@ export function PWAManager() {
             setIsInstalled(true);
             setDeferredPrompt(null);
             toast.success('🎉 Application installée !', {
-                description: 'CampusFlow est maintenant sur votre écran d\'accueil.',
+                description: 'IziTeach est maintenant sur votre écran d\'accueil.',
             });
         };
 
@@ -187,7 +187,7 @@ export function PWAManager() {
                 // to avoid double-registration bugs. Do NOT subscribe here.
 
                 if (swRegistration) {
-                    swRegistration.showNotification('CampusFlow', {
+                    swRegistration.showNotification('IziTeach', {
                         body: 'Les notifications sont activées ! Vous recevrez des rappels quotidiens.',
                         icon: '/icon-192.png',
                         badge: '/icon-192.png',
@@ -280,7 +280,7 @@ export function PWAManager() {
 
         setTimeout(() => {
             sendLocalNotification(
-                '📚 Rappel CampusFlow',
+                '📚 Rappel IziTeach',
                 'N\'oubliez pas de consulter vos cours et activités !'
             );
             scheduleLocalReminder();

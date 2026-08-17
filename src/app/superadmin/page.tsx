@@ -23,7 +23,7 @@ import { SuperadminOrgCards } from '@/components/superadmin/superadmin-org-cards
 import { SuperadminNotificationBell } from '@/components/superadmin/SuperadminNotificationBell';
 
 // ═══════════════════════════════════════════════════════════════════════
-// CAMPUSFLOW — SUPERADMIN PANEL
+// IZITEACH — SUPERADMIN PANEL
 // Platform-level administration dashboard
 // Protected by platform_admins table (Supabase Auth + RLS)
 // ═══════════════════════════════════════════════════════════════════════
@@ -758,7 +758,7 @@ export default function SuperAdminPage() {
                 <div className="text-center">
                     <img
                         src="/logo-campusflow.png"
-                        alt="CampusFlow"
+                        alt="IziTeach"
                         className="w-16 h-16 object-contain mx-auto mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(139,92,246,0.6)]"
                     />
                     <Loader2 className="w-5 h-5 text-violet-400 animate-spin mx-auto" />
@@ -788,11 +788,11 @@ export default function SuperAdminPage() {
                         >
                             <img
                                 src="/logo-campusflow.png"
-                                alt="CampusFlow"
+                                alt="IziTeach"
                                 className="w-24 h-24 object-contain mx-auto drop-shadow-[0_0_30px_rgba(139,92,246,0.7)]"
                             />
                         </motion.div>
-                        <h1 className="text-3xl font-black bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent tracking-tight">CampusFlow</h1>
+                        <h1 className="text-3xl font-black bg-gradient-to-r from-violet-400 via-cyan-400 to-fuchsia-400 bg-clip-text text-transparent tracking-tight">IziTeach</h1>
                         <p className="text-sm text-slate-400 mt-1 font-medium">SuperAdmin Panel</p>
                         <p className="text-xs text-slate-600 mt-1">Réservé à l&apos;équipe SYGMA-TECH</p>
                     </div>
@@ -843,7 +843,7 @@ export default function SuperAdminPage() {
                     </div>
 
                     <p className="text-center text-xs text-slate-700 mt-6">
-                        CampusFlow SuperAdmin · SYGMA-TECH © 2026
+                        IziTeach SuperAdmin · SYGMA-TECH © 2026
                     </p>
                 </motion.div>
             </div>
@@ -863,11 +863,11 @@ export default function SuperAdminPage() {
                     <div className="flex items-center gap-3">
                         <img
                             src="/logo-campusflow.png"
-                            alt="CampusFlow"
+                            alt="IziTeach"
                             className="w-9 h-9 object-contain drop-shadow-[0_0_10px_rgba(139,92,246,0.6)] shrink-0"
                         />
                         <div>
-                            <p className="font-black text-sm leading-tight bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">CampusFlow</p>
+                            <p className="font-black text-sm leading-tight bg-gradient-to-r from-violet-400 via-cyan-400 to-fuchsia-400 bg-clip-text text-transparent">IziTeach</p>
                             <p className="text-[9px] text-slate-600 leading-tight">SuperAdmin Platform</p>
                         </div>
                     </div>
@@ -935,11 +935,11 @@ export default function SuperAdminPage() {
                                 <div className="flex items-center gap-3">
                                     <img
                                         src="/logo-campusflow.png"
-                                        alt="CampusFlow"
+                                        alt="IziTeach"
                                         className="w-9 h-9 object-contain drop-shadow-[0_0_10px_rgba(139,92,246,0.6)]"
                                     />
                                     <div>
-                                        <p className="font-black text-sm bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">CampusFlow</p>
+                                        <p className="font-black text-sm bg-gradient-to-r from-violet-400 via-cyan-400 to-fuchsia-400 bg-clip-text text-transparent">IziTeach</p>
                                         <p className="text-[9px] text-slate-500">SuperAdmin Platform</p>
                                     </div>
                                 </div>
@@ -1359,7 +1359,7 @@ export default function SuperAdminPage() {
                                 {/* ── Domaine principal de la plateforme ── */}
                                 <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 space-y-3">
                                     <div>
-                                        <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider">🌐 Domaine principal CampusFlow</p>
+                                        <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider">🌐 Domaine principal IziTeach</p>
                                         <p className="text-xs text-slate-600 mt-1">
                                             Ce domaine est affiché à tous vos clients comme cible CNAME. Changez-le une fois et tous vos clients voient automatiquement le bon enregistrement DNS.
                                         </p>
@@ -3307,7 +3307,7 @@ function PlatformDomainCard({ supabase }: { supabase: any }) {
     useEffect(() => {
         (async () => {
             const { data } = await supabase.from('platform_settings').select('value').eq('key', 'main_domain').single();
-            const val = data?.value || 'campusflow.netlify.app';
+            const val = data?.value || 'iziteach.com';
             setDomain(val); setInput(val); setFetching(false);
         })();
     }, []);
@@ -3317,7 +3317,7 @@ function PlatformDomainCard({ supabase }: { supabase: any }) {
         if (!val) return;
         setLoading(true);
         const { error } = await supabase.from('platform_settings')
-            .upsert({ key: 'main_domain', value: val, description: 'Domaine principal CampusFlow', updated_at: new Date().toISOString() });
+            .upsert({ key: 'main_domain', value: val, description: 'Domaine principal IziTeach', updated_at: new Date().toISOString() });
         if (error) { toast.error(error.message); }
         else { setDomain(val); setEditing(false); toast.success('\u2705 Domaine mis \u00e0 jour : ' + val); }
         setLoading(false);

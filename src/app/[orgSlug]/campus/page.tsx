@@ -222,7 +222,7 @@ export default function CampusPage() {
                 if (updatedReq.status === 'approved') {
                     setApprovalStatus(null);
                     SessionManager.patch({ approval_status: 'approved' });
-                    toast.success('🎉 Votre inscription a été approuvée ! Bienvenue sur CampusFlow !');
+                    toast.success('🎉 Votre inscription a été approuvée ! Bienvenue sur IziTeach !');
                 } else if (updatedReq.status === 'info_needed' || updatedReq.status === 'pending') {
                     setApprovalStatus(updatedReq.status);
                     if (updatedReq.admin_message) {
@@ -365,7 +365,7 @@ export default function CampusPage() {
                 <div className="flex flex-col items-center gap-3">
                     <img
                         src="/logo-campusflow.png"
-                        alt="CampusFlow"
+                        alt="IziTeach"
                         className="w-16 h-16 object-contain drop-shadow-[0_0_20px_rgba(20,184,166,0.5)] animate-pulse"
                     />
                     <div className="w-5 h-5 border-2 border-teal-400/30 border-t-teal-400 rounded-full animate-spin" />
@@ -650,7 +650,7 @@ export default function CampusPage() {
                         ) : (
                             <img
                                 src="/logo-campusflow.png"
-                                alt="CampusFlow"
+                                alt="IziTeach"
                                 className="w-10 h-10 object-contain drop-shadow-[0_0_10px_rgba(20,184,166,0.4)]"
                             />
                         )}

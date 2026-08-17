@@ -143,7 +143,7 @@ function receipt1Html(d: ReceiptData): string {
         </div>
 
         <div style="text-align:center;margin-top:25px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">
-            Document généré le ${dateNow()} — ${d.org.name} — CampusFlow<br>
+            Document généré le ${dateNow()} — ${d.org.name} — IziTeach<br>
             ${d.org.phone ? `Tél: ${d.org.phone} • ` : ''}${d.org.email || ''}
         </div>
     </div>`;
@@ -195,7 +195,7 @@ function receipt2Html(d: ReceiptData): string {
         </div>
 
         <div style="text-align:center;margin-top:20px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">
-            ${dateNow()} — ${d.org.name} — CampusFlow
+            ${dateNow()} — ${d.org.name} — IziTeach
         </div>
     </div>`;
 }
@@ -236,7 +236,7 @@ function receipt3Html(d: ReceiptData): string {
             <div style="text-align:center;width:40%"><p style="font-size:8pt;color:#64748b;margin-bottom:4px;">Le Directeur</p>${renderStampSignature(d.org.signature_url, d.org.stamp_url, 'Cachet & Signature')}</div>
         </div>
 
-        <div style="text-align:center;margin-top:20px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">${dateNow()} — ${d.org.name} — CampusFlow</div>
+        <div style="text-align:center;margin-top:20px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">${dateNow()} — ${d.org.name} — IziTeach</div>
     </div>`;
 }
 
@@ -282,7 +282,7 @@ function receipt4Html(d: ReceiptData): string {
             <div style="text-align:center;width:30%"><p style="font-size:7pt;color:#64748b;margin-bottom:2px;">Principal / Directeur</p>${renderStampSignature(d.org.signature_url, d.org.stamp_url, 'Stamp & Signature')}</div>
         </div>
 
-        <div style="text-align:center;margin-top:20px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">${dateNow()} — ${d.org.name} — CampusFlow</div>
+        <div style="text-align:center;margin-top:20px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">${dateNow()} — ${d.org.name} — IziTeach</div>
     </div>`;
 }
 
@@ -341,7 +341,7 @@ function receipt5Html(d: ReceiptData): string {
         </div>
 
         <div style="text-align:center;margin-top:20px;font-size:7pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">
-            🔗 ${dateNow()} — ${d.org.name} — CampusFlow
+            🔗 ${dateNow()} — ${d.org.name} — IziTeach
         </div>
     </div>`;
 }

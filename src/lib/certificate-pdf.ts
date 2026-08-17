@@ -229,7 +229,7 @@ function template1Html(d: CertificateData): string {
                 <div class="gold-badge">
                     <span style="font-size:7pt;letter-spacing:1px;text-transform:uppercase;">OFFICIEL</span>
                     <span style="font-size:12pt;font-weight:900;">★</span>
-                    <span style="font-size:6.5pt;letter-spacing:0.5px;">CAMPUSFLOW</span>
+                    <span style="font-size:6.5pt;letter-spacing:0.5px;">IZITEACH</span>
                 </div>
             </div>
 

@@ -399,7 +399,7 @@ export const socialService = {
         if (navigator.share) {
             try {
                 await navigator.share({
-                    title: title || 'Partagé depuis CampusFlow',
+                    title: title || 'Partagé depuis IziTeach',
                     text: content,
                     url: window.location.href
                 });

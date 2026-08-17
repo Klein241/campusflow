@@ -120,19 +120,19 @@ export default function GlobalLogin() {
 
             <div className="w-full max-w-sm relative z-10">
                 <div className="text-center mb-8">
-                    {/* Logo officiel CampusFlow */}
+                    {/* Logo officiel IziTeach */}
                     <div className="flex items-center justify-center mx-auto mb-4">
                         <img
                             src="/logo-campusflow.png"
-                            alt="CampusFlow"
+                            alt="IziTeach"
                             className="w-20 h-20 object-contain drop-shadow-[0_0_20px_rgba(99,102,241,0.5)]"
                         />
                     </div>
-                    <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">CampusFlow</h1>
+                    <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 via-cyan-400 to-indigo-400 bg-clip-text text-transparent">IziTeach</h1>
                     <p className="text-slate-400 text-sm mt-1">
                         {mode === 'reset_password' ? 'Créer un nouveau mot de passe' :
                          mode === 'reset_success' ? 'Mot de passe mis à jour' :
-                         'Connexion à votre espace'}
+                         'Enseigner simplement — Connexion'}
                     </p>
                 </div>
 

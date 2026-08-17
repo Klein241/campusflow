@@ -165,7 +165,7 @@ ${questions.map((q, i) => {
 }).join('')}
 
 <div class="footer">
-  <span>Généré par CampusFlow • ${new Date().toLocaleString('fr-FR')}</span>
+  <span>Généré par IziTeach • ${new Date().toLocaleString('fr-FR')}</span>
   <span>Document confidentiel — Usage interne uniquement</span>
 </div>
 </body></html>`;

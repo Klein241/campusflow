@@ -58,7 +58,7 @@ const TEMPLATES: Record<string, { label: string; icon: any; emoji: string; subje
         subject: 'Nouveau cours et ressources pédagogiques disponibles',
         body: `Bonjour chers étudiants,
 
-Un nouveau support de cours / chapitre est désormais accessible sur votre espace CampusFlow.
+Un nouveau support de cours / chapitre est désormais accessible sur votre espace IziTeach.
 
 👉 Veuillez vous connecter pour consulter les documents et le programme d'apprentissage.
 
@@ -73,7 +73,7 @@ Travaillez avec assiduité et bonne révision à tous !`
 
 Une évaluation / devoir a été programmé. 
 
-📅 Détails et consignes disponibles sur votre espace étudiant CampusFlow.
+📅 Détails et consignes disponibles sur votre espace étudiant IziTeach.
 ⚠️ Assurez-vous de respecter les délais de soumission.
 
 Bon courage à tous !`
@@ -87,7 +87,7 @@ Bon courage à tous !`
 
 Veuillez prendre connaissance de cette communication officielle concernant le déroulement des cours et activités de l'établissement.
 
-Retrouvez toutes les annonces à jour sur votre tableau de bord CampusFlow.`
+Retrouvez toutes les annonces à jour sur votre tableau de bord IziTeach.`
     },
     reminder: {
         label: 'Rappel de séance',
@@ -108,7 +108,7 @@ Merci d'arriver à l'heure avec tout le matériel requis.
         subject: 'Publication des notes et évaluations récentes',
         body: `Chers étudiants,
 
-Les notes de vos récentes évaluations ont été publiées sur votre espace CampusFlow.
+Les notes de vos récentes évaluations ont été publiées sur votre espace IziTeach.
 Connectez-vous pour consulter vos résultats et votre progression.
 
 Félicitations pour vos efforts !`
@@ -121,7 +121,7 @@ export function EmailModal({
     subject: defaultSubject = '',
     body: defaultBody = '',
     students = [],
-    orgName = 'CampusFlow',
+    orgName = 'IziTeach',
     orgLogo,
     workerUrl,
     senderId,
@@ -311,7 +311,7 @@ export function EmailModal({
         }
         text += `────────────────────────────\n`;
         text += `🏫 ${orgName} · Envoyé par ${senderName}\n`;
-        text += `🌐 Connectez-vous sur votre espace CampusFlow pour plus de détails.`;
+        text += `🌐 Connectez-vous sur votre espace IziTeach pour plus de détails.`;
         return text;
     };
 
@@ -386,7 +386,7 @@ export function EmailModal({
       ${imageUrl ? `<div style="margin-top:20px;padding:12px;background:#0F172A;border-radius:12px;text-align:center;"><a href="${imageUrl}" target="_blank" style="color:#38BDF8;font-size:13px;text-decoration:none;font-weight:bold;">🔗 Voir la pièce jointe / image</a></div>` : ''}
     </div>
     <div style="text-align:center;padding:16px 0 8px;">
-      <p style="color:#475569;font-size:11px;margin:0;">CampusFlow · ${orgName} · Tous droits réservés</p>
+      <p style="color:#475569;font-size:11px;margin:0;">IziTeach · ${orgName} · Tous droits réservés</p>
     </div>
   </div>
 </body></html>`;

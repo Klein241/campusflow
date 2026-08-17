@@ -161,7 +161,7 @@ export default function OnboardingPage() {
                 .limit(1);
 
             if (existingOrgs && existingOrgs.length > 0) {
-                throw new Error(`Un établissement nommé "${trimmedSchoolName}" est déjà enregistré sur CampusFlow. Veuillez choisir une dénomination distincte.`);
+                throw new Error(`Un établissement nommé "${trimmedSchoolName}" est déjà enregistré sur IziTeach. Veuillez choisir une dénomination distincte.`);
             }
 
             const slug = generateSlug(trimmedSchoolName);
@@ -292,10 +292,10 @@ export default function OnboardingPage() {
             <div className="p-4 sm:p-6 border-b border-white/5">
                 <div className="max-w-2xl mx-auto flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center">
                             <GraduationCap className="w-4 h-4" />
                         </div>
-                        <span className="font-semibold text-slate-300">CampusFlow</span>
+                        <span className="font-bold text-slate-200">IziTeach</span>
                     </div>
                     <span className="text-sm text-slate-500">Étape {step + 1} / 6</span>
                 </div>
@@ -393,7 +393,7 @@ export default function OnboardingPage() {
                                         />
                                         {data.schoolName && (
                                             <p className="text-xs text-indigo-400 mt-1.5">
-                                                🔗 URL: campusflow.com/<strong>{generateSlug(data.schoolName)}</strong>
+                                                🔗 URL: iziteach.com/<strong>{generateSlug(data.schoolName)}</strong>
                                             </p>
                                         )}
                                     </div>
@@ -664,7 +664,7 @@ export default function OnboardingPage() {
                                             <p><strong>Localisation:</strong> {data.quarter}, {data.city}, {data.country}</p>
                                             <p><strong>Contact:</strong> {data.phone} — {data.email}</p>
                                             {data.schoolName && (
-                                                <p><strong>URL:</strong> campusflow.com/<span className="text-indigo-400">{generateSlug(data.schoolName)}</span></p>
+                                                <p><strong>URL:</strong> iziteach.com/<span className="text-indigo-400">{generateSlug(data.schoolName)}</span></p>
                                             )}
                                         </div>
                                     </div>
