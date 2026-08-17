@@ -291,6 +291,14 @@ export default function SuperAdminPage() {
                         student_count: (allStudents || []).filter(s => s.organization_id === o.id).length,
                         teacher_count: (allTeachers || []).filter(t => t.organization_id === o.id).length,
                         sky_points: o.sky_points || 0,
+                        phone: o.phone || '',
+                        email: o.email || '',
+                        brand_color: o.brand_color || '',
+                        // Badge certification
+                        certification_badge: o.certification_badge || 'none',
+                        badge_title: o.badge_title || null,
+                        is_online_academy: !!o.is_online_academy,
+                        verification_docs: o.verification_docs || [],
                     }));
                 }
             }

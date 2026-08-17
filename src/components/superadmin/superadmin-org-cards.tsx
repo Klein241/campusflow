@@ -9,7 +9,7 @@ import {
     Sparkles, ArrowRight, Eye, Phone, Mail, MapPin, X,
     Plus, Minus, Save, Loader2, Link2, Check, KeyRound,
     ShieldAlert, FileText, AlertCircle, RefreshCw, Lock,
-    CheckCircle, UserCheck, EyeOff
+    CheckCircle, UserCheck, EyeOff, Award
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +38,11 @@ export interface OrgCardItem {
     brand_color?: string;
     hero_template?: string;
     landing_layout?: string;
+    // Certification badge system
+    certification_badge?: 'none' | 'verified_physical' | 'verified_online' | null;
+    badge_title?: string | null;
+    is_online_academy?: boolean;
+    verification_docs?: any[] | null;
 }
 
 interface SuperadminOrgCardsProps {
@@ -66,6 +71,12 @@ export function SuperadminOrgCards({
     const [pointsModalOrg, setPointsModalOrg] = useState<OrgCardItem | null>(null);
     const [pointsDelta, setPointsDelta] = useState(1000);
     const [savingPoints, setSavingPoints] = useState(false);
+
+    // Badge modal
+    const [badgeModalOrg, setBadgeModalOrg] = useState<OrgCardItem | null>(null);
+    const [savingBadge, setSavingBadge] = useState(false);
+    const [badgeType, setBadgeType] = useState<'none' | 'verified_physical' | 'verified_online'>('none');
+    const [badgeTitle, setBadgeTitle] = useState('');
 
     // Detail Modal (Feature 3: Full school roster & management)
     const [detailOrg, setDetailOrg] = useState<OrgCardItem | null>(null);
@@ -108,6 +119,36 @@ export function SuperadminOrgCards({
             console.error('Error loading org details:', err);
         } finally {
             setDetailLoading(false);
+        }
+    };
+
+    // Badge modal handlers
+    const openBadgeModal = (org: OrgCardItem) => {
+        setBadgeModalOrg(org);
+        setBadgeType((org.certification_badge as any) || 'none');
+        setBadgeTitle(org.badge_title || '');
+    };
+
+    const handleAssignBadge = async () => {
+        if (!badgeModalOrg) return;
+        setSavingBadge(true);
+        try {
+            const { error } = await supabase
+                .from('organizations')
+                .update({
+                    certification_badge: badgeType,
+                    badge_title: badgeTitle.trim() || null,
+                    badge_issued_at: badgeType !== 'none' ? new Date().toISOString() : null,
+                })
+                .eq('id', badgeModalOrg.id);
+            if (error) throw error;
+            toast.success(badgeType === 'none' ? 'Badge retiré.' : `Badge ${badgeType === 'verified_physical' ? '🏛️ Établissement Agréé' : '🎓 Académie Certifiée'} attribué !`);
+            setBadgeModalOrg(null);
+            onRefresh();
+        } catch (err: any) {
+            toast.error(err.message || 'Erreur lors de l\'attribution du badge');
+        } finally {
+            setSavingBadge(false);
         }
     };
 
@@ -630,6 +671,18 @@ export function SuperadminOrgCards({
                                         </span>
                                     </div>
 
+                                    {/* ── Certification Badge Display ── */}
+                                    {org.certification_badge && org.certification_badge !== 'none' && (
+                                        <div className={`mb-3 px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-2 border ${
+                                            org.certification_badge === 'verified_physical'
+                                                ? 'bg-amber-500/10 text-amber-300 border-amber-500/25'
+                                                : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/25'
+                                        }`}>
+                                            <span className="text-base">{org.certification_badge === 'verified_physical' ? '🏛️' : '🎓'}</span>
+                                            <span>{org.badge_title || (org.certification_badge === 'verified_physical' ? 'Établissement Agréé' : 'Académie Certifiée')}</span>
+                                        </div>
+                                    )}
+
                                     {/* ── Trafic & Domaine Info ── */}
                                     <div className="space-y-2 mb-4">
                                         <div className="flex items-center justify-between gap-2 text-xs">
@@ -771,6 +824,24 @@ export function SuperadminOrgCards({
                                             <Coins className="w-3 h-3" /> Points
                                         </Button>
 
+                                        {/* Badge Certification button */}
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => openBadgeModal(org)}
+                                            className={cn(
+                                                'h-7 px-2 text-[10px] rounded-lg gap-1 font-bold',
+                                                org.certification_badge === 'verified_physical'
+                                                    ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25'
+                                                    : org.certification_badge === 'verified_online'
+                                                        ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/25'
+                                                        : 'text-slate-400 hover:text-white hover:bg-white/10'
+                                            )}
+                                            title="Attribuer un badge de certification"
+                                        >
+                                            <Award className="w-3 h-3" /> Badge
+                                        </Button>
+
                                         {/* Edit org button */}
                                         <Button
                                             size="sm"
@@ -816,6 +887,129 @@ export function SuperadminOrgCards({
                     })}
                 </div>
             )}
+
+            {/* ═══ MODALE ATTRIBUTION BADGE CERTIFICATION ═══ */}
+            <AnimatePresence>
+                {badgeModalOrg && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.92 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.92 }}
+                            className="w-full max-w-md bg-[#0E121B] border border-white/15 rounded-3xl p-6 shadow-2xl space-y-5"
+                        >
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className="font-black text-white text-base">🏅 Attribuer un Badge</h3>
+                                    <p className="text-xs text-slate-400 mt-0.5">{badgeModalOrg.name}</p>
+                                </div>
+                                <button onClick={() => setBadgeModalOrg(null)} className="text-slate-500 hover:text-white transition-colors">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            <div className="space-y-3">
+                                <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Sélectionnez la catégorie :</p>
+
+                                {/* Option 1: Établissement Physique Agréé */}
+                                <button
+                                    onClick={() => { setBadgeType('verified_physical'); setBadgeTitle(badgeTitle || 'Établissement Agréé'); }}
+                                    className={cn(
+                                        'w-full p-4 rounded-xl border text-left transition-all',
+                                        badgeType === 'verified_physical'
+                                            ? 'bg-amber-500/15 border-amber-500/50 text-amber-200'
+                                            : 'bg-white/[0.02] border-white/10 text-slate-300 hover:border-amber-500/30'
+                                    )}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-2xl">🏛️</span>
+                                        <div>
+                                            <div className="font-bold text-sm">Établissement Physique Agréé</div>
+                                            <div className="text-[11px] opacity-70 mt-0.5">A fourni un arrêté ministériel, récépissé ou agrément officiel. Campus géographiquement implanté.</div>
+                                        </div>
+                                        {badgeType === 'verified_physical' && <Check className="w-5 h-5 text-amber-400 ml-auto shrink-0" />}
+                                    </div>
+                                </button>
+
+                                {/* Option 2: Académie en Ligne Certifiée */}
+                                <button
+                                    onClick={() => { setBadgeType('verified_online'); setBadgeTitle(badgeTitle || 'Académie Certifiée'); }}
+                                    className={cn(
+                                        'w-full p-4 rounded-xl border text-left transition-all',
+                                        badgeType === 'verified_online'
+                                            ? 'bg-cyan-500/15 border-cyan-500/50 text-cyan-200'
+                                            : 'bg-white/[0.02] border-white/10 text-slate-300 hover:border-cyan-500/30'
+                                    )}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-2xl">🎓</span>
+                                        <div>
+                                            <div className="font-bold text-sm">Académie en Ligne / Formateur Expert</div>
+                                            <div className="text-[11px] opacity-70 mt-0.5">A fourni un doctorat, diplôme ou certificat d'expertise. Pas de bâtiment physique requis.</div>
+                                        </div>
+                                        {badgeType === 'verified_online' && <Check className="w-5 h-5 text-cyan-400 ml-auto shrink-0" />}
+                                    </div>
+                                </button>
+
+                                {/* Option 3: Aucun badge */}
+                                <button
+                                    onClick={() => { setBadgeType('none'); setBadgeTitle(''); }}
+                                    className={cn(
+                                        'w-full p-3 rounded-xl border text-left transition-all',
+                                        badgeType === 'none'
+                                            ? 'bg-white/10 border-white/30 text-white'
+                                            : 'bg-white/[0.02] border-white/10 text-slate-400 hover:border-white/20'
+                                    )}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-xl">⚪</span>
+                                        <div>
+                                            <div className="font-bold text-xs">Aucun badge / Compte Standard</div>
+                                            <div className="text-[11px] opacity-60">Aucune pièce justificative soumise ou validée.</div>
+                                        </div>
+                                        {badgeType === 'none' && <Check className="w-4 h-4 text-slate-300 ml-auto shrink-0" />}
+                                    </div>
+                                </button>
+
+                                {/* Badge title override */}
+                                {badgeType !== 'none' && (
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs text-slate-400 font-semibold">Libellé personnalisé du badge (optionnel)</label>
+                                        <input
+                                            type="text"
+                                            value={badgeTitle}
+                                            onChange={e => setBadgeTitle(e.target.value)}
+                                            placeholder={badgeType === 'verified_physical' ? 'Ex: Agréé Ministère de l\'Éducation' : 'Ex: Dr. Expert en Intelligence Artificielle'}
+                                            className="w-full h-10 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 text-xs px-3 focus:outline-none focus:border-indigo-500"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex items-center gap-3 pt-1">
+                                <Button
+                                    onClick={handleAssignBadge}
+                                    disabled={savingBadge}
+                                    className={cn(
+                                        'flex-1 h-11 rounded-xl font-black text-xs gap-2',
+                                        badgeType === 'verified_physical'
+                                            ? 'bg-amber-500 hover:bg-amber-400 text-black'
+                                            : badgeType === 'verified_online'
+                                                ? 'bg-cyan-500 hover:bg-cyan-400 text-black'
+                                                : 'bg-white/10 hover:bg-white/15 text-white'
+                                    )}
+                                >
+                                    {savingBadge ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                                    {badgeType === 'none' ? 'Retirer le Badge' : 'Attribuer ce Badge'}
+                                </Button>
+                                <Button variant="ghost" onClick={() => setBadgeModalOrg(null)} className="h-11 px-4 rounded-xl text-slate-400 hover:text-white text-xs">
+                                    Annuler
+                                </Button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             {/* ═══ MODALE FICHE COMPLÈTE & ROSTER DE L'ÉCOLE (Feature 3) ═══ */}
             <AnimatePresence>

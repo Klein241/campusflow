@@ -31,9 +31,10 @@ const ROLES = [
 const SCHOOL_TYPES = [
     { id: 'college', label: 'Collège', emoji: '🏫' },
     { id: 'lycee', label: 'Lycée', emoji: '🎓' },
-    { id: 'universite', label: 'Université', emoji: '🏛️' },
+    { id: 'universite', label: 'Université / Grande École', emoji: '🏛️' },
+    { id: 'academie_en_ligne', label: 'Académie en Ligne / Formateur Expert (Sans Bâtiment)', emoji: '💻' },
     { id: 'centre_formation', label: 'Centre de formation professionnel', emoji: '⚙️' },
-    { id: 'institut', label: 'Institut de formation', emoji: '📚' },
+    { id: 'institut', label: 'Institut de formation spécialisé', emoji: '📚' },
     { id: 'autre', label: 'Autre (précisé)', emoji: '✨' },
 ];
 
@@ -239,6 +240,8 @@ export default function OnboardingPage() {
                     owner_role: data.role,
                     owner_first_name: data.firstName,
                     owner_last_name: data.lastName,
+                    is_online_academy: data.schoolType === 'academie_en_ligne',
+                    certification_badge: 'none',
                 })
                 .select()
                 .single();
