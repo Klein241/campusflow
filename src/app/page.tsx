@@ -180,11 +180,10 @@ export default function LandingPage() {
 
           {/* 4 Pillars Stats */}
           <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.6 }}
-            className="mt-14 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-3xl mx-auto">
+            className="mt-14 grid grid-cols-3 gap-3 max-w-2xl mx-auto">
             {[
               { value: '0 Bâtiment', label: 'Option 100% en ligne sans locaux' },
               { value: '5 min', label: 'Pour créer votre établissement' },
-              { value: 'Mobile Money', label: 'MTN MoMo & Orange Money intégrés' },
               { value: 'Certifié', label: 'Badges de certification officielle' },
             ].map((s, i) => (
               <div key={i} className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 text-center">

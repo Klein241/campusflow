@@ -57,9 +57,9 @@ export function TemplateBentoBox({
     return (
         <div className="relative min-h-screen bg-[#070B12] text-white overflow-x-hidden pb-28 selection:bg-cyan-500/30">
             {/* Ambient Background Glows */}
-            <div className="fixed inset-0 pointer-events-none z-0">
-                <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[650px] h-[350px] bg-cyan-600/10 blur-[180px] rounded-full" />
-                <div className="absolute bottom-10 right-10 w-[500px] h-[500px] bg-teal-600/10 blur-[200px] rounded-full" />
+            <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+                <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[90vw] max-w-[600px] h-[300px] sm:h-[350px] bg-cyan-600/10 blur-[150px] rounded-full" />
+                <div className="absolute bottom-10 right-10 w-[90vw] max-w-[500px] h-[250px] sm:h-[500px] bg-teal-600/10 blur-[150px] rounded-full" />
             </div>
 
             {/* ═══ Header Bar ═══ */}
@@ -410,13 +410,13 @@ export function TemplateBentoBox({
             </main>
 
             {/* ═══ Bottom Sticky Action Bar ═══ */}
-            <div className="fixed bottom-0 inset-x-0 z-40 bg-[#0A0E17]/95 backdrop-blur-2xl border-t border-cyan-500/25 p-3.5 px-6 shadow-2xl">
-                <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
+            <div className="fixed bottom-0 inset-x-0 z-40 bg-[#0A0E17]/95 backdrop-blur-2xl border-t border-cyan-500/25 p-3 sm:p-3.5 px-4 sm:px-6 shadow-2xl">
+                <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
                     <div>
                         <p className="text-xs font-black text-white uppercase tracking-wide">Commencez votre avenir</p>
-                        <p className="text-[10px] text-slate-400">Inscriptions ouvertes pour l'année académique 2025/2026</p>
+                        <p className="text-[10px] text-slate-400">Inscriptions ouvertes pour l'année académique</p>
                     </div>
-                    <Button onClick={onOpenInscription} className="h-11 px-6 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-black text-xs shadow-lg shadow-cyan-500/25 gap-2">
+                    <Button onClick={onOpenInscription} className="h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-black text-xs shadow-lg shadow-cyan-500/25 gap-2 w-full sm:w-auto justify-center">
                         <FileText className="w-4 h-4" />
                         <span>S'INSCRIRE MAINTENANT</span>
                         <ArrowRight className="w-4 h-4" />

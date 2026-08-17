@@ -158,7 +158,7 @@ export function TemplateHubOnglets({
                 )}
 
                 {activeTab === 'about' && (
-                    <motion.div key="about" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} className="grid lg:grid-cols-2 gap-6 items-center">
+                    <motion.div key="about" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                         <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 space-y-4">
                             <h3 className="text-xl font-bold text-white flex items-center gap-2">
                                 <Award className="w-5 h-5 text-amber-400" /> Notre Histoire & Vision
@@ -166,7 +166,7 @@ export function TemplateHubOnglets({
                             <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">
                                 {org.about_text || `${org.name} forme les leaders de demain dans un cadre d'excellence pédagogique avec un corps professoral hautement qualifié.`}
                             </p>
-                            <div className="grid grid-cols-2 gap-2 pt-2 text-xs text-slate-300">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 text-xs text-slate-300">
                                 <div className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Suivi personnalisé</div>
                                 <div className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Corps qualifié</div>
                                 <div className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Diplômes reconnus</div>
@@ -174,9 +174,9 @@ export function TemplateHubOnglets({
                             </div>
                         </div>
                         {org.about_image_url ? (
-                            <img src={org.about_image_url} alt="À propos" className="w-full h-72 rounded-2xl object-cover border border-white/10 shadow-xl" />
+                            <img src={org.about_image_url} alt="À propos" className="w-full h-48 sm:h-72 rounded-2xl object-cover border border-white/10 shadow-xl" />
                         ) : (
-                            <div className="w-full h-72 rounded-2xl border border-white/10 bg-white/[0.02] flex flex-col items-center justify-center p-6 text-center">
+                            <div className="w-full h-48 sm:h-72 rounded-2xl border border-white/10 bg-white/[0.02] flex flex-col items-center justify-center p-6 text-center">
                                 <GraduationCap className="w-12 h-12 text-slate-600 mb-2" />
                                 <p className="text-sm font-semibold text-slate-400">Excellence & Discipline</p>
                             </div>

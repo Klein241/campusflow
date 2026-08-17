@@ -2037,28 +2037,56 @@ ${bodyHtml}
                             </div>
                             {isCL && <div className="mt-3"><p className="text-xs text-slate-500 mb-2">Ajout rapide :</p><div className="flex flex-wrap gap-2">{(org.type === 'college' ? COLLEGE : [...COLLEGE, ...LYCEE]).map(l => <Button key={l} size="sm" variant="outline" className="text-xs border-white/10" onClick={() => quickAdd(l)}><Plus className="w-3 h-3 mr-1" />{l}</Button>)}</div></div>}
                         </div>
-                        {/* Liste */}
-                        {cls.map((c, i) => <div key={c.id || i} className="flex items-center justify-between p-4 rounded-xl bg-white/[0.03] border border-white/10">
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                                <School className="w-5 h-5 text-indigo-400 shrink-0" />
-                                {editingClsId === c.id ? (
-                                    <div className="flex gap-2 flex-1">
-                                        <Input value={editClsName} onChange={e => setEditClsName(e.target.value)} onKeyDown={e => e.key === 'Enter' && updateClass(c.id!)} className="bg-white/5 border-white/10 text-white h-8 rounded-lg text-sm flex-1" autoFocus />
-                                        <Button size="sm" className="bg-emerald-600 h-8" onClick={() => updateClass(c.id!)}><Save className="w-3 h-3" /></Button>
-                                        <Button size="sm" variant="ghost" className="h-8" onClick={() => setEditingClsId(null)}><X className="w-3 h-3" /></Button>
+                        {/* Cartes Classes */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {cls.map((c, i) => {
+                                const classStudents = students.filter((s: any) => s.classroom_id === c.id);
+                                return (
+                                    <div key={c.id || i} className="p-5 rounded-2xl bg-gradient-to-br from-[#121726] via-[#0F1420] to-[#0B0E17] border border-white/10 hover:border-indigo-500/40 transition-all duration-300 shadow-xl flex flex-col justify-between">
+                                        <div>
+                                            <div className="flex items-start justify-between gap-3 mb-3">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center font-bold shrink-0">
+                                                        <School className="w-5 h-5" />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        {editingClsId === c.id ? (
+                                                            <div className="flex gap-2">
+                                                                <Input value={editClsName} onChange={e => setEditClsName(e.target.value)} onKeyDown={e => e.key === 'Enter' && updateClass(c.id!)} className="bg-white/5 border-white/10 text-white h-8 rounded-lg text-sm" autoFocus />
+                                                                <Button size="sm" className="bg-emerald-600 h-8 px-2" onClick={() => updateClass(c.id!)}><Save className="w-3 h-3" /></Button>
+                                                                <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setEditingClsId(null)}><X className="w-3 h-3" /></Button>
+                                                            </div>
+                                                        ) : (
+                                                            <>
+                                                                <h4 className="font-bold text-white text-base truncate">{c.name}</h4>
+                                                                <span className="inline-block text-[10px] px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-300 border border-indigo-500/20 font-semibold">
+                                                                    {c.cycle || 'Général'}
+                                                                </span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {c.id && editingClsId !== c.id && (
+                                                    <div className="flex items-center gap-1">
+                                                        <button onClick={() => { setEditingClsId(c.id!); setEditClsName(c.name); }} className="text-slate-400 hover:text-indigo-300 p-1.5 rounded-lg hover:bg-white/5 transition" title="Modifier"><Pencil className="w-3.5 h-3.5" /></button>
+                                                        <button onClick={() => deleteClass(c.id!)} className="text-slate-400 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition" title="Supprimer"><Trash2 className="w-3.5 h-3.5" /></button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs text-slate-400">
+                                                <div className="flex items-center gap-1.5">
+                                                    <GraduationCap className="w-4 h-4 text-indigo-400" />
+                                                    <span><strong>{classStudents.length}</strong> étudiant(s)</span>
+                                                </div>
+                                                <span className="text-[11px] text-slate-500">Capacité: {c.capacity || 50}</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                ) : (
-                                    <div>
-                                        <p className="font-medium">{c.name}</p>
-                                        <p className="text-xs text-slate-500">{c.cycle || '—'} • {students.filter((s: any) => s.classroom_id === c.id).length} étudiant(s){!c.id && ' • nouveau'}</p>
-                                    </div>
-                                )}
-                            </div>
-                            {c.id && editingClsId !== c.id && <div className="flex items-center gap-1">
-                                <button onClick={() => { setEditingClsId(c.id!); setEditClsName(c.name); }} className="text-indigo-400 hover:text-indigo-300 p-1"><Pencil className="w-4 h-4" /></button>
-                                <button onClick={() => deleteClass(c.id!)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-4 h-4" /></button>
-                            </div>}
-                        </div>)}
+                                );
+                            })}
+                        </div>
+                        {cls.length === 0 && <div className="text-center py-12 text-slate-500"><School className="w-12 h-12 mx-auto mb-2 opacity-30" /><p className="text-sm">Aucune classe configurée</p></div>}
                     </div>}
 
                     {/* ═══ ROOMS (salles physiques) ═══ */}
@@ -2076,23 +2104,45 @@ ${bodyHtml}
                                 <Button onClick={addRoomDirect} disabled={!directNewRoom.trim() || saving} className="bg-amber-600 shrink-0"><Plus className="w-4 h-4 mr-1" />Ajouter</Button>
                             </div>
                         </div>
-                        {rooms.map((r) => <div key={r.id} className="flex items-center justify-between p-4 rounded-xl bg-white/[0.03] border border-white/10">
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                                <Building2 className="w-5 h-5 text-amber-400 shrink-0" />
-                                {editingRoomId === r.id ? (
-                                    <div className="flex gap-2 flex-1">
-                                        <Input value={editRoomName} onChange={e => setEditRoomName(e.target.value)} onKeyDown={e => e.key === 'Enter' && updateRoom(r.id!)} className="bg-white/5 border-white/10 text-white h-8 rounded-lg text-sm flex-1" autoFocus />
-                                        <Button size="sm" className="bg-emerald-600 h-8" onClick={() => updateRoom(r.id!)}><Save className="w-3 h-3" /></Button>
-                                        <Button size="sm" variant="ghost" className="h-8" onClick={() => setEditingRoomId(null)}><X className="w-3 h-3" /></Button>
+                        {/* Cartes Salles */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {rooms.map((r) => (
+                                <div key={r.id} className="p-5 rounded-2xl bg-gradient-to-br from-[#1c1813] via-[#16130e] to-[#0E0C09] border border-white/10 hover:border-amber-500/40 transition-all duration-300 shadow-xl flex flex-col justify-between">
+                                    <div>
+                                        <div className="flex items-start justify-between gap-3 mb-2">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center font-bold shrink-0">
+                                                    <Building2 className="w-5 h-5" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    {editingRoomId === r.id ? (
+                                                        <div className="flex gap-2">
+                                                            <Input value={editRoomName} onChange={e => setEditRoomName(e.target.value)} onKeyDown={e => e.key === 'Enter' && updateRoom(r.id!)} className="bg-white/5 border-white/10 text-white h-8 rounded-lg text-sm" autoFocus />
+                                                            <Button size="sm" className="bg-emerald-600 h-8 px-2" onClick={() => updateRoom(r.id!)}><Save className="w-3 h-3" /></Button>
+                                                            <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setEditingRoomId(null)}><X className="w-3 h-3" /></Button>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            <h4 className="font-bold text-white text-base truncate">{r.name}</h4>
+                                                            <span className="inline-block text-[10px] px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/20 font-semibold">
+                                                                Salle de cours
+                                                            </span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {r.id && editingRoomId !== r.id && (
+                                                <div className="flex items-center gap-1">
+                                                    <button onClick={() => { setEditingRoomId(r.id!); setEditRoomName(r.name); }} className="text-slate-400 hover:text-amber-300 p-1.5 rounded-lg hover:bg-white/5 transition" title="Modifier"><Pencil className="w-3.5 h-3.5" /></button>
+                                                    <button onClick={() => deleteRoom(r.id!)} className="text-slate-400 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition" title="Supprimer"><Trash2 className="w-3.5 h-3.5" /></button>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                ) : (<p className="font-medium">{r.name}</p>)}
-                            </div>
-                            {r.id && editingRoomId !== r.id && <div className="flex items-center gap-1">
-                                <button onClick={() => { setEditingRoomId(r.id!); setEditRoomName(r.name); }} className="text-amber-400 hover:text-amber-300 p-1"><Pencil className="w-4 h-4" /></button>
-                                <button onClick={() => deleteRoom(r.id!)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-4 h-4" /></button>
-                            </div>}
-                        </div>)}
-                        {rooms.length === 0 && <div className="text-center py-8 text-slate-500"><Building2 className="w-10 h-10 mx-auto mb-2 opacity-30" /><p className="text-sm">Aucune salle</p></div>}
+                                </div>
+                            ))}
+                        </div>
+                        {rooms.length === 0 && <div className="text-center py-12 text-slate-500"><Building2 className="w-12 h-12 mx-auto mb-2 opacity-30" /><p className="text-sm">Aucune salle physique enregistrée</p></div>}
                     </div>}
 
                     {/* ═══ SUBJECTS (indépendants des classes) ═══ */}
@@ -2113,29 +2163,39 @@ ${bodyHtml}
                         </div>
                         {/* Liste simple */}
                         <div className="space-y-2">
-                            {subs.map(s => (
-                                <div key={s.id} className="flex items-center justify-between p-3 rounded-lg bg-white/[0.03] border border-white/10">
-                                    {editingSubId === s.id ? (
-                                        <div className="flex gap-2 flex-1">
-                                            <Input value={editSubName} onChange={e => setEditSubName(e.target.value)} onKeyDown={e => e.key === 'Enter' && updateSubject(s.id!)} className="bg-white/5 border-white/10 text-white h-8 rounded-lg text-sm flex-1" autoFocus />
-                                            <Input type="number" value={editSubCoef} onChange={e => setEditSubCoef(e.target.value)} className="bg-white/5 border-white/10 text-white h-8 rounded-lg text-sm w-16" placeholder="Coef" />
-                                            <Button size="sm" className="bg-emerald-600 h-8" onClick={() => updateSubject(s.id!)}><Save className="w-3 h-3" /></Button>
-                                            <Button size="sm" variant="ghost" className="h-8" onClick={() => setEditingSubId(null)}><X className="w-3 h-3" /></Button>
-                                        </div>
-                                    ) : (<>
-                                        <div className="flex items-center gap-2">
-                                            <BookOpen className="w-4 h-4 text-emerald-400" />
-                                            <span className="text-sm font-medium">{s.name}</span>
-                                            <span className="text-xs text-slate-500">Coef.{s.coefficient}</span>
-                                            {s.teacher_id && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-600/10 text-emerald-300">{teachers.find((t: any) => t.id === s.teacher_id)?.first_name || 'Prof assigné'}</span>}
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            <button onClick={() => { setEditingSubId(s.id!); setEditSubName(s.name); setEditSubCoef(String(s.coefficient)); }} className="text-emerald-400 hover:text-emerald-300 p-1"><Pencil className="w-3.5 h-3.5" /></button>
-                                            <button onClick={() => deleteSubject(s.id!)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
-                                        </div>
-                                    </>)}
-                                </div>
-                            ))}
+                            {subs.map(s => {
+                                const assignedTeacher = teachers.find((t: any) => t.id === s.teacher_id);
+                                return (
+                                    <div key={s.id} className="flex items-center justify-between p-3 rounded-lg bg-white/[0.03] border border-white/10">
+                                        {editingSubId === s.id ? (
+                                            <div className="flex gap-2 flex-1">
+                                                <Input value={editSubName} onChange={e => setEditSubName(e.target.value)} onKeyDown={e => e.key === 'Enter' && updateSubject(s.id!)} className="bg-white/5 border-white/10 text-white h-8 rounded-lg text-sm flex-1" autoFocus />
+                                                <Input type="number" value={editSubCoef} onChange={e => setEditSubCoef(e.target.value)} className="bg-white/5 border-white/10 text-white h-8 rounded-lg text-sm w-16" placeholder="Coef" />
+                                                <Button size="sm" className="bg-emerald-600 h-8" onClick={() => updateSubject(s.id!)}><Save className="w-3 h-3" /></Button>
+                                                <Button size="sm" variant="ghost" className="h-8" onClick={() => setEditingSubId(null)}><X className="w-3 h-3" /></Button>
+                                            </div>
+                                        ) : (<>
+                                            <div className="flex items-center gap-2">
+                                                <BookOpen className="w-4 h-4 text-emerald-400" />
+                                                <span className="text-sm font-medium">{s.name}</span>
+                                                <span className="text-xs text-slate-500">Coef.{s.coefficient}</span>
+                                                {s.teacher_id && (
+                                                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-600/15 text-emerald-300 border border-emerald-500/20 flex items-center gap-1.5">
+                                                        👨‍🏫 {assignedTeacher ? `${assignedTeacher.first_name} ${assignedTeacher.last_name}` : 'Prof assigné'}
+                                                        <button onClick={() => assignTeacherToSubject(s.id, null)} className="text-slate-400 hover:text-red-400 transition" title="Retirer ce professeur">
+                                                            <X className="w-3 h-3" />
+                                                        </button>
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <button onClick={() => { setEditingSubId(s.id!); setEditSubName(s.name); setEditSubCoef(String(s.coefficient)); }} className="text-emerald-400 hover:text-emerald-300 p-1"><Pencil className="w-3.5 h-3.5" /></button>
+                                                <button onClick={() => deleteSubject(s.id!)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                                            </div>
+                                        </>)}
+                                    </div>
+                                );
+                            })}
                         </div>
                         {subs.length === 0 && <div className="text-center py-8 text-slate-500"><BookOpen className="w-10 h-10 mx-auto mb-2 opacity-30" /><p className="text-sm">Aucune matière</p></div>}
                     </div>}
@@ -2209,8 +2269,15 @@ ${bodyHtml}
                                                         {assignedSubs.length > 0 ? (
                                                             <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
                                                                 {assignedSubs.map(s => (
-                                                                    <span key={s.id} className="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-medium flex items-center gap-1">
-                                                                        📘 {s.name} <span className="text-emerald-400/60">({cls.find(c => c.id === s.classroom_id)?.name || 'All'})</span>
+                                                                    <span key={s.id} className="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-medium flex items-center gap-1.5">
+                                                                        <span>📘 {s.name} <span className="text-emerald-400/60">({cls.find(c => c.id === s.classroom_id)?.name || 'All'})</span></span>
+                                                                        <button 
+                                                                            onClick={() => assignTeacherToSubject(s.id, null)} 
+                                                                            className="text-slate-400 hover:text-red-400 p-0.5 rounded transition"
+                                                                            title={`Retirer ${s.name} de cet enseignant`}
+                                                                        >
+                                                                            <X className="w-3 h-3" />
+                                                                        </button>
                                                                     </span>
                                                                 ))}
                                                             </div>

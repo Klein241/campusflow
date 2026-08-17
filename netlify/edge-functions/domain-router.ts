@@ -20,7 +20,9 @@
 const PLATFORM_DOMAINS = [
     "netlify.app",      // catches ALL *.netlify.app subdomains (campusflw, mycampusfl, previews...)
     "netlify.live",     // Netlify deploy previews
-    "campusflow.app",   // production domain
+    "iziteach.com",     // official production domain
+    "iziteach.app",
+    "campusflow.app",   // legacy fallback
     "readsgreat.site",  // primary production domain
 ];
 

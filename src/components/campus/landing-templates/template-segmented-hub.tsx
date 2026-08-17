@@ -72,9 +72,9 @@ export function TemplateSegmentedHub({
     return (
         <div className="relative min-h-screen bg-[#030E08] text-white overflow-x-hidden pb-28 selection:bg-amber-500/30">
             {/* Ambient Background Glows */}
-            <div className="fixed inset-0 pointer-events-none z-0">
-                <div className="absolute top-[-5%] left-1/4 w-[700px] h-[500px] bg-emerald-700/10 blur-[200px] rounded-full" />
-                <div className="absolute bottom-10 right-10 w-[600px] h-[400px] bg-amber-600/10 blur-[180px] rounded-full" />
+            <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+                <div className="absolute top-[-5%] left-1/4 w-[90vw] max-w-[600px] h-[300px] sm:h-[500px] bg-emerald-700/10 blur-[150px] rounded-full" />
+                <div className="absolute bottom-10 right-10 w-[90vw] max-w-[500px] h-[250px] sm:h-[400px] bg-amber-600/10 blur-[150px] rounded-full" />
             </div>
 
             {/* ═══ Top Navbar Luxury ═══ */}
@@ -135,14 +135,14 @@ export function TemplateSegmentedHub({
                         <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-lg font-light">
                             Bénéficiez d'une éducation de haut niveau, de parcours certifiés et d'un encadrement rigoureux à <strong className="text-amber-300">{org.name}</strong>.
                         </p>
-                        <div className="flex items-center gap-3 pt-2">
-                            <Button onClick={onOpenInscription} className="h-12 px-7 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-xl shadow-amber-500/30 gap-2">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
+                            <Button onClick={onOpenInscription} className="h-12 px-7 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-xl shadow-amber-500/30 gap-2 w-full sm:w-auto">
                                 <FileText className="w-4 h-4" />
                                 <span>Demande d'Admission</span>
                                 <ArrowRight className="w-4 h-4" />
                             </Button>
                             <Link href={orgPath(orgSlug, 'library')}>
-                                <Button variant="outline" className="h-12 px-6 rounded-xl border-amber-500/30 text-amber-300 hover:bg-amber-500/10 font-bold text-xs">
+                                <Button variant="outline" className="h-12 px-6 rounded-xl border-amber-500/30 text-amber-300 hover:bg-amber-500/10 font-bold text-xs w-full sm:w-auto">
                                     Bibliothèque & Livres
                                 </Button>
                             </Link>
@@ -160,12 +160,12 @@ export function TemplateSegmentedHub({
                         </div>
 
                         {/* Floating 98% SUCCESS RATE Badge */}
-                        <div className="absolute top-1/2 left-6 -translate-y-1/2 p-3.5 px-5 rounded-2xl bg-[#06180F]/90 backdrop-blur-2xl border border-amber-400/50 shadow-2xl flex items-center gap-3">
+                        <div className="absolute bottom-3 left-3 sm:top-1/2 sm:bottom-auto sm:left-6 sm:-translate-y-1/2 p-2.5 sm:p-3.5 px-4 sm:px-5 rounded-2xl bg-[#06180F]/90 backdrop-blur-2xl border border-amber-400/50 shadow-2xl flex items-center gap-3">
                             <div>
-                                <span className="text-2xl font-black text-white tracking-tight">98%</span>
-                                <span className="text-[10px] text-amber-400 block font-bold uppercase tracking-wider">Taux de Réussite</span>
+                                <span className="text-xl sm:text-2xl font-black text-white tracking-tight">98%</span>
+                                <span className="text-[9px] sm:text-[10px] text-amber-400 block font-bold uppercase tracking-wider">Taux de Réussite</span>
                             </div>
-                            <Shield className="w-6 h-6 text-amber-400" />
+                            <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400" />
                         </div>
                     </div>
                 </div>
@@ -186,7 +186,7 @@ export function TemplateSegmentedHub({
                                 <motion.div
                                     key={p.id || idx}
                                     onClick={() => setSelectedProgramIdx(idx)}
-                                    className={`p-5 rounded-3xl border transition-all cursor-pointer flex flex-col justify-between h-52 group ${
+                                    className={`p-5 rounded-3xl border transition-all cursor-pointer flex flex-col justify-between min-h-[180px] sm:h-52 group ${
                                         selectedProgramIdx === idx
                                             ? 'bg-gradient-to-br from-[#0D2418] to-[#06180F] border-amber-400/60 shadow-xl shadow-amber-500/10'
                                             : 'bg-[#06180F]/80 border-white/10 hover:border-amber-500/30'

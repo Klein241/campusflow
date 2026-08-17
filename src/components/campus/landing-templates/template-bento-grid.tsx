@@ -53,9 +53,9 @@ export function TemplateBentoGrid({
     return (
         <div className="relative min-h-screen bg-[#070A0F] text-white overflow-x-hidden selection:bg-emerald-500/30">
             {/* Ambient Background Glows */}
-            <div className="fixed inset-0 pointer-events-none z-0">
-                <div className="absolute top-[-10%] right-[-5%] w-[600px] h-[600px] bg-emerald-500/10 blur-[180px] rounded-full" />
-                <div className="absolute bottom-[10%] left-[-10%] w-[500px] h-[500px] bg-teal-500/10 blur-[160px] rounded-full" />
+            <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+                <div className="absolute top-[-10%] right-[-5%] w-[90vw] max-w-[600px] h-[300px] sm:h-[600px] bg-emerald-500/10 blur-[150px] rounded-full" />
+                <div className="absolute bottom-[10%] left-[-10%] w-[90vw] max-w-[500px] h-[250px] sm:h-[500px] bg-teal-500/10 blur-[140px] rounded-full" />
             </div>
 
             {/* ═══ Header Navbar Bento ═══ */}
@@ -108,12 +108,12 @@ export function TemplateBentoGrid({
                     <p className="text-xs sm:text-sm text-slate-400 max-w-xl mx-auto leading-relaxed">
                         {org.motto || org.hero_subtitle || 'Portail officiel d\'admission, de formation et de suivi académique pour les étudiants et enseignants.'}
                     </p>
-                    <div className="flex items-center justify-center gap-3 pt-3">
-                        <Button onClick={onOpenInscription} className="h-11 px-7 rounded-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/25 flex items-center gap-2">
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-3">
+                        <Button onClick={onOpenInscription} className="h-11 px-7 rounded-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 w-full sm:w-auto">
                             <FileText className="w-4 h-4" />
                             S'inscrire Maintenant
                         </Button>
-                        <Button onClick={() => setActiveTab('programs')} variant="outline" className="h-11 px-7 rounded-full border-white/15 text-white hover:bg-white/5 font-bold text-xs">
+                        <Button onClick={() => setActiveTab('programs')} variant="outline" className="h-11 px-7 rounded-full border-white/15 text-white hover:bg-white/5 font-bold text-xs w-full sm:w-auto">
                             Découvrir les Formations
                         </Button>
                     </div>

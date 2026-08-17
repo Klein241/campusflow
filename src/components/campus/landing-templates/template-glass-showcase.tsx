@@ -65,10 +65,10 @@ export function TemplateGlassShowcase({
     return (
         <div className="relative min-h-screen bg-[#06090E] text-white overflow-x-hidden selection:bg-cyan-500/30">
             {/* ═══ Ambient Glows ═══ */}
-            <div className="fixed inset-0 pointer-events-none z-0">
-                <div className="absolute top-0 left-1/4 w-[600px] h-[400px] bg-cyan-600/10 blur-[180px] rounded-full" />
-                <div className="absolute top-1/3 right-10 w-[500px] h-[500px] bg-emerald-600/10 blur-[180px] rounded-full" />
-                <div className="absolute bottom-10 left-1/3 w-[600px] h-[400px] bg-blue-600/10 blur-[200px] rounded-full" />
+            <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+                <div className="absolute top-0 left-1/4 w-[90vw] max-w-[600px] h-[300px] sm:h-[400px] bg-cyan-600/10 blur-[150px] rounded-full" />
+                <div className="absolute top-1/3 right-10 w-[90vw] max-w-[500px] h-[250px] sm:h-[500px] bg-emerald-600/10 blur-[150px] rounded-full" />
+                <div className="absolute bottom-10 left-1/3 w-[90vw] max-w-[500px] h-[250px] sm:h-[400px] bg-blue-600/10 blur-[160px] rounded-full" />
             </div>
 
             {/* ═══ Top Navbar Prestige Vitré ═══ */}
