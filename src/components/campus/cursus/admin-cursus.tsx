@@ -384,15 +384,47 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
     };
 
     const createExercise = async () => {
-        if (!exForm.title || exForm.questions.length === 0 || !selectedChId) return;
+        if (!exForm.title.trim()) {
+            toast.error('Veuillez renseigner le titre de l\'exercice');
+            return;
+        }
+        if (!selectedChId) {
+            toast.error('Veuillez sélectionner un chapitre pour cet exercice');
+            return;
+        }
+
+        // Auto-add pending question if user typed without clicking +
+        let questionsToSave = [...exForm.questions];
+        if (newQ.question.trim()) {
+            const pendingQ = {
+                ...newQ,
+                question: newQ.question.trim(),
+                answer: newQ.answer.trim(),
+                options: newQ.options.filter((o: string) => o.trim())
+            };
+            questionsToSave.push(pendingQ);
+            setNewQ({ question: '', answer: '', options: ['', '', '', ''] });
+        }
+
+        if (questionsToSave.length === 0) {
+            toast.error('Veuillez ajouter au moins une question à l\'exercice');
+            return;
+        }
+
         setSavingEx(true);
         const { data, error } = await supabase.from('exercises').insert({
-            organization_id: orgId, title: exForm.title, type: exForm.type,
-            duration_minutes: exForm.duration_minutes, max_score: exForm.max_score,
-            questions: exForm.questions, chapter_id: selectedChId
+            organization_id: orgId,
+            title: exForm.title.trim(),
+            type: exForm.type,
+            duration_minutes: exForm.duration_minutes || 10,
+            max_score: exForm.max_score || 20,
+            questions: questionsToSave,
+            chapter_id: selectedChId
         }).select().single();
-        if (error) toast.error(error.message);
-        else {
+
+        if (error) {
+            toast.error('Erreur création exercice : ' + error.message);
+        } else {
             setExercises(p => [...p, data]); setShowNewEx(false);
             setExForm({ title: '', type: 'qcm', duration_minutes: 10, max_score: 20, questions: [] });
             toast.success('Exercice créé ✅');
@@ -413,7 +445,7 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
                 const classStudents = allStudents.filter(s => s.classroom_id === subject.classroom_id);
                 setEmailStudents(classStudents);
                 setEmailSubject(`Nouvel exercice disponible : ${data.title}`);
-                setEmailBody(`Un nouvel exercice vous attend sur IziTeach !\\n\\n🏋️ Exercice : ${data.title}\\n📖 Chapitre : ${chapter?.title || ''}\\n🏫 Matière : ${subject?.name || ''}\\n⏱️ Durée : ${data.duration_minutes} min · 🏆 ${data.max_score} pts\\n\\nConnectez-vous pour le commencer.`);
+                setEmailBody(`Un nouvel exercice vous attend sur IziTeach !\n\n🏋️ Exercice : ${data.title}\n📖 Chapitre : ${chapter?.title || ''}\n🏫 Matière : ${subject?.name || ''}\n⏱️ Durée : ${data.duration_minutes} min · 🏆 ${data.max_score} pts\n\nConnectez-vous pour le commencer.`);
                 setEmailModalOpen(true);
             }
         }
@@ -1138,8 +1170,8 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
                                         </button>
                                     </div>
                                 </div>
-                                <Button onClick={createExercise} disabled={savingEx || !exForm.title || exForm.questions.length === 0}
-                                    className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl h-10">
+                                <Button onClick={createExercise} disabled={savingEx || !exForm.title.trim()}
+                                    className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl h-10 font-bold">
                                     {savingEx ? 'Création...' : 'Créer l\'exercice'}
                                 </Button>
                             </div>

@@ -20,6 +20,11 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { PwaInstall } from './pwa-install';
 
+import { UserFeedbackModal, FeedbackTab } from './user-feedback-modal';
+import { Bug, Lightbulb, School as SchoolIcon, Smartphone, X } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
 // ═══════════════════════════════════════════════════════
 // PROFILE VIEW — Profile + Marketplace + Code + Logout
 // ═══════════════════════════════════════════════════════
@@ -47,6 +52,24 @@ export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgNam
     const [loading, setLoading] = useState(true);
     const [codeCopied, setCodeCopied] = useState(false);
 
+    // Feedback & Review Modal
+    const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+    const [feedbackTab, setFeedbackTab] = useState<FeedbackTab>('bug');
+
+    // Edit Profile Modal states
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [savingProfile, setSavingProfile] = useState(false);
+    const [editFirstName, setEditFirstName] = useState('');
+    const [editLastName, setEditLastName] = useState('');
+    const [editEmail, setEditEmail] = useState('');
+    const [editPhone, setEditPhone] = useState('');
+    const [editBirthDate, setEditBirthDate] = useState('');
+    const [editSex, setEditSex] = useState('M');
+    const [editResidence, setEditResidence] = useState('');
+    const [editGuardianName, setEditGuardianName] = useState('');
+    const [editGuardianPhone, setEditGuardianPhone] = useState('');
+    const [editSpeciality, setEditSpeciality] = useState('');
+
     // Marketplace seller
     const [myProducts, setMyProducts] = useState<any[]>([]);
     const [loadingProducts, setLoadingProducts] = useState(false);
@@ -59,6 +82,54 @@ export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgNam
     // Photo upload
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
     const [showPhotoModal, setShowPhotoModal] = useState(false);
+
+    const handleSaveProfile = async () => {
+        if (!editFirstName.trim() || !editLastName.trim()) {
+            toast.error('Prénom et nom obligatoires.');
+            return;
+        }
+
+        setSavingProfile(true);
+        try {
+            const table = userRole === 'teacher' ? 'teacher_profiles' : 'student_profiles';
+            const updates: any = {
+                first_name: editFirstName.trim(),
+                last_name: editLastName.trim(),
+                email: editEmail.trim() || null,
+                phone: editPhone.trim() || null,
+                birth_date: editBirthDate || null,
+                sex: editSex,
+                residence: editResidence.trim() || null,
+            };
+
+            if (userRole === 'student') {
+                updates.guardian_name = editGuardianName.trim() || null;
+                updates.guardian_phone = editGuardianPhone.trim() || null;
+            } else if (userRole === 'teacher') {
+                updates.speciality = editSpeciality.trim() || null;
+            }
+
+            const { error } = await supabase.from(table).update(updates).eq('id', profile?.id || userId);
+            if (error) throw error;
+
+            setProfile((prev: any) => ({ ...prev, ...updates }));
+            try {
+                SessionManager.patch({
+                    name: `${editFirstName.trim()} ${editLastName.trim()}`,
+                    first_name: editFirstName.trim(),
+                    last_name: editLastName.trim(),
+                    email: editEmail.trim() || undefined,
+                });
+            } catch {}
+
+            setShowEditModal(false);
+            toast.success('Profil mis à jour avec succès ! ✅');
+        } catch (err: any) {
+            toast.error(err.message || 'Erreur lors de la mise à jour');
+        } finally {
+            setSavingProfile(false);
+        }
+    };
 
     useEffect(() => {
         (async () => {
@@ -287,24 +358,122 @@ export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgNam
                 })}
             </div>
 
-            {/* ═══ PROFILE INFO ═══ */}
+            {/* ═══ PROFILE INFO + EDIT BUTTON ═══ */}
             <Card className="bg-card/50 backdrop-blur-sm border-white/10 overflow-hidden">
                 <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                        <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Informations Personnelles</span>
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                                setEditFirstName(profile?.first_name || '');
+                                setEditLastName(profile?.last_name || '');
+                                setEditEmail(profile?.email || '');
+                                setEditPhone(profile?.phone || '');
+                                setEditBirthDate(profile?.birth_date || profile?.date_of_birth || '');
+                                setEditSex(profile?.sex || profile?.gender || 'M');
+                                setEditResidence(profile?.residence || '');
+                                setEditGuardianName(profile?.guardian_name || '');
+                                setEditGuardianPhone(profile?.guardian_phone || '');
+                                setEditSpeciality(profile?.speciality || '');
+                                setShowEditModal(true);
+                            }}
+                            className="h-7 px-2.5 text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg gap-1"
+                        >
+                            <Edit className="w-3.5 h-3.5" /> Modifier
+                        </Button>
+                    </div>
+
                     {[
-                        ['🆔 Matricule', profile?.matricule],
+                        ['🆔 Matricule / Code', profile?.matricule || profile?.access_code],
                         ['📧 Email', profile?.email],
                         ['📱 Téléphone', profile?.phone],
                         ['🎂 Naissance', profile?.birth_date || profile?.date_of_birth],
-                        ['👤 Sexe', profile?.sex === 'M' ? 'Masculin' : profile?.sex === 'F' ? 'Féminin' : profile?.sex],
-                        ['🎓 Filière', filiere?.nom || '—'],
+                        ['👤 Sexe', (profile?.sex === 'M' || profile?.gender === 'M') ? 'Masculin' : (profile?.sex === 'F' || profile?.gender === 'F') ? 'Féminin' : (profile?.sex || profile?.gender)],
+                        ['🏠 Résidence', profile?.residence],
+                        ['🎓 Filière / Classe', filiere?.nom || classroom?.filieres?.nom || classroom?.cycle || classroom?.name],
+                        ...(userRole === 'student' && (profile?.guardian_name || profile?.guardian_phone) ? [
+                            ['👨‍👩‍👦 Tuteur', `${profile?.guardian_name || ''} ${profile?.guardian_phone ? `(${profile?.guardian_phone})` : ''}`.trim()]
+                        ] : []),
+                        ...(userRole === 'teacher' && profile?.speciality ? [
+                            ['📚 Spécialité', profile?.speciality]
+                        ] : []),
                     ].map(([k, v], i) => (
                         <div key={i} className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">{k}</span>
-                            <span className="font-medium">{v || '—'}</span>
+                            <span className="font-medium text-right truncate max-w-[200px]">{v || '—'}</span>
                         </div>
                     ))}
                 </CardContent>
             </Card>
+
+            {/* ═══ RETOURS, BUGS & ÉVALUATIONS (+ SKY POINTS) ═══ */}
+            <div className="space-y-2">
+                <div className="flex items-center justify-between px-1">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Avis & Assistance</p>
+                    <span className="text-[10px] text-amber-400 font-bold flex items-center gap-1">
+                        <Star className="w-3 h-3 fill-amber-400" /> Jusqu'à +7 pts
+                    </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                    {/* Bug report */}
+                    <button
+                        onClick={() => { setFeedbackTab('bug'); setShowFeedbackModal(true); }}
+                        className="p-3.5 rounded-2xl bg-red-500/10 hover:bg-red-500/15 border border-red-500/20 text-left transition group shadow-sm flex flex-col justify-between"
+                    >
+                        <div className="w-8 h-8 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center mb-2">
+                            <Bug className="w-4 h-4" />
+                        </div>
+                        <div>
+                            <p className="text-xs font-bold text-white group-hover:text-red-300 transition">Signaler un Bug</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">Avec capture d'écran</p>
+                        </div>
+                    </button>
+
+                    {/* Proposer une idée */}
+                    <button
+                        onClick={() => { setFeedbackTab('feature'); setShowFeedbackModal(true); }}
+                        className="p-3.5 rounded-2xl bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/20 text-left transition group shadow-sm flex flex-col justify-between"
+                    >
+                        <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-2">
+                            <Lightbulb className="w-4 h-4" />
+                        </div>
+                        <div>
+                            <p className="text-xs font-bold text-white group-hover:text-amber-300 transition">Proposer une Idée</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">Pour le Superadmin</p>
+                        </div>
+                    </button>
+
+                    {/* Évaluer l'école */}
+                    <button
+                        onClick={() => { setFeedbackTab('school_review'); setShowFeedbackModal(true); }}
+                        className="p-3.5 rounded-2xl bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/20 text-left transition group shadow-sm flex flex-col justify-between"
+                    >
+                        <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-2">
+                            <School className="w-4 h-4" />
+                        </div>
+                        <div>
+                            <p className="text-xs font-bold text-white group-hover:text-emerald-300 transition">Évaluer l'École</p>
+                            <p className="text-[10px] text-emerald-400 font-bold mt-0.5">+1 à +7 Sky Points ⭐</p>
+                        </div>
+                    </button>
+
+                    {/* Évaluer IziTeach */}
+                    <button
+                        onClick={() => { setFeedbackTab('app_review'); setShowFeedbackModal(true); }}
+                        className="p-3.5 rounded-2xl bg-cyan-500/10 hover:bg-cyan-500/15 border border-cyan-500/20 text-left transition group shadow-sm flex flex-col justify-between"
+                    >
+                        <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center mb-2">
+                            <Smartphone className="w-4 h-4" />
+                        </div>
+                        <div>
+                            <p className="text-xs font-bold text-white group-hover:text-cyan-300 transition">Évaluer IziTeach</p>
+                            <p className="text-[10px] text-cyan-400 font-bold mt-0.5">+1 à +7 Sky Points ⭐</p>
+                        </div>
+                    </button>
+                </div>
+            </div>
 
             {/* ═══ ACCESS CODE ═══ */}
             {profile?.access_code && (
@@ -398,6 +567,118 @@ export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgNam
                     Se déconnecter
                 </Button>
             </motion.div>
+
+            {/* ═══ EDIT PROFILE MODAL ═══ */}
+            {showEditModal && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        className="bg-[#0e1320] border border-white/10 rounded-3xl max-w-md w-full overflow-hidden shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+                    >
+                        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                            <h3 className="font-bold text-base text-white flex items-center gap-2">
+                                <Edit className="w-4 h-4 text-amber-400" /> Modifier mon profil
+                            </h3>
+                            <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-white p-1">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <Label className="text-xs text-slate-300">Prénom *</Label>
+                                    <Input value={editFirstName} onChange={e => setEditFirstName(e.target.value)} className="bg-white/5 border-white/10 text-white text-xs h-9 mt-1" />
+                                </div>
+                                <div>
+                                    <Label className="text-xs text-slate-300">Nom *</Label>
+                                    <Input value={editLastName} onChange={e => setEditLastName(e.target.value)} className="bg-white/5 border-white/10 text-white text-xs h-9 mt-1" />
+                                </div>
+                            </div>
+
+                            <div>
+                                <Label className="text-xs text-slate-300">Email</Label>
+                                <Input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} className="bg-white/5 border-white/10 text-white text-xs h-9 mt-1" />
+                            </div>
+
+                            <div>
+                                <Label className="text-xs text-slate-300">Téléphone</Label>
+                                <Input value={editPhone} onChange={e => setEditPhone(e.target.value)} className="bg-white/5 border-white/10 text-white text-xs h-9 mt-1" />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <Label className="text-xs text-slate-300">Date de naissance</Label>
+                                    <Input type="date" value={editBirthDate} onChange={e => setEditBirthDate(e.target.value)} className="bg-white/5 border-white/10 text-white text-xs h-9 mt-1" />
+                                </div>
+                                <div>
+                                    <Label className="text-xs text-slate-300">Sexe</Label>
+                                    <select value={editSex} onChange={e => setEditSex(e.target.value)} className="w-full bg-[#141926] border border-white/10 text-white text-xs h-9 rounded-md mt-1 px-2">
+                                        <option value="M">Masculin</option>
+                                        <option value="F">Féminin</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div>
+                                <Label className="text-xs text-slate-300">Lieu de résidence / Ville</Label>
+                                <Input value={editResidence} onChange={e => setEditResidence(e.target.value)} placeholder="Ex: Douala, Yaoundé..." className="bg-white/5 border-white/10 text-white text-xs h-9 mt-1" />
+                            </div>
+
+                            {userRole === 'student' && (
+                                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-white/5">
+                                    <div>
+                                        <Label className="text-xs text-slate-300">Nom du tuteur / parent</Label>
+                                        <Input value={editGuardianName} onChange={e => setEditGuardianName(e.target.value)} className="bg-white/5 border-white/10 text-white text-xs h-9 mt-1" />
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-slate-300">Téléphone tuteur</Label>
+                                        <Input value={editGuardianPhone} onChange={e => setEditGuardianPhone(e.target.value)} className="bg-white/5 border-white/10 text-white text-xs h-9 mt-1" />
+                                    </div>
+                                </div>
+                            )}
+
+                            {userRole === 'teacher' && (
+                                <div>
+                                    <Label className="text-xs text-slate-300">Spécialité / Discipline</Label>
+                                    <Input value={editSpeciality} onChange={e => setEditSpeciality(e.target.value)} placeholder="Ex: Mathématiques, Sciences..." className="bg-white/5 border-white/10 text-white text-xs h-9 mt-1" />
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                            <Button variant="ghost" onClick={() => setShowEditModal(false)} className="flex-1 text-xs h-10 border border-white/10">
+                                Annuler
+                            </Button>
+                            <Button
+                                onClick={handleSaveProfile}
+                                disabled={savingProfile || !editFirstName.trim() || !editLastName.trim()}
+                                className="flex-1 text-xs h-10 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold"
+                            >
+                                {savingProfile ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <CheckCircle2 className="w-4 h-4 mr-1" />}
+                                Enregistrer
+                            </Button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
+            {/* ═══ FEEDBACK & AVIS MODAL ═══ */}
+            <UserFeedbackModal
+                isOpen={showFeedbackModal}
+                onClose={() => setShowFeedbackModal(false)}
+                initialTab={feedbackTab}
+                orgId={orgId}
+                orgName={orgName}
+                userId={userId}
+                userName={userName}
+                userRole={userRole}
+                userEmail={profile?.email}
+                onSkyPointsEarned={(newTotal) => {
+                    setProfile((prev: any) => ({ ...prev, sky_points: newTotal }));
+                }}
+            />
         </div>
     );
 }

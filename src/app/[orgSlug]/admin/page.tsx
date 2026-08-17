@@ -2264,33 +2264,95 @@ ${bodyHtml}
                                                         </div>
                                                     </div>
 
-                                                    <div className="mb-4">
-                                                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Matières ({assignedSubs.length})</p>
+                                                    <div className="mb-4 space-y-2">
+                                                        <div className="flex items-center justify-between">
+                                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                                                Classes & Matières ({assignedSubs.length})
+                                                            </p>
+                                                            <span className="text-[10px] text-emerald-400 font-medium">
+                                                                {[...new Set(assignedSubs.map(s => s.classroom_id).filter(Boolean))].length} classe(s)
+                                                            </span>
+                                                        </div>
+
                                                         {assignedSubs.length > 0 ? (
-                                                            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
-                                                                {assignedSubs.map(s => (
-                                                                    <span key={s.id} className="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-medium flex items-center gap-1.5">
-                                                                        <span>📘 {s.name} <span className="text-emerald-400/60">({cls.find(c => c.id === s.classroom_id)?.name || 'All'})</span></span>
-                                                                        <button 
-                                                                            onClick={() => assignTeacherToSubject(s.id, null)} 
-                                                                            className="text-slate-400 hover:text-red-400 p-0.5 rounded transition"
-                                                                            title={`Retirer ${s.name} de cet enseignant`}
-                                                                        >
-                                                                            <X className="w-3 h-3" />
-                                                                        </button>
-                                                                    </span>
-                                                                ))}
+                                                            <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                                                                {(() => {
+                                                                    // Group subjects by classroom
+                                                                    const classMap: Record<string, any[]> = {};
+                                                                    assignedSubs.forEach(s => {
+                                                                        const cId = s.classroom_id || 'unassigned';
+                                                                        if (!classMap[cId]) classMap[cId] = [];
+                                                                        classMap[cId].push(s);
+                                                                    });
+
+                                                                    return Object.entries(classMap).map(([cId, cSubs]) => {
+                                                                        const classObj = cls.find(c => c.id === cId);
+                                                                        const className = classObj ? classObj.name : 'Sans classe spécifique';
+                                                                        return (
+                                                                            <div key={cId} className="p-2 rounded-xl bg-black/40 border border-white/5 space-y-1.5">
+                                                                                <div className="flex items-center justify-between">
+                                                                                    <span className="text-[11px] font-bold text-teal-300 flex items-center gap-1">
+                                                                                        🏛️ {className}
+                                                                                    </span>
+                                                                                    <span className="text-[9px] text-slate-500 font-mono">
+                                                                                        {cSubs.length} matière(s)
+                                                                                    </span>
+                                                                                </div>
+                                                                                <div className="flex flex-wrap gap-1.5">
+                                                                                    {cSubs.map(s => (
+                                                                                        <span key={s.id} className="text-[11px] px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-medium flex items-center gap-1.5">
+                                                                                            <span>📘 {s.name} <span className="text-emerald-400/60 text-[9px]">(Coef.{s.coefficient || 1})</span></span>
+                                                                                            <button 
+                                                                                                onClick={() => assignTeacherToSubject(s.id, null)} 
+                                                                                                className="text-slate-400 hover:text-red-400 p-0.5 rounded transition"
+                                                                                                title={`Retirer ${s.name} de ${className}`}
+                                                                                            >
+                                                                                                <X className="w-3 h-3" />
+                                                                                            </button>
+                                                                                        </span>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    });
+                                                                })()}
                                                             </div>
                                                         ) : (
-                                                            <p className="text-xs text-slate-500 italic">Aucune matière assignée</p>
+                                                            <div className="p-2.5 rounded-xl bg-black/20 border border-dashed border-white/10 text-center">
+                                                                <p className="text-xs text-slate-500 italic">Aucune classe ni matière assignée</p>
+                                                            </div>
                                                         )}
                                                     </div>
                                                 </div>
 
                                                 <div className="pt-3 border-t border-white/5 space-y-2">
-                                                    <select onChange={e => { if (e.target.value) assignTeacherToSubject(e.target.value, t.id); e.target.value = ''; }} className="text-xs h-8 rounded-xl bg-white/5 border border-white/10 text-slate-300 px-2.5 w-full hover:bg-white/10 transition cursor-pointer">
-                                                        <option value="" className="bg-slate-900">+ Assigner une matière...</option>
-                                                        {subs.filter(s => !s.teacher_id).map(s => <option key={s.id} value={s.id} className="bg-slate-900">{s.name} ({cls.find(c => c.id === s.classroom_id)?.name})</option>)}
+                                                    <select 
+                                                        onChange={e => { if (e.target.value) assignTeacherToSubject(e.target.value, t.id); e.target.value = ''; }} 
+                                                        className="text-xs h-9 rounded-xl bg-white/5 border border-white/10 text-slate-300 px-2.5 w-full hover:bg-white/10 transition cursor-pointer font-medium"
+                                                    >
+                                                        <option value="" className="bg-slate-900">+ Assigner une matière par classe...</option>
+                                                        {cls.map(c => {
+                                                            const unassignedInClass = subs.filter(s => s.classroom_id === c.id && !s.teacher_id);
+                                                            if (unassignedInClass.length === 0) return null;
+                                                            return (
+                                                                <optgroup key={c.id} label={`🏛️ Classe de ${c.name}`} className="bg-slate-900 font-bold text-teal-300">
+                                                                    {unassignedInClass.map(s => (
+                                                                        <option key={s.id} value={s.id} className="bg-slate-900 text-slate-200 font-normal">
+                                                                            📘 {s.name} (Coef. {s.coefficient || 1})
+                                                                        </option>
+                                                                    ))}
+                                                                </optgroup>
+                                                            );
+                                                        })}
+                                                        {subs.filter(s => !s.classroom_id && !s.teacher_id).length > 0 && (
+                                                            <optgroup label="🌐 Autres matières" className="bg-slate-900 font-bold text-slate-400">
+                                                                {subs.filter(s => !s.classroom_id && !s.teacher_id).map(s => (
+                                                                    <option key={s.id} value={s.id} className="bg-slate-900 text-slate-200">
+                                                                        📘 {s.name} (Coef. {s.coefficient || 1})
+                                                                    </option>
+                                                                ))}
+                                                            </optgroup>
+                                                        )}
                                                     </select>
 
                                                     <div className="flex items-center gap-2">

@@ -26,9 +26,9 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { AdsBanner } from '@/components/campus/ads-banner';
 import { OfficialAnnouncements } from '@/components/campus/official-announcements';
-import { ReviewSection } from '@/components/shared/ReviewSection';
-import { BugReportButton } from '@/components/shared/BugReportButton';
+import { UserFeedbackModal, FeedbackTab } from '@/components/campus/user-feedback-modal';
 import { EmailModal } from '@/components/campus/email-modal';
+import { Edit, Bug, Lightbulb, School as SchoolIcon, Smartphone } from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════
 // CAMPUSFLOW — DASHBOARD PROFESSEUR (holographic-ring design)
@@ -134,6 +134,59 @@ export default function TeacherDashboard() {
     const [newEvDate, setNewEvDate] = useState('');
     const [newEvMax, setNewEvMax] = useState('20');
     const [showNewEval, setShowNewEval] = useState(false);
+
+    // Feedback Modal & Profile Edit State
+    const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+    const [feedbackTab, setFeedbackTab] = useState<FeedbackTab>('bug');
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [savingProfile, setSavingProfile] = useState(false);
+    const [editFirstName, setEditFirstName] = useState('');
+    const [editLastName, setEditLastName] = useState('');
+    const [editEmail, setEditEmail] = useState('');
+    const [editPhone, setEditPhone] = useState('');
+    const [editSpec, setEditSpec] = useState('');
+    const [editDiplomas, setEditDiplomas] = useState('');
+    const [editRes, setEditRes] = useState('');
+
+    const handleSaveTeacherProfile = async () => {
+        if (!editFirstName.trim() || !editLastName.trim()) {
+            toast.error('Prénom et nom obligatoires.');
+            return;
+        }
+
+        setSavingProfile(true);
+        try {
+            const updates = {
+                first_name: editFirstName.trim(),
+                last_name: editLastName.trim(),
+                email: editEmail.trim() || null,
+                phone: editPhone.trim() || null,
+                speciality: editSpec.trim() || null,
+                diplomas: editDiplomas.trim() || null,
+                residence: editRes.trim() || null,
+            };
+
+            const { error } = await supabase.from('teacher_profiles').update(updates).eq('id', teacher.id);
+            if (error) throw error;
+
+            setTeacher((p: any) => ({ ...p, ...updates }));
+            try {
+                SessionManager.patch({
+                    name: `${editFirstName.trim()} ${editLastName.trim()}`,
+                    first_name: editFirstName.trim(),
+                    last_name: editLastName.trim(),
+                    email: editEmail.trim() || undefined,
+                });
+            } catch {}
+
+            setShowEditModal(false);
+            toast.success('Profil mis à jour avec succès ! ✅');
+        } catch (e: any) {
+            toast.error(e.message || 'Erreur lors de la mise à jour');
+        } finally {
+            setSavingProfile(false);
+        }
+    };
 
     // ═══ LOAD ═══
     useEffect(() => {
@@ -464,6 +517,95 @@ export default function TeacherDashboard() {
                                     );
                                 })}
                             </div>
+
+                            {/* ═══ MES CLASSES & MATIÈRES ATTRIBUÉES ═══ */}
+                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center">
+                                            <GraduationCap className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-sm text-white">Mes Classes &amp; Matières Enseignées</h3>
+                                            <p className="text-[11px] text-slate-400">Répartition précise de vos enseignements par classe</p>
+                                        </div>
+                                    </div>
+                                    <Badge className="bg-teal-500/15 text-teal-300 border-teal-500/30 text-[10px]">
+                                        {myClasses.length} classe(s) · {mySubjects.length} matière(s)
+                                    </Badge>
+                                </div>
+
+                                {myClasses.length === 0 ? (
+                                    <Card className="bg-card/50 border-white/5 p-6 text-center">
+                                        <p className="text-sm text-slate-400">Aucune classe ne vous a encore été assignée par l&apos;administration.</p>
+                                        <p className="text-xs text-slate-600 mt-1">Contactez votre établissement pour configurer vos matières.</p>
+                                    </Card>
+                                ) : (
+                                    <div className="grid sm:grid-cols-2 gap-3">
+                                        {myClasses.map((cls: any) => {
+                                            const classSubs = mySubjects.filter((s: any) => s.classroom_id === cls.id);
+                                            const classStudents = students.filter((s: any) => s.classroom_id === cls.id);
+                                            const classEvals = evaluations.filter((e: any) => e.classroom_id === cls.id);
+
+                                            return (
+                                                <Card key={cls.id} className="bg-gradient-to-br from-[#131927] to-[#0d121c] border border-teal-500/20 hover:border-teal-500/40 transition-all rounded-2xl overflow-hidden shadow-lg">
+                                                    <CardContent className="p-4 space-y-3">
+                                                        <div className="flex items-start justify-between">
+                                                            <div className="flex items-center gap-2.5">
+                                                                <div className="w-10 h-10 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center font-black text-teal-300 text-sm">
+                                                                    🏛️
+                                                                </div>
+                                                                <div>
+                                                                    <h4 className="font-bold text-white text-sm">{cls.name}</h4>
+                                                                    <span className="text-[10px] text-teal-400 font-medium">
+                                                                        {cls.cycle || 'Général'} · {classStudents.length} élève(s)
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <Badge className="bg-white/5 text-slate-300 border-white/10 text-[9px]">
+                                                                {classSubs.length} matière(s)
+                                                            </Badge>
+                                                        </div>
+
+                                                        {/* Liste des matières enseignées dans cette classe */}
+                                                        <div className="space-y-1.5 pt-2 border-t border-white/5">
+                                                            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                                                                Matières dispensées :
+                                                            </p>
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {classSubs.map((s: any) => (
+                                                                    <span key={s.id} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-500/10 text-teal-300 border border-teal-500/25 text-xs font-semibold">
+                                                                        📘 {s.name} <span className="text-teal-400/60 text-[10px] font-normal">(Coef. {s.coefficient || 1})</span>
+                                                                    </span>
+                                                                ))}
+                                                                {classSubs.length === 0 && (
+                                                                    <span className="text-xs text-slate-500 italic">Matières générales</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Actions rapides pour cette classe */}
+                                                        <div className="pt-2 border-t border-white/5 flex items-center gap-2">
+                                                            <button
+                                                                onClick={() => { setTab('cursus'); if (classSubs[0]) setExpandedSubject(classSubs[0].id); }}
+                                                                className="flex-1 py-1.5 px-2 rounded-xl bg-teal-600/15 hover:bg-teal-600/25 text-teal-300 text-[11px] font-bold border border-teal-500/25 transition text-center"
+                                                            >
+                                                                📚 Cursus
+                                                            </button>
+                                                            <button
+                                                                onClick={() => { setTab('grades'); if (classSubs[0]) setNewEvSub(classSubs[0].id); }}
+                                                                className="flex-1 py-1.5 px-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-[11px] font-bold border border-amber-500/25 transition text-center"
+                                                            >
+                                                                📝 Notes ({classEvals.length})
+                                                            </button>
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </motion.div>
 
                             {/* Today's schedule */}
                             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
@@ -1013,11 +1155,33 @@ export default function TeacherDashboard() {
 
                             <Card className="bg-card/50 backdrop-blur-sm border-white/10 overflow-hidden">
                                 <CardContent className="p-4 space-y-3">
+                                    <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                                        <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Informations Enseignant</span>
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => {
+                                                setEditFirstName(teacher.first_name || '');
+                                                setEditLastName(teacher.last_name || '');
+                                                setEditEmail(teacher.email || '');
+                                                setEditPhone(teacher.phone || '');
+                                                setEditSpec(teacher.speciality || '');
+                                                setEditDiplomas(teacher.diplomas || '');
+                                                setEditRes(teacher.residence || '');
+                                                setShowEditModal(true);
+                                            }}
+                                            className="h-7 px-2.5 text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg gap-1"
+                                        >
+                                            <Edit className="w-3.5 h-3.5" /> Modifier
+                                        </Button>
+                                    </div>
+
                                     {[
                                         ['📧 Email', teacher.email],
                                         ['📱 Téléphone', teacher.phone],
                                         ['📖 Spécialité', teacher.speciality],
                                         ['🎓 Diplômes', teacher.diplomas],
+                                        ['🏠 Résidence', teacher.residence],
                                         ['🔑 Code accès', teacher.access_code],
                                     ].map(([k, v], i) => (
                                         <div key={i} className="flex items-center justify-between text-sm">
@@ -1028,30 +1192,157 @@ export default function TeacherDashboard() {
                                 </CardContent>
                             </Card>
 
-                            {/* ── Mon Avis sur l'école ── */}
-                            <ReviewSection
-                                userId={teacher.id}
-                                userName={`${teacher.first_name || ''} ${teacher.last_name || ''}`.trim()}
-                                userRole="teacher"
-                                orgId={teacher.organization_id}
-                                orgName={org.name}
-                            />
+                            {/* ── RETOURS, BUGS & ÉVALUATIONS (+ SKY POINTS) ── */}
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between px-1">
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Avis & Assistance</p>
+                                    <span className="text-[10px] text-amber-400 font-bold flex items-center gap-1">
+                                        ⭐ Jusqu&apos;à +7 Sky Pts
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2.5">
+                                    <button
+                                        onClick={() => { setFeedbackTab('bug'); setShowFeedbackModal(true); }}
+                                        className="p-3.5 rounded-2xl bg-red-500/10 hover:bg-red-500/15 border border-red-500/20 text-left transition group shadow-sm flex flex-col justify-between"
+                                    >
+                                        <div className="w-8 h-8 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center mb-2">
+                                            <Bug className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-white group-hover:text-red-300 transition">Signaler un Bug</p>
+                                            <p className="text-[10px] text-slate-400 mt-0.5">Capture obligatoire</p>
+                                        </div>
+                                    </button>
 
-                            {/* ── Signaler un bug ── */}
-                            <div className="flex justify-center pt-2 pb-6">
-                                <BugReportButton
-                                    userId={teacher.id}
-                                    userName={`${teacher.first_name || ''} ${teacher.last_name || ''}`.trim()}
-                                    userRole="teacher"
-                                    orgId={teacher.organization_id}
-                                    orgName={org.name}
-                                    orgSlug={orgSlug}
-                                />
+                                    <button
+                                        onClick={() => { setFeedbackTab('feature'); setShowFeedbackModal(true); }}
+                                        className="p-3.5 rounded-2xl bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/20 text-left transition group shadow-sm flex flex-col justify-between"
+                                    >
+                                        <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-2">
+                                            <Lightbulb className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-white group-hover:text-amber-300 transition">Proposer une Idée</p>
+                                            <p className="text-[10px] text-slate-400 mt-0.5">Pour le Superadmin</p>
+                                        </div>
+                                    </button>
+
+                                    <button
+                                        onClick={() => { setFeedbackTab('school_review'); setShowFeedbackModal(true); }}
+                                        className="p-3.5 rounded-2xl bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/20 text-left transition group shadow-sm flex flex-col justify-between"
+                                    >
+                                        <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-2">
+                                            <SchoolIcon className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-white group-hover:text-emerald-300 transition">Évaluer l&apos;École</p>
+                                            <p className="text-[10px] text-emerald-400 font-bold mt-0.5">+1 à +7 Sky Points ⭐</p>
+                                        </div>
+                                    </button>
+
+                                    <button
+                                        onClick={() => { setFeedbackTab('app_review'); setShowFeedbackModal(true); }}
+                                        className="p-3.5 rounded-2xl bg-cyan-500/10 hover:bg-cyan-500/15 border border-cyan-500/20 text-left transition group shadow-sm flex flex-col justify-between"
+                                    >
+                                        <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center mb-2">
+                                            <Smartphone className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-white group-hover:text-cyan-300 transition">Évaluer IziTeach</p>
+                                            <p className="text-[10px] text-cyan-400 font-bold mt-0.5">+1 à +7 Sky Points ⭐</p>
+                                        </div>
+                                    </button>
+                                </div>
                             </div>
                         </motion.div>
                     )}
                 </AnimatePresence>
             </div>
+
+            {/* ── MODAL: MODIFIER PROFIL ENSEIGNANT ── */}
+            {showEditModal && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        className="bg-[#0e1320] border border-white/10 rounded-3xl max-w-md w-full overflow-hidden shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+                    >
+                        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                            <h3 className="font-bold text-base text-white flex items-center gap-2">
+                                <Edit className="w-4 h-4 text-amber-400" /> Modifier mon profil
+                            </h3>
+                            <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-white p-1">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <Label className="text-xs text-slate-300">Prénom *</Label>
+                                    <Input value={editFirstName} onChange={e => setEditFirstName(e.target.value)} className="bg-white/5 border-white/10 text-white text-xs h-9 mt-1" />
+                                </div>
+                                <div>
+                                    <Label className="text-xs text-slate-300">Nom *</Label>
+                                    <Input value={editLastName} onChange={e => setEditLastName(e.target.value)} className="bg-white/5 border-white/10 text-white text-xs h-9 mt-1" />
+                                </div>
+                            </div>
+
+                            <div>
+                                <Label className="text-xs text-slate-300">Email</Label>
+                                <Input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} className="bg-white/5 border-white/10 text-white text-xs h-9 mt-1" />
+                            </div>
+
+                            <div>
+                                <Label className="text-xs text-slate-300">Téléphone</Label>
+                                <Input value={editPhone} onChange={e => setEditPhone(e.target.value)} className="bg-white/5 border-white/10 text-white text-xs h-9 mt-1" />
+                            </div>
+
+                            <div>
+                                <Label className="text-xs text-slate-300">Spécialité / Matière principale</Label>
+                                <Input value={editSpec} onChange={e => setEditSpec(e.target.value)} placeholder="Ex: Mathématiques, Français..." className="bg-white/5 border-white/10 text-white text-xs h-9 mt-1" />
+                            </div>
+
+                            <div>
+                                <Label className="text-xs text-slate-300">Diplômes / Titres</Label>
+                                <Input value={editDiplomas} onChange={e => setEditDiplomas(e.target.value)} placeholder="Ex: Master, CAPES..." className="bg-white/5 border-white/10 text-white text-xs h-9 mt-1" />
+                            </div>
+
+                            <div>
+                                <Label className="text-xs text-slate-300">Lieu de résidence / Ville</Label>
+                                <Input value={editRes} onChange={e => setEditRes(e.target.value)} placeholder="Ex: Douala, Yaoundé..." className="bg-white/5 border-white/10 text-white text-xs h-9 mt-1" />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                            <Button variant="ghost" onClick={() => setShowEditModal(false)} className="flex-1 text-xs h-10 border border-white/10">
+                                Annuler
+                            </Button>
+                            <Button
+                                onClick={handleSaveTeacherProfile}
+                                disabled={savingProfile || !editFirstName.trim() || !editLastName.trim()}
+                                className="flex-1 text-xs h-10 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold"
+                            >
+                                {savingProfile ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <CheckCircle2 className="w-4 h-4 mr-1" />}
+                                Enregistrer
+                            </Button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
+            {/* ── USER FEEDBACK MODAL (Bugs, Idées, Avis École & App) ── */}
+            <UserFeedbackModal
+                isOpen={showFeedbackModal}
+                onClose={() => setShowFeedbackModal(false)}
+                initialTab={feedbackTab}
+                orgId={teacher?.organization_id}
+                orgName={org?.name}
+                userId={teacher?.id}
+                userName={`${teacher?.first_name || ''} ${teacher?.last_name || ''}`.trim() || 'Enseignant'}
+                userRole="teacher"
+                userEmail={teacher?.email}
+            />
 
             {/* ── SALLE D'ÉVALUATION ── */}
             {tab === 'exam_room' && teacher && (
