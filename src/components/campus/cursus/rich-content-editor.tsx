@@ -443,9 +443,21 @@ export function RichContentRenderer({ blocks, onAudioDownload }: RichContentRend
                                     setDownloading(i);
                                     const ok = await onAudioDownload(block as ContentBlock & { type: 'audio' });
                                     if (ok) {
-                                        const a = document.createElement('a');
-                                        a.href = block.url; a.download = `note-vocale-${i + 1}.webm`;
-                                        a.click();
+                                        try {
+                                            const resp = await fetch(block.url);
+                                            const blob = await resp.blob();
+                                            const objUrl = URL.createObjectURL(blob);
+                                            const a = document.createElement('a');
+                                            a.href = objUrl;
+                                            a.download = `note-vocale-${i + 1}.webm`;
+                                            a.click();
+                                            setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
+                                        } catch {
+                                            const a = document.createElement('a');
+                                            a.href = block.url;
+                                            a.download = `note-vocale-${i + 1}.webm`;
+                                            a.click();
+                                        }
                                     }
                                     setDownloading(null);
                                 } : undefined}

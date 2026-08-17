@@ -58,7 +58,8 @@ const HIGHLIGHT_COLORS = [
     { id: 'orange', label: 'Orange',bg: 'bg-orange-400/40', text: 'text-orange-200', border: 'border-orange-400/60', css: 'rgba(251,146,60,0.35)'  },
 ];
 
-// ── Mini AudioPlayer (lesson reader) ───────────────────────────────────
+// ── Mini AudioPlayer Modal (lesson reader) ─────────────────────────────
+// Affiche un lecteur audio inline propre avec modal popup — sans exposer l'URL R2
 function AudioBlockPlayer({
   url, caption, onDownload, downloading,
 }: { url: string; caption: string; onDownload?: () => void; downloading?: boolean }) {
@@ -66,48 +67,116 @@ function AudioBlockPlayer({
   const [playing,  setPlaying]  = useState(false);
   const [progress, setProgress] = useState(0);
   const [dur,      setDur]      = useState(0);
+  const [showModal, setShowModal] = useState(false);
+
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
   const toggle = () => {
     if (!audioRef.current) return;
     if (playing) { audioRef.current.pause(); setPlaying(false); }
     else         { audioRef.current.play();  setPlaying(true);  }
   };
+
+  // Ferme le modal et stop la lecture
+  const closeModal = () => {
+    if (audioRef.current) { audioRef.current.pause(); setPlaying(false); }
+    setShowModal(false);
+  };
+
   return (
-    <div className="rounded-2xl overflow-hidden border border-violet-500/20 bg-violet-500/5 my-2">
-      <audio ref={audioRef} src={url}
-        onTimeUpdate={()    => setProgress(audioRef.current?.currentTime || 0)}
-        onLoadedMetadata={() => setDur(audioRef.current?.duration || 0)}
-        onEnded={() => setPlaying(false)}
-      />
-      <div className="px-4 py-3 flex items-center gap-3">
-        <button onClick={toggle}
-          className="w-10 h-10 rounded-full bg-violet-500/20 hover:bg-violet-500/40 border border-violet-500/30 flex items-center justify-center transition-all shrink-0">
-          {playing ? <Pause className="w-5 h-5 text-violet-300" /> : <Play className="w-5 h-5 text-violet-300 ml-0.5" />}
-        </button>
-        <div className="flex-1 space-y-1">
-          <div className="relative h-2 bg-white/10 rounded-full overflow-hidden cursor-pointer"
-            onClick={e => {
-              const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
-              if (audioRef.current) audioRef.current.currentTime = ((e.clientX - rect.left) / rect.width) * dur;
-            }}>
-            <div className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-400 transition-all"
-              style={{ width: dur ? `${(progress / dur) * 100}%` : '0%' }} />
+    <>
+      {/* ── Carte cliquable pour ouvrir la popup ── */}
+      <div
+        onClick={() => setShowModal(true)}
+        className="cursor-pointer rounded-2xl overflow-hidden border border-violet-500/20 bg-violet-500/5 hover:bg-violet-500/10 hover:border-violet-500/40 transition-all my-2 group"
+      >
+        <div className="px-4 py-3 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center shrink-0 group-hover:bg-violet-500/30 transition-all">
+            <Play className="w-5 h-5 text-violet-300 ml-0.5" />
           </div>
-          <div className="flex justify-between text-[10px] text-slate-500">
-            <span>{fmt(progress)}</span><span>{fmt(dur)}</span>
+          <div className="flex-1 space-y-1">
+            <div className="relative h-2 bg-white/10 rounded-full overflow-hidden">
+              <div className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-violet-500/40 to-purple-400/40" style={{ width: '100%' }} />
+            </div>
+            <p className="text-xs text-violet-300 font-medium">{caption || '🎙️ Note vocale — Cliquer pour écouter'}</p>
           </div>
+          <Mic className="w-4 h-4 text-violet-400 shrink-0" />
         </div>
-        <Mic className="w-4 h-4 text-violet-400 shrink-0" />
-        {onDownload && (
-          <button onClick={onDownload} disabled={downloading}
-            className="w-9 h-9 rounded-full bg-white/5 hover:bg-violet-500/20 border border-white/10 flex items-center justify-center transition-all shrink-0"
-            title="Télécharger (-2 Sky Points)">
-            {downloading ? <Loader2 className="w-4 h-4 animate-spin text-violet-400" /> : <Download className="w-4 h-4 text-slate-400" />}
-          </button>
-        )}
       </div>
-      {caption && <p className="px-4 pb-3 text-xs text-slate-500 italic">{caption}</p>}
-    </div>
+
+      {/* ── Modale lecteur audio propre ── */}
+      <AnimatePresence>
+        {showModal && (
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-4 bg-black/75 backdrop-blur-md" onClick={closeModal}>
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 40 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-sm bg-[#13162A] border border-violet-500/30 rounded-3xl p-5 shadow-2xl space-y-4"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center">
+                    <Mic className="w-4 h-4 text-violet-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-white">{caption || 'Note vocale'}</p>
+                    <p className="text-[10px] text-slate-500">Contenu audio de la leçon</p>
+                  </div>
+                </div>
+                <button onClick={closeModal} className="text-slate-500 hover:text-white transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Hidden audio element */}
+              <audio ref={audioRef} src={url}
+                onTimeUpdate={() => setProgress(audioRef.current?.currentTime || 0)}
+                onLoadedMetadata={() => setDur(audioRef.current?.duration || 0)}
+                onEnded={() => setPlaying(false)}
+              />
+
+              {/* Lecteur visuel */}
+              <div className="flex items-center gap-3">
+                <button onClick={toggle}
+                  className="w-12 h-12 rounded-full bg-violet-600 hover:bg-violet-500 flex items-center justify-center shrink-0 shadow-lg shadow-violet-600/30 transition-all">
+                  {playing ? <Pause className="w-5 h-5 text-white" /> : <Play className="w-5 h-5 text-white ml-0.5" />}
+                </button>
+                <div className="flex-1 space-y-1.5">
+                  <div className="relative h-2 bg-white/10 rounded-full overflow-hidden cursor-pointer"
+                    onClick={e => {
+                      const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                      if (audioRef.current) audioRef.current.currentTime = ((e.clientX - rect.left) / rect.width) * dur;
+                    }}>
+                    <div className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-400 transition-all"
+                      style={{ width: dur ? `${(progress / dur) * 100}%` : '0%' }} />
+                  </div>
+                  <div className="flex justify-between text-[10px] text-slate-500">
+                    <span>{fmt(progress)}</span><span>{fmt(dur)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bouton téléchargement */}
+              {onDownload && (
+                <button
+                  onClick={onDownload}
+                  disabled={downloading}
+                  className="w-full h-10 rounded-xl border border-violet-500/30 bg-violet-500/10 hover:bg-violet-500/20 text-violet-300 text-xs font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                >
+                  {downloading
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Déduction en cours…</>
+                    : <><Download className="w-4 h-4" /> Télécharger l'audio (Sky Points requis)</>}
+                </button>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
@@ -688,11 +757,20 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
                                                             setDownloadingAudio(i);
                                                             const ok = await deductSkyPoints(userId, block.sky_cost ?? 2, 'telechargement_audio', 'Téléchargement note vocale', 'student');
                                                             if (ok) {
-                                                                const a = document.createElement('a');
-                                                                a.href = block.url;
-                                                                a.download = `note-vocale-${i + 1}.webm`;
-                                                                a.click();
-                                                                toast.success('-2 Sky Points déduits');
+                                                                try {
+                                                                    // Fetch pour forcer le téléchargement sans ouvrir l'URL dans le navigateur
+                                                                    const resp = await fetch(block.url);
+                                                                    const blob = await resp.blob();
+                                                                    const objUrl = URL.createObjectURL(blob);
+                                                                    const a = document.createElement('a');
+                                                                    a.href = objUrl;
+                                                                    a.download = `note-vocale-${i + 1}.webm`;
+                                                                    a.click();
+                                                                    setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
+                                                                    toast.success(`-${block.sky_cost ?? 2} Sky Points déduits`);
+                                                                } catch {
+                                                                    toast.error('Erreur lors du téléchargement');
+                                                                }
                                                             } else {
                                                                 toast.error('Sky Points insuffisants');
                                                             }
