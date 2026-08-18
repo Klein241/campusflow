@@ -13,6 +13,7 @@ import { SessionManager, buildSessionFromRpc } from '@/lib/session';
 import { isCustomDomain } from '@/lib/custom-domain';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { IziTeachLogo } from '@/components/brand/iziteach-logo';
 
 type LoginMode = 'choose' | 'admin' | 'access_code' | 'pin_create' | 'pin_verify' | 'dashboard_redirect' | 'forgot_password' | 'reset_password' | 'reset_success' | 'admin_recovery';
 
@@ -814,11 +815,7 @@ export default function LoginPage() {
                     {org.logo_url ? (
                         <img src={org.logo_url} alt={org.name} className="w-16 h-16 rounded-2xl mx-auto mb-4 object-cover shadow-2xl" />
                     ) : (
-                        <img
-                            src="/logo-campusflow.png"
-                            alt="IziTeach"
-                            className="w-16 h-16 object-contain mx-auto mb-4 drop-shadow-[0_0_16px_rgba(99,102,241,0.5)]"
-                        />
+                        <IziTeachLogo variant="symbol" size="lg" className="mx-auto mb-4" />
                     )}
                     <h1 className="text-2xl font-bold text-white">{org.name}</h1>
                     <p className="text-sm text-slate-400 mt-1">Connexion à votre espace</p>
@@ -1199,7 +1196,7 @@ export default function LoginPage() {
 
                 {/* Footer — Powered by IziTeach */}
                 <div className="flex items-center justify-center gap-2 mt-6">
-                    <img src="/logo-campusflow.png" alt="IziTeach" className="w-4 h-4 object-contain opacity-50" />
+                    <IziTeachLogo variant="symbol" size="xs" />
                     <p className="text-[10px] text-slate-600">
                         Propulsé par <span className="text-teal-500 font-semibold">IziTeach</span> • Enseigner simplement
                     </p>

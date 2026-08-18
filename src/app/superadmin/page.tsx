@@ -21,6 +21,7 @@ import { uploadToR2 } from '@/lib/r2';
 import { SuperadminStylesPricing } from '@/components/superadmin/superadmin-styles-pricing';
 import { SuperadminOrgCards } from '@/components/superadmin/superadmin-org-cards';
 import { SuperadminNotificationBell } from '@/components/superadmin/SuperadminNotificationBell';
+import { IziTeachLogo } from '@/components/brand/iziteach-logo';
 
 // ═══════════════════════════════════════════════════════════════════════
 // IZITEACH — SUPERADMIN PANEL
@@ -756,11 +757,7 @@ export default function SuperAdminPage() {
         return (
             <div className="min-h-screen bg-[#06080F] flex items-center justify-center">
                 <div className="text-center">
-                    <img
-                        src="/logo-campusflow.png"
-                        alt="IziTeach"
-                        className="w-16 h-16 object-contain mx-auto mb-4 animate-pulse drop-shadow-[0_0_20px_rgba(139,92,246,0.6)]"
-                    />
+                    <IziTeachLogo variant="symbol" size="xl" className="mx-auto mb-4 animate-pulse" />
                     <Loader2 className="w-5 h-5 text-violet-400 animate-spin mx-auto" />
                 </div>
             </div>
@@ -784,17 +781,13 @@ export default function SuperAdminPage() {
                             initial={{ scale: 0.8, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ delay: 0.1 }}
-                            className="mx-auto mb-5"
+                            className="mx-auto mb-5 flex justify-center"
                         >
-                            <img
-                                src="/logo-campusflow.png"
-                                alt="IziTeach"
-                                className="w-24 h-24 object-contain mx-auto drop-shadow-[0_0_30px_rgba(139,92,246,0.7)]"
-                            />
+                            <IziTeachLogo variant="symbol" size="xl" />
                         </motion.div>
                         <h1 className="text-3xl font-black bg-gradient-to-r from-violet-400 via-cyan-400 to-fuchsia-400 bg-clip-text text-transparent tracking-tight">IziTeach</h1>
                         <p className="text-sm text-slate-400 mt-1 font-medium">SuperAdmin Panel</p>
-                        <p className="text-xs text-slate-600 mt-1">Réservé à l&apos;équipe SYGMA-TECH</p>
+                        <p className="text-xs text-slate-600 mt-1">R&apos;eserv&apos; à l&apos;&eacute;quipe SYGMA-TECH</p>
                     </div>
 
                     {/* Form card */}
@@ -860,17 +853,8 @@ export default function SuperAdminPage() {
             <aside className="hidden md:flex w-60 shrink-0 border-r border-white/[0.06] flex-col bg-[#080B12] sticky top-0 h-screen">
                 {/* Brand */}
                 <div className="p-4 border-b border-white/[0.06]">
-                    <div className="flex items-center gap-3">
-                        <img
-                            src="/logo-campusflow.png"
-                            alt="IziTeach"
-                            className="w-9 h-9 object-contain drop-shadow-[0_0_10px_rgba(139,92,246,0.6)] shrink-0"
-                        />
-                        <div>
-                            <p className="font-black text-sm leading-tight bg-gradient-to-r from-violet-400 via-cyan-400 to-fuchsia-400 bg-clip-text text-transparent">IziTeach</p>
-                            <p className="text-[9px] text-slate-600 leading-tight">SuperAdmin Platform</p>
-                        </div>
-                    </div>
+                    <IziTeachLogo variant="compact" size="sm" />
+                    <p className="text-[9px] text-slate-600 leading-tight mt-0.5 pl-1">SuperAdmin Platform</p>
                 </div>
 
                 {/* Nav links */}
@@ -932,16 +916,9 @@ export default function SuperAdminPage() {
                             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                             className="fixed left-0 top-0 bottom-0 w-72 bg-[#080B12] border-r border-white/[0.08] z-50 flex flex-col md:hidden">
                             <div className="p-4 border-b border-white/[0.06] flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <img
-                                        src="/logo-campusflow.png"
-                                        alt="IziTeach"
-                                        className="w-9 h-9 object-contain drop-shadow-[0_0_10px_rgba(139,92,246,0.6)]"
-                                    />
-                                    <div>
-                                        <p className="font-black text-sm bg-gradient-to-r from-violet-400 via-cyan-400 to-fuchsia-400 bg-clip-text text-transparent">IziTeach</p>
-                                        <p className="text-[9px] text-slate-500">SuperAdmin Platform</p>
-                                    </div>
+                                <div className="flex items-center gap-2">
+                                    <IziTeachLogo variant="compact" size="sm" />
+                                    <p className="text-[9px] text-slate-500">SuperAdmin</p>
                                 </div>
                                 <button onClick={() => setSidebarOpen(false)} className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/5">
                                     <X className="w-4 h-4" />

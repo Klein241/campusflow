@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { PlatformReviewsSection } from '@/components/platform-reviews';
 import { supabase } from '@/lib/supabase';
+import { IziTeachLogo } from '@/components/brand/iziteach-logo';
 
 // ═══════════════════════════════════════════════
 // CAMPUSFLOW — MAIN LANDING PAGE
@@ -95,18 +96,10 @@ export default function LandingPage() {
       {/* ═════ NAVBAR ═════ */}
       <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-2xl bg-[#060911]/85 border-b border-white/[0.08]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 via-blue-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/25">
-              <GraduationCap className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <span className="text-xl font-black tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
-                IziTeach
-              </span>
-              <span className="hidden sm:inline-block ml-2 text-[10px] uppercase font-bold text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-500/20">
-                Enseigner simplement
-              </span>
-            </div>
+          {/* Logo Desktop: Symbole + IziTeach + slogan / Mobile: Symbole + IziTeach */}
+          <div className="flex items-center">
+            <IziTeachLogo variant="full" size="sm" className="hidden sm:flex" />
+            <IziTeachLogo variant="compact" size="sm" className="flex sm:hidden" />
           </div>
 
           <div className="hidden md:flex items-center gap-7 text-xs font-bold text-slate-300">
@@ -503,13 +496,8 @@ export default function LandingPage() {
       {/* ═════ FOOTER ═════ */}
       <footer className="border-t border-white/5 py-10 px-4 sm:px-6 lg:px-8 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center text-white font-bold">
-              <GraduationCap className="w-4 h-4" />
-            </div>
-            <span className="font-bold text-slate-300">IziTeach</span>
-            <span>• Enseigner simplement</span>
-          </div>
+          {/* Footer: Logo horizontal avec slogan */}
+          <IziTeachLogo variant="horizontal" size="sm" />
           <p>© 2026 SYGMA-TECH. Tous droits réservés.</p>
         </div>
       </footer>

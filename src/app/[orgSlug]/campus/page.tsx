@@ -23,6 +23,7 @@ import { PwaInstall } from '@/components/campus/pwa-install';
 import { ExamRoomView } from '@/components/campus/exam-room/exam-room-view';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { orgPath } from '@/lib/custom-domain';
+import { IziTeachLogo } from '@/components/brand/iziteach-logo';
 
 // ═══════════════════════════════════════════════════════
 // CAMPUS PAGE
@@ -363,11 +364,7 @@ export default function CampusPage() {
         return (
             <div className="min-h-screen bg-gradient-to-b from-[#0B0E14] to-[#0F1219] flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
-                    <img
-                        src="/logo-campusflow.png"
-                        alt="IziTeach"
-                        className="w-16 h-16 object-contain drop-shadow-[0_0_20px_rgba(20,184,166,0.5)] animate-pulse"
-                    />
+                    <IziTeachLogo variant="symbol" size="lg" className="animate-pulse" />
                     <div className="w-5 h-5 border-2 border-teal-400/30 border-t-teal-400 rounded-full animate-spin" />
                 </div>
             </div>
@@ -648,11 +645,7 @@ export default function CampusPage() {
                         {org.logo_url ? (
                             <img src={org.logo_url} alt={org.name} className="w-10 h-10 rounded-xl object-contain bg-white/10 p-0.5 border border-white/10" />
                         ) : (
-                            <img
-                                src="/logo-campusflow.png"
-                                alt="IziTeach"
-                                className="w-10 h-10 object-contain drop-shadow-[0_0_10px_rgba(20,184,166,0.4)]"
-                            />
+                            <IziTeachLogo variant="symbol" size="sm" />
                         )}
                         <div className="flex items-center gap-2.5">
                             {/* Avatar utilisateur dans le header */}

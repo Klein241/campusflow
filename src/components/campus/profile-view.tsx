@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import { PwaInstall } from './pwa-install';
 
 import { UserFeedbackModal, FeedbackTab } from './user-feedback-modal';
-import { Bug, Lightbulb, School as SchoolIcon, Smartphone, X } from 'lucide-react';
+import { Bug, Lightbulb, School, Smartphone, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
