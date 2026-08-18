@@ -1,5 +1,5 @@
 -- ================================================================
--- IZITEACH — MIGRATION SQL COMPLÈTE
+-- IZITEACH — MIGRATION SQL COMPLÈTE & BULLETPROOF
 -- Feedback System : Bug Reports, Idées, Avis École & IziTeach
 -- Sky Points — Récompenses automatiques
 -- ================================================================
@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS bug_reports (
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Ajouter les colonnes manquantes si la table existait deja
+-- Assurer toutes les colonnes au cas où la table existait déjà partiellement
+ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id) ON DELETE SET NULL;
 ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS browser_info   TEXT;
 ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS org_id         UUID;
 ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS org_slug       TEXT;
@@ -46,6 +47,14 @@ ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS user_email     TEXT;
 ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS page_url       TEXT;
 ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS admin_notes    TEXT;
 ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS priority       TEXT DEFAULT 'medium';
+ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS org_name       TEXT;
+ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS user_name      TEXT;
+ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS user_role      TEXT DEFAULT 'student';
+ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS description    TEXT;
+ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS screenshot_url TEXT;
+ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS status         TEXT DEFAULT 'open';
+ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS created_at     TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS updated_at     TIMESTAMPTZ DEFAULT NOW();
 
 CREATE INDEX IF NOT EXISTS idx_bug_reports_user     ON bug_reports(user_id);
 CREATE INDEX IF NOT EXISTS idx_bug_reports_status   ON bug_reports(status);
@@ -106,9 +115,20 @@ CREATE TABLE IF NOT EXISTS feature_suggestions (
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE feature_suggestions ADD COLUMN IF NOT EXISTS votes          INT DEFAULT 0;
-ALTER TABLE feature_suggestions ADD COLUMN IF NOT EXISTS admin_response TEXT;
-ALTER TABLE feature_suggestions ADD COLUMN IF NOT EXISTS user_email     TEXT;
+ALTER TABLE feature_suggestions ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id) ON DELETE SET NULL;
+ALTER TABLE feature_suggestions ADD COLUMN IF NOT EXISTS org_name         TEXT;
+ALTER TABLE feature_suggestions ADD COLUMN IF NOT EXISTS user_id          UUID REFERENCES auth.users(id) ON DELETE CASCADE;
+ALTER TABLE feature_suggestions ADD COLUMN IF NOT EXISTS user_name        TEXT;
+ALTER TABLE feature_suggestions ADD COLUMN IF NOT EXISTS user_role        TEXT DEFAULT 'student';
+ALTER TABLE feature_suggestions ADD COLUMN IF NOT EXISTS user_email       TEXT;
+ALTER TABLE feature_suggestions ADD COLUMN IF NOT EXISTS title            TEXT;
+ALTER TABLE feature_suggestions ADD COLUMN IF NOT EXISTS description      TEXT;
+ALTER TABLE feature_suggestions ADD COLUMN IF NOT EXISTS category         TEXT DEFAULT 'other';
+ALTER TABLE feature_suggestions ADD COLUMN IF NOT EXISTS status           TEXT DEFAULT 'submitted';
+ALTER TABLE feature_suggestions ADD COLUMN IF NOT EXISTS votes            INT DEFAULT 0;
+ALTER TABLE feature_suggestions ADD COLUMN IF NOT EXISTS admin_response   TEXT;
+ALTER TABLE feature_suggestions ADD COLUMN IF NOT EXISTS created_at       TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE feature_suggestions ADD COLUMN IF NOT EXISTS updated_at       TIMESTAMPTZ DEFAULT NOW();
 
 CREATE INDEX IF NOT EXISTS idx_feat_sugg_user     ON feature_suggestions(user_id);
 CREATE INDEX IF NOT EXISTS idx_feat_sugg_status   ON feature_suggestions(status);
@@ -160,9 +180,19 @@ CREATE TABLE IF NOT EXISTS school_reviews (
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE school_reviews ADD COLUMN IF NOT EXISTS sky_points_awarded INT DEFAULT 0;
-ALTER TABLE school_reviews ADD COLUMN IF NOT EXISTS is_featured        BOOLEAN DEFAULT false;
-ALTER TABLE school_reviews ADD COLUMN IF NOT EXISTS admin_reply        TEXT;
+ALTER TABLE school_reviews ADD COLUMN IF NOT EXISTS organization_id     UUID REFERENCES organizations(id) ON DELETE CASCADE;
+ALTER TABLE school_reviews ADD COLUMN IF NOT EXISTS school_name         TEXT;
+ALTER TABLE school_reviews ADD COLUMN IF NOT EXISTS user_id             UUID REFERENCES auth.users(id) ON DELETE CASCADE;
+ALTER TABLE school_reviews ADD COLUMN IF NOT EXISTS author_name         TEXT;
+ALTER TABLE school_reviews ADD COLUMN IF NOT EXISTS author_role         TEXT DEFAULT 'Etudiant';
+ALTER TABLE school_reviews ADD COLUMN IF NOT EXISTS rating              INT DEFAULT 5;
+ALTER TABLE school_reviews ADD COLUMN IF NOT EXISTS comment             TEXT;
+ALTER TABLE school_reviews ADD COLUMN IF NOT EXISTS sky_points_awarded  INT DEFAULT 0;
+ALTER TABLE school_reviews ADD COLUMN IF NOT EXISTS is_published        BOOLEAN DEFAULT true;
+ALTER TABLE school_reviews ADD COLUMN IF NOT EXISTS is_featured         BOOLEAN DEFAULT false;
+ALTER TABLE school_reviews ADD COLUMN IF NOT EXISTS admin_reply         TEXT;
+ALTER TABLE school_reviews ADD COLUMN IF NOT EXISTS created_at          TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE school_reviews ADD COLUMN IF NOT EXISTS updated_at          TIMESTAMPTZ DEFAULT NOW();
 
 CREATE INDEX IF NOT EXISTS idx_school_reviews_org      ON school_reviews(organization_id);
 CREATE INDEX IF NOT EXISTS idx_school_reviews_user     ON school_reviews(user_id);
@@ -196,7 +226,6 @@ CREATE POLICY "Superadmin can manage school reviews"
 
 -- ────────────────────────────────────────────────────────────────
 -- 4. TABLE : platform_reviews — Avis sur IziTeach SaaS
---    CORRECTION ERREUR : is_featured not in schema cache
 -- ────────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS platform_reviews (
@@ -216,13 +245,21 @@ CREATE TABLE IF NOT EXISTS platform_reviews (
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- CORRECTION PRINCIPALE : ajouter les colonnes manquantes
-ALTER TABLE platform_reviews ADD COLUMN IF NOT EXISTS is_featured        BOOLEAN DEFAULT false;
-ALTER TABLE platform_reviews ADD COLUMN IF NOT EXISTS sky_points_awarded INT DEFAULT 0;
-ALTER TABLE platform_reviews ADD COLUMN IF NOT EXISTS is_published        BOOLEAN DEFAULT true;
-ALTER TABLE platform_reviews ADD COLUMN IF NOT EXISTS admin_reply         TEXT;
+ALTER TABLE platform_reviews ADD COLUMN IF NOT EXISTS organization_id     UUID REFERENCES organizations(id) ON DELETE SET NULL;
+ALTER TABLE platform_reviews ADD COLUMN IF NOT EXISTS school_name         TEXT;
+ALTER TABLE platform_reviews ADD COLUMN IF NOT EXISTS user_id             UUID REFERENCES auth.users(id) ON DELETE CASCADE;
+ALTER TABLE platform_reviews ADD COLUMN IF NOT EXISTS author_name         TEXT;
+ALTER TABLE platform_reviews ADD COLUMN IF NOT EXISTS author_role         TEXT DEFAULT 'Etudiant';
+ALTER TABLE platform_reviews ADD COLUMN IF NOT EXISTS rating              INT DEFAULT 5;
+ALTER TABLE platform_reviews ADD COLUMN IF NOT EXISTS comment             TEXT;
+ALTER TABLE platform_reviews ADD COLUMN IF NOT EXISTS is_featured         BOOLEAN DEFAULT false;
+ALTER TABLE platform_reviews ADD COLUMN IF NOT EXISTS sky_points_awarded  INT DEFAULT 0;
+ALTER TABLE platform_reviews ADD COLUMN IF NOT EXISTS is_published         BOOLEAN DEFAULT true;
+ALTER TABLE platform_reviews ADD COLUMN IF NOT EXISTS admin_reply          TEXT;
+ALTER TABLE platform_reviews ADD COLUMN IF NOT EXISTS created_at          TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE platform_reviews ADD COLUMN IF NOT EXISTS updated_at          TIMESTAMPTZ DEFAULT NOW();
 
--- Rafraîchir le schema cache Supabase
+-- Rafraîchir le schema cache Supabase (PostgREST)
 NOTIFY pgrst, 'reload schema';
 
 CREATE INDEX IF NOT EXISTS idx_platform_reviews_user     ON platform_reviews(user_id);
@@ -364,7 +401,7 @@ END; $$;
 
 
 -- ────────────────────────────────────────────────────────────────
--- VERIFICATION FINALE
+-- VÉRIFICATION FINALE
 -- ────────────────────────────────────────────────────────────────
 
 SELECT table_name, COUNT(*) AS nb_colonnes
