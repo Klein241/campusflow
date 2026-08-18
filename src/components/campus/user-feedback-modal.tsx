@@ -303,12 +303,13 @@ export function UserFeedbackModal({
     };
 
     return (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center overflow-hidden">
             <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                initial={{ opacity: 0, scale: 0.95, y: 30 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-[#0e1320] border border-white/10 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col max-h-[92vh]"
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="bg-[#0e1320] border border-white/10 rounded-t-3xl sm:rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col"
+                style={{ maxHeight: 'calc(100dvh - env(safe-area-inset-bottom, 0px) - 70px)' }}
             >
                 {/* Header */}
                 <div className="p-5 border-b border-white/10 flex items-center justify-between bg-white/[0.02]">
@@ -349,8 +350,8 @@ export function UserFeedbackModal({
                     ))}
                 </div>
 
-                {/* Content Area */}
-                <div className="p-5 sm:p-6 overflow-y-auto space-y-4 flex-1">
+                {/* Content Area — pb-24 évite que la nav mobile cache le bouton d'envoi */}
+                <div className="p-5 sm:p-6 overflow-y-auto space-y-4 flex-1" style={{ paddingBottom: 'max(80px, calc(env(safe-area-inset-bottom, 0px) + 72px))' }}>
                     {/* ════ TAB 1: SIGNALER UN BUG ════ */}
                     {activeTab === 'bug' && (
                         <div className="space-y-4">

@@ -25,8 +25,12 @@ export const metadata: Metadata = {
   description: "IziTeach — Plateforme SaaS de gestion d'écoles physiques et académies en ligne. Enseigner simplement.",
   manifest: "/manifest.json",
   icons: {
-    icon: "/logo-campusflow.png",
-    apple: "/logo-campusflow.png",
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    apple: '/icon-192.png',
+    shortcut: '/favicon.ico',
   },
   openGraph: {
     title: "IziTeach — Enseigner simplement",
@@ -57,12 +61,13 @@ export default function RootLayout({
   return (
     <html lang="fr" className="dark" style={{ colorScheme: 'dark' }} suppressHydrationWarning>
       <head>
-        <link rel="icon" href="/logo-campusflow.png" type="image/png" />
-        <link rel="apple-touch-icon" href="/logo-campusflow.png" />
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="IziTeach" />
-        <meta name="msapplication-TileImage" content="/logo-campusflow.png" />
+        <meta name="msapplication-TileImage" content="/icon-192.png" />
         <meta name="msapplication-TileColor" content="#0B0E14" />
         <meta name="color-scheme" content="dark" />
       </head>

@@ -282,3 +282,28 @@
   transform: translateY(-2px);
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
 }
+
+/* ═══════════════════════════════════
+   IZITEACH LOGO — EFFET PHARE / FAISCEAU
+   ═══════════════════════════════════ */
+
+/* Rotation du faisceau conique (effet gyrophare) */
+@keyframes itBeamSpin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Pulsation du halo néon extérieur */
+@keyframes itPulseHalo {
+  0%,  100% { opacity: 0.4; transform: scale(1);    }
+  50%        { opacity: 1;   transform: scale(1.18); }
+}
+
+/* Wrapper — hover enlève le flou pour effet de focalisation */
+.logo-beacon-wrap {
+  filter: drop-shadow(0 0 6px rgba(0, 212, 212, 0.35));
+  transition: filter 0.3s ease;
+}
+.logo-beacon-wrap:hover {
+  filter: drop-shadow(0 0 14px rgba(0, 212, 212, 0.75));
+}

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0a2a3a"/>
+      <stop offset="100%" stop-color="#060f1a"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00d4d4" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#3b9eff" stop-opacity="0.6"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1.8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <!-- Fond sombre circulaire -->
+  <circle cx="50" cy="50" r="48" fill="url(#bg)"/>
+  <!-- Anneau cyan -->
+  <circle cx="50" cy="50" r="46" fill="none" stroke="url(#ring)" stroke-width="2.5"/>
+  <!-- Lettre i (blanche) -->
+  <text x="27" y="70" font-family="Arial Black, Helvetica Neue, Arial, sans-serif"
+        font-weight="900" font-size="50" fill="white" filter="url(#glow)"
+        letter-spacing="-2">i</text>
+  <!-- Lettre T (cyan vif) -->
+  <text x="47" y="70" font-family="Arial Black, Helvetica Neue, Arial, sans-serif"
+        font-weight="900" font-size="50" fill="#00d4d4" filter="url(#glow)"
+        letter-spacing="-2">T</text>
+  <!-- Point déco -->
+  <circle cx="50" cy="82" r="2.5" fill="#00d4d4" opacity="0.65"/>
+</svg>
