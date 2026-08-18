@@ -1,5 +1,5 @@
-import { IziTeachLogo } from '@/components/brand/iziteach-logo';
 'use client';
+import { IziTeachLogo } from '@/components/brand/iziteach-logo';
 
 import { useState, useEffect } from 'react';
 import { Mail, Lock, Loader2, Eye, EyeOff, ArrowLeft, KeyRound, CheckCircle2, ShieldCheck } from 'lucide-react';

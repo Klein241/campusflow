@@ -4,6 +4,13 @@
 -- ================================================================
 
 -- ── 1. bug_reports ──────────────────────────────────────────────
+-- Supprimer les contraintes NOT NULL qui bloquent l'insertion
+ALTER TABLE bug_reports ALTER COLUMN title DROP NOT NULL;
+ALTER TABLE bug_reports ALTER COLUMN description DROP NOT NULL;
+ALTER TABLE bug_reports ALTER COLUMN user_name DROP NOT NULL;
+ALTER TABLE bug_reports ALTER COLUMN user_role DROP NOT NULL;
+ALTER TABLE bug_reports ALTER COLUMN status DROP NOT NULL;
+-- Ajouter les colonnes manquantes
 ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS user_id         TEXT;
 ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS user_name       TEXT;
 ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS user_role       TEXT;

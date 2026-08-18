@@ -131,12 +131,14 @@ export function UserFeedbackModal({
                 user_name: userName,
                 user_role: userRole,
                 user_email: userEmail || null,
+                title: bugDesc.trim().substring(0, 80) || 'Bug signalé',
                 description: bugDesc.trim(),
                 screenshot_url: bugScreenshot,
                 page_url: typeof window !== 'undefined' ? window.location.href : null,
                 browser_info: typeof navigator !== 'undefined' ? navigator.userAgent : null,
                 status: 'open'
             });
+
 
             if (error) throw error;
 
