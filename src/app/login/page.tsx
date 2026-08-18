@@ -1,3 +1,4 @@
+import { IziTeachLogo } from '@/components/brand/iziteach-logo';
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -122,11 +123,7 @@ export default function GlobalLogin() {
                 <div className="text-center mb-8">
                     {/* Logo officiel IziTeach */}
                     <div className="flex items-center justify-center mx-auto mb-4">
-                        <img
-                            src="/logo-campusflow.png"
-                            alt="IziTeach"
-                            className="w-20 h-20 object-contain drop-shadow-[0_0_20px_rgba(99,102,241,0.5)]"
-                        />
+                        <IziTeachLogo variant="symbol" size="xl" className="mx-auto mb-4" />
                     </div>
                     <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 via-cyan-400 to-indigo-400 bg-clip-text text-transparent">IziTeach</h1>
                     <p className="text-slate-400 text-sm mt-1">
@@ -334,3 +331,4 @@ export default function GlobalLogin() {
         </div>
     );
 }
+

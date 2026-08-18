@@ -1,217 +1,122 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { cn } from '@/lib/utils';
 
 export type LogoVariant = 'full' | 'horizontal' | 'compact' | 'symbol';
-export type LogoTheme = 'dark' | 'light' | 'auto';
-export type LogoSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+export type LogoSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'hero';
 
 interface IziTeachLogoProps {
     variant?: LogoVariant;
-    theme?: LogoTheme;
     size?: LogoSize;
     className?: string;
+    isLoading?: boolean;
     showSlogan?: boolean;
     symbolOnly?: boolean;
-    animated?: boolean; // ← effet phare au chargement
     onClick?: () => void;
 }
 
-/**
- * ═══════════════════════════════════════════════════════════════
- * IZITEACH — LOGO OFFICIEL 100% SVG TRANSPARENT PREMIUM
- * ═══════════════════════════════════════════════════════════════
- * 
- * • Aucun fond blanc — badge vectoriel pur sur fond sombre
- * • Effet "phare lumineux" rotatif au chargement (animated=true)
- * • Tailles calibrées pour header desktop & mobile
- * 
- * Variants :
- *  "full"       → Symbole iT + IziTeach + slogan vertical
- *  "horizontal" → Symbole iT + IziTeach + slogan horizontal
- *  "compact"    → Symbole iT + IziTeach
- *  "symbol"     → Symbole iT seul (favicon, PWA, loader)
- */
 export function IziTeachLogo({
-    variant = 'compact',
-    theme = 'dark',
+    variant = 'full',
     size = 'md',
     className,
+    isLoading = false,
     showSlogan,
     symbolOnly = false,
-    animated = false,
     onClick,
 }: IziTeachLogoProps) {
-    const [isLoaded, setIsLoaded] = useState(false);
+    const finalVariant = symbolOnly ? 'symbol' : variant;
 
-    useEffect(() => {
-        // Déclencher l'animation phare après 100ms
-        const t = setTimeout(() => setIsLoaded(true), 100);
-        return () => clearTimeout(t);
-    }, []);
-
-    const finalVariant: LogoVariant = symbolOnly ? 'symbol' : variant;
-
-    // Dimensions selon la taille
-    const sizeConfig = {
-        xs: { symbol: 22, text: 'text-xs',    slogan: 'text-[9px]',  gap: 'gap-1.5' },
-        sm: { symbol: 32, text: 'text-sm',    slogan: 'text-[10px]', gap: 'gap-2'   },
-        md: { symbol: 42, text: 'text-base',  slogan: 'text-[11px]', gap: 'gap-2.5' },
-        lg: { symbol: 54, text: 'text-xl',    slogan: 'text-xs',     gap: 'gap-3'   },
-        xl: { symbol: 72, text: 'text-2xl',   slogan: 'text-sm',     gap: 'gap-3.5' },
+    const sizes = {
+        xs: { symbol: 26, title: 'text-sm', slogan: 'text-[8px]' },
+        sm: { symbol: 36, title: 'text-base', slogan: 'text-[9px]' },
+        md: { symbol: 52, title: 'text-2xl', slogan: 'text-[11px]' },
+        lg: { symbol: 64, title: 'text-3xl', slogan: 'text-xs' },
+        xl: { symbol: 80, title: 'text-4xl', slogan: 'text-sm' },
+        hero: { symbol: 100, title: 'text-5xl', slogan: 'text-base' },
     }[size];
 
-    const s = sizeConfig.symbol;
-
-    // ── Symbole SVG « iT » 100% transparent & premium ──────────────
     const renderSymbol = () => (
         <div
             className={cn(
-                'relative shrink-0 select-none',
-                animated && 'logo-beacon-wrap'
+                "relative shrink-0 select-none flex items-center justify-center transition-all duration-300",
+                onClick && "cursor-pointer hover:scale-105"
             )}
-            style={{ width: s, height: s }}
+            style={{ width: sizes.symbol, height: sizes.symbol }}
         >
-            {/* Halo néon externe (pulse) */}
-            {animated && (
-                <span
-                    className="absolute inset-0 rounded-full pointer-events-none"
-                    style={{
-                        background: 'radial-gradient(circle, rgba(0,212,212,0.18) 0%, transparent 70%)',
-                        animation: isLoaded ? 'itPulseHalo 2.4s ease-in-out infinite' : 'none',
-                    }}
-                />
-            )}
-
-            {/* Faisceau rotatif (effet phare) */}
-            {animated && (
-                <span
-                    className="absolute inset-0 rounded-full overflow-hidden pointer-events-none"
-                    style={{ zIndex: 2 }}
-                >
-                    <span
+            {/* Effet gyrophare / phare lumineux au chargement */}
+            {isLoading && (
+                <>
+                    <div 
+                        className="absolute -inset-3 rounded-full animate-spin pointer-events-none opacity-80"
                         style={{
-                            position: 'absolute',
-                            top: '50%',
-                            left: '50%',
-                            width: '200%',
-                            height: '200%',
-                            transform: 'translate(-50%, -50%)',
-                            background: 'conic-gradient(from 0deg, transparent 0deg, rgba(0,230,230,0.32) 18deg, transparent 36deg)',
-                            animation: isLoaded ? 'itBeamSpin 2.2s linear infinite' : 'none',
-                            borderRadius: '50%',
+                            background: 'conic-gradient(from 0deg, transparent 0deg, transparent 270deg, rgba(20,184,166,0.3) 320deg, rgba(6,182,212,0.9) 360deg)',
+                            filter: 'blur(4px)',
+                            animationDuration: '1.2s'
                         }}
                     />
-                </span>
+                    <div className="absolute -inset-2 rounded-full bg-teal-400/25 blur-md animate-ping" />
+                </>
             )}
 
-            {/* Badge SVG principal */}
+            {/* Symbole iT vectoriel sur fond transparent */}
             <svg
-                viewBox="0 0 100 100"
-                width={s}
-                height={s}
+                viewBox="0 0 120 120"
+                className={cn(
+                    "w-full h-full drop-shadow-[0_0_14px_rgba(20,184,166,0.5)]",
+                    isLoading && "animate-spin"
+                )}
+                style={{ animationDuration: isLoading ? '3s' : undefined }}
+                fill="none"
                 xmlns="http://www.w3.org/2000/svg"
-                style={{ display: 'block', position: 'relative', zIndex: 3 }}
-                aria-label="IziTeach — iT"
             >
                 <defs>
-                    <radialGradient id="itBg" cx="50%" cy="50%" r="50%">
-                        <stop offset="0%"   stopColor="#0a2a3a" />
-                        <stop offset="100%" stopColor="#060f1a" />
-                    </radialGradient>
-                    <linearGradient id="itStroke" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%"   stopColor="#00d4d4" stopOpacity="0.9" />
-                        <stop offset="50%"  stopColor="#3b9eff" stopOpacity="0.7" />
-                        <stop offset="100%" stopColor="#00d4d4" stopOpacity="0.5" />
+                    <linearGradient id="itCircleGrad" x1="15" y1="15" x2="105" y2="105" gradientUnits="userSpaceOnUse">
+                        <stop offset="0%" stopColor="#0B1E38" />
+                        <stop offset="50%" stopColor="#0A3252" />
+                        <stop offset="100%" stopColor="#0D738A" />
                     </linearGradient>
-                    <linearGradient id="itTextGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%"   stopColor="#ffffff" />
-                        <stop offset="55%"  stopColor="#cce8ff" />
-                        <stop offset="100%" stopColor="#00d4d4" />
+                    <linearGradient id="itRingGrad" x1="20" y1="100" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+                        <stop offset="0%" stopColor="#0D738A" stopOpacity="0.2" />
+                        <stop offset="50%" stopColor="#14B8A6" />
+                        <stop offset="100%" stopColor="#0D738A" stopOpacity="0.2" />
                     </linearGradient>
-                    <filter id="itGlow" x="-20%" y="-20%" width="140%" height="140%">
-                        <feGaussianBlur stdDeviation="2.5" result="blur" />
-                        <feMerge>
-                            <feMergeNode in="blur" />
-                            <feMergeNode in="SourceGraphic" />
-                        </feMerge>
-                    </filter>
                 </defs>
 
-                {/* Fond circulaire sombre translucide */}
-                <circle cx="50" cy="50" r="47" fill="url(#itBg)" opacity="0.95" />
+                <circle cx="60" cy="58" r="44" fill="url(#itCircleGrad)" />
+                <path d="M 24 74 C 32 94, 88 94, 96 74" stroke="url(#itRingGrad)" strokeWidth="3.5" strokeLinecap="round" />
 
-                {/* Anneau dégradé cyan */}
-                <circle
-                    cx="50" cy="50" r="46"
-                    fill="none"
-                    stroke="url(#itStroke)"
-                    strokeWidth="2.2"
-                />
+                <rect x="78" y="14" width="7" height="7" rx="1.5" fill="#14B8A6" />
+                <rect x="88" y="11" width="8" height="8" rx="1.5" fill="#06B6D4" />
+                <rect x="83" y="23" width="7" height="7" rx="1.5" fill="#38BDF8" />
+                <rect x="74" y="24" width="5" height="5" rx="1" fill="#14B8A6" />
+                <rect x="92" y="21" width="5" height="5" rx="1" fill="#0EA5E9" />
 
-                {/* Lettre « i » */}
-                <text
-                    x="30"
-                    y="68"
-                    fontFamily="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
-                    fontWeight="900"
-                    fontSize="46"
-                    fill="url(#itTextGrad)"
-                    filter="url(#itGlow)"
-                    letterSpacing="-2"
-                >i</text>
-
-                {/* Lettre « T » légèrement décalée, couleur cyan vive */}
-                <text
-                    x="46"
-                    y="68"
-                    fontFamily="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
-                    fontWeight="900"
-                    fontSize="46"
-                    fill="#00d4d4"
-                    filter="url(#itGlow)"
-                    letterSpacing="-2"
-                >T</text>
-
-                {/* Point décoratif sous-ligne */}
-                <circle cx="50" cy="80" r="2.5" fill="#00d4d4" opacity="0.6" />
+                <path d="M 37 36 C 37 32, 42 32, 47 32 L 47 78 C 42 78, 37 78, 37 74 Z" fill="#FFFFFF" />
+                <polygon points="46,47 46,65 59,56" fill="#00D2B4" />
+                <path d="M 52 38 C 52 33, 56 32, 60 32 L 87 32 C 92 32, 92 37, 88 41 L 76 41 L 76 74 C 76 78, 71 78, 66 78 C 61 78, 61 74, 61 74 L 61 41 L 52 41 Z" fill="#FFFFFF" />
             </svg>
         </div>
     );
 
-    // ── Couleurs texte ───────────────────────────────────────────────
-    const brandText = theme === 'light' ? 'text-slate-900' : 'text-white';
-
-    // ── Rendu des variants ──────────────────────────────────────────
-
-    // 1. Symbol seul
     if (finalVariant === 'symbol') {
         return (
-            <div
-                onClick={onClick}
-                className={cn('inline-flex items-center justify-center select-none', onClick && 'cursor-pointer', className)}
-                title="IziTeach — Enseigner Simplement"
-            >
+            <div onClick={onClick} className={cn("inline-flex items-center justify-center", className)}>
                 {renderSymbol()}
             </div>
         );
     }
 
-    // 2. Horizontal (footer, bannières)
     if (finalVariant === 'horizontal') {
         return (
-            <div
-                onClick={onClick}
-                className={cn('inline-flex items-center select-none', sizeConfig.gap, onClick && 'cursor-pointer', className)}
-            >
+            <div onClick={onClick} className={cn("inline-flex items-center gap-3.5", onClick && "cursor-pointer", className)}>
                 {renderSymbol()}
-                <div className="flex items-center gap-2">
-                    <span className={cn('font-black tracking-tight leading-none', sizeConfig.text, brandText)}>
+                <div className="flex items-center gap-2.5">
+                    <span className={cn("font-black tracking-tight text-white", sizes.title)}>
                         Izi<span className="text-teal-400">Teach</span>
                     </span>
-                    <span className="text-slate-500 text-xs hidden sm:inline">•</span>
-                    <span className={cn('font-medium text-slate-400 italic hidden sm:inline', sizeConfig.slogan)}>
+                    <span className="text-slate-600 text-sm hidden sm:inline">•</span>
+                    <span className={cn("font-semibold uppercase tracking-[0.18em] text-teal-400/90 hidden sm:inline", sizes.slogan)}>
                         Enseigner Simplement
                     </span>
                 </div>
@@ -219,36 +124,17 @@ export function IziTeachLogo({
         );
     }
 
-    // 3. Full — vertical avec slogan
-    if (finalVariant === 'full' || showSlogan) {
-        return (
-            <div
-                onClick={onClick}
-                className={cn('inline-flex items-center select-none', sizeConfig.gap, onClick && 'cursor-pointer', className)}
-            >
-                {renderSymbol()}
-                <div className="flex flex-col leading-none">
-                    <span className={cn('font-black tracking-tight', sizeConfig.text, brandText)}>
-                        Izi<span className="text-teal-400">Teach</span>
-                    </span>
-                    <span className={cn('font-bold tracking-widest text-teal-400/90 mt-[3px] uppercase', sizeConfig.slogan)}>
-                        Enseigner Simplement
-                    </span>
-                </div>
-            </div>
-        );
-    }
-
-    // 4. Compact (header mobile & dashboards)
     return (
-        <div
-            onClick={onClick}
-            className={cn('inline-flex items-center select-none', sizeConfig.gap, onClick && 'cursor-pointer', className)}
-        >
+        <div onClick={onClick} className={cn("inline-flex items-center gap-3.5", onClick && "cursor-pointer", className)}>
             {renderSymbol()}
-            <span className={cn('font-black tracking-tight leading-none', sizeConfig.text, brandText)}>
-                Izi<span className="text-teal-400">Teach</span>
-            </span>
+            <div className="flex flex-col justify-center -space-y-0.5">
+                <span className={cn("font-black tracking-tight leading-none text-white", sizes.title)}>
+                    Izi<span className="text-teal-400">Teach</span>
+                </span>
+                <span className={cn("font-bold uppercase tracking-[0.2em] text-teal-400 leading-tight mt-1", sizes.slogan)}>
+                    Enseigner Simplement
+                </span>
+            </div>
         </div>
     );
 }
