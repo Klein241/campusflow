@@ -1,10 +1,12 @@
-# CampusFlow SPA Redirects — Compatible Netlify + Cloudflare Pages
+# IziTeach SPA Redirects — Compatible Netlify + Cloudflare Pages
 # Maps dynamic /:orgSlug/* paths to the static placeholder _/ pages
 
 # Nested routes first (most specific)
 /:orgSlug/campus/*              /_/campus/index.html              200
 /:orgSlug/login/*               /_/login/index.html               200
-/:orgSlug/admin/*               /_/admin/index.html               200
+/:orgSlug/admin/agents           /_/admin/agents/index.html        200
+/:orgSlug/admin/agents/*         /_/admin/agents/index.html        200
+/:orgSlug/admin/*                /_/admin/index.html               200
 /:orgSlug/library/*             /_/library/index.html             200
 /:orgSlug/shop/*                /_/shop/index.html                200
 /:orgSlug/messages/*            /_/messages/index.html            200

@@ -69,7 +69,7 @@ CREATE POLICY "ai_agent_keys_admin_select"
 
 -- Pas d'accès direct en écriture depuis le client — uniquement via RPCs
 CREATE POLICY "ai_agent_keys_no_direct_write"
-    ON public.ai_agent_keys FOR INSERT USING (false);
+    ON public.ai_agent_keys FOR INSERT WITH CHECK (false);
 CREATE POLICY "ai_agent_keys_no_direct_update"
     ON public.ai_agent_keys FOR UPDATE USING (false);
 CREATE POLICY "ai_agent_keys_no_direct_delete"
@@ -121,7 +121,7 @@ CREATE POLICY "ai_agent_logs_admin_select"
     );
 
 CREATE POLICY "ai_agent_logs_no_direct_write"
-    ON public.ai_agent_logs FOR INSERT USING (false);
+    ON public.ai_agent_logs FOR INSERT WITH CHECK (false);
 
 GRANT SELECT ON public.ai_agent_logs TO authenticated;
 
@@ -167,7 +167,7 @@ CREATE POLICY "ai_pending_admin_select"
     );
 
 CREATE POLICY "ai_pending_no_direct_write"
-    ON public.ai_pending_actions FOR INSERT USING (false);
+    ON public.ai_pending_actions FOR INSERT WITH CHECK (false);
 
 GRANT SELECT ON public.ai_pending_actions TO authenticated;
 
