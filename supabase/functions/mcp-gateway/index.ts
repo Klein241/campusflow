@@ -616,11 +616,15 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             if (!args.subject_id) throw { code: -32602, message: 'subject_id requis' };
             const { data, error } = await supabase
                 .from('chapters')
-                .select('id, title, description, order_index, status, subject_id')
+                .select('id, title, description, position, status, subject_id')
                 .eq('subject_id', args.subject_id as string)
                 .order('position');
             if (error) throw { code: -32002, message: error.message };
-            return { chapters: data || [], total: (data || []).length };
+            const chapters = (data || []).map((ch: Record<string, unknown>) => ({
+                ...ch,
+                order_index: ch.position,
+            }));
+            return { chapters, total: chapters.length };
         }
 
         // ── LIST LESSONS ────────────────────────────────────────────────────
@@ -628,11 +632,15 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             if (!args.chapter_id) throw { code: -32602, message: 'chapter_id requis' };
             const { data, error } = await supabase
                 .from('lessons')
-                .select('id, title, position, estimated_minutes, status, chapter_id')
+                .select('id, title, content, position, estimated_minutes, status, chapter_id')
                 .eq('chapter_id', args.chapter_id as string)
                 .order('position');
             if (error) throw { code: -32002, message: error.message };
-            return { lessons: data || [], total: (data || []).length };
+            const lessons = (data || []).map((l: Record<string, unknown>) => ({
+                ...l,
+                order_index: l.position,
+            }));
+            return { lessons, total: lessons.length };
         }
 
         // ── CREATE SUBJECT ───────────────────────────────────────────────────

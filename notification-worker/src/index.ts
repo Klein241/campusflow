@@ -3656,15 +3656,23 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         // ── LIST CHAPTERS ──
         case 'list_chapters': {
             if (!args.subject_id) throw { code: -32602, message: 'subject_id requis' };
-            const { results } = await db.prepare(`SELECT id, title, description, order_index, subject_id FROM chapters WHERE subject_id = ?1 ORDER BY order_index ASC`).bind(args.subject_id).all();
-            return { chapters: results || [], total: (results || []).length };
+            const { results } = await db.prepare(`SELECT id, title, description, position, status, subject_id FROM chapters WHERE subject_id = ?1 ORDER BY position ASC`).bind(args.subject_id).all();
+            const chapters = (results || []).map((ch: any) => ({
+                ...ch,
+                order_index: ch.position,
+            }));
+            return { chapters, total: chapters.length };
         }
 
         // ── LIST LESSONS ──
         case 'list_lessons': {
             if (!args.chapter_id) throw { code: -32602, message: 'chapter_id requis' };
-            const { results } = await db.prepare(`SELECT id, title, content, order_index, estimated_minutes, status, chapter_id FROM lessons WHERE chapter_id = ?1 ORDER BY order_index ASC`).bind(args.chapter_id).all();
-            return { lessons: results || [], total: (results || []).length };
+            const { results } = await db.prepare(`SELECT id, title, content, position, estimated_minutes, status, chapter_id FROM lessons WHERE chapter_id = ?1 ORDER BY position ASC`).bind(args.chapter_id).all();
+            const lessons = (results || []).map((l: any) => ({
+                ...l,
+                order_index: l.position,
+            }));
+            return { lessons, total: lessons.length };
         }
 
         // ── CREATE SUBJECT ──
@@ -3683,10 +3691,11 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         case 'create_chapter': {
             if (!args.subject_id || !args.title) throw { code: -32602, message: 'subject_id et title requis' };
             const id = crypto.randomUUID();
-            const orderIndex = Number(args.order_index) || 1;
-            await db.prepare(`INSERT INTO chapters (id, subject_id, title, description, order_index, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)`)
-                .bind(id, args.subject_id, args.title, args.description || null, orderIndex, new Date().toISOString()).run();
-            syncToSupabase(env, 'chapters', 'INSERT', { id, subject_id: args.subject_id, title: args.title, description: args.description, order_index: orderIndex });
+            const position = Number(args.position ?? args.order_index) || 1;
+            const targetOrgId = args.org_id || ctx.orgId;
+            await db.prepare(`INSERT INTO chapters (id, organization_id, subject_id, title, description, position, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)`)
+                .bind(id, targetOrgId, args.subject_id, args.title, args.description || null, position, new Date().toISOString()).run();
+            syncToSupabase(env, 'chapters', 'INSERT', { id, organization_id: targetOrgId, subject_id: args.subject_id, title: args.title, description: args.description, position });
             return { success: true, chapter_id: id, message: `✅ Chapitre "${args.title}" créé sur Cloudflare D1` };
         }
 
@@ -3695,11 +3704,12 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             if (!args.chapter_id || !args.title || !args.content) throw { code: -32602, message: 'chapter_id, title et content requis' };
             const targetOrgId = args.org_id || ctx.orgId;
             const id = crypto.randomUUID();
-            const duration = Number(args.duration_minutes) || 15;
+            const duration = Number(args.duration_minutes || args.estimated_minutes) || 15;
+            const position = Number(args.position ?? args.order_index) || 1;
             const now = new Date().toISOString();
-            await db.prepare(`INSERT INTO lessons (id, organization_id, chapter_id, title, content, estimated_minutes, status, order_index, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', 1, ?7, ?7)`)
-                .bind(id, targetOrgId, args.chapter_id, args.title, args.content, duration, now).run();
-            syncToSupabase(env, 'lessons', 'INSERT', { id, organization_id: targetOrgId, chapter_id: args.chapter_id, title: args.title, content: args.content, estimated_minutes: duration, status: 'published', order_index: 1 });
+            await db.prepare(`INSERT INTO lessons (id, organization_id, chapter_id, title, content, estimated_minutes, status, position, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', ?7, ?8, ?8)`)
+                .bind(id, targetOrgId, args.chapter_id, args.title, args.content, duration, position, now).run();
+            syncToSupabase(env, 'lessons', 'INSERT', { id, organization_id: targetOrgId, chapter_id: args.chapter_id, title: args.title, content: args.content, estimated_minutes: duration, status: 'published', position });
             return { success: true, lesson_id: id, message: `✅ Leçon "${args.title}" créée et publiée sur Cloudflare D1` };
         }
 
