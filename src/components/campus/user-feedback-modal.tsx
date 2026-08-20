@@ -124,10 +124,15 @@ export function UserFeedbackModal({
 
         setSubmitting(true);
         try {
+            // ⚠️ IMPORTANT: user_id must be the authenticated user's auth.uid()
+            // NOT the profile id passed as prop (they should match, but use auth.uid() to be safe)
+            const { data: { user } } = await supabase.auth.getUser();
+            const authUserId = user?.id || userId;
+
             const { error } = await supabase.from('bug_reports').insert({
                 organization_id: orgId || null,
                 org_name: orgName,
-                user_id: userId,
+                user_id: authUserId,
                 user_name: userName,
                 user_role: userRole,
                 user_email: userEmail || null,
@@ -201,6 +206,20 @@ export function UserFeedbackModal({
 
         setSubmitting(true);
         try {
+            // ✅ Check if user already reviewed this school
+            const { data: existing } = await supabase
+                .from('school_reviews')
+                .select('id')
+                .eq('organization_id', orgId)
+                .eq('user_id', userId)
+                .maybeSingle();
+
+            if (existing) {
+                toast.error('Vous avez déjà donné votre avis sur cet établissement. Un seul avis par école est autorisé.');
+                setSubmitting(false);
+                return;
+            }
+
             const pointsToAward = getPointsForRating(schoolRating);
 
             const { error } = await supabase.from('school_reviews').insert({
@@ -227,9 +246,10 @@ export function UserFeedbackModal({
                     p_org_id: orgId
                 });
 
-                if (rpcRes?.points_awarded) {
+                // ✅ Fix: use typeof check (points_awarded can be 0 which is falsy)
+                if (rpcRes && typeof rpcRes.points_awarded === 'number' && rpcRes.points_awarded > 0) {
                     toast.success(`🎉 Avis enregistré ! +${rpcRes.points_awarded} Sky Points crédités ! ⭐`);
-                    if (rpcRes.new_total && onSkyPointsEarned) {
+                    if (typeof rpcRes.new_total === 'number' && onSkyPointsEarned) {
                         onSkyPointsEarned(rpcRes.new_total);
                     }
                 } else {
@@ -257,6 +277,19 @@ export function UserFeedbackModal({
 
         setSubmitting(true);
         try {
+            // ✅ Check if user already reviewed the platform
+            const { data: existing } = await supabase
+                .from('platform_reviews')
+                .select('id')
+                .eq('user_id', userId)
+                .maybeSingle();
+
+            if (existing) {
+                toast.error('Vous avez déjà donné votre avis sur IziTeach. Merci pour votre fidélité !');
+                setSubmitting(false);
+                return;
+            }
+
             const pointsToAward = getPointsForRating(appRating);
 
             const { error } = await supabase.from('platform_reviews').insert({
@@ -268,6 +301,7 @@ export function UserFeedbackModal({
                 rating: appRating,
                 comment: appComment.trim(),
                 sky_points_awarded: pointsToAward,
+                is_published: true,
                 is_featured: true
             });
 
@@ -283,9 +317,10 @@ export function UserFeedbackModal({
                     p_org_id: orgId || null
                 });
 
-                if (rpcRes?.points_awarded) {
+                // ✅ Fix: use typeof check (points_awarded can be 0 which is falsy)
+                if (rpcRes && typeof rpcRes.points_awarded === 'number' && rpcRes.points_awarded > 0) {
                     toast.success(`🎉 Merci pour votre avis ! +${rpcRes.points_awarded} Sky Points crédités ! ⭐`);
-                    if (rpcRes.new_total && onSkyPointsEarned) {
+                    if (typeof rpcRes.new_total === 'number' && onSkyPointsEarned) {
                         onSkyPointsEarned(rpcRes.new_total);
                     }
                 } else {

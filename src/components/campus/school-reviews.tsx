@@ -10,13 +10,12 @@ import { supabase } from '@/lib/supabase';
 
 interface SchoolReview {
     id: string;
-    org_id?: string;
-    org_slug?: string;
+    organization_id?: string;
     author_name: string;
-    author_role: 'student' | 'teacher';
-    classroom_name?: string;
+    author_role: string;
     rating: number;
     comment: string;
+    is_published: boolean;
     created_at: string;
 }
 
@@ -36,18 +35,15 @@ export function SchoolReviewsSection({ org, orgSlug, brandColor = '#14b8a6' }: S
     useEffect(() => {
         async function fetchReviews() {
             try {
-                let query = supabase
+                // Filter by organization_id (the correct column name in DB)
+                const { data, error } = await supabase
                     .from('school_reviews')
-                    .select('*')
-                    .order('created_at', { ascending: false });
+                    .select('id, organization_id, author_name, author_role, rating, comment, is_published, created_at')
+                    .eq('organization_id', org?.id)
+                    .eq('is_published', true)
+                    .order('created_at', { ascending: false })
+                    .limit(15);
 
-                if (org?.id) {
-                    query = query.or(`org_id.eq.${org.id},org_slug.eq.${orgSlug}`);
-                } else {
-                    query = query.eq('org_slug', orgSlug);
-                }
-
-                const { data } = await query.limit(15);
                 if (data && data.length > 0) {
                     setReviews(data);
                 }
@@ -56,8 +52,9 @@ export function SchoolReviewsSection({ org, orgSlug, brandColor = '#14b8a6' }: S
                 setLoading(false);
             }
         }
-        fetchReviews();
-    }, [org?.id, orgSlug]);
+        if (org?.id) fetchReviews();
+        else setLoading(false);
+    }, [org?.id]);
 
     const avg = reviews.length > 0
         ? (reviews.reduce((a, b) => a + (b.rating || 5), 0) / reviews.length).toFixed(1)
@@ -113,7 +110,7 @@ export function SchoolReviewsSection({ org, orgSlug, brandColor = '#14b8a6' }: S
                                     <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
                                 </span>
                                 <span className="text-slate-400 font-medium">
-                                    {r.author_role === 'teacher' ? '👨‍🏫 Professeur' : '👨‍🎓 Étudiant'}
+                                    {r.author_role === 'Professeur' || r.author_role === 'teacher' ? '👨‍🏫 Professeur' : '👨‍🎓 Étudiant'}
                                 </span>
                             </div>
                         </div>

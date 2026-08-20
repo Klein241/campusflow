@@ -67,13 +67,15 @@ export function PlatformReviewsSection() {
             try {
                 const { data, error } = await supabase
                     .from('platform_reviews')
-                    .select('*')
+                    .select('id, author_name, author_role, school_name, rating, comment, is_published, created_at')
+                    .eq('is_published', true)
                     .order('created_at', { ascending: false })
                     .limit(20);
 
-                if (data && data.length > 0) {
+                if (!error && data && data.length > 0) {
                     setReviews(data);
                 }
+                // else keep DEFAULT_REVIEWS as fallback
             } catch (e) {
                 // fallback to default
             } finally {

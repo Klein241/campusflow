@@ -40,6 +40,7 @@
     "node_modules",
     "notification-worker",
     "scripts",
-    "netlify"
+    "netlify",
+    "supabase"
   ]
 }

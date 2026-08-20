@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, Component, type ReactNode, type ErrorInfo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOrgSlug } from '@/hooks/use-org-slug';
-import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus, Building2, FileText, Receipt, PhoneCall, ClipboardCheck, Eye, Award, Volume2, Play, Pause, Maximize2, FileDown, Lock, KeyRound, Coins, Sparkles, Ban, CheckCircle, LogOut, AlertCircle, Send, Mail } from 'lucide-react';
+import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus, Building2, FileText, Receipt, PhoneCall, ClipboardCheck, Eye, Award, Volume2, Play, Pause, Maximize2, FileDown, Lock, KeyRound, Coins, Sparkles, Ban, CheckCircle, LogOut, AlertCircle, Send, Mail, Bot } from 'lucide-react';
 import { ExamRoomView } from '@/components/campus/exam-room/exam-room-view';
 import { BULLETIN_TEMPLATES, generateBulletinPDF, type BulletinData } from '@/lib/bulletin-pdf';
 import { RECEIPT_TEMPLATES, generateReceiptPDF, generateReceiptNumber, type ReceiptData } from '@/lib/receipt-pdf';
@@ -76,7 +76,7 @@ const Sel = ({ v, onChange, opts, ph = '—' }: { v: string, onChange: (v: strin
     </select>
 );
 
-type Tab = 'general' | 'landing' | 'premium_styles' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'modeles' | 'cursus' | 'settings' | 'chat' | 'stories' | 'actus' | 'groupes' | 'whatsapp' | 'exam_room' | 'monitoring' | 'certificates';
+type Tab = 'general' | 'landing' | 'premium_styles' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'modeles' | 'cursus' | 'settings' | 'chat' | 'stories' | 'actus' | 'groupes' | 'whatsapp' | 'exam_room' | 'monitoring' | 'certificates' | 'ai_agents';
 interface Cls { id?: string; name: string; cycle: string; filiere_id: string | null; level: number; capacity: number; }
 interface Sub { id?: string; name: string; code: string; coefficient: number; classroom_id: string; teacher_id: string | null; }
 interface Room { id?: string; name: string; }
@@ -101,6 +101,7 @@ const SIDES = [
     { id: 'actus' as Tab, icon: Bell, label: 'Actus' },
     { id: 'exam_room' as Tab, icon: ClipboardCheck, label: '🏛️ Salle d\'Évaluation' },
     { id: 'settings' as Tab, icon: Palette, label: 'Paramètres' },
+    { id: 'ai_agents' as Tab, icon: Bot, label: '🤖 Agents IA' },
 ];
 const COLLEGE = ['6ème', '5ème', '4ème', '3ème'], LYCEE = ['Seconde', 'Première', 'Terminale'], SECS = ['A', 'B', 'C'];
 const DEFS: Record<string, string[]> = { college: ['Mathématiques', 'Français', 'Anglais', 'SVT', 'Physique-Chimie', 'Histoire-Géo', 'Informatique', 'EPS'], lycee: ['Mathématiques', 'Français', 'Anglais', 'Physique', 'Chimie', 'SVT', 'Philosophie', 'Histoire-Géo', 'Informatique', 'EPS'], universite: ['Module 1', 'Module 2', 'Module 3', 'Projet tutoré', 'Stage'], centre_formation: ['Cours théorique', 'Travaux pratiques', 'Stage professionnel', 'Projet fin de formation'], institut: ['Cours fondamental', 'Spécialisation', 'Travaux pratiques', 'Stage'] };
@@ -4743,6 +4744,35 @@ ${bodyHtml}
                             </div>
                         </div>
                     )}
+
+                    {/* ── AGENTS IA — Redirige vers la page dédiée ── */}
+                    {tab === 'ai_agents' && org && (
+                        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center">
+                            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-violet-600/30 to-indigo-600/20 border border-violet-500/30 flex items-center justify-center">
+                                <Bot className="w-10 h-10 text-violet-300" />
+                            </div>
+                            <div>
+                                <h2 className="text-2xl font-black text-white mb-2">🤖 Agents IA — MCP Gateway</h2>
+                                <p className="text-slate-400 text-sm max-w-md leading-relaxed">
+                                    La gestion des agents IA dispose de sa propre page dédiée pour une meilleure expérience.
+                                    Compatible avec <strong className="text-violet-300">Claude</strong>,{' '}
+                                    <strong className="text-blue-300">MANUS</strong>,{' '}
+                                    <strong className="text-emerald-300">ChatGPT</strong> et tout outil MCP.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => router.push(`/${orgSlug}/admin/agents`)}
+                                className="flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-2xl font-bold text-sm shadow-xl shadow-violet-600/25 transition-all active:scale-95"
+                            >
+                                <Bot className="w-4 h-4" />
+                                Ouvrir la page Agents IA
+                            </button>
+                            <p className="text-xs text-slate-600">
+                                URL directe : <code className="text-slate-400">/{orgSlug}/admin/agents</code>
+                            </p>
+                        </div>
+                    )}
+
                 </div>
             </main>
 

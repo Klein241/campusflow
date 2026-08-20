@@ -98,8 +98,8 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between">
           {/* Logo Desktop: Symbole + IziTeach + slogan / Mobile: Symbole + IziTeach */}
           <div className="flex items-center">
-            <IziTeachLogo variant="full" size="lg" animated className="hidden sm:flex" />
-            <IziTeachLogo variant="compact" size="md" animated className="flex sm:hidden" />
+            <IziTeachLogo variant="full" size="lg" className="hidden sm:flex" />
+            <IziTeachLogo variant="compact" size="md" className="flex sm:hidden" />
           </div>
 
           <div className="hidden md:flex items-center gap-7 text-xs font-bold text-slate-300">

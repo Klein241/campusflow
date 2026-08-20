@@ -172,7 +172,6 @@ export default function TeacherDashboard() {
             setTeacher((p: any) => ({ ...p, ...updates }));
             try {
                 SessionManager.patch({
-                    name: `${editFirstName.trim()} ${editLastName.trim()}`,
                     first_name: editFirstName.trim(),
                     last_name: editLastName.trim(),
                     email: editEmail.trim() || undefined,

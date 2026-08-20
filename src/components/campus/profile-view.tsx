@@ -115,7 +115,6 @@ export function ProfileView({ orgId, orgSlug, userId, userName, userRole, orgNam
             setProfile((prev: any) => ({ ...prev, ...updates }));
             try {
                 SessionManager.patch({
-                    name: `${editFirstName.trim()} ${editLastName.trim()}`,
                     first_name: editFirstName.trim(),
                     last_name: editLastName.trim(),
                     email: editEmail.trim() || undefined,
