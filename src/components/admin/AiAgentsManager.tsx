@@ -208,6 +208,8 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
 
                 supabase.from('ai_permission_catalog')
                     .select('*')
+                    .neq('category', 'Superadmin')
+                    .neq('category', 'superadmin')
                     .order('sort_order'),
 
                 supabase.rpc('get_ai_agent_stats', { p_org_id: orgId }),
@@ -216,7 +218,13 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
             if (keysRes.data)    setAgentKeys(keysRes.data);
             if (logsRes.data)    setLogs(logsRes.data);
             if (pendingRes.data) setPendingActions(pendingRes.data);
-            if (catalogRes.data) setPermissionCatalog(catalogRes.data);
+            if (catalogRes.data) {
+                // Double filtre de sécurité : exclure toute permission superadmin
+                const schoolOnlyPerms = catalogRes.data.filter(
+                    (p: any) => p.category?.toLowerCase() !== 'superadmin' && !p.id.startsWith('superadmin:')
+                );
+                setPermissionCatalog(schoolOnlyPerms);
+            }
             if (statsRes.data)   setStats(statsRes.data);
         } catch (e) {
             console.error('[AiAgentsManager] Load error:', e);

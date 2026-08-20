@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { RichContentEditor, parseContent, serializeContent, type ContentBlock } from './rich-content-editor';
 import { EmailModal } from '@/components/campus/email-modal';
+import { checkHumanActionRateLimit } from '@/lib/anti-bot-guard';
 
 // ─── Helper notifications push cursus (admin) ────────────────────────────────
 const WORKER_URL = process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL || process.env.NEXT_PUBLIC_WORKER_URL || '';
@@ -334,6 +335,13 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
 
     const createLesson = async () => {
         if (!lessonForm.title || !selectedChId) return;
+
+        const rateCheck = checkHumanActionRateLimit('leçon');
+        if (!rateCheck.allowed) {
+            toast.error(rateCheck.reason);
+            return;
+        }
+
         setSavingLesson(true);
         const pos = chLessons.length;
         const { data, error } = await supabase.from('lessons').insert({
@@ -390,6 +398,12 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
         }
         if (!selectedChId) {
             toast.error('Veuillez sélectionner un chapitre pour cet exercice');
+            return;
+        }
+
+        const rateCheck = checkHumanActionRateLimit('exercice');
+        if (!rateCheck.allowed) {
+            toast.error(rateCheck.reason);
             return;
         }
 

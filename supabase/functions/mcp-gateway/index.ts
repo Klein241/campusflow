@@ -103,7 +103,7 @@ const MCP_TOOLS = [
     },
     {
         name: 'list_lessons',
-        description: 'Lister les leçons d\'un chapitre',
+        description: 'Lister les leçons d\'un chapitre avec le nombre et détails des exercices associés',
         permission: 'read:curriculum',
         inputSchema: {
             type: 'object',
@@ -111,6 +111,18 @@ const MCP_TOOLS = [
                 chapter_id: { type: 'string', description: 'UUID du chapitre' },
             },
             required: ['chapter_id'],
+        },
+    },
+    {
+        name: 'list_exercises',
+        description: 'Lister les exercices d\'une leçon ou d\'un chapitre',
+        permission: 'read:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                lesson_id: { type: 'string', description: 'UUID de la leçon (optionnel)' },
+                chapter_id: { type: 'string', description: 'UUID du chapitre (optionnel)' },
+            },
         },
     },
     {
@@ -128,6 +140,32 @@ const MCP_TOOLS = [
         },
     },
     {
+        name: 'update_subject',
+        description: 'Modifier une matière existante',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                subject_id: { type: 'string', description: 'UUID de la matière' },
+                name: { type: 'string', description: 'Nouveau nom de la matière' },
+                description: { type: 'string', description: 'Nouvelle description' },
+            },
+            required: ['subject_id'],
+        },
+    },
+    {
+        name: 'delete_subject',
+        description: 'Supprimer une matière',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                subject_id: { type: 'string', description: 'UUID de la matière' },
+            },
+            required: ['subject_id'],
+        },
+    },
+    {
         name: 'create_chapter',
         description: 'Créer un chapitre dans une matière',
         permission: 'write:curriculum',
@@ -138,8 +176,36 @@ const MCP_TOOLS = [
                 title: { type: 'string', description: 'Titre du chapitre' },
                 description: { type: 'string', description: 'Description (optionnel)' },
                 order_index: { type: 'number', description: 'Position dans la liste (défaut: auto)' },
+                position: { type: 'number', description: 'Position dans la liste' },
             },
             required: ['subject_id', 'title'],
+        },
+    },
+    {
+        name: 'update_chapter',
+        description: 'Modifier un chapitre existant',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                chapter_id: { type: 'string', description: 'UUID du chapitre' },
+                title: { type: 'string', description: 'Nouveau titre' },
+                description: { type: 'string', description: 'Nouvelle description' },
+                position: { type: 'number', description: 'Nouvelle position' },
+            },
+            required: ['chapter_id'],
+        },
+    },
+    {
+        name: 'delete_chapter',
+        description: 'Supprimer un chapitre',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                chapter_id: { type: 'string', description: 'UUID du chapitre' },
+            },
+            required: ['chapter_id'],
         },
     },
     {
@@ -153,14 +219,43 @@ const MCP_TOOLS = [
                 title: { type: 'string', description: 'Titre de la leçon' },
                 content: { type: 'string', description: 'Contenu de la leçon (markdown supporté)' },
                 order_index: { type: 'number', description: 'Position dans le chapitre' },
+                position: { type: 'number', description: 'Position dans le chapitre' },
                 duration_minutes: { type: 'number', description: 'Durée estimée en minutes' },
             },
             required: ['chapter_id', 'title', 'content'],
         },
     },
     {
+        name: 'update_lesson',
+        description: 'Modifier une leçon existante',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                lesson_id: { type: 'string', description: 'UUID de la leçon' },
+                title: { type: 'string', description: 'Nouveau titre' },
+                content: { type: 'string', description: 'Nouveau contenu markdown' },
+                duration_minutes: { type: 'number', description: 'Nouvelle durée' },
+                position: { type: 'number', description: 'Nouvelle position' },
+            },
+            required: ['lesson_id'],
+        },
+    },
+    {
+        name: 'delete_lesson',
+        description: 'Supprimer une leçon',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                lesson_id: { type: 'string', description: 'UUID de la leçon' },
+            },
+            required: ['lesson_id'],
+        },
+    },
+    {
         name: 'create_exercise',
-        description: 'Créer un exercice dans une leçon',
+        description: 'Créer un exercice dans une leçon (QCM, Vrai/Faux ou rédaction)',
         permission: 'write:exercises',
         inputSchema: {
             type: 'object',
@@ -178,12 +273,59 @@ const MCP_TOOLS = [
                     items: { type: 'string' },
                     description: 'Choix de réponses (pour QCM)',
                 },
+                options: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'Options alternatives',
+                },
                 correct_answer: { type: 'string', description: 'Réponse correcte' },
                 explanation: { type: 'string', description: 'Explication de la réponse' },
-                max_score: { type: 'number', description: 'Score maximum (défaut: 10)' },
-                order_index: { type: 'number', description: 'Position dans la leçon' },
+                questions: { type: 'array', description: 'Questions au format JSONB structuré' },
+                max_score: { type: 'number', description: 'Score maximum (défaut: 20)' },
+                duration_minutes: { type: 'number', description: 'Durée en minutes' },
             },
-            required: ['lesson_id', 'title', 'question', 'type', 'correct_answer'],
+            required: ['lesson_id', 'title'],
+        },
+    },
+    {
+        name: 'update_exercise',
+        description: 'Modifier un exercice existant',
+        permission: 'write:exercises',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                exercise_id: { type: 'string', description: 'UUID de l\'exercice' },
+                title: { type: 'string', description: 'Nouveau titre' },
+                questions: { type: 'array', description: 'Questions JSONB' },
+                max_score: { type: 'number', description: 'Nouveau score max' },
+            },
+            required: ['exercise_id'],
+        },
+    },
+    {
+        name: 'delete_exercise',
+        description: 'Supprimer un exercice',
+        permission: 'write:exercises',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                exercise_id: { type: 'string', description: 'UUID de l\'exercice' },
+            },
+            required: ['exercise_id'],
+        },
+    },
+    {
+        name: 'bulk_create',
+        description: 'Création en masse ultra-rapide (créer toute une arborescence matière/chapitres/leçons/exercices en 1 seul appel)',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                subject_name: { type: 'string', description: 'Nom de la matière' },
+                subject_id: { type: 'string', description: 'UUID de la matière parente existante' },
+                class_id: { type: 'string', description: 'UUID de la classe' },
+                chapters: { type: 'array', description: 'Liste des chapitres avec leçons et exercices imbriqués' },
+            },
         },
     },
     {
@@ -214,6 +356,78 @@ const MCP_TOOLS = [
         inputSchema: {
             type: 'object',
             properties: {},
+        },
+    },
+    {
+        name: 'list_grades',
+        description: 'Consulter les notes et évaluations des étudiants',
+        permission: 'read:grades',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                student_id: { type: 'string' },
+                class_id: { type: 'string' },
+                subject_id: { type: 'string' },
+                limit: { type: 'number' },
+            },
+        },
+    },
+    {
+        name: 'create_grade',
+        description: 'Enregistrer une note d\'évaluation pour un étudiant',
+        permission: 'write:grades',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                student_id: { type: 'string' },
+                subject_id: { type: 'string' },
+                score: { type: 'number' },
+                max_score: { type: 'number' },
+                evaluation_title: { type: 'string' },
+                period: { type: 'string' },
+            },
+            required: ['student_id', 'subject_id', 'score'],
+        },
+    },
+    {
+        name: 'list_attendance',
+        description: 'Consulter le registre des présences',
+        permission: 'read:attendance',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                class_id: { type: 'string' },
+                date: { type: 'string' },
+                limit: { type: 'number' },
+            },
+        },
+    },
+    {
+        name: 'list_schedule',
+        description: 'Consulter l\'emploi du temps d\'une classe',
+        permission: 'read:schedule',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                class_id: { type: 'string' },
+                day_of_week: { type: 'string' },
+            },
+        },
+    },
+    {
+        name: 'update_schedule',
+        description: 'Ajouter ou modifier un créneau d\'emploi du temps',
+        permission: 'write:schedule',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                classroom_id: { type: 'string' },
+                subject_id: { type: 'string' },
+                day_of_week: { type: 'string' },
+                start_time: { type: 'string' },
+                end_time: { type: 'string' },
+            },
+            required: ['classroom_id', 'subject_id', 'day_of_week', 'start_time', 'end_time'],
         },
     },
 
@@ -561,6 +775,7 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
         // ── LIST ORGANIZATIONS (SUPERADMIN) ─────────────────────────────────
         case 'list_organizations':
         case 'list_orgs': {
+            if (!agent.isSuperadmin) throw { code: -32003, message: 'Réservé aux clés Superadmin' };
             const limit = Math.min(Number(args.limit) || 50, 100);
             const { data, error } = await supabase
                 .from('organizations')
@@ -573,15 +788,18 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
 
         // ── GET ORG INFO ────────────────────────────────────────────────────
         case 'get_org_info': {
-            const targetOrgId = (args.org_id as string) || agent.orgId;
+            const targetOrgId = agent.isSuperadmin ? ((args.org_id as string) || agent.orgId) : agent.orgId;
             if (!targetOrgId) {
-                const { data, error } = await supabase
-                    .from('organizations')
-                    .select('id, name, type, city, country, slug')
-                    .order('created_at', { ascending: true })
-                    .limit(1);
-                if (error) throw { code: -32002, message: error.message };
-                return { organization: data?.[0] || null, note: 'Organisation par défaut renvoyée. Pour une école précise, utilisez : { "org_id": "UUID" }' };
+                if (agent.isSuperadmin) {
+                    const { data, error } = await supabase
+                        .from('organizations')
+                        .select('id, name, type, city, country, slug')
+                        .order('created_at', { ascending: true })
+                        .limit(1);
+                    if (error) throw { code: -32002, message: error.message };
+                    return { organization: data?.[0] || null, note: 'Organisation par défaut renvoyée. Pour une école précise, utilisez : { "org_id": "UUID" }' };
+                }
+                throw { code: -32003, message: 'Aucune organisation rattachée à cet agent' };
             }
             const { data, error } = await supabase
                 .from('organizations')
@@ -594,7 +812,7 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
 
         // ── LIST CLASSES ────────────────────────────────────────────────────
         case 'list_classes': {
-            const targetOrgId = (args.org_id as string) || agent.orgId;
+            const targetOrgId = agent.isSuperadmin ? ((args.org_id as string) || agent.orgId) : agent.orgId;
             let query = supabase
                 .from('classrooms')
                 .select('id, name, cycle, level, capacity, organization_id')
@@ -650,11 +868,48 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
                 .eq('chapter_id', args.chapter_id as string)
                 .order('position');
             if (error) throw { code: -32002, message: error.message };
+
+            // Récupérer les exercices pour chaque leçon
+            const lessonIds = (data || []).map((l: any) => l.id);
+            let exercisesMap: Record<string, any[]> = {};
+            if (lessonIds.length > 0) {
+                const { data: exList } = await supabase
+                    .from('exercises')
+                    .select('id, lesson_id, title, type, max_score, duration_minutes, created_at')
+                    .in('lesson_id', lessonIds);
+                if (exList) {
+                    for (const ex of exList) {
+                        if (!exercisesMap[ex.lesson_id]) exercisesMap[ex.lesson_id] = [];
+                        exercisesMap[ex.lesson_id].push(ex);
+                    }
+                }
+            }
+
             const lessons = (data || []).map((l: Record<string, unknown>) => ({
                 ...l,
                 order_index: l.position,
+                exercises_count: (exercisesMap[l.id as string] || []).length,
+                exercises: exercisesMap[l.id as string] || [],
             }));
             return { lessons, total: lessons.length };
+        }
+
+        // ── LIST EXERCISES ───────────────────────────────────────────────────
+        case 'list_exercises': {
+            let query = supabase
+                .from('exercises')
+                .select('id, organization_id, chapter_id, lesson_id, title, type, questions, max_score, duration_minutes, created_at')
+                .order('created_at', { ascending: false })
+                .limit(100);
+
+            const targetOrgId = (args.org_id as string) || agent.orgId;
+            if (targetOrgId) query = query.eq('organization_id', targetOrgId);
+            if (args.lesson_id) query = query.eq('lesson_id', args.lesson_id as string);
+            if (args.chapter_id) query = query.eq('chapter_id', args.chapter_id as string);
+
+            const { data, error } = await query;
+            if (error) throw { code: -32002, message: error.message };
+            return { exercises: data || [], total: (data || []).length };
         }
 
         // ── CREATE SUBJECT ───────────────────────────────────────────────────
@@ -685,13 +940,44 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             };
         }
 
+        // ── UPDATE SUBJECT ───────────────────────────────────────────────────
+        case 'update_subject': {
+            if (!args.subject_id) throw { code: -32602, message: 'subject_id requis' };
+            const updatePayload: Record<string, unknown> = {};
+            if (args.name) updatePayload.name = args.name;
+            if (args.description !== undefined) updatePayload.description = args.description;
+
+            const { data, error } = await supabase
+                .from('subjects')
+                .update(updatePayload)
+                .eq('id', args.subject_id as string)
+                .select()
+                .single();
+            if (error) throw { code: -32002, message: error.message };
+            return { success: true, subject: data, message: `✅ Matière mise à jour` };
+        }
+
+        // ── DELETE SUBJECT ───────────────────────────────────────────────────
+        case 'delete_subject': {
+            if (!args.subject_id) throw { code: -32602, message: 'subject_id requis' };
+            const { error } = await supabase.from('subjects').delete().eq('id', args.subject_id as string);
+            if (error) throw { code: -32002, message: error.message };
+            return { success: true, message: `🗑️ Matière supprimée` };
+        }
+
         // ── CREATE CHAPTER ───────────────────────────────────────────────────
         case 'create_chapter': {
             if (!args.subject_id || !args.title) throw { code: -32602, message: '"subject_id" et "title" sont requis' };
             const targetOrgId = (args.org_id as string) || agent.orgId;
 
-            // Auto order_index si non fourni
-            let orderIndex = args.order_index as number;
+            // Vérifier existence matière
+            const { data: sub } = await supabase.from('subjects').select('id, organization_id').eq('id', args.subject_id as string).maybeSingle();
+            if (!sub) throw { code: -32602, message: `La matière parente (subject_id: "${args.subject_id}") n'existe pas` };
+            if (!agent.isSuperadmin && agent.orgId && sub.organization_id !== agent.orgId) {
+                throw { code: -32003, message: 'Accès refusé : la matière n\'appartient pas à votre établissement' };
+            }
+
+            let orderIndex = (args.position as number) || (args.order_index as number);
             if (!orderIndex) {
                 const { count } = await supabase
                     .from('chapters')
@@ -722,6 +1008,32 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             };
         }
 
+        // ── UPDATE CHAPTER ───────────────────────────────────────────────────
+        case 'update_chapter': {
+            if (!args.chapter_id) throw { code: -32602, message: 'chapter_id requis' };
+            const updatePayload: Record<string, unknown> = {};
+            if (args.title) updatePayload.title = args.title;
+            if (args.description !== undefined) updatePayload.description = args.description;
+            if (args.position !== undefined) updatePayload.position = args.position;
+
+            const { data, error } = await supabase
+                .from('chapters')
+                .update(updatePayload)
+                .eq('id', args.chapter_id as string)
+                .select()
+                .single();
+            if (error) throw { code: -32002, message: error.message };
+            return { success: true, chapter: data, message: `✅ Chapitre mis à jour` };
+        }
+
+        // ── DELETE CHAPTER ───────────────────────────────────────────────────
+        case 'delete_chapter': {
+            if (!args.chapter_id) throw { code: -32602, message: 'chapter_id requis' };
+            const { error } = await supabase.from('chapters').delete().eq('id', args.chapter_id as string);
+            if (error) throw { code: -32002, message: error.message };
+            return { success: true, message: `🗑️ Chapitre supprimé` };
+        }
+
         // ── CREATE LESSON ────────────────────────────────────────────────────
         case 'create_lesson': {
             if (!args.chapter_id || !args.title || !args.content) {
@@ -729,7 +1041,14 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             }
             const targetOrgId = (args.org_id as string) || agent.orgId;
 
-            let orderIndex = args.order_index as number;
+            // Vérifier existence chapitre
+            const { data: ch } = await supabase.from('chapters').select('id, organization_id').eq('id', args.chapter_id as string).maybeSingle();
+            if (!ch) throw { code: -32602, message: `Le chapitre parent (chapter_id: "${args.chapter_id}") n'existe pas` };
+            if (!agent.isSuperadmin && agent.orgId && ch.organization_id !== agent.orgId) {
+                throw { code: -32003, message: 'Accès refusé : le chapitre n\'appartient pas à votre établissement' };
+            }
+
+            let orderIndex = (args.position as number) || (args.order_index as number);
             if (!orderIndex) {
                 const { count } = await supabase
                     .from('lessons')
@@ -761,26 +1080,55 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             };
         }
 
-        // ── CREATE EXERCISE ───────────────────────────────────────────────────
+        // ── UPDATE LESSON ────────────────────────────────────────────────────
+        case 'update_lesson': {
+            if (!args.lesson_id) throw { code: -32602, message: 'lesson_id requis' };
+            const updatePayload: Record<string, unknown> = {};
+            if (args.title) updatePayload.title = args.title;
+            if (args.content !== undefined) updatePayload.content = args.content;
+            if (args.duration_minutes !== undefined) updatePayload.estimated_minutes = args.duration_minutes;
+            if (args.position !== undefined) updatePayload.position = args.position;
+
+            const { data, error } = await supabase
+                .from('lessons')
+                .update(updatePayload)
+                .eq('id', args.lesson_id as string)
+                .select()
+                .single();
+            if (error) throw { code: -32002, message: error.message };
+            return { success: true, lesson: data, message: `✅ Leçon mise à jour` };
+        }
+
+        // ── DELETE LESSON ────────────────────────────────────────────────────
+        case 'delete_lesson': {
+            if (!args.lesson_id) throw { code: -32602, message: 'lesson_id requis' };
+            const { error } = await supabase.from('lessons').delete().eq('id', args.lesson_id as string);
+            if (error) throw { code: -32002, message: error.message };
+            return { success: true, message: `🗑️ Leçon supprimée` };
+        }
+
+        // ── CREATE EXERCISE (AVEC VÉRIFICATION FK LESSON_ID) ─────────────────
         case 'create_exercise': {
             if (!args.lesson_id || !args.title) {
                 throw { code: -32602, message: '"lesson_id" et "title" sont requis' };
             }
 
-            // Récupérer lesson → chapter_id & organization_id
-            let chapterId = args.chapter_id as string;
-            let targetOrgId = (args.org_id as string) || agent.orgId;
-            if (args.lesson_id) {
-                const { data: les } = await supabase
-                    .from('lessons')
-                    .select('chapter_id, organization_id')
-                    .eq('id', args.lesson_id as string)
-                    .maybeSingle();
-                if (les) {
-                    if (!chapterId) chapterId = les.chapter_id;
-                    if (!targetOrgId) targetOrgId = les.organization_id;
-                }
+            // 🔒 VALIDATION FK STRICTE : Vérifier que la leçon existe
+            const { data: les } = await supabase
+                .from('lessons')
+                .select('id, chapter_id, organization_id')
+                .eq('id', args.lesson_id as string)
+                .maybeSingle();
+
+            if (!les) {
+                throw { code: -32602, message: `La leçon spécifiée (lesson_id: "${args.lesson_id}") n'existe pas dans l'établissement` };
             }
+            if (!agent.isSuperadmin && agent.orgId && les.organization_id !== agent.orgId) {
+                throw { code: -32003, message: 'Accès refusé : la leçon n\'appartient pas à votre établissement' };
+            }
+
+            const chapterId = les.chapter_id;
+            const targetOrgId = les.organization_id || (args.org_id as string) || agent.orgId;
 
             // Construire le tableau questions JSONB
             let questionsToSave: any[] = [];
@@ -812,7 +1160,7 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
                 .from('exercises')
                 .insert({
                     organization_id:  targetOrgId,
-                    chapter_id:       chapterId || null,
+                    chapter_id:       chapterId,
                     lesson_id:        args.lesson_id,
                     title:            args.title,
                     type:             (args.type as string) || 'qcm',
@@ -830,6 +1178,212 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
                 exercise: data,
                 message: `✅ Exercice "${args.title}" créé avec succès (${questionsToSave.length} question(s))`,
             };
+        }
+
+        // ── UPDATE EXERCISE ──────────────────────────────────────────────────
+        case 'update_exercise': {
+            if (!args.exercise_id) throw { code: -32602, message: 'exercise_id requis' };
+            const updatePayload: Record<string, unknown> = {};
+            if (args.title) updatePayload.title = args.title;
+            if (args.type) updatePayload.type = args.type;
+            if (args.questions) updatePayload.questions = args.questions;
+            if (args.max_score) updatePayload.max_score = Number(args.max_score);
+
+            const { data, error } = await supabase
+                .from('exercises')
+                .update(updatePayload)
+                .eq('id', args.exercise_id as string)
+                .select()
+                .single();
+            if (error) throw { code: -32002, message: error.message };
+            return { success: true, exercise: data, message: `✅ Exercice mis à jour` };
+        }
+
+        // ── DELETE EXERCISE ──────────────────────────────────────────────────
+        case 'delete_exercise': {
+            if (!args.exercise_id) throw { code: -32602, message: 'exercise_id requis' };
+            const { error } = await supabase.from('exercises').delete().eq('id', args.exercise_id as string);
+            if (error) throw { code: -32002, message: error.message };
+            return { success: true, message: `🗑️ Exercice supprimé` };
+        }
+
+        // ── BULK CREATE (CRÉATION EN MASSE DU CURSUS) ────────────────────────
+        case 'bulk_create': {
+            const targetOrgId = (args.org_id as string) || agent.orgId;
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+
+            let subjectId = args.subject_id as string;
+            const summary = { chapters: 0, lessons: 0, exercises: 0 };
+
+            // 1. Créer la matière si subject_name fourni
+            if (!subjectId && args.subject_name) {
+                const { data: sub, error: subErr } = await supabase
+                    .from('subjects')
+                    .insert({
+                        organization_id: targetOrgId,
+                        name: args.subject_name,
+                        classroom_id: args.class_id || null,
+                        code: String(args.subject_name).slice(0, 4).toUpperCase(),
+                        coefficient: 1,
+                    })
+                    .select()
+                    .single();
+                if (subErr) throw { code: -32002, message: subErr.message };
+                subjectId = sub.id;
+            }
+
+            // 2. Traiter l'arborescence complète
+            if (Array.isArray(args.chapters) && subjectId) {
+                for (let cIdx = 0; cIdx < args.chapters.length; cIdx++) {
+                    const chData = args.chapters[cIdx];
+                    const { data: ch, error: chErr } = await supabase
+                        .from('chapters')
+                        .insert({
+                            organization_id: targetOrgId,
+                            subject_id: subjectId,
+                            title: chData.title,
+                            description: chData.description || null,
+                            position: cIdx + 1,
+                            status: 'draft',
+                            created_by_ai: true,
+                            ai_agent_name: agent.agentName,
+                        })
+                        .select()
+                        .single();
+                    if (chErr) continue;
+                    summary.chapters++;
+
+                    if (Array.isArray(chData.lessons)) {
+                        for (let lIdx = 0; lIdx < chData.lessons.length; lIdx++) {
+                            const lData = chData.lessons[lIdx];
+                            const { data: les, error: lesErr } = await supabase
+                                .from('lessons')
+                                .insert({
+                                    organization_id: targetOrgId,
+                                    chapter_id: ch.id,
+                                    title: lData.title,
+                                    content: lData.content,
+                                    position: lIdx + 1,
+                                    estimated_minutes: lData.duration_minutes || 15,
+                                    status: 'published',
+                                    created_by_ai: true,
+                                    ai_agent_name: agent.agentName,
+                                })
+                                .select()
+                                .single();
+                            if (lesErr) continue;
+                            summary.lessons++;
+
+                            if (Array.isArray(lData.exercises)) {
+                                for (const exData of lData.exercises) {
+                                    const qList = Array.isArray(exData.questions) ? exData.questions : [{
+                                        id: 'q_1',
+                                        question: exData.question || exData.title,
+                                        type: exData.type || 'qcm',
+                                        options: exData.options || exData.choices || [],
+                                        choices: exData.choices || exData.options || [],
+                                        answer: exData.correct_answer || exData.answer || '',
+                                        correct_answer: exData.correct_answer || exData.answer || '',
+                                    }];
+                                    const { error: exErr } = await supabase
+                                        .from('exercises')
+                                        .insert({
+                                            organization_id: targetOrgId,
+                                            chapter_id: ch.id,
+                                            lesson_id: les.id,
+                                            title: exData.title,
+                                            type: exData.type || 'qcm',
+                                            questions: qList,
+                                            duration_minutes: exData.duration_minutes || 10,
+                                            max_score: exData.max_score || 20,
+                                            created_by_ai: true,
+                                            ai_agent_name: agent.agentName,
+                                        });
+                                    if (!exErr) summary.exercises++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return {
+                success: true,
+                subject_id: subjectId,
+                summary,
+                message: `⚡ Création en masse terminée : ${summary.chapters} chapitre(s), ${summary.lessons} leçon(s), ${summary.exercises} exercice(s)`,
+            };
+        }
+
+        // ── LIST GRADES ──────────────────────────────────────────────────────
+        case 'list_grades': {
+            const targetOrgId = (args.org_id as string) || agent.orgId;
+            let query = supabase.from('grades').select('*').limit(50);
+            if (targetOrgId) query = query.eq('organization_id', targetOrgId);
+            if (args.student_id) query = query.eq('student_id', args.student_id as string);
+            const { data, error } = await query;
+            if (error) throw { code: -32002, message: error.message };
+            return { grades: data || [], total: (data || []).length };
+        }
+
+        // ── CREATE GRADE ─────────────────────────────────────────────────────
+        case 'create_grade': {
+            const targetOrgId = (args.org_id as string) || agent.orgId;
+            const { data, error } = await supabase
+                .from('grades')
+                .insert({
+                    organization_id: targetOrgId,
+                    student_id: args.student_id,
+                    score: Number(args.score),
+                    max_score: Number(args.max_score || 20),
+                    title: args.evaluation_title || 'Évaluation',
+                    type: args.period || 'Trimestre 1',
+                })
+                .select()
+                .single();
+            if (error) throw { code: -32002, message: error.message };
+            return { success: true, grade: data, message: `✅ Note enregistrée` };
+        }
+
+        // ── LIST ATTENDANCE ──────────────────────────────────────────────────
+        case 'list_attendance': {
+            const targetOrgId = (args.org_id as string) || agent.orgId;
+            let query = supabase.from('attendances').select('*').limit(50);
+            if (targetOrgId) query = query.eq('organization_id', targetOrgId);
+            if (args.date) query = query.eq('date', args.date as string);
+            const { data, error } = await query;
+            if (error) throw { code: -32002, message: error.message };
+            return { attendances: data || [], total: (data || []).length };
+        }
+
+        // ── LIST SCHEDULE ────────────────────────────────────────────────────
+        case 'list_schedule': {
+            const targetOrgId = (args.org_id as string) || agent.orgId;
+            let query = supabase.from('timetables').select('*');
+            if (targetOrgId) query = query.eq('organization_id', targetOrgId);
+            if (args.class_id) query = query.eq('classroom_id', args.class_id as string);
+            const { data, error } = await query;
+            if (error) throw { code: -32002, message: error.message };
+            return { schedule: data || [], total: (data || []).length };
+        }
+
+        // ── UPDATE SCHEDULE ──────────────────────────────────────────────────
+        case 'update_schedule': {
+            const targetOrgId = (args.org_id as string) || agent.orgId;
+            const { data, error } = await supabase
+                .from('timetables')
+                .insert({
+                    organization_id: targetOrgId,
+                    classroom_id: args.classroom_id,
+                    subject_id: args.subject_id,
+                    day_of_week: args.day_of_week,
+                    start_time: args.start_time,
+                    end_time: args.end_time,
+                })
+                .select()
+                .single();
+            if (error) throw { code: -32002, message: error.message };
+            return { success: true, schedule: data, message: `✅ Emploi du temps mis à jour` };
         }
 
         // ── LIST STUDENTS ─────────────────────────────────────────────────────

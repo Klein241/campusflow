@@ -3324,9 +3324,15 @@ const WORKER_MCP_TOOLS = [
     },
     {
         name: 'list_lessons',
-        description: 'Lister les leçons d\'un chapitre',
+        description: 'Lister les leçons d\'un chapitre avec le nombre et détails des exercices associés',
         permission: 'read:curriculum',
         inputSchema: { type: 'object', properties: { chapter_id: { type: 'string' } }, required: ['chapter_id'] },
+    },
+    {
+        name: 'list_exercises',
+        description: 'Lister les exercices d\'une leçon ou d\'un chapitre',
+        permission: 'read:curriculum',
+        inputSchema: { type: 'object', properties: { lesson_id: { type: 'string' }, chapter_id: { type: 'string' } } },
     },
     {
         name: 'create_subject',
@@ -3335,22 +3341,112 @@ const WORKER_MCP_TOOLS = [
         inputSchema: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, class_id: { type: 'string' } }, required: ['name'] },
     },
     {
+        name: 'update_subject',
+        description: 'Modifier une matière existante',
+        permission: 'write:curriculum',
+        inputSchema: { type: 'object', properties: { subject_id: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' } }, required: ['subject_id'] },
+    },
+    {
+        name: 'delete_subject',
+        description: 'Supprimer une matière (et ses chapitres/leçons)',
+        permission: 'write:curriculum',
+        inputSchema: { type: 'object', properties: { subject_id: { type: 'string' } }, required: ['subject_id'] },
+    },
+    {
         name: 'create_chapter',
         description: 'Créer un chapitre dans une matière',
         permission: 'write:curriculum',
-        inputSchema: { type: 'object', properties: { subject_id: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, order_index: { type: 'number' } }, required: ['subject_id', 'title'] },
+        inputSchema: { type: 'object', properties: { subject_id: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, order_index: { type: 'number' }, position: { type: 'number' } }, required: ['subject_id', 'title'] },
+    },
+    {
+        name: 'update_chapter',
+        description: 'Modifier un chapitre existant',
+        permission: 'write:curriculum',
+        inputSchema: { type: 'object', properties: { chapter_id: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, position: { type: 'number' } }, required: ['chapter_id'] },
+    },
+    {
+        name: 'delete_chapter',
+        description: 'Supprimer un chapitre',
+        permission: 'write:curriculum',
+        inputSchema: { type: 'object', properties: { chapter_id: { type: 'string' } }, required: ['chapter_id'] },
     },
     {
         name: 'create_lesson',
         description: 'Créer une leçon dans un chapitre',
         permission: 'write:curriculum',
-        inputSchema: { type: 'object', properties: { chapter_id: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' }, duration_minutes: { type: 'number' } }, required: ['chapter_id', 'title', 'content'] },
+        inputSchema: { type: 'object', properties: { chapter_id: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' }, duration_minutes: { type: 'number' }, position: { type: 'number' } }, required: ['chapter_id', 'title', 'content'] },
+    },
+    {
+        name: 'update_lesson',
+        description: 'Modifier une leçon existante (titre, contenu markdown, durée)',
+        permission: 'write:curriculum',
+        inputSchema: { type: 'object', properties: { lesson_id: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' }, duration_minutes: { type: 'number' }, position: { type: 'number' } }, required: ['lesson_id'] },
+    },
+    {
+        name: 'delete_lesson',
+        description: 'Supprimer une leçon',
+        permission: 'write:curriculum',
+        inputSchema: { type: 'object', properties: { lesson_id: { type: 'string' } }, required: ['lesson_id'] },
     },
     {
         name: 'create_exercise',
-        description: 'Créer un exercice dans une leçon',
+        description: 'Créer un exercice dans une leçon (QCM, Vrai/Faux ou rédaction)',
         permission: 'write:exercises',
-        inputSchema: { type: 'object', properties: { lesson_id: { type: 'string' }, title: { type: 'string' }, question: { type: 'string' }, type: { type: 'string', enum: ['qcm', 'text', 'true_false'] }, choices: { type: 'array', items: { type: 'string' } }, correct_answer: { type: 'string' }, explanation: { type: 'string' } }, required: ['lesson_id', 'title', 'question', 'type', 'correct_answer'] },
+        inputSchema: { type: 'object', properties: { lesson_id: { type: 'string' }, title: { type: 'string' }, question: { type: 'string' }, type: { type: 'string', enum: ['qcm', 'text', 'true_false'] }, choices: { type: 'array', items: { type: 'string' } }, options: { type: 'array', items: { type: 'string' } }, correct_answer: { type: 'string' }, explanation: { type: 'string' }, questions: { type: 'array' }, max_score: { type: 'number' } }, required: ['lesson_id', 'title'] },
+    },
+    {
+        name: 'update_exercise',
+        description: 'Modifier un exercice existant',
+        permission: 'write:exercises',
+        inputSchema: { type: 'object', properties: { exercise_id: { type: 'string' }, title: { type: 'string' }, question: { type: 'string' }, type: { type: 'string' }, choices: { type: 'array' }, correct_answer: { type: 'string' }, explanation: { type: 'string' }, questions: { type: 'array' }, max_score: { type: 'number' } }, required: ['exercise_id'] },
+    },
+    {
+        name: 'delete_exercise',
+        description: 'Supprimer un exercice',
+        permission: 'write:exercises',
+        inputSchema: { type: 'object', properties: { exercise_id: { type: 'string' } }, required: ['exercise_id'] },
+    },
+    {
+        name: 'bulk_create',
+        description: 'Création en masse ultra-rapide (créer toute une arborescence matière/chapitres/leçons/exercices en 1 seul appel)',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                subject_name: { type: 'string', description: 'Nom de la matière (optionnel si subject_id fourni)' },
+                subject_id: { type: 'string', description: 'ID de la matière parente existante' },
+                class_id: { type: 'string', description: 'ID de la classe cible' },
+                chapters: {
+                    type: 'array',
+                    description: 'Liste des chapitres avec leçons et exercices imbriqués',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            title: { type: 'string' },
+                            description: { type: 'string' },
+                            lessons: {
+                                type: 'array',
+                                items: {
+                                    type: 'object',
+                                    properties: {
+                                        title: { type: 'string' },
+                                        content: { type: 'string' },
+                                        duration_minutes: { type: 'number' },
+                                        exercises: { type: 'array' },
+                                    },
+                                    required: ['title', 'content'],
+                                },
+                            },
+                        },
+                        required: ['title'],
+                    },
+                },
+                items: {
+                    type: 'array',
+                    description: 'Liste plate d\'éléments à créer (chapitres, leçons ou exercices)',
+                },
+            },
+        },
     },
     {
         name: 'list_students',
@@ -3369,6 +3465,36 @@ const WORKER_MCP_TOOLS = [
         description: 'Obtenir les informations générales de l\'organisation',
         permission: 'read:curriculum',
         inputSchema: { type: 'object', properties: {} },
+    },
+    {
+        name: 'list_grades',
+        description: 'Consulter les notes et évaluations des étudiants',
+        permission: 'read:grades',
+        inputSchema: { type: 'object', properties: { student_id: { type: 'string' }, class_id: { type: 'string' }, subject_id: { type: 'string' }, limit: { type: 'number' } } },
+    },
+    {
+        name: 'create_grade',
+        description: 'Enregistrer une note d\'évaluation pour un étudiant',
+        permission: 'write:grades',
+        inputSchema: { type: 'object', properties: { student_id: { type: 'string' }, subject_id: { type: 'string' }, score: { type: 'number' }, max_score: { type: 'number' }, evaluation_title: { type: 'string' }, period: { type: 'string' } }, required: ['student_id', 'subject_id', 'score'] },
+    },
+    {
+        name: 'list_attendance',
+        description: 'Consulter le registre des présences',
+        permission: 'read:attendance',
+        inputSchema: { type: 'object', properties: { class_id: { type: 'string' }, date: { type: 'string' }, limit: { type: 'number' } } },
+    },
+    {
+        name: 'list_schedule',
+        description: 'Consulter l\'emploi du temps d\'une classe',
+        permission: 'read:schedule',
+        inputSchema: { type: 'object', properties: { class_id: { type: 'string' }, day_of_week: { type: 'string' } } },
+    },
+    {
+        name: 'update_schedule',
+        description: 'Ajouter ou modifier un créneau d\'emploi du temps',
+        permission: 'write:schedule',
+        inputSchema: { type: 'object', properties: { classroom_id: { type: 'string' }, subject_id: { type: 'string' }, day_of_week: { type: 'string' }, start_time: { type: 'string' }, end_time: { type: 'string' }, room_name: { type: 'string' } }, required: ['classroom_id', 'subject_id', 'day_of_week', 'start_time', 'end_time'] },
     },
     // ── SUPERADMIN TOOLS ──
     {
@@ -3638,30 +3764,35 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
 async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx: { agentKey: any; isSuperadmin: boolean; orgId: string | null; agentName: string }, env: Env): Promise<any> {
     const db = env.CAMPUSFLOW_DB;
 
+    // 🔒 SÉCURITÉ MULTI-TENANT : Un agent d'école ne peut JAMAIS écraser targetOrgId
+    const targetOrgId = ctx.isSuperadmin ? (args.org_id || ctx.orgId) : ctx.orgId;
+
     switch (toolName) {
         // ── LIST ORGANIZATIONS (SUPERADMIN) ──
         case 'list_organizations':
         case 'list_orgs': {
+            if (!ctx.isSuperadmin) throw { code: -32003, message: 'Réservé aux clés Superadmin' };
             const limit = Math.min(Number(args.limit) || 50, 100);
-            const { results } = await db.prepare(`SELECT id, name, slug, school_type, city, country, is_active, created_at FROM organizations ORDER BY created_at DESC LIMIT ?1`).bind(limit).all();
+            const { results } = await db.prepare(`SELECT id, name, slug, plan, is_active, created_at FROM organizations ORDER BY created_at DESC LIMIT ?1`).bind(limit).all();
             return { organizations: results || [], total: (results || []).length };
         }
 
         // ── GET ORG INFO ──
         case 'get_org_info': {
-            const targetOrgId = args.org_id || ctx.orgId;
             if (!targetOrgId) {
-                const org = await db.prepare(`SELECT id, name, slug, school_type, city, country FROM organizations ORDER BY created_at ASC LIMIT 1`).first();
-                return { organization: org, note: 'Organisation par défaut renvoyée. Pour cibler une école précise, utilisez : { "org_id": "UUID_DE_L_ECOLE" }' };
+                if (ctx.isSuperadmin) {
+                    const org = await db.prepare(`SELECT id, name, slug, plan, is_active, created_at FROM organizations ORDER BY created_at ASC LIMIT 1`).first();
+                    return { organization: org, note: 'Organisation par défaut renvoyée. Pour cibler une école précise, utilisez : { "org_id": "UUID_DE_L_ECOLE" }' };
+                }
+                throw { code: -32003, message: 'Aucune organisation rattachée à cet agent' };
             }
-            const org = await db.prepare(`SELECT id, name, slug, school_type, city, country FROM organizations WHERE id = ?1`).bind(targetOrgId).first();
+            const org = await db.prepare(`SELECT id, name, slug, plan, is_active, created_at FROM organizations WHERE id = ?1`).bind(targetOrgId).first();
             return { organization: org };
         }
 
         // ── LIST CLASSES ──
         case 'list_classes': {
-            const targetOrgId = args.org_id || ctx.orgId;
-            let sql = `SELECT id, name, cycle, level, capacity, organization_id FROM classrooms`;
+            let sql = `SELECT id, name, level, section, capacity, academic_year, organization_id FROM classrooms`;
             const params: any[] = [];
             if (targetOrgId) {
                 sql += ` WHERE organization_id = ?1`;
@@ -3674,8 +3805,7 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
 
         // ── LIST SUBJECTS ──
         case 'list_subjects': {
-            const targetOrgId = args.org_id || ctx.orgId;
-            let sql = `SELECT id, name, description, classroom_id, organization_id FROM subjects`;
+            let sql = `SELECT id, name, code, coefficient, classroom_id, organization_id FROM subjects`;
             const conditions: string[] = [];
             const params: any[] = [];
             if (targetOrgId) {
@@ -3697,6 +3827,13 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         // ── LIST CHAPTERS ──
         case 'list_chapters': {
             if (!args.subject_id) throw { code: -32602, message: 'subject_id requis' };
+            // Vérification de propriété
+            if (!ctx.isSuperadmin && ctx.orgId) {
+                const sub: any = await db.prepare(`SELECT organization_id FROM subjects WHERE id = ?1`).bind(args.subject_id).first();
+                if (sub && sub.organization_id !== ctx.orgId) {
+                    throw { code: -32003, message: 'Accès refusé : cette matière n\'appartient pas à votre établissement' };
+                }
+            }
             const { results } = await db.prepare(`SELECT id, title, description, position, status, subject_id FROM chapters WHERE subject_id = ?1 ORDER BY position ASC`).bind(args.subject_id).all();
             const chapters = (results || []).map((ch: any) => ({
                 ...ch,
@@ -3708,58 +3845,201 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         // ── LIST LESSONS ──
         case 'list_lessons': {
             if (!args.chapter_id) throw { code: -32602, message: 'chapter_id requis' };
+            // Vérification de propriété
+            if (!ctx.isSuperadmin && ctx.orgId) {
+                const ch: any = await db.prepare(`SELECT organization_id FROM chapters WHERE id = ?1`).bind(args.chapter_id).first();
+                if (ch && ch.organization_id !== ctx.orgId) {
+                    throw { code: -32003, message: 'Accès refusé : ce chapitre n\'appartient pas à votre établissement' };
+                }
+            }
             const { results } = await db.prepare(`SELECT id, title, content, position, estimated_minutes, status, chapter_id FROM lessons WHERE chapter_id = ?1 ORDER BY position ASC`).bind(args.chapter_id).all();
+
+            // Récupérer les exercices de chaque leçon
+            const lessonIds = (results || []).map((l: any) => l.id);
+            const exercisesMap: Record<string, any[]> = {};
+            if (lessonIds.length > 0) {
+                for (const lId of lessonIds) {
+                    const { results: exList } = await db.prepare(`SELECT id, title, type, max_score, duration_minutes, created_at FROM exercises WHERE lesson_id = ?1`).bind(lId).all();
+                    exercisesMap[lId] = exList || [];
+                }
+            }
+
             const lessons = (results || []).map((l: any) => ({
                 ...l,
                 order_index: l.position,
+                exercises_count: (exercisesMap[l.id] || []).length,
+                exercises: exercisesMap[l.id] || [],
             }));
             return { lessons, total: lessons.length };
+        }
+
+        // ── LIST EXERCISES ──
+        case 'list_exercises': {
+            let sql = `SELECT id, organization_id, chapter_id, lesson_id, title, type, questions, max_score, duration_minutes, created_at FROM exercises`;
+            const conditions: string[] = [];
+            const params: any[] = [];
+            if (targetOrgId) {
+                params.push(targetOrgId);
+                conditions.push(`organization_id = ?${params.length}`);
+            }
+            if (args.lesson_id) {
+                params.push(args.lesson_id);
+                conditions.push(`lesson_id = ?${params.length}`);
+            }
+            if (args.chapter_id) {
+                params.push(args.chapter_id);
+                conditions.push(`chapter_id = ?${params.length}`);
+            }
+            if (conditions.length > 0) sql += ` WHERE ` + conditions.join(' AND ');
+            sql += ` ORDER BY created_at DESC LIMIT 100`;
+            const { results } = await db.prepare(sql).bind(...params).all();
+            return { exercises: results || [], total: (results || []).length };
         }
 
         // ── CREATE SUBJECT ──
         case 'create_subject': {
             if (!args.name) throw { code: -32602, message: 'name requis' };
-            const targetOrgId = args.org_id || ctx.orgId;
-            if (!targetOrgId) throw { code: -32602, message: 'org_id requis (passer "org_id" dans les arguments pour créer une matière)' };
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
             const id = crypto.randomUUID();
-            await db.prepare(`INSERT INTO subjects (id, organization_id, name, description, classroom_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)`)
-                .bind(id, targetOrgId, args.name, args.description || null, args.class_id || null, new Date().toISOString()).run();
-            syncToSupabase(env, 'subjects', 'INSERT', { id, organization_id: targetOrgId, name: args.name, description: args.description, classroom_id: args.class_id });
+            const code = (args.code || String(args.name).slice(0, 4)).toUpperCase();
+            await db.prepare(`INSERT INTO subjects (id, organization_id, name, code, coefficient, classroom_id, is_active, created_at) VALUES (?1, ?2, ?3, ?4, 1, ?5, 1, ?6)`)
+                .bind(id, targetOrgId, args.name, code, args.class_id || null, new Date().toISOString()).run();
+            syncToSupabase(env, 'subjects', 'INSERT', { id, organization_id: targetOrgId, name: args.name, classroom_id: args.class_id, code });
             return { success: true, subject_id: id, message: `✅ Matière "${args.name}" créée sur Cloudflare D1` };
+        }
+
+        // ── UPDATE SUBJECT ──
+        case 'update_subject': {
+            if (!args.subject_id) throw { code: -32602, message: 'subject_id requis' };
+            const sub: any = await db.prepare(`SELECT organization_id FROM subjects WHERE id = ?1`).bind(args.subject_id).first();
+            if (!sub) throw { code: -32602, message: 'Matière introuvable' };
+            if (!ctx.isSuperadmin && ctx.orgId && sub.organization_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
+
+            if (args.name) {
+                await db.prepare(`UPDATE subjects SET name = ?1, classroom_id = COALESCE(?2, classroom_id) WHERE id = ?3`)
+                    .bind(args.name, args.class_id || null, args.subject_id).run();
+                syncToSupabase(env, 'subjects', 'UPDATE', { id: args.subject_id, name: args.name, classroom_id: args.class_id });
+            }
+            return { success: true, message: `✅ Matière mise à jour` };
+        }
+
+        // ── DELETE SUBJECT ──
+        case 'delete_subject': {
+            if (!args.subject_id) throw { code: -32602, message: 'subject_id requis' };
+            const sub: any = await db.prepare(`SELECT organization_id FROM subjects WHERE id = ?1`).bind(args.subject_id).first();
+            if (!sub) throw { code: -32602, message: 'Matière introuvable' };
+            if (!ctx.isSuperadmin && ctx.orgId && sub.organization_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
+
+            await db.prepare(`DELETE FROM subjects WHERE id = ?1`).bind(args.subject_id).run();
+            syncToSupabase(env, 'subjects', 'DELETE', { id: args.subject_id });
+            return { success: true, message: `🗑️ Matière supprimée` };
         }
 
         // ── CREATE CHAPTER ──
         case 'create_chapter': {
             if (!args.subject_id || !args.title) throw { code: -32602, message: 'subject_id et title requis' };
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+            const sub: any = await db.prepare(`SELECT organization_id FROM subjects WHERE id = ?1`).bind(args.subject_id).first();
+            if (!sub) throw { code: -32602, message: `La matière parente (subject_id: "${args.subject_id}") n'existe pas` };
+            if (!ctx.isSuperadmin && ctx.orgId && sub.organization_id !== ctx.orgId) {
+                throw { code: -32003, message: 'Accès refusé : la matière n\'appartient pas à votre établissement' };
+            }
             const id = crypto.randomUUID();
             const position = Number(args.position ?? args.order_index) || 1;
-            const targetOrgId = args.org_id || ctx.orgId;
-            await db.prepare(`INSERT INTO chapters (id, organization_id, subject_id, title, description, position, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)`)
-                .bind(id, targetOrgId, args.subject_id, args.title, args.description || null, position, new Date().toISOString()).run();
+            const now = new Date().toISOString();
+            await db.prepare(`INSERT INTO chapters (id, organization_id, subject_id, title, description, position, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', ?7, ?7)`)
+                .bind(id, targetOrgId, args.subject_id, args.title, args.description || '', position, now).run();
             syncToSupabase(env, 'chapters', 'INSERT', { id, organization_id: targetOrgId, subject_id: args.subject_id, title: args.title, description: args.description, position });
             return { success: true, chapter_id: id, message: `✅ Chapitre "${args.title}" créé sur Cloudflare D1` };
+        }
+
+        // ── UPDATE CHAPTER ──
+        case 'update_chapter': {
+            if (!args.chapter_id) throw { code: -32602, message: 'chapter_id requis' };
+            const ch: any = await db.prepare(`SELECT organization_id FROM chapters WHERE id = ?1`).bind(args.chapter_id).first();
+            if (!ch) throw { code: -32602, message: 'Chapitre introuvable' };
+            if (!ctx.isSuperadmin && ctx.orgId && ch.organization_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
+
+            const now = new Date().toISOString();
+            await db.prepare(`UPDATE chapters SET title = COALESCE(?1, title), description = COALESCE(?2, description), position = COALESCE(?3, position), updated_at = ?4 WHERE id = ?5`)
+                .bind(args.title || null, args.description || null, args.position || null, now, args.chapter_id).run();
+            syncToSupabase(env, 'chapters', 'UPDATE', { id: args.chapter_id, title: args.title, description: args.description, position: args.position });
+            return { success: true, message: `✅ Chapitre mis à jour` };
+        }
+
+        // ── DELETE CHAPTER ──
+        case 'delete_chapter': {
+            if (!args.chapter_id) throw { code: -32602, message: 'chapter_id requis' };
+            const ch: any = await db.prepare(`SELECT organization_id FROM chapters WHERE id = ?1`).bind(args.chapter_id).first();
+            if (!ch) throw { code: -32602, message: 'Chapitre introuvable' };
+            if (!ctx.isSuperadmin && ctx.orgId && ch.organization_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
+
+            await db.prepare(`DELETE FROM chapters WHERE id = ?1`).bind(args.chapter_id).run();
+            syncToSupabase(env, 'chapters', 'DELETE', { id: args.chapter_id });
+            return { success: true, message: `🗑️ Chapitre supprimé` };
         }
 
         // ── CREATE LESSON ──
         case 'create_lesson': {
             if (!args.chapter_id || !args.title || !args.content) throw { code: -32602, message: 'chapter_id, title et content requis' };
-            const targetOrgId = args.org_id || ctx.orgId;
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+            const ch: any = await db.prepare(`SELECT organization_id FROM chapters WHERE id = ?1`).bind(args.chapter_id).first();
+            if (!ch) throw { code: -32602, message: `Le chapitre parent (chapter_id: "${args.chapter_id}") n'existe pas` };
+            if (!ctx.isSuperadmin && ctx.orgId && ch.organization_id !== ctx.orgId) {
+                throw { code: -32003, message: 'Accès refusé : le chapitre n\'appartient pas à votre établissement' };
+            }
             const id = crypto.randomUUID();
             const duration = Number(args.duration_minutes || args.estimated_minutes) || 15;
             const position = Number(args.position ?? args.order_index) || 1;
             const now = new Date().toISOString();
-            await db.prepare(`INSERT INTO lessons (id, organization_id, chapter_id, title, content, estimated_minutes, status, position, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', ?7, ?8, ?8)`)
+            await db.prepare(`INSERT INTO lessons (id, organization_id, chapter_id, title, content, estimated_minutes, status, position, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', ?7, ?8)`)
                 .bind(id, targetOrgId, args.chapter_id, args.title, args.content, duration, position, now).run();
             syncToSupabase(env, 'lessons', 'INSERT', { id, organization_id: targetOrgId, chapter_id: args.chapter_id, title: args.title, content: args.content, estimated_minutes: duration, status: 'published', position });
             return { success: true, lesson_id: id, message: `✅ Leçon "${args.title}" créée et publiée sur Cloudflare D1` };
         }
 
-        // ── CREATE EXERCISE ──
+        // ── UPDATE LESSON ──
+        case 'update_lesson': {
+            if (!args.lesson_id) throw { code: -32602, message: 'lesson_id requis' };
+            const les: any = await db.prepare(`SELECT organization_id FROM lessons WHERE id = ?1`).bind(args.lesson_id).first();
+            if (!les) throw { code: -32602, message: 'Leçon introuvable' };
+            if (!ctx.isSuperadmin && ctx.orgId && les.organization_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
+
+            await db.prepare(`UPDATE lessons SET title = COALESCE(?1, title), content = COALESCE(?2, content), estimated_minutes = COALESCE(?3, estimated_minutes), position = COALESCE(?4, position) WHERE id = ?5`)
+                .bind(args.title || null, args.content || null, args.duration_minutes || null, args.position || null, args.lesson_id).run();
+            syncToSupabase(env, 'lessons', 'UPDATE', { id: args.lesson_id, title: args.title, content: args.content, estimated_minutes: args.duration_minutes, position: args.position });
+            return { success: true, message: `✅ Leçon mise à jour` };
+        }
+
+        // ── DELETE LESSON ──
+        case 'delete_lesson': {
+            if (!args.lesson_id) throw { code: -32602, message: 'lesson_id requis' };
+            const les: any = await db.prepare(`SELECT organization_id FROM lessons WHERE id = ?1`).bind(args.lesson_id).first();
+            if (!les) throw { code: -32602, message: 'Leçon introuvable' };
+            if (!ctx.isSuperadmin && ctx.orgId && les.organization_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
+
+            await db.prepare(`DELETE FROM lessons WHERE id = ?1`).bind(args.lesson_id).run();
+            syncToSupabase(env, 'lessons', 'DELETE', { id: args.lesson_id });
+            return { success: true, message: `🗑️ Leçon supprimée` };
+        }
+
+        // ── CREATE EXERCISE (AVEC VALIDATION FK LESSON_ID) ──
         case 'create_exercise': {
             if (!args.lesson_id || !args.title) throw { code: -32602, message: 'lesson_id et title requis' };
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+
+            // 🔒 VALIDATION FK STRICTE : Vérifier que la leçon existe réellement
+            const les: any = await db.prepare(`SELECT id, organization_id, chapter_id FROM lessons WHERE id = ?1`).bind(args.lesson_id).first();
+            if (!les) {
+                throw { code: -32602, message: `La leçon spécifiée (lesson_id: "${args.lesson_id}") n'existe pas dans l'établissement` };
+            }
+            if (!ctx.isSuperadmin && ctx.orgId && les.organization_id !== ctx.orgId) {
+                throw { code: -32003, message: 'Accès refusé : la leçon n\'appartient pas à votre établissement' };
+            }
+
+            const chapterId = les.chapter_id;
             const id = crypto.randomUUID();
             const now = new Date().toISOString();
-            const targetOrgId = args.org_id || ctx.orgId;
 
             // Construire questions JSONB
             let questionsToSave: any[] = [];
@@ -3791,12 +4071,13 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             const duration = Number(args.duration_minutes) || 10;
             const maxScore = Number(args.max_score) || 20;
 
-            await db.prepare(`INSERT INTO exercises (id, organization_id, lesson_id, title, type, questions, duration_minutes, max_score, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`)
-                .bind(id, targetOrgId, args.lesson_id, args.title, args.type || 'qcm', questionsStr, duration, maxScore, now).run();
+            await db.prepare(`INSERT INTO exercises (id, organization_id, chapter_id, lesson_id, title, type, questions, duration_minutes, max_score, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`)
+                .bind(id, targetOrgId, chapterId, args.lesson_id, args.title, args.type || 'qcm', questionsStr, duration, maxScore, now).run();
 
             syncToSupabase(env, 'exercises', 'INSERT', {
                 id,
                 organization_id: targetOrgId,
+                chapter_id: chapterId,
                 lesson_id: args.lesson_id,
                 title: args.title,
                 type: args.type || 'qcm',
@@ -3804,7 +4085,7 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 duration_minutes: duration,
                 max_score: maxScore,
                 created_by_ai: true,
-                ai_agent_name: 'Sky Agent',
+                ai_agent_name: ctx.agentName,
             });
 
             return {
@@ -3814,9 +4095,194 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             };
         }
 
+        // ── UPDATE EXERCISE ──
+        case 'update_exercise': {
+            if (!args.exercise_id) throw { code: -32602, message: 'exercise_id requis' };
+            const ex: any = await db.prepare(`SELECT organization_id FROM exercises WHERE id = ?1`).bind(args.exercise_id).first();
+            if (!ex) throw { code: -32602, message: 'Exercice introuvable' };
+            if (!ctx.isSuperadmin && ctx.orgId && ex.organization_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
+
+            let questionsStr: string | null = null;
+            if (Array.isArray(args.questions)) {
+                questionsStr = JSON.stringify(args.questions);
+            }
+            await db.prepare(`UPDATE exercises SET title = COALESCE(?1, title), type = COALESCE(?2, type), questions = COALESCE(?3, questions), max_score = COALESCE(?4, max_score), duration_minutes = COALESCE(?5, duration_minutes) WHERE id = ?6`)
+                .bind(args.title || null, args.type || null, questionsStr, args.max_score || null, args.duration_minutes || null, args.exercise_id).run();
+            syncToSupabase(env, 'exercises', 'UPDATE', { id: args.exercise_id, title: args.title, type: args.type, questions: args.questions, max_score: args.max_score });
+            return { success: true, message: `✅ Exercice mis à jour` };
+        }
+
+        // ── DELETE EXERCISE ──
+        case 'delete_exercise': {
+            if (!args.exercise_id) throw { code: -32602, message: 'exercise_id requis' };
+            const ex: any = await db.prepare(`SELECT organization_id FROM exercises WHERE id = ?1`).bind(args.exercise_id).first();
+            if (!ex) throw { code: -32602, message: 'Exercice introuvable' };
+            if (!ctx.isSuperadmin && ctx.orgId && ex.organization_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
+
+            await db.prepare(`DELETE FROM exercises WHERE id = ?1`).bind(args.exercise_id).run();
+            syncToSupabase(env, 'exercises', 'DELETE', { id: args.exercise_id });
+            return { success: true, message: `🗑️ Exercice supprimé` };
+        }
+
+        // ── BULK CREATE (CRÉATION EN MASSE DU CURSUS) ──
+        case 'bulk_create': {
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+            let subjectId = args.subject_id;
+            const now = new Date().toISOString();
+            let createdCount = 0;
+            const createdSummary: { chapters: number; lessons: number; exercises: number } = { chapters: 0, lessons: 0, exercises: 0 };
+
+            // 1. Créer la matière si subject_name est fourni
+            if (!subjectId && args.subject_name) {
+                subjectId = crypto.randomUUID();
+                const code = (args.code || String(args.subject_name).slice(0, 4)).toUpperCase();
+                await db.prepare(`INSERT INTO subjects (id, organization_id, name, code, coefficient, classroom_id, is_active, created_at) VALUES (?1, ?2, ?3, ?4, 1, ?5, 1, ?6)`)
+                    .bind(subjectId, targetOrgId, args.subject_name, code, args.class_id || null, now).run();
+                syncToSupabase(env, 'subjects', 'INSERT', { id: subjectId, organization_id: targetOrgId, name: args.subject_name, classroom_id: args.class_id, code });
+            }
+
+            // 2. Traiter l'arborescence complète chapters -> lessons -> exercises
+            if (Array.isArray(args.chapters) && subjectId) {
+                for (let cIdx = 0; cIdx < args.chapters.length; cIdx++) {
+                    const chData = args.chapters[cIdx];
+                    const chId = crypto.randomUUID();
+                    const chPos = cIdx + 1;
+                    await db.prepare(`INSERT INTO chapters (id, organization_id, subject_id, title, description, position, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', ?7, ?7)`)
+                        .bind(chId, targetOrgId, subjectId, chData.title, chData.description || '', chPos, now).run();
+                    syncToSupabase(env, 'chapters', 'INSERT', { id: chId, organization_id: targetOrgId, subject_id: subjectId, title: chData.title, position: chPos });
+                    createdSummary.chapters++;
+                    createdCount++;
+
+                    if (Array.isArray(chData.lessons)) {
+                        for (let lIdx = 0; lIdx < chData.lessons.length; lIdx++) {
+                            const lData = chData.lessons[lIdx];
+                            const lId = crypto.randomUUID();
+                            const lPos = lIdx + 1;
+                            const dur = Number(lData.duration_minutes) || 15;
+                            await db.prepare(`INSERT INTO lessons (id, organization_id, chapter_id, title, content, estimated_minutes, status, position, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', ?7, ?8)`)
+                                .bind(lId, targetOrgId, chId, lData.title, lData.content, dur, lPos, now).run();
+                            syncToSupabase(env, 'lessons', 'INSERT', { id: lId, organization_id: targetOrgId, chapter_id: chId, title: lData.title, content: lData.content, position: lPos });
+                            createdSummary.lessons++;
+                            createdCount++;
+
+                            if (Array.isArray(lData.exercises)) {
+                                for (const exData of lData.exercises) {
+                                    const exId = crypto.randomUUID();
+                                    const qList = Array.isArray(exData.questions) ? exData.questions : [{
+                                        id: 'q_1',
+                                        question: exData.question || exData.title,
+                                        type: exData.type || 'qcm',
+                                        options: exData.options || exData.choices || [],
+                                        choices: exData.choices || exData.options || [],
+                                        answer: exData.correct_answer || exData.answer || '',
+                                        correct_answer: exData.correct_answer || exData.answer || '',
+                                    }];
+                                    const qStr = JSON.stringify(qList);
+                                    await db.prepare(`INSERT INTO exercises (id, organization_id, chapter_id, lesson_id, title, type, questions, duration_minutes, max_score, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`)
+                                        .bind(exId, targetOrgId, chId, lId, exData.title, exData.type || 'qcm', qStr, Number(exData.duration_minutes) || 10, Number(exData.max_score) || 20, now).run();
+                                    syncToSupabase(env, 'exercises', 'INSERT', { id: exId, organization_id: targetOrgId, chapter_id: chId, lesson_id: lId, title: exData.title, questions: qList, created_by_ai: true });
+                                    createdSummary.exercises++;
+                                    createdCount++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return {
+                success: true,
+                subject_id: subjectId,
+                created_total: createdCount,
+                summary: createdSummary,
+                message: `⚡ Création en masse terminée : ${createdSummary.chapters} chapitre(s), ${createdSummary.lessons} leçon(s), ${createdSummary.exercises} exercice(s)`,
+            };
+        }
+
+        // ── LIST GRADES ──
+        case 'list_grades': {
+            let sql = `SELECT id, student_id, score, max_score, title, type, created_at FROM grades`;
+            const conditions: string[] = [];
+            const params: any[] = [];
+            if (targetOrgId) {
+                params.push(targetOrgId);
+                conditions.push(`organization_id = ?${params.length}`);
+            }
+            if (args.student_id) {
+                params.push(args.student_id);
+                conditions.push(`student_id = ?${params.length}`);
+            }
+            if (conditions.length > 0) sql += ` WHERE ` + conditions.join(' AND ');
+            sql += ` ORDER BY created_at DESC LIMIT 50`;
+            const { results } = await db.prepare(sql).bind(...params).all();
+            return { grades: results || [], total: (results || []).length };
+        }
+
+        // ── CREATE GRADE ──
+        case 'create_grade': {
+            if (!args.student_id || args.score === undefined) throw { code: -32602, message: 'student_id et score requis' };
+            const id = crypto.randomUUID();
+            const now = new Date().toISOString();
+            await db.prepare(`INSERT INTO grades (id, organization_id, student_id, score, max_score, title, type, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`)
+                .bind(id, targetOrgId, args.student_id, Number(args.score), Number(args.max_score || 20), args.evaluation_title || 'Évaluation', args.period || 'Trimestre 1', now).run();
+            syncToSupabase(env, 'grades', 'INSERT', { id, organization_id: targetOrgId, student_id: args.student_id, score: Number(args.score), max_score: Number(args.max_score || 20), title: args.evaluation_title, type: args.period });
+            return { success: true, grade_id: id, message: `✅ Note enregistrée` };
+        }
+
+        // ── LIST ATTENDANCE ──
+        case 'list_attendance': {
+            let sql = `SELECT id, student_id, status, date, notes, created_at FROM attendances`;
+            const conditions: string[] = [];
+            const params: any[] = [];
+            if (targetOrgId) {
+                params.push(targetOrgId);
+                conditions.push(`organization_id = ?${params.length}`);
+            }
+            if (args.date) {
+                params.push(args.date);
+                conditions.push(`date = ?${params.length}`);
+            }
+            if (conditions.length > 0) sql += ` WHERE ` + conditions.join(' AND ');
+            sql += ` ORDER BY date DESC LIMIT 50`;
+            const { results } = await db.prepare(sql).bind(...params).all();
+            return { attendances: results || [], total: (results || []).length };
+        }
+
+        // ── LIST SCHEDULE ──
+        case 'list_schedule': {
+            let sql = `SELECT id, classroom_id, subject_id, day_of_week, start_time, end_time, room_name FROM timetables`;
+            const conditions: string[] = [];
+            const params: any[] = [];
+            if (targetOrgId) {
+                params.push(targetOrgId);
+                conditions.push(`organization_id = ?${params.length}`);
+            }
+            if (args.class_id) {
+                params.push(args.class_id);
+                conditions.push(`classroom_id = ?${params.length}`);
+            }
+            if (conditions.length > 0) sql += ` WHERE ` + conditions.join(' AND ');
+            sql += ` ORDER BY day_of_week, start_time ASC`;
+            const { results } = await db.prepare(sql).bind(...params).all();
+            return { schedule: results || [], total: (results || []).length };
+        }
+
+        // ── UPDATE SCHEDULE ──
+        case 'update_schedule': {
+            if (!args.classroom_id || !args.subject_id || !args.day_of_week || !args.start_time || !args.end_time) {
+                throw { code: -32602, message: 'classroom_id, subject_id, day_of_week, start_time et end_time requis' };
+            }
+            const id = args.schedule_id || crypto.randomUUID();
+            const now = new Date().toISOString();
+            await db.prepare(`INSERT INTO timetables (id, organization_id, classroom_id, subject_id, day_of_week, start_time, end_time, room_name, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`)
+                .bind(id, targetOrgId, args.classroom_id, args.subject_id, args.day_of_week, args.start_time, args.end_time, args.room_name || null, now).run();
+            syncToSupabase(env, 'timetables', 'INSERT', { id, organization_id: targetOrgId, classroom_id: args.classroom_id, subject_id: args.subject_id, day_of_week: args.day_of_week, start_time: args.start_time, end_time: args.end_time });
+            return { success: true, schedule_id: id, message: `✅ Emploi du temps mis à jour` };
+        }
+
         // ── LIST STUDENTS ──
         case 'list_students': {
-            const targetOrgId = args.org_id || ctx.orgId;
+            if (!ctx.isSuperadmin && !ctx.orgId) throw { code: -32003, message: 'Non autorisé' };
             const limit = Math.min(Number(args.limit) || 50, 100);
             let sql = `SELECT id, first_name, last_name, gender, classroom_id, organization_id FROM student_profiles`;
             const params: any[] = [];

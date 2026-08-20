@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/lib/supabase';
+import { checkHumanActionRateLimit } from '@/lib/anti-bot-guard';
 import { compressImage } from '@/lib/compress';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -297,6 +298,13 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
 
     const createLesson = async () => {
         if (!lessonForm.title || !selectedChId) return;
+
+        const rateCheck = checkHumanActionRateLimit('leçon');
+        if (!rateCheck.allowed) {
+            toast.error(rateCheck.reason);
+            return;
+        }
+
         setSavingLesson(true);
         const pos = chLessons.length;
         const { data, error } = await supabase.from('lessons').insert({
@@ -347,6 +355,12 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
         }
         if (!selectedChId) {
             toast.error('Veuillez sélectionner un chapitre pour cet exercice');
+            return;
+        }
+
+        const rateCheck = checkHumanActionRateLimit('exercice');
+        if (!rateCheck.allowed) {
+            toast.error(rateCheck.reason);
             return;
         }
 
