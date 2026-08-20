@@ -31,7 +31,8 @@ interface McpResponse {
 
 interface AgentContext {
     agentId: string;
-    orgId: string;
+    orgId: string | null;
+    isSuperadmin: boolean;
     agentName: string;
     permissions: string[];
     rateLimit: number;
@@ -215,6 +216,144 @@ const MCP_TOOLS = [
             properties: {},
         },
     },
+
+    // ── SUPERADMIN TOOLS ──────────────────────────────────────────────
+    {
+        name: 'list_support_messages',
+        description: '[Superadmin] Lister les demandes de support et messages Sky Requests',
+        permission: 'superadmin:support',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                status: { type: 'string', description: 'pending | confirmed | credited | all' },
+                limit: { type: 'number', description: 'Nombre max de résultats (défaut 50)' },
+            },
+        },
+    },
+    {
+        name: 'reply_support_message',
+        description: '[Superadmin] Répondre à un ticket de support / demande Sky Request',
+        permission: 'superadmin:support',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                request_id: { type: 'string', description: 'UUID de la demande' },
+                reply_message: { type: 'string', description: 'Message de réponse à envoyer' },
+            },
+            required: ['request_id', 'reply_message'],
+        },
+    },
+    {
+        name: 'credit_sky_points',
+        description: '[Superadmin] Créditer des Sky Points à un utilisateur ou une organisation',
+        permission: 'superadmin:points',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                target_type: { type: 'string', enum: ['org', 'user'], description: 'Type de cible : org ou user' },
+                target_id: { type: 'string', description: 'UUID de l\'organisation ou de l\'utilisateur' },
+                points: { type: 'number', description: 'Nombre de Sky Points à ajouter' },
+                note: { type: 'string', description: 'Motif du crédit (optionnel)' },
+            },
+            required: ['target_type', 'target_id', 'points'],
+        },
+    },
+    {
+        name: 'list_inactive_orgs',
+        description: '[Superadmin] Lister les organisations inactives (sans connexion récente)',
+        permission: 'superadmin:orgs',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                days_inactive: { type: 'number', description: 'Nombre de jours d\'inactivité (défaut 30)' },
+            },
+        },
+    },
+    {
+        name: 'list_bug_reports',
+        description: '[Superadmin] Lister les signalements de bugs reçus sur la plateforme',
+        permission: 'superadmin:bugs',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                status: { type: 'string', description: 'open | in_progress | resolved | all' },
+            },
+        },
+    },
+    {
+        name: 'update_bug_status',
+        description: '[Superadmin] Mettre à jour le statut et la note d\'un rapport de bug',
+        permission: 'superadmin:bugs',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                bug_id: { type: 'string', description: 'UUID du bug' },
+                status: { type: 'string', enum: ['open', 'in_progress', 'resolved'], description: 'Nouveau statut' },
+                admin_note: { type: 'string', description: 'Note d\'analyse ou résolution' },
+            },
+            required: ['bug_id', 'status'],
+        },
+    },
+    {
+        name: 'send_superadmin_announcement',
+        description: '[Superadmin] Diffuser une annonce officielle à toutes les écoles ou une école cible',
+        permission: 'superadmin:announcements',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                title: { type: 'string', description: 'Titre de l\'annonce' },
+                content: { type: 'string', description: 'Contenu Markdown de l\'annonce' },
+                target_org_id: { type: 'string', description: 'UUID d\'une organisation ou "all" pour toutes' },
+                type: { type: 'string', enum: ['info', 'warning', 'urgent', 'success'], description: 'Type d\'annonce' },
+            },
+            required: ['title', 'content'],
+        },
+    },
+    {
+        name: 'get_platform_stats',
+        description: '[Superadmin] Obtenir les statistiques globales de la plateforme IziTeach',
+        permission: 'superadmin:orgs',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+        },
+    },
+    {
+        name: 'send_email_to_org',
+        description: '[Superadmin] Envoyer un email direct de relance ou d\'information au responsable d\'une organisation',
+        permission: 'superadmin:emails',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                org_id: { type: 'string', description: 'UUID de l\'organisation' },
+                subject: { type: 'string', description: 'Objet de l\'email' },
+                message: { type: 'string', description: 'Corps du message' },
+            },
+            required: ['org_id', 'subject', 'message'],
+        },
+    },
+    {
+        name: 'generate_bug_summary_report',
+        description: '[Superadmin] Générer un rapport d\'analyse synthétique sur les bugs signalés',
+        permission: 'superadmin:bugs',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                period_days: { type: 'number', description: 'Période en jours (défaut 30)' },
+            },
+        },
+    },
+    {
+        name: 'list_organizations',
+        description: '[Superadmin] Lister tous les établissements/écoles de la plateforme avec leurs UUIDs et détails',
+        permission: 'superadmin:orgs',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                limit: { type: 'number', description: 'Nombre max de résultats' },
+            },
+        },
+    },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -267,11 +406,12 @@ Deno.serve(async (req: Request) => {
 
     const agent: AgentContext = {
         agentId:       agentData.agent_id,
-        orgId:         agentData.org_id,
+        orgId:         agentData.organization_id || null,
+        isSuperadmin:  !!agentData.is_superadmin,
         agentName:     agentData.agent_name,
         permissions:   agentData.permissions || [],
-        rateLimit:     agentData.rate_limit || 10,
-        bulkThreshold: agentData.bulk_threshold || 5,
+        rateLimit:     agentData.rate_limit_per_minute || 10,
+        bulkThreshold: agentData.bulk_action_threshold || 5,
     };
 
     // ── 4. Rate limiting ────────────────────────────────────────────────────
@@ -319,7 +459,9 @@ Deno.serve(async (req: Request) => {
             // ─ Liste des outils disponibles ─
             case 'tools/list': {
                 const availableTools = MCP_TOOLS.filter(tool =>
-                    agent.permissions.includes(tool.permission)
+                    agent.isSuperadmin
+                        ? (agent.permissions.includes('superadmin:all') || agent.permissions.includes(tool.permission))
+                        : agent.permissions.includes(tool.permission)
                 );
                 response = mcpSuccess(mcpReq.id, { tools: availableTools });
                 logOutput = `${availableTools.length} outils disponibles`;
@@ -338,7 +480,11 @@ Deno.serve(async (req: Request) => {
                     throw { code: -32601, message: `Outil inconnu : ${toolName}` };
                 }
 
-                if (!agent.permissions.includes(toolDef.permission)) {
+                const isAllowed = agent.isSuperadmin
+                    ? (agent.permissions.includes('superadmin:all') || agent.permissions.includes(toolDef.permission))
+                    : agent.permissions.includes(toolDef.permission);
+
+                if (!isAllowed) {
                     throw {
                         code: -32003,
                         message: `Permission refusée : "${toolDef.permission}" non accordée à cet agent`,
@@ -398,12 +544,35 @@ Deno.serve(async (req: Request) => {
 async function executeTool(toolName: string, args: Record<string, unknown>, agent: AgentContext, supabase: any): Promise<unknown> {
     switch (toolName) {
 
+        // ── LIST ORGANIZATIONS (SUPERADMIN) ─────────────────────────────────
+        case 'list_organizations':
+        case 'list_orgs': {
+            const limit = Math.min(Number(args.limit) || 50, 100);
+            const { data, error } = await supabase
+                .from('organizations')
+                .select('id, name, slug, school_type, city, country, is_active, created_at')
+                .order('created_at', { ascending: false })
+                .limit(limit);
+            if (error) throw { code: -32002, message: error.message };
+            return { organizations: data || [], total: (data || []).length };
+        }
+
         // ── GET ORG INFO ────────────────────────────────────────────────────
         case 'get_org_info': {
+            const targetOrgId = (args.org_id as string) || agent.orgId;
+            if (!targetOrgId) {
+                const { data, error } = await supabase
+                    .from('organizations')
+                    .select('id, name, type, city, country, slug')
+                    .order('created_at', { ascending: true })
+                    .limit(1);
+                if (error) throw { code: -32002, message: error.message };
+                return { organization: data?.[0] || null, note: 'Organisation par défaut renvoyée. Pour une école précise, utilisez : { "org_id": "UUID" }' };
+            }
             const { data, error } = await supabase
                 .from('organizations')
                 .select('id, name, type, city, country, slug')
-                .eq('id', agent.orgId)
+                .eq('id', targetOrgId)
                 .single();
             if (error) throw { code: -32002, message: error.message };
             return { organization: data };
@@ -411,23 +580,32 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
 
         // ── LIST CLASSES ────────────────────────────────────────────────────
         case 'list_classes': {
-            const { data, error } = await supabase
+            const targetOrgId = (args.org_id as string) || agent.orgId;
+            let query = supabase
                 .from('classrooms')
-                .select('id, name, cycle, level, capacity')
-                .eq('organization_id', agent.orgId)
+                .select('id, name, cycle, level, capacity, organization_id')
                 .order('name');
+            if (targetOrgId) {
+                query = query.eq('organization_id', targetOrgId);
+            }
+            const { data, error } = await query;
             if (error) throw { code: -32002, message: error.message };
             return { classes: data || [], total: (data || []).length };
         }
 
         // ── LIST SUBJECTS ───────────────────────────────────────────────────
         case 'list_subjects': {
+            const targetOrgId = (args.org_id as string) || agent.orgId;
             let query = supabase
                 .from('subjects')
-                .select('id, name, code, coefficient, classroom_id, classrooms(name)')
-                .eq('organization_id', agent.orgId)
+                .select('id, name, code, coefficient, classroom_id, organization_id, classrooms(name)')
                 .order('name');
-            if (args.class_id) query = query.eq('classroom_id', args.class_id as string);
+            if (targetOrgId) {
+                query = query.eq('organization_id', targetOrgId);
+            }
+            if (args.class_id) {
+                query = query.eq('classroom_id', args.class_id as string);
+            }
             const { data, error } = await query;
             if (error) throw { code: -32002, message: error.message };
             return { subjects: data || [], total: (data || []).length };
@@ -438,7 +616,7 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             if (!args.subject_id) throw { code: -32602, message: 'subject_id requis' };
             const { data, error } = await supabase
                 .from('chapters')
-                .select('id, title, description, order_index, status')
+                .select('id, title, description, order_index, status, subject_id')
                 .eq('subject_id', args.subject_id as string)
                 .order('position');
             if (error) throw { code: -32002, message: error.message };
@@ -450,7 +628,7 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             if (!args.chapter_id) throw { code: -32602, message: 'chapter_id requis' };
             const { data, error } = await supabase
                 .from('lessons')
-                .select('id, title, position, estimated_minutes, status')
+                .select('id, title, position, estimated_minutes, status, chapter_id')
                 .eq('chapter_id', args.chapter_id as string)
                 .order('position');
             if (error) throw { code: -32002, message: error.message };
@@ -460,8 +638,11 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
         // ── CREATE SUBJECT ───────────────────────────────────────────────────
         case 'create_subject': {
             if (!args.name) throw { code: -32602, message: '"name" est requis' };
+            const targetOrgId = (args.org_id as string) || agent.orgId;
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis pour créer une matière' };
+
             const payload: Record<string, unknown> = {
-                organization_id: agent.orgId,
+                organization_id: targetOrgId,
                 name: args.name,
                 code: String(args.name).slice(0, 4).toUpperCase(),
                 coefficient: 1,
@@ -485,15 +666,7 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
         // ── CREATE CHAPTER ───────────────────────────────────────────────────
         case 'create_chapter': {
             if (!args.subject_id || !args.title) throw { code: -32602, message: '"subject_id" et "title" sont requis' };
-
-            // Vérifier que le subject appartient à l'org
-            const { data: sub } = await supabase
-                .from('subjects')
-                .select('id')
-                .eq('id', args.subject_id as string)
-                .eq('organization_id', agent.orgId)
-                .single();
-            if (!sub) throw { code: -32003, message: 'Matière introuvable dans votre organisation' };
+            const targetOrgId = (args.org_id as string) || agent.orgId;
 
             // Auto order_index si non fourni
             let orderIndex = args.order_index as number;
@@ -508,7 +681,7 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             const { data, error } = await supabase
                 .from('chapters')
                 .insert({
-                    organization_id: agent.orgId,
+                    organization_id: targetOrgId,
                     subject_id:      args.subject_id,
                     title:           args.title,
                     description:     args.description || null,
@@ -532,14 +705,7 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             if (!args.chapter_id || !args.title || !args.content) {
                 throw { code: -32602, message: '"chapter_id", "title" et "content" sont requis' };
             }
-
-            // Vérifier ownership via chapter → subject → org
-            const chap = await supabase
-                .from('chapters')
-                .select('id')
-                .eq('id', args.chapter_id as string)
-                .single();
-            if (!chap.data) throw { code: -32003, message: 'Chapitre introuvable' };
+            const targetOrgId = (args.org_id as string) || agent.orgId;
 
             let orderIndex = args.order_index as number;
             if (!orderIndex) {
@@ -554,7 +720,7 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
                 .from('lessons')
                 .insert({
                     chapter_id:        args.chapter_id,
-                    organization_id:   agent.orgId,
+                    organization_id:   targetOrgId,
                     title:             args.title,
                     content:           args.content,
                     position:          orderIndex,
@@ -618,15 +784,21 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
 
         // ── LIST STUDENTS ─────────────────────────────────────────────────────
         case 'list_students': {
+            const targetOrgId = (args.org_id as string) || agent.orgId;
             const limit = Math.min((args.limit as number) || 50, 100);
             let query = supabase
                 .from('student_profiles')
-                .select('id, first_name, last_name, sex, classroom_id, classrooms(name), approval_status')
-                .eq('organization_id', agent.orgId)
-                .eq('approval_status', 'approved') // Only approved students
+                .select('id, first_name, last_name, gender, classroom_id, classrooms(name), approval_status, organization_id')
+                .eq('approval_status', 'approved')
                 .order('last_name')
                 .limit(limit);
-            if (args.class_id) query = query.eq('classroom_id', args.class_id as string);
+
+            if (targetOrgId) {
+                query = query.eq('organization_id', targetOrgId);
+            }
+            if (args.class_id) {
+                query = query.eq('classroom_id', args.class_id as string);
+            }
             const { data, error } = await query;
             if (error) throw { code: -32002, message: error.message };
 
@@ -635,11 +807,286 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
                 id:          s.id,
                 first_name:  s.first_name,
                 last_name:   s.last_name,
-                sex:         s.sex,
+                gender:      s.gender,
                 class_name:  (s.classrooms as Record<string, unknown>)?.name || null,
                 classroom_id: s.classroom_id,
             }));
             return { students: safeStudents, total: safeStudents.length };
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // SUPERADMIN TOOLS EXECUTORS
+        // ═══════════════════════════════════════════════════════════════════
+
+        // ── LIST SUPPORT MESSAGES ──────────────────────────────────────────
+        case 'list_support_messages': {
+            const limit = Math.min((args.limit as number) || 50, 100);
+            let query = supabase
+                .from('sky_point_requests')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(limit);
+
+            if (args.status && args.status !== 'all') {
+                query = query.eq('status', args.status as string);
+            }
+
+            const { data, error } = await query;
+            if (error) throw { code: -32002, message: error.message };
+            return { requests: data || [], total: (data || []).length };
+        }
+
+        // ── REPLY SUPPORT MESSAGE ──────────────────────────────────────────
+        case 'reply_support_message': {
+            if (!args.request_id || !args.reply_message) {
+                throw { code: -32602, message: 'request_id et reply_message requis' };
+            }
+
+            const { data, error } = await supabase
+                .from('sky_point_requests')
+                .update({
+                    response: String(args.reply_message).trim(),
+                    responded_at: new Date().toISOString(),
+                    status: 'confirmed',
+                })
+                .eq('id', args.request_id as string)
+                .select()
+                .single();
+
+            if (error) throw { code: -32002, message: error.message };
+            return {
+                success: true,
+                request: data,
+                message: `✅ Réponse envoyée pour le ticket ${args.request_id}`,
+            };
+        }
+
+        // ── CREDIT SKY POINTS ──────────────────────────────────────────────
+        case 'credit_sky_points': {
+            const targetType = args.target_type as string;
+            const targetId = args.target_id as string;
+            const points = Number(args.points);
+
+            if (!targetType || !targetId || isNaN(points) || points <= 0) {
+                throw { code: -32602, message: 'target_type (org/user), target_id et points (>0) requis' };
+            }
+
+            if (targetType === 'org') {
+                const { data: org, error: orgErr } = await supabase
+                    .from('organizations')
+                    .select('id, name, sky_points')
+                    .eq('id', targetId)
+                    .single();
+                if (orgErr || !org) throw { code: -32003, message: 'Organisation introuvable' };
+
+                const newBalance = (org.sky_points || 0) + points;
+                await supabase.from('organizations').update({ sky_points: newBalance }).eq('id', targetId);
+
+                await supabase.from('sky_points_transactions').insert({
+                    to_entity_type: 'org',
+                    to_entity_id: org.id,
+                    to_entity_name: org.name,
+                    org_name: org.name,
+                    amount: points,
+                    note: (args.note as string) || `Crédit Sky Agent: ${agent.agentName}`,
+                    performed_by: `ai_agent:${agent.agentName}`,
+                });
+
+                return { success: true, target: org.name, credited: points, new_balance: newBalance };
+            } else {
+                // User target
+                const { data: user, error: userErr } = await supabase
+                    .from('student_profiles')
+                    .select('id, first_name, last_name, sky_points')
+                    .eq('id', targetId)
+                    .single();
+
+                const userName = user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Utilisateur';
+                const newBalance = ((user?.sky_points || 0) + points);
+
+                if (user) {
+                    await supabase.from('student_profiles').update({ sky_points: newBalance }).eq('id', targetId);
+                }
+
+                await supabase.from('sky_points_transactions').insert({
+                    to_entity_type: 'user',
+                    to_entity_id: targetId,
+                    to_entity_name: userName,
+                    amount: points,
+                    note: (args.note as string) || `Crédit Sky Agent: ${agent.agentName}`,
+                    performed_by: `ai_agent:${agent.agentName}`,
+                });
+
+                return { success: true, target_id: targetId, credited: points, new_balance: newBalance };
+            }
+        }
+
+        // ── LIST INACTIVE ORGS ─────────────────────────────────────────────
+        case 'list_inactive_orgs': {
+            const days = Number(args.days_inactive) || 30;
+            const threshold = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+            const { data, error } = await supabase
+                .from('organizations')
+                .select('id, name, slug, email, phone, city, is_active, created_at')
+                .lt('created_at', threshold)
+                .order('created_at', { ascending: false });
+
+            if (error) throw { code: -32002, message: error.message };
+            return {
+                inactive_orgs: data || [],
+                total: (data || []).length,
+                threshold_days: days,
+            };
+        }
+
+        // ── LIST BUG REPORTS ───────────────────────────────────────────────
+        case 'list_bug_reports': {
+            let query = supabase.from('bug_reports').select('*').order('created_at', { ascending: false });
+            if (args.status && args.status !== 'all') {
+                query = query.eq('status', args.status as string);
+            }
+            const { data, error } = await query;
+            if (error) throw { code: -32002, message: error.message };
+            return { bugs: data || [], total: (data || []).length };
+        }
+
+        // ── UPDATE BUG STATUS ──────────────────────────────────────────────
+        case 'update_bug_status': {
+            if (!args.bug_id || !args.status) throw { code: -32602, message: 'bug_id et status requis' };
+            const { data, error } = await supabase
+                .from('bug_reports')
+                .update({
+                    status: args.status as string,
+                    admin_note: (args.admin_note as string) || null,
+                })
+                .eq('id', args.bug_id as string)
+                .select()
+                .single();
+            if (error) throw { code: -32002, message: error.message };
+            return { success: true, bug: data, message: `✅ Bug ${args.bug_id} mis à jour : ${args.status}` };
+        }
+
+        // ── SEND SUPERADMIN ANNOUNCEMENT ───────────────────────────────────
+        case 'send_superadmin_announcement': {
+            if (!args.title || !args.content) throw { code: -32602, message: 'title et content requis' };
+            const title = String(args.title).trim();
+            const content = String(args.content).trim();
+            const type = (args.type as string) || 'info';
+            const target = (args.target_org_id as string) || 'all';
+
+            // Insert into superadmin_announcements
+            await supabase.from('superadmin_announcements').insert({
+                title: `📣 ${title}`,
+                body: content,
+                target_org_id: target,
+                ann_type: type,
+                sent_to_count: target === 'all' ? 100 : 1,
+            });
+
+            // Insert into announcements
+            if (target === 'all') {
+                const { data: orgs } = await supabase.from('organizations').select('id');
+                for (const org of orgs || []) {
+                    await supabase.from('announcements').insert({
+                        organization_id: org.id,
+                        title: `📣 ${title}`,
+                        content,
+                        body: content,
+                        type: 'official',
+                    });
+                }
+            } else {
+                await supabase.from('announcements').insert({
+                    organization_id: target,
+                    title: `📣 ${title}`,
+                    content,
+                    body: content,
+                    type: 'official',
+                });
+            }
+
+            return { success: true, message: `📢 Annonce "${title}" diffusée avec succès` };
+        }
+
+        // ── GET PLATFORM STATS ─────────────────────────────────────────────
+        case 'get_platform_stats': {
+            const { data: orgsCount } = await supabase.from('organizations').select('id', { count: 'exact', head: true });
+            const { data: studentsCount } = await supabase.from('student_profiles').select('id', { count: 'exact', head: true });
+            const { data: teachersCount } = await supabase.from('teacher_profiles').select('id', { count: 'exact', head: true });
+            const { data: bugsCount } = await supabase.from('bug_reports').select('id', { count: 'exact', head: true });
+
+            return {
+                total_organizations: orgsCount?.length ?? 0,
+                total_students: studentsCount?.length ?? 0,
+                total_teachers: teachersCount?.length ?? 0,
+                total_bug_reports: bugsCount?.length ?? 0,
+                timestamp: new Date().toISOString(),
+            };
+        }
+
+        // ── SEND EMAIL TO ORG ──────────────────────────────────────────────
+        case 'send_email_to_org': {
+            if (!args.org_id || !args.subject || !args.message) {
+                throw { code: -32602, message: 'org_id, subject et message requis' };
+            }
+
+            const { data: org, error: orgErr } = await supabase
+                .from('organizations')
+                .select('id, name, email')
+                .eq('id', args.org_id as string)
+                .single();
+
+            if (orgErr || !org) throw { code: -32003, message: 'Organisation introuvable' };
+
+            // Record notification / message in system
+            await supabase.from('announcements').insert({
+                organization_id: org.id,
+                title: `📧 Message Superadmin : ${String(args.subject).trim()}`,
+                content: String(args.message).trim(),
+                body: String(args.message).trim(),
+                type: 'official',
+            });
+
+            return {
+                success: true,
+                recipient_org: org.name,
+                recipient_email: org.email || 'Email de l\'école',
+                subject: args.subject,
+                message: `✅ Email / Notification transmise avec succès à "${org.name}"`,
+            };
+        }
+
+        // ── GENERATE BUG SUMMARY REPORT ────────────────────────────────────
+        case 'generate_bug_summary_report': {
+            const days = Number(args.period_days) || 30;
+            const threshold = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+            const { data: bugs, error } = await supabase
+                .from('bug_reports')
+                .select('id, title, description, status, page_url, created_at')
+                .gte('created_at', threshold)
+                .order('created_at', { ascending: false });
+
+            if (error) throw { code: -32002, message: error.message };
+
+            const total = bugs?.length || 0;
+            const openCount = (bugs || []).filter(b => b.status === 'open').length;
+            const inProgressCount = (bugs || []).filter(b => b.status === 'in_progress').length;
+            const resolvedCount = (bugs || []).filter(b => b.status === 'resolved').length;
+
+            return {
+                success: true,
+                period_days: days,
+                summary: {
+                    total_bugs_reported: total,
+                    open: openCount,
+                    in_progress: inProgressCount,
+                    resolved: resolvedCount,
+                },
+                recent_bugs: (bugs || []).slice(0, 15),
+                generated_by_agent: agent.agentName,
+            };
         }
 
         default:

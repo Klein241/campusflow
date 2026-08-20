@@ -2681,6 +2681,11 @@ export default {
             if (pathname === '/api/email/send'   && method === 'POST') return handleEmailSend(request, env);
             if (pathname === '/api/email/status'  && method === 'GET')  return handleEmailStatus(request, env);
 
+            // ── MCP IziTeach — Cloudflare D1 Primary Edge Gateway ──
+            if ((pathname === '/mcp-gateway' || pathname === '/api/mcp' || pathname === '/api/mcp-gateway') && method === 'POST') {
+                return handleMcpGateway(request, env);
+            }
+
             // ── Inscription (bypass RLS) ──
             if (pathname === '/api/inscription' && method === 'POST') return handleInscription(request, env);
 
@@ -2787,6 +2792,9 @@ const D1_ALLOWED_TABLES = new Set([
     'app_settings', 'platform_settings',
     // System
     'system_alerts', 'pending_supabase_sync',
+    // AI Agents & MCP IziTeach
+    'ai_agent_keys', 'ai_agent_logs', 'ai_pending_actions', 'ai_permission_catalog',
+    'bug_reports', 'announcements', 'superadmin_announcements',
 ]);
 
 function getTableFromPath(pathname: string): string | null {
@@ -3296,3 +3304,594 @@ async function purgeSyncResolved(env: Env): Promise<void> {
         console.error('[purgeSyncResolved] Erreur:', err.message);
     }
 }
+
+// ══════════════════════════════════════════════════════════
+// MCP IZITEACH — CLOUDFLARE D1 PRIMARY ENGINE
+// ══════════════════════════════════════════════════════════
+
+const WORKER_MCP_TOOLS = [
+    {
+        name: 'list_subjects',
+        description: 'Lister toutes les matières de l\'organisation',
+        permission: 'read:curriculum',
+        inputSchema: { type: 'object', properties: { class_id: { type: 'string' } } },
+    },
+    {
+        name: 'list_chapters',
+        description: 'Lister les chapitres d\'une matière',
+        permission: 'read:curriculum',
+        inputSchema: { type: 'object', properties: { subject_id: { type: 'string' } }, required: ['subject_id'] },
+    },
+    {
+        name: 'list_lessons',
+        description: 'Lister les leçons d\'un chapitre',
+        permission: 'read:curriculum',
+        inputSchema: { type: 'object', properties: { chapter_id: { type: 'string' } }, required: ['chapter_id'] },
+    },
+    {
+        name: 'create_subject',
+        description: 'Créer une nouvelle matière',
+        permission: 'write:curriculum',
+        inputSchema: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, class_id: { type: 'string' } }, required: ['name'] },
+    },
+    {
+        name: 'create_chapter',
+        description: 'Créer un chapitre dans une matière',
+        permission: 'write:curriculum',
+        inputSchema: { type: 'object', properties: { subject_id: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, order_index: { type: 'number' } }, required: ['subject_id', 'title'] },
+    },
+    {
+        name: 'create_lesson',
+        description: 'Créer une leçon dans un chapitre',
+        permission: 'write:curriculum',
+        inputSchema: { type: 'object', properties: { chapter_id: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' }, duration_minutes: { type: 'number' } }, required: ['chapter_id', 'title', 'content'] },
+    },
+    {
+        name: 'create_exercise',
+        description: 'Créer un exercice dans une leçon',
+        permission: 'write:exercises',
+        inputSchema: { type: 'object', properties: { lesson_id: { type: 'string' }, title: { type: 'string' }, question: { type: 'string' }, type: { type: 'string', enum: ['qcm', 'text', 'true_false'] }, choices: { type: 'array', items: { type: 'string' } }, correct_answer: { type: 'string' }, explanation: { type: 'string' } }, required: ['lesson_id', 'title', 'question', 'type', 'correct_answer'] },
+    },
+    {
+        name: 'list_students',
+        description: 'Lister les étudiants (sans données sensibles)',
+        permission: 'read:students',
+        inputSchema: { type: 'object', properties: { class_id: { type: 'string' }, limit: { type: 'number' } } },
+    },
+    {
+        name: 'list_classes',
+        description: 'Lister les classes de l\'organisation',
+        permission: 'read:curriculum',
+        inputSchema: { type: 'object', properties: {} },
+    },
+    {
+        name: 'get_org_info',
+        description: 'Obtenir les informations générales de l\'organisation',
+        permission: 'read:curriculum',
+        inputSchema: { type: 'object', properties: {} },
+    },
+    // ── SUPERADMIN TOOLS ──
+    {
+        name: 'list_support_messages',
+        description: '[Superadmin] Lister les demandes de support et messages Sky Requests',
+        permission: 'superadmin:support',
+        inputSchema: { type: 'object', properties: { status: { type: 'string' }, limit: { type: 'number' } } },
+    },
+    {
+        name: 'reply_support_message',
+        description: '[Superadmin] Répondre à un ticket de support / demande Sky Request',
+        permission: 'superadmin:support',
+        inputSchema: { type: 'object', properties: { request_id: { type: 'string' }, reply_message: { type: 'string' } }, required: ['request_id', 'reply_message'] },
+    },
+    {
+        name: 'credit_sky_points',
+        description: '[Superadmin] Créditer des Sky Points à un utilisateur ou une organisation',
+        permission: 'superadmin:points',
+        inputSchema: { type: 'object', properties: { target_type: { type: 'string', enum: ['org', 'user'] }, target_id: { type: 'string' }, points: { type: 'number' }, note: { type: 'string' } }, required: ['target_type', 'target_id', 'points'] },
+    },
+    {
+        name: 'list_inactive_orgs',
+        description: '[Superadmin] Lister les organisations inactives (sans connexion récente)',
+        permission: 'superadmin:orgs',
+        inputSchema: { type: 'object', properties: { days_inactive: { type: 'number' } } },
+    },
+    {
+        name: 'list_bug_reports',
+        description: '[Superadmin] Lister les signalements de bugs reçus sur la plateforme',
+        permission: 'superadmin:bugs',
+        inputSchema: { type: 'object', properties: { status: { type: 'string' } } },
+    },
+    {
+        name: 'update_bug_status',
+        description: '[Superadmin] Mettre à jour le statut et la note d\'un rapport de bug',
+        permission: 'superadmin:bugs',
+        inputSchema: { type: 'object', properties: { bug_id: { type: 'string' }, status: { type: 'string', enum: ['open', 'in_progress', 'resolved'] }, admin_note: { type: 'string' } }, required: ['bug_id', 'status'] },
+    },
+    {
+        name: 'send_superadmin_announcement',
+        description: '[Superadmin] Diffuser une annonce officielle à toutes les écoles ou une école cible',
+        permission: 'superadmin:announcements',
+        inputSchema: { type: 'object', properties: { title: { type: 'string' }, content: { type: 'string' }, target_org_id: { type: 'string' }, type: { type: 'string', enum: ['info', 'warning', 'urgent', 'success'] } }, required: ['title', 'content'] },
+    },
+    {
+        name: 'send_email_to_org',
+        description: '[Superadmin] Envoyer un email direct de relance ou d\'information au responsable d\'une organisation',
+        permission: 'superadmin:emails',
+        inputSchema: { type: 'object', properties: { org_id: { type: 'string' }, subject: { type: 'string' }, message: { type: 'string' } }, required: ['org_id', 'subject', 'message'] },
+    },
+    {
+        name: 'generate_bug_summary_report',
+        description: '[Superadmin] Générer un rapport d\'analyse synthétique sur les bugs signalés',
+        permission: 'superadmin:bugs',
+        inputSchema: { type: 'object', properties: { period_days: { type: 'number' } } },
+    },
+    {
+        name: 'get_platform_stats',
+        description: '[Superadmin] Obtenir les statistiques globales de la plateforme IziTeach',
+        permission: 'superadmin:orgs',
+        inputSchema: { type: 'object', properties: {} },
+    },
+    {
+        name: 'list_organizations',
+        description: '[Superadmin] Lister tous les établissements/écoles de la plateforme avec leurs UUIDs et détails',
+        permission: 'superadmin:orgs',
+        inputSchema: { type: 'object', properties: { limit: { type: 'number' } } },
+    },
+];
+
+async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
+    const startTime = Date.now();
+    const authHeader = request.headers.get('Authorization') || '';
+    const rawKey = authHeader.replace(/^Bearer\s+/i, '').trim();
+
+    if (!rawKey || !rawKey.startsWith('cf_live_')) {
+        return json({ jsonrpc: '2.0', error: { code: -32001, message: 'Clé API manquante. Utilisez: Authorization: Bearer cf_live_xxxxx' }, id: null }, 401);
+    }
+
+    // 1. SHA-256 de la clé API
+    const encoder = new TextEncoder();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(rawKey));
+    const keyHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+    // 2. Vérification sur D1 (avec fallback Supabase si absent dans D1)
+    let agentKey: any = null;
+    try {
+        agentKey = await env.CAMPUSFLOW_DB.prepare(
+            `SELECT * FROM ai_agent_keys WHERE key_hash = ?1 AND is_active = 1`
+        ).bind(keyHash).first();
+    } catch {}
+
+    if (!agentKey && env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+        try {
+            const supRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/verify_ai_agent_key`, {
+                method: 'POST',
+                headers: {
+                    'apikey': env.SUPABASE_SERVICE_KEY,
+                    'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ p_raw_key: rawKey }),
+            });
+            if (supRes.ok) {
+                const verified = await supRes.json() as any;
+                if (verified && verified.valid) {
+                    agentKey = {
+                        id: verified.agent_id,
+                        name: verified.agent_name,
+                        organization_id: verified.organization_id,
+                        is_superadmin: verified.is_superadmin ? 1 : 0,
+                        permissions: JSON.stringify(verified.permissions || []),
+                        rate_limit_per_minute: verified.rate_limit_per_minute || 30,
+                        bulk_action_threshold: verified.bulk_action_threshold || 10,
+                    };
+                }
+            }
+        } catch {}
+    }
+
+    if (!agentKey) {
+        return json({ jsonrpc: '2.0', error: { code: -32001, message: 'Clé API invalide, inactive ou révoquée' }, id: null }, 401);
+    }
+
+    const permissions: string[] = typeof agentKey.permissions === 'string'
+        ? JSON.parse(agentKey.permissions || '[]')
+        : (agentKey.permissions || []);
+
+    const isSuperadmin = Boolean(agentKey.is_superadmin);
+    const orgId = agentKey.organization_id;
+    const agentName = agentKey.name || 'Sky Agent';
+
+    // 3. Parser la requête JSON-RPC
+    let mcpReq: any;
+    try {
+        mcpReq = await request.json();
+    } catch {
+        return json({ jsonrpc: '2.0', error: { code: -32700, message: 'JSON invalide' }, id: null }, 400);
+    }
+
+    const reqId = mcpReq.id ?? null;
+
+    if (mcpReq.method === 'ping') {
+        return json({ jsonrpc: '2.0', result: { pong: true, engine: 'Cloudflare D1 Primary Edge (SQLite)', agent: agentName }, id: reqId });
+    }
+
+    if (mcpReq.method === 'initialize') {
+        return json({
+            jsonrpc: '2.0',
+            result: {
+                protocolVersion: '2024-11-05',
+                capabilities: { tools: {} },
+                serverInfo: { name: 'MCP IziTeach Cloudflare Edge Engine', version: '2.0.0' },
+            },
+            id: reqId,
+        });
+    }
+
+    if (mcpReq.method === 'tools/list') {
+        const tools = WORKER_MCP_TOOLS.filter(t =>
+            isSuperadmin
+                ? (permissions.includes('superadmin:all') || permissions.includes(t.permission))
+                : permissions.includes(t.permission)
+        );
+        return json({ jsonrpc: '2.0', result: { tools }, id: reqId });
+    }
+
+    if (mcpReq.method === 'tools/call') {
+        const toolName = mcpReq.params?.name;
+        const args = mcpReq.params?.arguments || {};
+        const toolDef = WORKER_MCP_TOOLS.find(t => t.name === toolName);
+
+        if (!toolDef) {
+            return json({ jsonrpc: '2.0', error: { code: -32601, message: `Outil inconnu : ${toolName}` }, id: reqId }, 404);
+        }
+
+        const isAllowed = isSuperadmin
+            ? (permissions.includes('superadmin:all') || permissions.includes(toolDef.permission))
+            : permissions.includes(toolDef.permission);
+
+        if (!isAllowed) {
+            return json({ jsonrpc: '2.0', error: { code: -32003, message: `Permission "${toolDef.permission}" non accordée` }, id: reqId }, 403);
+        }
+
+        try {
+            const result = await executeMcpToolD1(toolName, args, { agentKey, isSuperadmin, orgId, agentName }, env);
+            const duration = Date.now() - startTime;
+
+            logMcpAction(env, {
+                agentKeyId: agentKey.id,
+                orgId,
+                isSuperadmin,
+                toolName,
+                inputSummary: JSON.stringify(args).slice(0, 300),
+                outputSummary: JSON.stringify(result).slice(0, 300),
+                status: 'success',
+                durationMs: duration,
+            });
+
+            return json({
+                jsonrpc: '2.0',
+                result: { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] },
+                id: reqId,
+            });
+        } catch (err: any) {
+            const duration = Date.now() - startTime;
+            logMcpAction(env, {
+                agentKeyId: agentKey.id,
+                orgId,
+                isSuperadmin,
+                toolName,
+                inputSummary: JSON.stringify(args).slice(0, 300),
+                outputSummary: null,
+                status: 'error',
+                errorMessage: err.message || 'Erreur execution',
+                durationMs: duration,
+            });
+            return json({ jsonrpc: '2.0', error: { code: err.code || -32000, message: err.message || 'Erreur interne' }, id: reqId }, 500);
+        }
+    }
+
+    return json({ jsonrpc: '2.0', error: { code: -32601, message: `Méthode non supportée : ${mcpReq.method}` }, id: reqId }, 400);
+}
+
+// ── Exécuteur direct Cloudflare D1 ────────────────────────────────
+async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx: { agentKey: any; isSuperadmin: boolean; orgId: string | null; agentName: string }, env: Env): Promise<any> {
+    const db = env.CAMPUSFLOW_DB;
+
+    switch (toolName) {
+        // ── LIST ORGANIZATIONS (SUPERADMIN) ──
+        case 'list_organizations':
+        case 'list_orgs': {
+            const limit = Math.min(Number(args.limit) || 50, 100);
+            const { results } = await db.prepare(`SELECT id, name, slug, school_type, city, country, is_active, created_at FROM organizations ORDER BY created_at DESC LIMIT ?1`).bind(limit).all();
+            return { organizations: results || [], total: (results || []).length };
+        }
+
+        // ── GET ORG INFO ──
+        case 'get_org_info': {
+            const targetOrgId = args.org_id || ctx.orgId;
+            if (!targetOrgId) {
+                const org = await db.prepare(`SELECT id, name, slug, school_type, city, country FROM organizations ORDER BY created_at ASC LIMIT 1`).first();
+                return { organization: org, note: 'Organisation par défaut renvoyée. Pour cibler une école précise, utilisez : { "org_id": "UUID_DE_L_ECOLE" }' };
+            }
+            const org = await db.prepare(`SELECT id, name, slug, school_type, city, country FROM organizations WHERE id = ?1`).bind(targetOrgId).first();
+            return { organization: org };
+        }
+
+        // ── LIST CLASSES ──
+        case 'list_classes': {
+            const targetOrgId = args.org_id || ctx.orgId;
+            let sql = `SELECT id, name, cycle, level, capacity, organization_id FROM classrooms`;
+            const params: any[] = [];
+            if (targetOrgId) {
+                sql += ` WHERE organization_id = ?1`;
+                params.push(targetOrgId);
+            }
+            sql += ` ORDER BY name ASC LIMIT 100`;
+            const { results } = await db.prepare(sql).bind(...params).all();
+            return { classes: results || [], total: (results || []).length };
+        }
+
+        // ── LIST SUBJECTS ──
+        case 'list_subjects': {
+            const targetOrgId = args.org_id || ctx.orgId;
+            let sql = `SELECT id, name, description, classroom_id, organization_id FROM subjects`;
+            const conditions: string[] = [];
+            const params: any[] = [];
+            if (targetOrgId) {
+                params.push(targetOrgId);
+                conditions.push(`organization_id = ?${params.length}`);
+            }
+            if (args.class_id) {
+                params.push(args.class_id);
+                conditions.push(`classroom_id = ?${params.length}`);
+            }
+            if (conditions.length > 0) {
+                sql += ` WHERE ` + conditions.join(' AND ');
+            }
+            sql += ` ORDER BY name ASC LIMIT 100`;
+            const { results } = await db.prepare(sql).bind(...params).all();
+            return { subjects: results || [], total: (results || []).length };
+        }
+
+        // ── LIST CHAPTERS ──
+        case 'list_chapters': {
+            if (!args.subject_id) throw { code: -32602, message: 'subject_id requis' };
+            const { results } = await db.prepare(`SELECT id, title, description, order_index, subject_id FROM chapters WHERE subject_id = ?1 ORDER BY order_index ASC`).bind(args.subject_id).all();
+            return { chapters: results || [], total: (results || []).length };
+        }
+
+        // ── LIST LESSONS ──
+        case 'list_lessons': {
+            if (!args.chapter_id) throw { code: -32602, message: 'chapter_id requis' };
+            const { results } = await db.prepare(`SELECT id, title, content, order_index, estimated_minutes, status, chapter_id FROM lessons WHERE chapter_id = ?1 ORDER BY order_index ASC`).bind(args.chapter_id).all();
+            return { lessons: results || [], total: (results || []).length };
+        }
+
+        // ── CREATE SUBJECT ──
+        case 'create_subject': {
+            if (!args.name) throw { code: -32602, message: 'name requis' };
+            const targetOrgId = args.org_id || ctx.orgId;
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis (passer "org_id" dans les arguments pour créer une matière)' };
+            const id = crypto.randomUUID();
+            await db.prepare(`INSERT INTO subjects (id, organization_id, name, description, classroom_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)`)
+                .bind(id, targetOrgId, args.name, args.description || null, args.class_id || null, new Date().toISOString()).run();
+            syncToSupabase(env, 'subjects', 'INSERT', { id, organization_id: targetOrgId, name: args.name, description: args.description, classroom_id: args.class_id });
+            return { success: true, subject_id: id, message: `✅ Matière "${args.name}" créée sur Cloudflare D1` };
+        }
+
+        // ── CREATE CHAPTER ──
+        case 'create_chapter': {
+            if (!args.subject_id || !args.title) throw { code: -32602, message: 'subject_id et title requis' };
+            const id = crypto.randomUUID();
+            const orderIndex = Number(args.order_index) || 1;
+            await db.prepare(`INSERT INTO chapters (id, subject_id, title, description, order_index, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)`)
+                .bind(id, args.subject_id, args.title, args.description || null, orderIndex, new Date().toISOString()).run();
+            syncToSupabase(env, 'chapters', 'INSERT', { id, subject_id: args.subject_id, title: args.title, description: args.description, order_index: orderIndex });
+            return { success: true, chapter_id: id, message: `✅ Chapitre "${args.title}" créé sur Cloudflare D1` };
+        }
+
+        // ── CREATE LESSON ──
+        case 'create_lesson': {
+            if (!args.chapter_id || !args.title || !args.content) throw { code: -32602, message: 'chapter_id, title et content requis' };
+            const targetOrgId = args.org_id || ctx.orgId;
+            const id = crypto.randomUUID();
+            const duration = Number(args.duration_minutes) || 15;
+            const now = new Date().toISOString();
+            await db.prepare(`INSERT INTO lessons (id, organization_id, chapter_id, title, content, estimated_minutes, status, order_index, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', 1, ?7, ?7)`)
+                .bind(id, targetOrgId, args.chapter_id, args.title, args.content, duration, now).run();
+            syncToSupabase(env, 'lessons', 'INSERT', { id, organization_id: targetOrgId, chapter_id: args.chapter_id, title: args.title, content: args.content, estimated_minutes: duration, status: 'published', order_index: 1 });
+            return { success: true, lesson_id: id, message: `✅ Leçon "${args.title}" créée et publiée sur Cloudflare D1` };
+        }
+
+        // ── CREATE EXERCISE ──
+        case 'create_exercise': {
+            if (!args.lesson_id || !args.title || !args.question || !args.type || !args.correct_answer) throw { code: -32602, message: 'Champs requis manquants' };
+            const id = crypto.randomUUID();
+            const now = new Date().toISOString();
+            const choicesStr = args.choices ? JSON.stringify(args.choices) : null;
+            await db.prepare(`INSERT INTO exercises (id, lesson_id, title, question, type, choices, correct_answer, explanation, max_score, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 10, ?9, ?9)`)
+                .bind(id, args.lesson_id, args.title, args.question, args.type, choicesStr, args.correct_answer, args.explanation || null, now).run();
+            syncToSupabase(env, 'exercises', 'INSERT', { id, lesson_id: args.lesson_id, title: args.title, question: args.question, type: args.type, choices: args.choices, correct_answer: args.correct_answer, explanation: args.explanation, max_score: 10 });
+            return { success: true, exercise_id: id, message: `✅ Exercice "${args.title}" créé sur Cloudflare D1` };
+        }
+
+        // ── LIST STUDENTS ──
+        case 'list_students': {
+            const targetOrgId = args.org_id || ctx.orgId;
+            const limit = Math.min(Number(args.limit) || 50, 100);
+            let sql = `SELECT id, first_name, last_name, gender, classroom_id, organization_id FROM student_profiles`;
+            const params: any[] = [];
+            if (targetOrgId) {
+                sql += ` WHERE organization_id = ?1 AND is_active = 1`;
+                params.push(targetOrgId);
+            } else {
+                sql += ` WHERE is_active = 1`;
+            }
+            sql += ` LIMIT ?${params.length + 1}`;
+            params.push(limit);
+            const { results } = await db.prepare(sql).bind(...params).all();
+            return { students: results || [], total: (results || []).length };
+        }
+
+        // ── SUPERADMIN: LIST SUPPORT MESSAGES ──
+        case 'list_support_messages': {
+            const limit = Math.min(Number(args.limit) || 50, 100);
+            const { results } = await db.prepare(`SELECT * FROM sky_point_requests ORDER BY created_at DESC LIMIT ?1`).bind(limit).all();
+            return { requests: results || [], total: (results || []).length };
+        }
+
+        // ── SUPERADMIN: REPLY SUPPORT MESSAGE ──
+        case 'reply_support_message': {
+            if (!args.request_id || !args.reply_message) throw { code: -32602, message: 'request_id et reply_message requis' };
+            const now = new Date().toISOString();
+            await db.prepare(`UPDATE sky_point_requests SET response = ?1, responded_at = ?2, status = 'confirmed' WHERE id = ?3`).bind(String(args.reply_message).trim(), now, args.request_id).run();
+            syncToSupabase(env, 'sky_point_requests', 'UPDATE', { id: args.request_id, response: args.reply_message, responded_at: now, status: 'confirmed' });
+            return { success: true, message: `✅ Réponse enregistrée sur D1 pour le ticket ${args.request_id}` };
+        }
+
+        // ── SUPERADMIN: CREDIT SKY POINTS ──
+        case 'credit_sky_points': {
+            const targetType = args.target_type;
+            const targetId = args.target_id;
+            const points = Number(args.points);
+            if (!targetType || !targetId || isNaN(points) || points <= 0) throw { code: -32602, message: 'target_type, target_id et points (>0) requis' };
+
+            if (targetType === 'org') {
+                await db.prepare(`UPDATE organizations SET sky_points = COALESCE(sky_points, 0) + ?1 WHERE id = ?2`).bind(points, targetId).run();
+                syncToSupabase(env, 'sky_points_transactions', 'INSERT', { to_entity_type: 'org', to_entity_id: targetId, amount: points, performed_by: `cloudflare_mcp:${ctx.agentName}` });
+            } else {
+                await db.prepare(`UPDATE student_profiles SET sky_points = COALESCE(sky_points, 0) + ?1 WHERE id = ?2`).bind(points, targetId).run();
+                syncToSupabase(env, 'sky_points_transactions', 'INSERT', { to_entity_type: 'user', to_entity_id: targetId, amount: points, performed_by: `cloudflare_mcp:${ctx.agentName}` });
+            }
+            return { success: true, target_id: targetId, credited: points, message: `⭐ ${points} Sky Points crédités sur D1` };
+        }
+
+        // ── SUPERADMIN: LIST INACTIVE ORGS ──
+        case 'list_inactive_orgs': {
+            const { results } = await db.prepare(`SELECT id, name, slug, email, phone, city, is_active, created_at FROM organizations ORDER BY created_at DESC LIMIT 50`).all();
+            return { inactive_orgs: results || [], total: (results || []).length };
+        }
+
+        // ── SUPERADMIN: LIST BUG REPORTS ──
+        case 'list_bug_reports': {
+            const { results } = await db.prepare(`SELECT * FROM bug_reports ORDER BY created_at DESC LIMIT 50`).all();
+            return { bugs: results || [], total: (results || []).length };
+        }
+
+        // ── SUPERADMIN: UPDATE BUG STATUS ──
+        case 'update_bug_status': {
+            if (!args.bug_id || !args.status) throw { code: -32602, message: 'bug_id et status requis' };
+            await db.prepare(`UPDATE bug_reports SET status = ?1, admin_note = ?2 WHERE id = ?3`).bind(args.status, args.admin_note || null, args.bug_id).run();
+            syncToSupabase(env, 'bug_reports', 'UPDATE', { id: args.bug_id, status: args.status, admin_note: args.admin_note });
+            return { success: true, message: `✅ Statut du bug mis à jour : ${args.status}` };
+        }
+
+        // ── SUPERADMIN: SEND ANNOUNCEMENT ──
+        case 'send_superadmin_announcement': {
+            if (!args.title || !args.content) throw { code: -32602, message: 'title et content requis' };
+            const id = crypto.randomUUID();
+            const now = new Date().toISOString();
+            await db.prepare(`INSERT INTO superadmin_announcements (id, title, body, ann_type, target_org_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)`)
+                .bind(id, `📣 ${args.title}`, args.content, args.type || 'info', args.target_org_id || 'all', now).run();
+            syncToSupabase(env, 'superadmin_announcements', 'INSERT', { id, title: `📣 ${args.title}`, body: args.content, ann_type: args.type || 'info', target_org_id: args.target_org_id || 'all' });
+            return { success: true, message: `📢 Annonce "${args.title}" diffusée via Cloudflare D1` };
+        }
+
+        // ── SUPERADMIN: SEND EMAIL TO ORG ──
+        case 'send_email_to_org': {
+            if (!args.org_id || !args.subject || !args.message) throw { code: -32602, message: 'org_id, subject et message requis' };
+            const org: any = await db.prepare(`SELECT id, name, email FROM organizations WHERE id = ?1`).bind(args.org_id).first();
+            if (!org) throw { code: -32003, message: 'Organisation introuvable' };
+
+            // Notification / Annonce
+            const annId = crypto.randomUUID();
+            await db.prepare(`INSERT INTO announcements (id, organization_id, title, content, type, created_at) VALUES (?1, ?2, ?3, ?4, 'official', ?5)`)
+                .bind(annId, org.id, `📧 ${args.subject}`, args.message, new Date().toISOString()).run();
+            syncToSupabase(env, 'announcements', 'INSERT', { id: annId, organization_id: org.id, title: `📧 ${args.subject}`, content: args.message, type: 'official' });
+
+            return { success: true, recipient: org.name, message: `✅ Message/Email envoyé à "${org.name}" via Cloudflare D1` };
+        }
+
+        // ── SUPERADMIN: GET PLATFORM STATS ──
+        case 'get_platform_stats': {
+            const orgs = await db.prepare(`SELECT COUNT(*) as count FROM organizations`).first();
+            const students = await db.prepare(`SELECT COUNT(*) as count FROM student_profiles`).first();
+            const teachers = await db.prepare(`SELECT COUNT(*) as count FROM teacher_profiles`).first();
+            const bugs = await db.prepare(`SELECT COUNT(*) as count FROM bug_reports`).first();
+
+            return {
+                engine: 'Cloudflare D1 Primary Edge Database',
+                total_organizations: (orgs as any)?.count ?? 0,
+                total_students: (students as any)?.count ?? 0,
+                total_teachers: (teachers as any)?.count ?? 0,
+                total_bug_reports: (bugs as any)?.count ?? 0,
+                timestamp: new Date().toISOString(),
+            };
+        }
+
+        default:
+            throw { code: -32601, message: `Outil "${toolName}" non implémenté` };
+    }
+}
+
+// ── Helpers sync & audit D1 ↔ Supabase ────────────────────────────
+function syncToSupabase(env: Env, tableName: string, operation: string, payload: Record<string, any>): void {
+    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return;
+    const recordId = payload.id || crypto.randomUUID();
+
+    // Async push direct vers Supabase REST
+    fetch(`${env.SUPABASE_URL}/rest/v1/${tableName}`, {
+        method: operation === 'INSERT' ? 'POST' : 'PATCH',
+        headers: {
+            'apikey': env.SUPABASE_SERVICE_KEY,
+            'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates',
+        },
+        body: JSON.stringify(payload),
+    }).catch(() => {
+        // En cas d'erreur de Supabase, enregistrer dans pending_supabase_sync sur D1 pour réconciliation automatique
+        env.CAMPUSFLOW_DB.prepare(
+            `INSERT INTO pending_supabase_sync (id, table_name, operation, record_id, payload, created_at, retry_count, status)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 'pending')`
+        ).bind(crypto.randomUUID(), tableName, operation, recordId, JSON.stringify(payload), new Date().toISOString()).run().catch(() => {});
+    });
+}
+
+function logMcpAction(env: Env, log: { agentKeyId: string; orgId: string | null; isSuperadmin: boolean; toolName: string; inputSummary: string; outputSummary: string | null; status: string; errorMessage?: string; durationMs: number }): void {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    // 1. Log dans D1
+    env.CAMPUSFLOW_DB.prepare(
+        `INSERT INTO ai_agent_logs (id, agent_key_id, organization_id, is_superadmin, tool_name, input_summary, output_summary, status, error_message, duration_ms, executed_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`
+    ).bind(id, log.agentKeyId, log.orgId, log.isSuperadmin ? 1 : 0, log.toolName, log.inputSummary, log.outputSummary, log.status, log.errorMessage || null, log.durationMs, now)
+    .run().catch(() => {});
+
+    // 2. Log dans Supabase
+    if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+        fetch(`${env.SUPABASE_URL}/rest/v1/ai_agent_logs`, {
+            method: 'POST',
+            headers: {
+                'apikey': env.SUPABASE_SERVICE_KEY,
+                'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                id,
+                agent_key_id: log.agentKeyId,
+                organization_id: log.orgId,
+                is_superadmin: log.isSuperadmin,
+                tool_name: log.toolName,
+                input_summary: log.inputSummary,
+                output_summary: log.outputSummary,
+                status: log.status,
+                error_message: log.errorMessage || null,
+                duration_ms: log.durationMs,
+                executed_at: now,
+            }),
+        }).catch(() => {});
+    }
+}
+

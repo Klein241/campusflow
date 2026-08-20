@@ -10,7 +10,7 @@ import {
     Mail, Lock, School, UserCheck, Activity,
     BarChart3, Zap, Clock, CheckSquare, Star, Plus, Minus, Menu, X,
     MessageSquare, Send, Crown, CreditCard,
-    Image as ImageIcon, Video as VideoIcon, Link as LinkIcon, Target, Gift, Copy, Sparkles, Coins, Bug
+    Image as ImageIcon, Video as VideoIcon, Link as LinkIcon, Target, Gift, Copy, Sparkles, Coins, Bug, Bot
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -22,6 +22,7 @@ import { SuperadminStylesPricing } from '@/components/superadmin/superadmin-styl
 import { SuperadminOrgCards } from '@/components/superadmin/superadmin-org-cards';
 import { SuperadminNotificationBell } from '@/components/superadmin/SuperadminNotificationBell';
 import { IziTeachLogo } from '@/components/brand/iziteach-logo';
+import { SkyAgentSuperadminManager } from '@/components/superadmin/SkyAgentSuperadminManager';
 
 // ═══════════════════════════════════════════════════════════════════════
 // IZITEACH — SUPERADMIN PANEL
@@ -29,7 +30,7 @@ import { IziTeachLogo } from '@/components/brand/iziteach-logo';
 // Protected by platform_admins table (Supabase Auth + RLS)
 // ═══════════════════════════════════════════════════════════════════════
 
-type Tab = 'overview' | 'orgs' | 'users' | 'domains' | 'announcements' | 'points' | 'pricing' | 'requests' | 'ads' | 'email' | 'bugs' | 'compte';
+type Tab = 'overview' | 'orgs' | 'users' | 'domains' | 'announcements' | 'points' | 'pricing' | 'requests' | 'ads' | 'email' | 'bugs' | 'compte' | 'sky_agent';
 
 interface Stats {
     total_orgs: number;
@@ -85,6 +86,7 @@ const SIDEBAR: { id: Tab; label: string; icon: any; emoji?: string }[] = [
     { id: 'email',          label: 'Email Providers',  icon: Mail,            emoji: '📧' },
     { id: 'domains',        label: 'Domaines',         icon: Globe,           emoji: '🌐' },
     { id: 'announcements',  label: 'Annonces',         icon: Megaphone,       emoji: '📢' },
+    { id: 'sky_agent',      label: 'Sky Agent',        icon: Bot,             emoji: '🤖' },
     { id: 'compte',         label: 'Mon Compte',        icon: Lock,            emoji: '🔑' },
 ];
 
@@ -2411,6 +2413,15 @@ export default function SuperAdminPage() {
                                 </motion.div>
                             );
                         })()}
+
+                        {/* ══════════════════════════════════════════
+                            SKY AGENT SUPERADMIN
+                        ══════════════════════════════════════════ */}
+                        {tab === 'sky_agent' && (
+                            <motion.div key="sky_agent" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                                <SkyAgentSuperadminManager />
+                            </motion.div>
+                        )}
 
                     </AnimatePresence>
 

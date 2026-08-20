@@ -1,12 +1,18 @@
-# 📘 Guide Complet — Agent IA dans IziTeach
+# 📘 Guide — MCP IziTeach (Sky Agent)
 
-> **Pour qui ?** Ce guide est destiné à tout agent IA (Claude, Manus, ChatGPT, etc.) qui reçoit une clé API IziTeach. Il décrit comment se connecter, quelles actions sont disponibles, et comment les utiliser.
+> **Pour qui ?** Ce guide est destiné à tout Sky Agent (Claude, Manus, ChatGPT, Antigravity, etc.) qui reçoit une clé API IziTeach. Il décrit comment se connecter, quelles actions sont disponibles et comment les utiliser.
 
 ---
 
-## 🔌 Connexion au Gateway MCP
+## 🔌 Connexion au MCP IziTeach
 
-### Endpoint unique
+### Endpoint Principal (Cloudflare D1 — Haute performance & Concurrence massive)
+
+```
+POST https://campusflow-worker.kleintaptue1.workers.dev/mcp-gateway
+```
+
+### Endpoint Secondaire (Supabase Failover)
 
 ```
 POST https://nuisijvopyudmbcqpaua.supabase.co/functions/v1/mcp-gateway
@@ -41,170 +47,113 @@ Content-Type: application/json
 
 Réponse attendue :
 ```json
-{ "jsonrpc": "2.0", "result": { "pong": true, "agent": "NomAgent" }, "id": 0 }
+{ "jsonrpc": "2.0", "result": { "pong": true, "engine": "Cloudflare D1 Primary Edge (SQLite)", "agent": "NomAgent" }, "id": 0 }
 ```
 
 ---
 
-## Outils disponibles
+## ⚙️ Configuration sur Manus IA
+
+1. Dans Manus → **Paramètres** → **MCP** → **Ajouter un serveur**
+2. Remplir comme suit :
+
+| Champ | Valeur |
+|-------|--------|
+| **Nom du serveur** | `IziTeach` |
+| **Type de transport** | `HTTP` |
+| **URL (Cloudflare Principal)** | `https://campusflow-worker.kleintaptue1.workers.dev/mcp-gateway` |
+| **Remarque** | Colle le contenu de ce guide dans ce champ |
+
+3. Dans **Variables d'environnement** → ajouter :
+
+| Clé | Valeur |
+|-----|--------|
+| `IZITEACH_KEY` | `cf_live_VOTRE_CLE_API` |
+
+> Si Manus demande une **Commande** (STDIO), utilise plutôt le type **HTTP** qui ne nécessite pas de script local.
+
+---
+
+## 🛠️ Outils disponibles
 
 ### Consulter les données
 
-#### `get_org_info` — Informations de l'école
-```json
-{ "name": "get_org_info", "arguments": {} }
-```
-Retourne : nom, ville, type, slug.
-
----
-
-#### `list_classes` — Liste des classes
-```json
-{ "name": "list_classes", "arguments": {} }
-```
-
----
-
-#### `list_subjects` — Liste des matières
-```json
-{ "name": "list_subjects", "arguments": { "class_id": "UUID" } }
-```
-`class_id` est optionnel.
-
----
-
-#### `list_chapters` — Chapitres d'une matière
-```json
-{ "name": "list_chapters", "arguments": { "subject_id": "UUID" } }
-```
-
----
-
-#### `list_lessons` — Leçons d'un chapitre
-```json
-{ "name": "list_lessons", "arguments": { "chapter_id": "UUID" } }
-```
-
----
-
-#### `list_students` — Étudiants
-```json
-{ "name": "list_students", "arguments": { "class_id": "UUID" } }
-```
-`class_id` est optionnel.
-
----
+| Outil | Description | Arguments requis |
+|-------|------------|-----------------|
+| `get_org_info` | Infos de l'école | — |
+| `list_classes` | Liste des classes | — |
+| `list_subjects` | Liste des matières | `class_id` (opt.) |
+| `list_chapters` | Chapitres d'une matière | `subject_id` |
+| `list_lessons` | Leçons d'un chapitre | `chapter_id` |
+| `list_students` | Étudiants | `class_id` (opt.) |
 
 ### Créer du contenu
 
-#### `create_subject` — Créer une matière
+| Outil | Description | Arguments requis |
+|-------|------------|-----------------|
+| `create_subject` | Créer une matière | `name` |
+| `create_chapter` | Créer un chapitre | `subject_id`, `title` |
+| `create_lesson` | Créer une leçon | `chapter_id`, `title`, `content` |
+| `create_exercise` | Créer un exercice | `lesson_id`, `title`, `question`, `type`, `correct_answer` |
+
+### ⚡ Outils Superadmin (Master Agent)
+
+| Outil | Description | Arguments |
+|-------|------------|-----------|
+| `list_support_messages` | Lister les tickets & requêtes Sky Requests | `status` (opt), `limit` (opt) |
+| `reply_support_message` | Répondre à un ticket utilisateur | `request_id`, `reply_message` |
+| `credit_sky_points` | Vendre / créditer des Sky Points | `target_type` ('org'/'user'), `target_id`, `points` |
+| `list_inactive_orgs` | Lister les écoles inactives (>30j) | `days_inactive` (opt) |
+| `send_email_to_org` | Envoyer un email direct à une école | `org_id`, `subject`, `message` |
+| `list_bug_reports` | Consulter les rapports de bugs | `status` (opt) |
+| `update_bug_status` | Traiter / résoudre un bug | `bug_id`, `status`, `admin_note` |
+| `generate_bug_summary_report` | Analyse synthétique des bugs | `period_days` (opt) |
+| `send_superadmin_announcement` | Diffuser une annonce globale | `title`, `content`, `target_org_id` |
+| `get_platform_stats` | Statistiques globales IziTeach | — |
+
+---
+
+## Exemple complet — Créer une leçon
+
 ```json
-{
-  "name": "create_subject",
-  "arguments": {
-    "name": "Algorithmique",
-    "class_id": "UUID"
-  }
-}
+// Étape 1 : Lister les matières
+{ "jsonrpc": "2.0", "method": "tools/call", "id": 1,
+  "params": { "name": "list_subjects", "arguments": {} } }
+
+// Étape 2 : Créer un chapitre
+{ "jsonrpc": "2.0", "method": "tools/call", "id": 2,
+  "params": { "name": "create_chapter",
+    "arguments": { "subject_id": "UUID", "title": "Mon chapitre" } } }
+
+// Étape 3 : Créer la leçon
+{ "jsonrpc": "2.0", "method": "tools/call", "id": 3,
+  "params": { "name": "create_lesson",
+    "arguments": {
+      "chapter_id": "UUID",
+      "title": "Ma leçon",
+      "content": "## Introduction\nContenu en Markdown..."
+    } } }
 ```
 
 ---
 
-#### `create_chapter` — Créer un chapitre
-```json
-{
-  "name": "create_chapter",
-  "arguments": {
-    "subject_id": "UUID",
-    "title": "Introduction à la POO",
-    "description": "Optionnel",
-    "order_index": 1
-  }
-}
-```
+## 🔐 Permissions
+
+| Permission | Outils concernés |
+|-----------|-----------------|
+| `read:curriculum` | `get_org_info`, `list_*` |
+| `read:students` | `list_students` |
+| `write:curriculum` | `create_subject`, `create_chapter`, `create_lesson` |
+| `write:exercises` | `create_exercise` |
 
 ---
 
-#### `create_lesson` — Créer une leçon
-```json
-{
-  "name": "create_lesson",
-  "arguments": {
-    "chapter_id": "UUID",
-    "title": "Les variables en Python",
-    "content": "## Introduction\nUne variable est...",
-    "duration_minutes": 30,
-    "order_index": 1
-  }
-}
-```
-Le contenu supporte le **Markdown** (titres, listes, code).
-
----
-
-#### `create_exercise` — Créer un exercice
-```json
-{
-  "name": "create_exercise",
-  "arguments": {
-    "lesson_id": "UUID",
-    "title": "QCM Variables",
-    "question": "Quelle instruction déclare une variable en Python ?",
-    "type": "qcm",
-    "choices": ["var x = 5", "x = 5", "int x = 5"],
-    "correct_answer": "x = 5",
-    "explanation": "En Python on écrit simplement x = valeur.",
-    "max_score": 10
-  }
-}
-```
-Types : `"qcm"` | `"text"` | `"true_false"`
-
----
-
-## Permissions requises par outil
-
-| Outil | Permission nécessaire |
-|-------|-----------------------|
-| `get_org_info`, `list_*` | `read:curriculum` |
-| `list_students` | `read:students` |
-| `create_subject`, `create_chapter`, `create_lesson` | `write:curriculum` |
-| `create_exercise` | `write:exercises` |
-
----
-
-## Limites et quotas
+## ⚡ Limites
 
 | Paramètre | Valeur |
 |-----------|--------|
-| Requêtes / minute | 20 req/min |
-| Seuil d'approbation | Au-delà de 10 éléments en masse |
-| Expiration clé | Selon configuration admin |
-
----
-
-## Flux de travail typique pour créer une leçon
-
-```
-1. get_org_info       — identifier l'organisation
-2. list_subjects      — choisir une matière
-3. list_chapters      — choisir un chapitre (ou create_chapter)
-4. create_lesson      — créer la leçon avec son contenu
-5. create_exercise    — ajouter des exercices
-```
-
----
-
-## Fonctionnement autonome (24h/24)
-
-**Oui**, l'agent peut travailler même quand l'admin n'est pas connecté.
-
-| Scénario | Résultat |
-|----------|---------|
-| Créer leçons la nuit | Oui |
-| Lire données sans admin connecté | Oui |
-| Actions en masse au-delà du seuil | Mise en attente — l'admin approuve au prochain login |
-| Clé révoquée | Accès coupé immédiatement |
+| Requêtes / minute | 20 req/min (par clé) |
+| Actions en masse | Au-delà de 10 → approbation admin requise |
 
 ---
 
@@ -221,4 +170,4 @@ Types : `"qcm"` | `"text"` | `"true_false"`
 
 ---
 
-*IziTeach MCP Gateway v1.0 — Compatible JSON-RPC 2.0*
+*MCP IziTeach v1.0 — Sky Agent System*

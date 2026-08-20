@@ -102,7 +102,7 @@ const SIDES = [
     { id: 'actus' as Tab, icon: Bell, label: 'Actus' },
     { id: 'exam_room' as Tab, icon: ClipboardCheck, label: '🏛️ Salle d\'Évaluation' },
     { id: 'settings' as Tab, icon: Palette, label: 'Paramètres' },
-    { id: 'ai_agents' as Tab, icon: Bot, label: '🤖 Agents IA' },
+    { id: 'ai_agents' as Tab, icon: Bot, label: '🤖 Sky Agent' },
 ];
 const COLLEGE = ['6ème', '5ème', '4ème', '3ème'], LYCEE = ['Seconde', 'Première', 'Terminale'], SECS = ['A', 'B', 'C'];
 const DEFS: Record<string, string[]> = { college: ['Mathématiques', 'Français', 'Anglais', 'SVT', 'Physique-Chimie', 'Histoire-Géo', 'Informatique', 'EPS'], lycee: ['Mathématiques', 'Français', 'Anglais', 'Physique', 'Chimie', 'SVT', 'Philosophie', 'Histoire-Géo', 'Informatique', 'EPS'], universite: ['Module 1', 'Module 2', 'Module 3', 'Projet tutoré', 'Stage'], centre_formation: ['Cours théorique', 'Travaux pratiques', 'Stage professionnel', 'Projet fin de formation'], institut: ['Cours fondamental', 'Spécialisation', 'Travaux pratiques', 'Stage'] };
@@ -4746,7 +4746,7 @@ ${bodyHtml}
                         </div>
                     )}
 
-                    {/* ── AGENTS IA — Redirige vers la page dédiée ── */}
+                    {/* ── SKY AGENT ── */}
                     {tab === 'ai_agents' && org && (
                         <div className="max-w-5xl mx-auto">
                             <AiAgentsManager orgId={org.id} orgSlug={orgSlug} />

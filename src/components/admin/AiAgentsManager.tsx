@@ -20,7 +20,7 @@ import {
     Activity, Clock, AlertTriangle, CheckCircle, XCircle,
     ChevronRight, ChevronDown, RefreshCw, Loader2, Info,
     Zap, Lock, BookOpen, Users, BarChart3, Calendar, ListChecks,
-    Ban, ArrowRight,
+    Ban, ArrowRight, Terminal,
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────
@@ -162,7 +162,7 @@ function extractOutputInfo(toolName: string, outputSummary: string | null, statu
 
 // ── Main Component ────────────────────────────────────────────────
 export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
-    const [subTab, setSubTab] = useState<'keys' | 'logs' | 'pending'>('keys');
+    const [subTab, setSubTab] = useState<'keys' | 'logs' | 'pending' | 'docs'>('keys');
     const [agentKeys, setAgentKeys] = useState<AgentKey[]>([]);
     const [logs, setLogs] = useState<AgentLog[]>([]);
     const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
@@ -330,8 +330,8 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
                         <Bot className="w-5 h-5 text-violet-400" />
                     </div>
                     <div>
-                        <h2 className="text-lg font-bold text-white">Agents IA</h2>
-                        <p className="text-xs text-slate-400">Gérez les accès des agents IA à votre école</p>
+                        <h2 className="text-lg font-bold text-white">Sky Agent</h2>
+                        <p className="text-xs text-slate-400">Gérez les accès des Sky Agents à votre école</p>
                     </div>
                 </div>
                 <button
@@ -384,6 +384,7 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
                     { id: 'keys',    label: 'Clés API',          icon: Key,       count: agentKeys.filter(k => k.is_active).length },
                     { id: 'logs',    label: 'Journal d\'activité', icon: Activity,  count: logs.length },
                     { id: 'pending', label: 'Approbations',       icon: Clock,     count: pendingCount },
+                    { id: 'docs',    label: 'Guide & Connexion',  icon: Terminal,  count: 0 },
                 ].map(({ id, label, icon: Icon, count }) => (
                     <button
                         key={id}
@@ -418,7 +419,7 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
                             className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-indigo-500/40 rounded-xl text-indigo-400 hover:border-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/5 transition font-medium text-sm"
                         >
                             <Plus className="w-5 h-5" />
-                            Autoriser un nouvel agent IA
+                            Autoriser un nouveau Sky Agent
                         </button>
                     )}
 
@@ -434,7 +435,7 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
                             </div>
                             <p className="text-xs text-amber-400 flex items-center gap-1.5">
                                 <AlertTriangle className="w-3.5 h-3.5" />
-                                Cette clé ne sera plus affichée. Copiez-la maintenant et donnez-la à votre agent IA.
+                                Cette clé ne sera plus affichée. Copiez-la maintenant et donnez-la à votre Sky Agent (Claude, Manus, ChatGPT...).
                             </p>
                             <div className="flex gap-2">
                                 <button
@@ -459,7 +460,7 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
                         <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-5">
                             <h3 className="text-base font-bold text-white flex items-center gap-2">
                                 <Bot className="w-5 h-5 text-violet-400" />
-                                Configurer un nouvel agent IA
+                                Configurer un nouveau Sky Agent
                             </h3>
 
                             {/* Name & Description */}
@@ -809,6 +810,33 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
                             ))}
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* ── TAB : DOCS & GUIDE ──────────────────────────────────── */}
+            {subTab === 'docs' && (
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4 text-sm text-slate-300 leading-relaxed">
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                        <Terminal className="w-5 h-5 text-indigo-400" />
+                        Connexion MCP IziTeach (Sky Agent)
+                    </h3>
+                    <p>
+                        Configurez votre agent IA préféré (Manus, Claude Desktop, ChatGPT, Antigravity) avec les coordonnées suivantes :
+                    </p>
+                    <div className="space-y-2">
+                        <div className="bg-black/60 p-3.5 rounded-xl font-mono text-xs border border-indigo-500/30 space-y-1">
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-indigo-400">⚡ Endpoint Principal (Cloudflare D1 Edge) :</span>
+                            <p className="text-indigo-300 font-semibold">POST https://campusflow-worker.kleintaptue1.workers.dev/mcp-gateway</p>
+                        </div>
+                        <div className="bg-black/40 p-3 rounded-xl font-mono text-[11px] border border-white/5 space-y-1">
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">🛡️ Endpoint Secours (Supabase Edge) :</span>
+                            <p className="text-slate-400">POST https://nuisijvopyudmbcqpaua.supabase.co/functions/v1/mcp-gateway</p>
+                        </div>
+                    </div>
+                    <div className="bg-black/60 p-3.5 rounded-xl font-mono text-xs text-slate-300 border border-white/10 space-y-1">
+                        <p>Authorization: Bearer cf_live_VOTRE_CLE</p>
+                        <p>Content-Type: application/json</p>
+                    </div>
                 </div>
             )}
         </div>
