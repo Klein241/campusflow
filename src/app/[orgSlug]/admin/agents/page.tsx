@@ -42,30 +42,18 @@ function useAdminSession() {
                 if (cancelled) return;
                 setSession(authSession);
 
-                // 2. Vérifier que l'user est admin/director de cette org
-                const { data: profile } = await supabase
-                    .from('teacher_profiles')
-                    .select('id, role, organization_id')
-                    .eq('id', authSession.user.id)
-                    .maybeSingle();
-
-                if (cancelled) return;
-
-                if (!profile || !['director', 'superadmin', 'admin'].includes(profile.role)) {
-                    router.replace(`/${orgSlug}/admin`);
-                    return;
-                }
-
-                // 3. Charger l'organisation
+                // 2. Vérifier que l'user est owner de cette org
                 const { data: orgData } = await supabase
                     .from('organizations')
-                    .select('id, name, slug, logo_url, is_active, sky_points')
+                    .select('id, name, slug, logo_url, is_active, sky_points, owner_id')
                     .eq('slug', orgSlug)
+                    .eq('owner_id', authSession.user.id)
                     .maybeSingle();
 
                 if (cancelled) return;
 
                 if (!orgData) {
+                    // Pas owner → accès refusé
                     router.replace(`/${orgSlug}/admin`);
                     return;
                 }
