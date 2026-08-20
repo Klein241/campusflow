@@ -2,7 +2,7 @@
   "functions": {
     "mcp-gateway": {
       "verify_jwt": false,
-      "entrypoint": "index.ts"
+      "entrypoint": "functions/mcp-gateway/index.ts"
     }
   }
 }
