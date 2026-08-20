@@ -3496,6 +3496,119 @@ const WORKER_MCP_TOOLS = [
         permission: 'write:schedule',
         inputSchema: { type: 'object', properties: { classroom_id: { type: 'string' }, subject_id: { type: 'string' }, day_of_week: { type: 'string' }, start_time: { type: 'string' }, end_time: { type: 'string' }, room_name: { type: 'string' } }, required: ['classroom_id', 'subject_id', 'day_of_week', 'start_time', 'end_time'] },
     },
+    // ── SALLE D'ÉVALUATION & EXAMENS ──
+    {
+        name: 'list_exam_papers',
+        description: 'Lister les épreuves d\'examen et devoirs de la Salle d\'Évaluation',
+        permission: 'read:curriculum',
+        inputSchema: { type: 'object', properties: { subject: { type: 'string' }, status: { type: 'string' } } },
+    },
+    {
+        name: 'create_exam_paper',
+        description: 'Créer une épreuve d\'examen dans la Salle d\'Évaluation (avec barème, questions QCM/rédaction, durée, coefficient)',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                title: { type: 'string' },
+                subject: { type: 'string' },
+                coefficient: { type: 'number' },
+                duration_minutes: { type: 'number' },
+                instructions: { type: 'string' },
+                questions: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            text: { type: 'string' },
+                            type: { type: 'string', enum: ['qcm', 'vrai_faux', 'redaction', 'texte_a_trou'] },
+                            points: { type: 'number' },
+                            options: { type: 'array', items: { type: 'string' } },
+                            correct: {},
+                        },
+                        required: ['text', 'type', 'points'],
+                    },
+                },
+                status: { type: 'string', enum: ['draft', 'published', 'archived'] },
+            },
+            required: ['title'],
+        },
+    },
+    {
+        name: 'update_exam_paper',
+        description: 'Modifier une épreuve d\'examen dans la Salle d\'Évaluation',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                paper_id: { type: 'string' },
+                title: { type: 'string' },
+                subject: { type: 'string' },
+                coefficient: { type: 'number' },
+                duration_minutes: { type: 'number' },
+                instructions: { type: 'string' },
+                questions: { type: 'array' },
+                status: { type: 'string' },
+            },
+            required: ['paper_id'],
+        },
+    },
+    {
+        name: 'delete_exam_paper',
+        description: 'Supprimer une épreuve d\'examen',
+        permission: 'write:curriculum',
+        inputSchema: { type: 'object', properties: { paper_id: { type: 'string' } }, required: ['paper_id'] },
+    },
+    {
+        name: 'launch_exam_session',
+        description: 'Lancer une session d\'examen en direct dans la Salle d\'Évaluation pour les étudiants',
+        permission: 'write:curriculum',
+        inputSchema: { type: 'object', properties: { paper_id: { type: 'string' }, participant_ids: { type: 'array', items: { type: 'string' } } }, required: ['paper_id'] },
+    },
+    // ── FORMULAIRES, SONDAGES & ENQUÊTES ──
+    {
+        name: 'list_forms',
+        description: 'Lister les formulaires, sondages et enquêtes de l\'établissement',
+        permission: 'read:curriculum',
+        inputSchema: { type: 'object', properties: { form_type: { type: 'string', enum: ['survey', 'quiz', 'registration'] }, is_published: { type: 'boolean' } } },
+    },
+    {
+        name: 'create_form',
+        description: 'Créer un formulaire, sondage ou enquête avec questions et lien public direct pour les étudiants',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                title: { type: 'string' },
+                description: { type: 'string' },
+                form_type: { type: 'string', enum: ['survey', 'quiz', 'registration'] },
+                is_published: { type: 'boolean' },
+                fields: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            label: { type: 'string' },
+                            field_type: { type: 'string', enum: ['short_text', 'long_text', 'multiple_choice', 'checkbox', 'dropdown', 'date', 'time', 'rating', 'number', 'section_header'] },
+                            description: { type: 'string' },
+                            options: { type: 'array', items: { type: 'string' } },
+                            required: { type: 'boolean' },
+                            points: { type: 'number' },
+                            correct_answer: { type: 'string' },
+                        },
+                        required: ['label', 'field_type'],
+                    },
+                },
+            },
+            required: ['title'],
+        },
+    },
+    {
+        name: 'get_form_results',
+        description: 'Consulter les résultats, réponses et statistiques d\'un formulaire ou sondage',
+        permission: 'read:curriculum',
+        inputSchema: { type: 'object', properties: { form_id: { type: 'string' } }, required: ['form_id'] },
+    },
     // ── SUPERADMIN TOOLS ──
     {
         name: 'list_support_messages',
@@ -3721,7 +3834,7 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
         }
 
         try {
-            const result = await executeMcpToolD1(toolName, args, { agentKey, isSuperadmin, orgId, agentName }, env);
+            const result = await executeMcpToolD1(toolName, args, { agentKey, isSuperadmin, orgId, agentName, agentId: agentKey.id }, env);
             const duration = Date.now() - startTime;
 
             logMcpAction(env, {
@@ -3760,8 +3873,38 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
     return json({ jsonrpc: '2.0', error: { code: -32601, message: `Méthode non supportée : ${mcpReq.method}` }, id: reqId }, 400);
 }
 
+// ── BROADCAST PUSH NOTIFICATION HELPER ─────────────────────────────
+async function broadcastUpdatePush(
+    env: Env,
+    db: any,
+    orgId: string,
+    title: string,
+    message: string,
+    icon: string = '📢',
+    url: string = ''
+) {
+    try {
+        const notifId = crypto.randomUUID();
+        const now = new Date().toISOString();
+        // 1. Notification in-app pour tous
+        await db.prepare(`INSERT INTO admin_notifications (id, organization_id, title, message, icon, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)`)
+            .bind(notifId, orgId, title, message, icon, now).run().catch(() => {});
+        syncToSupabase(env, 'admin_notifications', 'INSERT', { id: notifId, organization_id: orgId, title, message, icon });
+
+        // 2. Notification Push directe pour les étudiants
+        const { results: students } = await db.prepare(`SELECT id FROM student_profiles WHERE organization_id = ?1 AND is_active = 1 LIMIT 100`).bind(orgId).all().catch(() => ({ results: [] }));
+        if (students && students.length > 0) {
+            for (const s of students) {
+                sendPushDirect(s.id, title, message, { url, orgId }, 'normal', `notif_${notifId}`, env).catch(() => {});
+            }
+        }
+    } catch (e) {
+        console.error('[broadcastUpdatePush] error:', e);
+    }
+}
+
 // ── Exécuteur direct Cloudflare D1 ────────────────────────────────
-async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx: { agentKey: any; isSuperadmin: boolean; orgId: string | null; agentName: string }, env: Env): Promise<any> {
+async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx: { agentKey: any; isSuperadmin: boolean; orgId: string | null; agentName: string; agentId: string }, env: Env): Promise<any> {
     const db = env.CAMPUSFLOW_DB;
 
     // 🔒 SÉCURITÉ MULTI-TENANT : Un agent d'école ne peut JAMAIS écraser targetOrgId
@@ -3995,6 +4138,10 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             await db.prepare(`INSERT INTO lessons (id, organization_id, chapter_id, title, content, estimated_minutes, status, position, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', ?7, ?8)`)
                 .bind(id, targetOrgId, args.chapter_id, args.title, args.content, duration, position, now).run();
             syncToSupabase(env, 'lessons', 'INSERT', { id, organization_id: targetOrgId, chapter_id: args.chapter_id, title: args.title, content: args.content, estimated_minutes: duration, status: 'published', position });
+
+            // 📢 NOTIFICATION PUSH AUTOMATIQUE
+            broadcastUpdatePush(env, db, targetOrgId, `📚 Nouvelle Leçon : ${args.title}`, `Une nouvelle leçon (${duration} min) a été ajoutée à votre cursus.`, '📚', '/campus/cursus');
+
             return { success: true, lesson_id: id, message: `✅ Leçon "${args.title}" créée et publiée sur Cloudflare D1` };
         }
 
@@ -4008,6 +4155,10 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             await db.prepare(`UPDATE lessons SET title = COALESCE(?1, title), content = COALESCE(?2, content), estimated_minutes = COALESCE(?3, estimated_minutes), position = COALESCE(?4, position) WHERE id = ?5`)
                 .bind(args.title || null, args.content || null, args.duration_minutes || null, args.position || null, args.lesson_id).run();
             syncToSupabase(env, 'lessons', 'UPDATE', { id: args.lesson_id, title: args.title, content: args.content, estimated_minutes: args.duration_minutes, position: args.position });
+
+            // 📢 NOTIFICATION PUSH AUTOMATIQUE
+            broadcastUpdatePush(env, db, les.organization_id, `📝 Mise à jour de la leçon : ${args.title || 'Contenu modifié'}`, `Le contenu de la leçon a été mis à jour.`, '📝', '/campus/cursus');
+
             return { success: true, message: `✅ Leçon mise à jour` };
         }
 
@@ -4087,6 +4238,9 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 created_by_ai: true,
                 ai_agent_name: ctx.agentName,
             });
+
+            // 📢 NOTIFICATION PUSH AUTOMATIQUE
+            broadcastUpdatePush(env, db, targetOrgId, `🎯 Nouvel Exercice : ${args.title}`, `Un nouvel exercice (${maxScore} pts) est disponible dans votre cours.`, '🎯', '/campus/cursus');
 
             return {
                 success: true,
@@ -4190,6 +4344,9 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 }
             }
 
+            // 📢 NOTIFICATION PUSH AUTOMATIQUE DU CURSUS
+            broadcastUpdatePush(env, db, targetOrgId, `🌟 Mise à Jour Pédagogique`, `${createdSummary.chapters} chapitre(s), ${createdSummary.lessons} leçon(s) et ${createdSummary.exercises} exercice(s) ont été publiés.`, '🌟', '/campus/cursus');
+
             return {
                 success: true,
                 subject_id: subjectId,
@@ -4278,6 +4435,219 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 .bind(id, targetOrgId, args.classroom_id, args.subject_id, args.day_of_week, args.start_time, args.end_time, args.room_name || null, now).run();
             syncToSupabase(env, 'timetables', 'INSERT', { id, organization_id: targetOrgId, classroom_id: args.classroom_id, subject_id: args.subject_id, day_of_week: args.day_of_week, start_time: args.start_time, end_time: args.end_time });
             return { success: true, schedule_id: id, message: `✅ Emploi du temps mis à jour` };
+        }
+
+        // ── LIST EXAM PAPERS (SALLE D'ÉVALUATION) ──
+        case 'list_exam_papers': {
+            let sql = `SELECT id, org_id, created_by, title, subject, coefficient, duration_minutes, instructions, questions, status, created_at, updated_at FROM exam_papers`;
+            const conditions: string[] = [];
+            const params: any[] = [];
+            if (targetOrgId) {
+                params.push(targetOrgId);
+                conditions.push(`org_id = ?${params.length}`);
+            }
+            if (args.subject) {
+                params.push(args.subject);
+                conditions.push(`subject = ?${params.length}`);
+            }
+            if (args.status) {
+                params.push(args.status);
+                conditions.push(`status = ?${params.length}`);
+            }
+            if (conditions.length > 0) sql += ` WHERE ` + conditions.join(' AND ');
+            sql += ` ORDER BY created_at DESC LIMIT 50`;
+            const { results } = await db.prepare(sql).bind(...params).all();
+            const papers = (results || []).map((p: any) => ({
+                ...p,
+                questions: typeof p.questions === 'string' ? JSON.parse(p.questions || '[]') : p.questions,
+            }));
+            return { exam_papers: papers, total: papers.length };
+        }
+
+        // ── CREATE EXAM PAPER ──
+        case 'create_exam_paper': {
+            if (!args.title) throw { code: -32602, message: 'title requis' };
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+            const id = crypto.randomUUID();
+            const now = new Date().toISOString();
+            const questions = Array.isArray(args.questions) ? args.questions : [];
+            const questionsStr = JSON.stringify(questions);
+            const coeff = Number(args.coefficient) || 1.0;
+            const dur = Number(args.duration_minutes) || 60;
+            const status = args.status || 'published';
+
+            await db.prepare(`INSERT INTO exam_papers (id, org_id, created_by, title, subject, coefficient, duration_minutes, instructions, questions, status, created_at, updated_at, exam_mode) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11, 'structured')`)
+                .bind(id, targetOrgId, ctx.agentId, args.title, args.subject || null, coeff, dur, args.instructions || null, questionsStr, status, now).run();
+
+            syncToSupabase(env, 'exam_papers', 'INSERT', {
+                id, org_id: targetOrgId, created_by: ctx.agentId, title: args.title, subject: args.subject, coefficient: coeff, duration_minutes: dur, instructions: args.instructions, questions, status, exam_mode: 'structured'
+            });
+
+            // 📢 NOTIFICATION PUSH AUTOMATIQUE AUX ÉLÈVES
+            const notifTitle = `📝 Nouvelle Épreuve : ${args.title}`;
+            const notifMsg = `Une nouvelle épreuve ${args.subject ? `de ${args.subject}` : ''} (${dur} min) est prête dans la Salle d'Évaluation.`;
+            broadcastUpdatePush(env, db, targetOrgId, notifTitle, notifMsg, '📝', '/campus/evaluations');
+
+            return {
+                success: true,
+                paper_id: id,
+                message: `✅ Épreuve "${args.title}" créée dans la Salle d'Évaluation (${questions.length} question(s))`,
+            };
+        }
+
+        // ── UPDATE EXAM PAPER ──
+        case 'update_exam_paper': {
+            if (!args.paper_id) throw { code: -32602, message: 'paper_id requis' };
+            const paper: any = await db.prepare(`SELECT org_id FROM exam_papers WHERE id = ?1`).bind(args.paper_id).first();
+            if (!paper) throw { code: -32602, message: 'Épreuve introuvable' };
+            if (!ctx.isSuperadmin && ctx.orgId && paper.org_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
+
+            const now = new Date().toISOString();
+            const questionsStr = Array.isArray(args.questions) ? JSON.stringify(args.questions) : null;
+
+            await db.prepare(`UPDATE exam_papers SET title = COALESCE(?1, title), subject = COALESCE(?2, subject), coefficient = COALESCE(?3, coefficient), duration_minutes = COALESCE(?4, duration_minutes), instructions = COALESCE(?5, instructions), questions = COALESCE(?6, questions), status = COALESCE(?7, status), updated_at = ?8 WHERE id = ?9`)
+                .bind(args.title || null, args.subject || null, args.coefficient || null, args.duration_minutes || null, args.instructions || null, questionsStr, args.status || null, now, args.paper_id).run();
+
+            syncToSupabase(env, 'exam_papers', 'UPDATE', { id: args.paper_id, title: args.title, subject: args.subject, coefficient: args.coefficient, duration_minutes: args.duration_minutes, instructions: args.instructions, questions: args.questions, status: args.status });
+            return { success: true, message: `✅ Épreuve mise à jour` };
+        }
+
+        // ── DELETE EXAM PAPER ──
+        case 'delete_exam_paper': {
+            if (!args.paper_id) throw { code: -32602, message: 'paper_id requis' };
+            const paper: any = await db.prepare(`SELECT org_id FROM exam_papers WHERE id = ?1`).bind(args.paper_id).first();
+            if (!paper) throw { code: -32602, message: 'Épreuve introuvable' };
+            if (!ctx.isSuperadmin && ctx.orgId && paper.org_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
+
+            await db.prepare(`DELETE FROM exam_papers WHERE id = ?1`).bind(args.paper_id).run();
+            syncToSupabase(env, 'exam_papers', 'DELETE', { id: args.paper_id });
+            return { success: true, message: `🗑️ Épreuve supprimée` };
+        }
+
+        // ── LAUNCH EXAM SESSION ──
+        case 'launch_exam_session': {
+            if (!args.paper_id) throw { code: -32602, message: 'paper_id requis' };
+            const paper: any = await db.prepare(`SELECT * FROM exam_papers WHERE id = ?1`).bind(args.paper_id).first();
+            if (!paper) throw { code: -32602, message: 'Épreuve introuvable' };
+            if (!ctx.isSuperadmin && ctx.orgId && paper.org_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
+
+            const sessionId = crypto.randomUUID();
+            const now = new Date().toISOString();
+            const participantIds = JSON.stringify(args.participant_ids || []);
+
+            await db.prepare(`INSERT INTO exam_sessions (id, exam_paper_id, org_id, launched_by, participant_ids, status, started_at, created_at) VALUES (?1, ?2, ?3, ?4, ?5, 'active', ?6, ?6)`)
+                .bind(sessionId, args.paper_id, paper.org_id, ctx.agentId, participantIds, now).run();
+
+            syncToSupabase(env, 'exam_sessions', 'INSERT', { id: sessionId, exam_paper_id: args.paper_id, org_id: paper.org_id, launched_by: ctx.agentId, status: 'active', started_at: now });
+
+            // 📢 NOTIFICATION PUSH D'ÉVALUATION EN DIRECT
+            const notifTitle = `⚡ Évaluation en Direct : ${paper.title}`;
+            const notifMsg = `Une session d'examen vient d'être lancée dans la Salle d'Évaluation !`;
+            broadcastUpdatePush(env, db, paper.org_id, notifTitle, notifMsg, '⚡', '/campus/evaluations');
+
+            return {
+                success: true,
+                session_id: sessionId,
+                message: `🚀 Session d'examen lancée en direct pour "${paper.title}"`,
+            };
+        }
+
+        // ── LIST FORMS (SONDAGES & ENQUÊTES) ──
+        case 'list_forms': {
+            let sql = `SELECT id, organization_id, title, description, slug, form_type, is_published, accepts_responses, show_results_to_respondents, created_at FROM forms`;
+            const conditions: string[] = [];
+            const params: any[] = [];
+            if (targetOrgId) {
+                params.push(targetOrgId);
+                conditions.push(`organization_id = ?${params.length}`);
+            }
+            if (args.form_type) {
+                params.push(args.form_type);
+                conditions.push(`form_type = ?${params.length}`);
+            }
+            if (typeof args.is_published === 'boolean') {
+                params.push(args.is_published ? 1 : 0);
+                conditions.push(`is_published = ?${params.length}`);
+            }
+            if (conditions.length > 0) sql += ` WHERE ` + conditions.join(' AND ');
+            sql += ` ORDER BY created_at DESC LIMIT 50`;
+            const { results } = await db.prepare(sql).bind(...params).all();
+            return { forms: results || [], total: (results || []).length };
+        }
+
+        // ── CREATE FORM (AVEC LIEN PUBLIC OPÉRATIONNEL & PUSH) ──
+        case 'create_form': {
+            if (!args.title) throw { code: -32602, message: 'title requis' };
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+
+            // Récupérer le slug de l'organisation
+            const org: any = await db.prepare(`SELECT slug FROM organizations WHERE id = ?1`).bind(targetOrgId).first();
+            const orgSlug = org?.slug || 'campus';
+
+            // Génération de slug propre
+            const baseSlug = String(args.title).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 28);
+            const uniquePart = crypto.randomUUID().slice(0, 6);
+            const formSlug = `${baseSlug}-${uniquePart}`;
+
+            const formId = crypto.randomUUID();
+            const now = new Date().toISOString();
+            const formType = args.form_type || 'survey';
+            const isPub = args.is_published !== false ? 1 : 0;
+
+            await db.prepare(`INSERT INTO forms (id, organization_id, created_by_role, created_by_id, title, description, slug, form_type, is_published, accepts_responses, show_results_to_respondents, created_at) VALUES (?1, ?2, 'teacher', ?3, ?4, ?5, ?6, ?7, ?8, 1, 0, ?9)`)
+                .bind(formId, targetOrgId, ctx.agentId, args.title, args.description || null, formSlug, formType, isPub, now).run();
+
+            syncToSupabase(env, 'forms', 'INSERT', {
+                id: formId, organization_id: targetOrgId, created_by_role: 'teacher', created_by_id: ctx.agentId, title: args.title, description: args.description, slug: formSlug, form_type: formType, is_published: Boolean(isPub), accepts_responses: true
+            });
+
+            // Insérer les champs du formulaire s'ils sont fournis
+            const fields = Array.isArray(args.fields) ? args.fields : [];
+            for (let i = 0; i < fields.length; i++) {
+                const f = fields[i];
+                const fieldId = crypto.randomUUID();
+                const optsStr = Array.isArray(f.options) ? JSON.stringify(f.options) : null;
+                await db.prepare(`INSERT INTO form_fields (id, form_id, field_type, label, description, options, required, sort_order, correct_answer, points, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`)
+                    .bind(fieldId, formId, f.field_type || 'short_text', f.label, f.description || null, optsStr, f.required ? 1 : 0, i, f.correct_answer || null, Number(f.points) || 0, now).run();
+                syncToSupabase(env, 'form_fields', 'INSERT', {
+                    id: fieldId, form_id: formId, field_type: f.field_type || 'short_text', label: f.label, description: f.description, options: f.options, required: Boolean(f.required), sort_order: i, correct_answer: f.correct_answer, points: Number(f.points) || 0
+                });
+            }
+
+            const publicUrl = `/${orgSlug}/f/${formSlug}`;
+
+            // 📢 NOTIFICATION PUSH AUTOMATIQUE DU SONDAGE / ENQUÊTE
+            if (isPub) {
+                const notifTitle = `📊 Nouveau Formulaire / Enquête : ${args.title}`;
+                const notifMsg = `Votre avis compte ! Répondez dès maintenant : ${args.title}`;
+                broadcastUpdatePush(env, db, targetOrgId, notifTitle, notifMsg, '📊', publicUrl);
+            }
+
+            return {
+                success: true,
+                form_id: formId,
+                slug: formSlug,
+                public_url: publicUrl,
+                message: `✅ Formulaire "${args.title}" créé et publié avec ${fields.length} question(s). Lien direct : ${publicUrl}`,
+            };
+        }
+
+        // ── GET FORM RESULTS ──
+        case 'get_form_results': {
+            if (!args.form_id) throw { code: -32602, message: 'form_id requis' };
+            const form: any = await db.prepare(`SELECT id, title, slug, form_type, is_published, organization_id FROM forms WHERE id = ?1`).bind(args.form_id).first();
+            if (!form) throw { code: -32602, message: 'Formulaire introuvable' };
+            if (!ctx.isSuperadmin && ctx.orgId && form.organization_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
+
+            const { results: responses } = await db.prepare(`SELECT id, respondent_name, respondent_email, total_score, submitted_at FROM form_responses WHERE form_id = ?1 ORDER BY submitted_at DESC LIMIT 100`).bind(args.form_id).all();
+            const { results: fields } = await db.prepare(`SELECT id, field_type, label, sort_order FROM form_fields WHERE form_id = ?1 ORDER BY sort_order ASC`).bind(args.form_id).all();
+
+            return {
+                form,
+                fields: fields || [],
+                responses: responses || [],
+                total_responses: (responses || []).length,
+            };
         }
 
         // ── LIST STUDENTS ──

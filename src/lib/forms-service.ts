@@ -99,7 +99,7 @@ export const formsService = {
             .insert({
                 ...data,
                 slug,
-                is_published: false,
+                is_published: true,
                 accepts_responses: true,
                 show_results_to_respondents: false,
             })

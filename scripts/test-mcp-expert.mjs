@@ -181,23 +181,134 @@ async function runExpertTests() {
     const bulkSubjectId = bulkData.subject_id;
     assert(bulkData.success && bulkData.summary?.chapters === 1 && bulkData.summary?.lessons === 1 && bulkData.summary?.exercises === 1, '13. bulk_create crée toute l\'arborescence en 1 seul appel éclair', bulkData);
 
-    // 14. Nettoyage de la base de données (Tests de suppression delete_*)
+    // 14. Test Salle d'évaluation : create_exam_paper
+    const examRes = await callMcp('tools/call', {
+        name: 'create_exam_paper',
+        arguments: {
+            title: 'Examen Blanc : Mathématiques & Analyse',
+            subject: 'Mathématiques',
+            coefficient: 3,
+            duration_minutes: 90,
+            instructions: 'Calculatrice interdite. Justifiez chaque étape.',
+            questions: [
+                {
+                    id: 'q1',
+                    text: 'Calculer la dérivée de f(x) = ln(x^2 + 1)',
+                    type: 'redaction',
+                    points: 5
+                },
+                {
+                    id: 'q2',
+                    text: 'Quelle est la valeur de l\'intégrale de 0 à 1 de exp(x) dx ?',
+                    type: 'qcm',
+                    points: 5,
+                    options: ['e - 1', 'e', '1', 'ln(2)'],
+                    correct: 'e - 1'
+                }
+            ],
+            status: 'published'
+        }
+    });
+    const examData = JSON.parse(examRes.result?.content?.[0]?.text || '{}');
+    const testExamId = examData.paper_id;
+    assert(examData.success && testExamId, '14. create_exam_paper crée une épreuve dans la Salle d\'Évaluation avec push auto', examData);
+
+    // 15. Test list_exam_papers
+    const listExamRes = await callMcp('tools/call', {
+        name: 'list_exam_papers',
+        arguments: { subject: 'Mathématiques' }
+    });
+    const listExamData = JSON.parse(listExamRes.result?.content?.[0]?.text || '{}');
+    assert(listExamData.exam_papers?.length >= 1, '15. list_exam_papers liste les épreuves de la Salle d\'Évaluation', { count: listExamData.total });
+
+    // 16. Test update_exam_paper
+    const updateExamRes = await callMcp('tools/call', {
+        name: 'update_exam_paper',
+        arguments: { paper_id: testExamId, duration_minutes: 120, coefficient: 4 }
+    });
+    const updateExamData = JSON.parse(updateExamRes.result?.content?.[0]?.text || '{}');
+    assert(updateExamData.success, '16. update_exam_paper modifie la durée et le coefficient de l\'épreuve', updateExamData);
+
+    // 17. Test launch_exam_session (Démarrer une session en direct)
+    const launchRes = await callMcp('tools/call', {
+        name: 'launch_exam_session',
+        arguments: { paper_id: testExamId }
+    });
+    const launchData = JSON.parse(launchRes.result?.content?.[0]?.text || '{}');
+    assert(launchData.success && launchData.session_id, '17. launch_exam_session lance l\'évaluation en direct avec push', launchData);
+
+    // 18. Test Création de Formulaire / Sondage : create_form
+    const createFormRes = await callMcp('tools/call', {
+        name: 'create_form',
+        arguments: {
+            title: 'Sondage : Qualité des cours et vie sur le campus',
+            description: 'Donnez votre avis pour nous aider à améliorer votre formation.',
+            form_type: 'survey',
+            is_published: true,
+            fields: [
+                {
+                    label: 'Comment évaluez-vous la clarté des cours ?',
+                    field_type: 'rating',
+                    required: true
+                },
+                {
+                    label: 'Quels sont vos points d\'amélioration prioritaires ?',
+                    field_type: 'long_text',
+                    description: 'Sky Agent peut vous aider à formuler vos propositions.',
+                    required: false
+                }
+            ]
+        }
+    });
+    const formData = JSON.parse(createFormRes.result?.content?.[0]?.text || '{}');
+    const testFormId = formData.form_id;
+    assert(formData.success && testFormId && formData.public_url, '18. create_form crée un formulaire/sondage avec lien direct et notification push', {
+        form_id: testFormId,
+        public_url: formData.public_url,
+        slug: formData.slug
+    });
+
+    // 19. Test list_forms
+    const listFormsRes = await callMcp('tools/call', {
+        name: 'list_forms',
+        arguments: { form_type: 'survey' }
+    });
+    const listFormsData = JSON.parse(listFormsRes.result?.content?.[0]?.text || '{}');
+    assert(listFormsData.forms?.length >= 1, '19. list_forms retourne la liste des formulaires actifs', { count: listFormsData.total });
+
+    // 20. Test get_form_results
+    const formResultsRes = await callMcp('tools/call', {
+        name: 'get_form_results',
+        arguments: { form_id: testFormId }
+    });
+    const formResultsData = JSON.parse(formResultsRes.result?.content?.[0]?.text || '{}');
+    assert(formResultsData.form && formResultsData.fields?.length === 2, '20. get_form_results retourne les champs et résultats du sondage', {
+        title: formResultsData.form?.title,
+        fields_count: formResultsData.fields?.length
+    });
+
+    // 21. Nettoyage de la base de données (Tests de suppression delete_*)
     console.log('\n🧹 NETTOYAGE DES DONNÉES DE TEST...');
     const delEx = await callMcp('tools/call', { name: 'delete_exercise', arguments: { exercise_id: testExerciseId } });
-    assert(JSON.parse(delEx.result?.content?.[0]?.text || '{}').success, '14. delete_exercise supprime l\'exercice', delEx.result);
+    assert(JSON.parse(delEx.result?.content?.[0]?.text || '{}').success, '21. delete_exercise supprime l\'exercice', delEx.result);
 
     const delLes = await callMcp('tools/call', { name: 'delete_lesson', arguments: { lesson_id: testLessonId } });
-    assert(JSON.parse(delLes.result?.content?.[0]?.text || '{}').success, '15. delete_lesson supprime la leçon', delLes.result);
+    assert(JSON.parse(delLes.result?.content?.[0]?.text || '{}').success, '22. delete_lesson supprime la leçon', delLes.result);
 
     const delCh = await callMcp('tools/call', { name: 'delete_chapter', arguments: { chapter_id: testChapterId } });
-    assert(JSON.parse(delCh.result?.content?.[0]?.text || '{}').success, '16. delete_chapter supprime le chapitre', delCh.result);
+    assert(JSON.parse(delCh.result?.content?.[0]?.text || '{}').success, '23. delete_chapter supprime le chapitre', delCh.result);
 
     const delSub = await callMcp('tools/call', { name: 'delete_subject', arguments: { subject_id: testSubjectId } });
-    assert(JSON.parse(delSub.result?.content?.[0]?.text || '{}').success, '17. delete_subject supprime la matière de test 1', delSub.result);
+    assert(JSON.parse(delSub.result?.content?.[0]?.text || '{}').success, '24. delete_subject supprime la matière de test 1', delSub.result);
 
     if (bulkSubjectId) {
         const delBulkSub = await callMcp('tools/call', { name: 'delete_subject', arguments: { subject_id: bulkSubjectId } });
-        assert(JSON.parse(delBulkSub.result?.content?.[0]?.text || '{}').success, '18. delete_subject supprime la matière bulk de test 2', delBulkSub.result);
+        assert(JSON.parse(delBulkSub.result?.content?.[0]?.text || '{}').success, '25. delete_subject supprime la matière bulk de test 2', delBulkSub.result);
+    }
+
+    if (testExamId) {
+        const delExam = await callMcp('tools/call', { name: 'delete_exam_paper', arguments: { paper_id: testExamId } });
+        assert(JSON.parse(delExam.result?.content?.[0]?.text || '{}').success, '26. delete_exam_paper supprime l\'épreuve de test', delExam.result);
     }
 
     console.log(`\n═════════════════════════════════════════════════════════════════════`);

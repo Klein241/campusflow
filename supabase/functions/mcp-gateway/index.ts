@@ -431,6 +431,93 @@ const MCP_TOOLS = [
         },
     },
 
+    // ── SALLE D'ÉVALUATION & EXAMENS ─────────────────────────────────
+    {
+        name: 'list_exam_papers',
+        description: 'Lister les épreuves d\'examen et devoirs de la Salle d\'Évaluation',
+        permission: 'read:curriculum',
+        inputSchema: { type: 'object', properties: { subject: { type: 'string' }, status: { type: 'string' } } },
+    },
+    {
+        name: 'create_exam_paper',
+        description: 'Créer une épreuve d\'examen dans la Salle d\'Évaluation (avec barème, questions QCM/rédaction, durée, coefficient)',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                title: { type: 'string' },
+                subject: { type: 'string' },
+                coefficient: { type: 'number' },
+                duration_minutes: { type: 'number' },
+                instructions: { type: 'string' },
+                questions: { type: 'array' },
+                status: { type: 'string', enum: ['draft', 'published', 'archived'] },
+            },
+            required: ['title'],
+        },
+    },
+    {
+        name: 'update_exam_paper',
+        description: 'Modifier une épreuve d\'examen dans la Salle d\'Évaluation',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                paper_id: { type: 'string' },
+                title: { type: 'string' },
+                subject: { type: 'string' },
+                coefficient: { type: 'number' },
+                duration_minutes: { type: 'number' },
+                instructions: { type: 'string' },
+                questions: { type: 'array' },
+                status: { type: 'string' },
+            },
+            required: ['paper_id'],
+        },
+    },
+    {
+        name: 'delete_exam_paper',
+        description: 'Supprimer une épreuve d\'examen',
+        permission: 'write:curriculum',
+        inputSchema: { type: 'object', properties: { paper_id: { type: 'string' } }, required: ['paper_id'] },
+    },
+    {
+        name: 'launch_exam_session',
+        description: 'Lancer une session d\'examen en direct dans la Salle d\'Évaluation pour les étudiants',
+        permission: 'write:curriculum',
+        inputSchema: { type: 'object', properties: { paper_id: { type: 'string' }, participant_ids: { type: 'array' } }, required: ['paper_id'] },
+    },
+
+    // ── FORMULAIRES, SONDAGES & ENQUÊTES ──────────────────────────────
+    {
+        name: 'list_forms',
+        description: 'Lister les formulaires, sondages et enquêtes de l\'établissement',
+        permission: 'read:curriculum',
+        inputSchema: { type: 'object', properties: { form_type: { type: 'string', enum: ['survey', 'quiz', 'registration'] }, is_published: { type: 'boolean' } } },
+    },
+    {
+        name: 'create_form',
+        description: 'Créer un formulaire, sondage ou enquête avec questions et lien public direct pour les étudiants',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                title: { type: 'string' },
+                description: { type: 'string' },
+                form_type: { type: 'string', enum: ['survey', 'quiz', 'registration'] },
+                is_published: { type: 'boolean' },
+                fields: { type: 'array' },
+            },
+            required: ['title'],
+        },
+    },
+    {
+        name: 'get_form_results',
+        description: 'Consulter les résultats, réponses et statistiques d\'un formulaire ou sondage',
+        permission: 'read:curriculum',
+        inputSchema: { type: 'object', properties: { form_id: { type: 'string' } }, required: ['form_id'] },
+    },
+
     // ── SUPERADMIN TOOLS ──────────────────────────────────────────────
     {
         name: 'list_support_messages',
@@ -1384,6 +1471,168 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
                 .single();
             if (error) throw { code: -32002, message: error.message };
             return { success: true, schedule: data, message: `✅ Emploi du temps mis à jour` };
+        }
+
+        // ── LIST EXAM PAPERS ──────────────────────────────────────────────────
+        case 'list_exam_papers': {
+            const targetOrgId = (args.org_id as string) || agent.orgId;
+            let query = supabase.from('exam_papers').select('*').limit(50);
+            if (targetOrgId) query = query.eq('org_id', targetOrgId);
+            if (args.subject) query = query.eq('subject', args.subject as string);
+            if (args.status) query = query.eq('status', args.status as string);
+            const { data, error } = await query;
+            if (error) throw { code: -32002, message: error.message };
+            return { exam_papers: data || [], total: (data || []).length };
+        }
+
+        // ── CREATE EXAM PAPER ─────────────────────────────────────────────────
+        case 'create_exam_paper': {
+            const targetOrgId = (args.org_id as string) || agent.orgId;
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+            const questions = Array.isArray(args.questions) ? args.questions : [];
+            const coeff = Number(args.coefficient) || 1.0;
+            const dur = Number(args.duration_minutes) || 60;
+            const status = (args.status as string) || 'published';
+
+            const { data, error } = await supabase
+                .from('exam_papers')
+                .insert({
+                    org_id: targetOrgId,
+                    created_by: agent.id,
+                    title: args.title,
+                    subject: args.subject || null,
+                    coefficient: coeff,
+                    duration_minutes: dur,
+                    instructions: args.instructions || null,
+                    questions,
+                    status,
+                    exam_mode: 'structured',
+                })
+                .select()
+                .single();
+            if (error) throw { code: -32002, message: error.message };
+            return { success: true, paper_id: data.id, message: `✅ Épreuve "${args.title}" créée dans la Salle d'Évaluation` };
+        }
+
+        // ── UPDATE EXAM PAPER ─────────────────────────────────────────────────
+        case 'update_exam_paper': {
+            if (!args.paper_id) throw { code: -32602, message: 'paper_id requis' };
+            const updates: Record<string, any> = { updated_at: new Date().toISOString() };
+            if (args.title) updates.title = args.title;
+            if (args.subject) updates.subject = args.subject;
+            if (args.coefficient) updates.coefficient = Number(args.coefficient);
+            if (args.duration_minutes) updates.duration_minutes = Number(args.duration_minutes);
+            if (args.instructions) updates.instructions = args.instructions;
+            if (args.questions) updates.questions = args.questions;
+            if (args.status) updates.status = args.status;
+
+            const { error } = await supabase.from('exam_papers').update(updates).eq('id', args.paper_id as string);
+            if (error) throw { code: -32002, message: error.message };
+            return { success: true, message: `✅ Épreuve mise à jour` };
+        }
+
+        // ── DELETE EXAM PAPER ─────────────────────────────────────────────────
+        case 'delete_exam_paper': {
+            if (!args.paper_id) throw { code: -32602, message: 'paper_id requis' };
+            const { error } = await supabase.from('exam_papers').delete().eq('id', args.paper_id as string);
+            if (error) throw { code: -32002, message: error.message };
+            return { success: true, message: `🗑️ Épreuve supprimée` };
+        }
+
+        // ── LAUNCH EXAM SESSION ───────────────────────────────────────────────
+        case 'launch_exam_session': {
+            if (!args.paper_id) throw { code: -32602, message: 'paper_id requis' };
+            const targetOrgId = (args.org_id as string) || agent.orgId;
+            const { data, error } = await supabase
+                .from('exam_sessions')
+                .insert({
+                    exam_paper_id: args.paper_id,
+                    org_id: targetOrgId,
+                    launched_by: agent.id,
+                    participant_ids: args.participant_ids || [],
+                    status: 'active',
+                    started_at: new Date().toISOString(),
+                })
+                .select()
+                .single();
+            if (error) throw { code: -32002, message: error.message };
+            return { success: true, session_id: data.id, message: `🚀 Session d'examen lancée en direct` };
+        }
+
+        // ── LIST FORMS ────────────────────────────────────────────────────────
+        case 'list_forms': {
+            const targetOrgId = (args.org_id as string) || agent.orgId;
+            let query = supabase.from('forms').select('*').limit(50);
+            if (targetOrgId) query = query.eq('organization_id', targetOrgId);
+            if (args.form_type) query = query.eq('form_type', args.form_type as string);
+            if (typeof args.is_published === 'boolean') query = query.eq('is_published', args.is_published);
+            const { data, error } = await query;
+            if (error) throw { code: -32002, message: error.message };
+            return { forms: data || [], total: (data || []).length };
+        }
+
+        // ── CREATE FORM ───────────────────────────────────────────────────────
+        case 'create_form': {
+            const targetOrgId = (args.org_id as string) || agent.orgId;
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+
+            const { data: org } = await supabase.from('organizations').select('slug').eq('id', targetOrgId).single();
+            const orgSlug = org?.slug || 'campus';
+
+            const baseSlug = String(args.title).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 28);
+            const uniquePart = Math.random().toString(36).slice(2, 7);
+            const formSlug = `${baseSlug}-${uniquePart}`;
+
+            const { data: form, error } = await supabase
+                .from('forms')
+                .insert({
+                    organization_id: targetOrgId,
+                    created_by_role: 'teacher',
+                    created_by_id: agent.id,
+                    title: args.title,
+                    description: args.description || null,
+                    slug: formSlug,
+                    form_type: args.form_type || 'survey',
+                    is_published: args.is_published !== false,
+                    accepts_responses: true,
+                })
+                .select()
+                .single();
+            if (error) throw { code: -32002, message: error.message };
+
+            const fields = Array.isArray(args.fields) ? args.fields : [];
+            if (fields.length > 0) {
+                const toInsert = fields.map((f: any, i: number) => ({
+                    form_id: form.id,
+                    field_type: f.field_type || 'short_text',
+                    label: f.label,
+                    description: f.description || null,
+                    options: f.options || null,
+                    required: Boolean(f.required),
+                    sort_order: i,
+                    correct_answer: f.correct_answer || null,
+                    points: Number(f.points) || 0,
+                }));
+                await supabase.from('form_fields').insert(toInsert);
+            }
+
+            const publicUrl = `/${orgSlug}/f/${formSlug}`;
+            return { success: true, form_id: form.id, slug: formSlug, public_url: publicUrl, message: `✅ Formulaire "${args.title}" créé et publié. Lien direct : ${publicUrl}` };
+        }
+
+        // ── GET FORM RESULTS ──────────────────────────────────────────────────
+        case 'get_form_results': {
+            if (!args.form_id) throw { code: -32602, message: 'form_id requis' };
+            const { data: form } = await supabase.from('forms').select('*').eq('id', args.form_id as string).single();
+            const { data: fields } = await supabase.from('form_fields').select('*').eq('form_id', args.form_id as string).order('sort_order');
+            const { data: responses } = await supabase.from('form_responses').select('*, form_answers(*)').eq('form_id', args.form_id as string);
+
+            return {
+                form,
+                fields: fields || [],
+                responses: responses || [],
+                total_responses: (responses || []).length,
+            };
         }
 
         // ── LIST STUDENTS ─────────────────────────────────────────────────────

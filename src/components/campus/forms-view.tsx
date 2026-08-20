@@ -697,14 +697,22 @@ export function FormsView({ orgId, orgSlug, userId, userRole, userName }: FormsV
         else toast.error('Erreur lors de la suppression');
     };
 
-    const copyLink = (form: CampusForm) => {
+    const copyLink = async (form: CampusForm) => {
+        if (!form.is_published && form.id) {
+            await formsService.updateForm(form.id, { is_published: true, accepts_responses: true });
+            setMyForms(prev => prev.map(f => f.id === form.id ? { ...f, is_published: true, accepts_responses: true } : f));
+        }
         const url = `${window.location.origin}/${orgSlug}/f/${form.slug}`;
         navigator.clipboard.writeText(url);
-        toast.success('🔗 Lien copié !');
+        toast.success('🔗 Lien copié et formulaire actif !');
     };
 
-    const openForm = (slug: string) => {
-        window.open(`/${orgSlug}/f/${slug}`, '_blank');
+    const openForm = async (form: CampusForm) => {
+        if (!form.is_published && form.id) {
+            await formsService.updateForm(form.id, { is_published: true, accepts_responses: true });
+            setMyForms(prev => prev.map(f => f.id === form.id ? { ...f, is_published: true, accepts_responses: true } : f));
+        }
+        window.open(`/${orgSlug}/f/${form.slug}`, '_blank');
     };
 
     if (loading) {

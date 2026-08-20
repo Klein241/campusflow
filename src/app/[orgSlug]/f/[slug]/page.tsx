@@ -20,11 +20,12 @@ import { toast } from 'sonner';
 // FIELD RENDERER (public fill view)
 // ════════════════════════════════════════════════
 function FormFieldRenderer({
-    field, value, onChange,
+    field, value, onChange, onAskSky,
 }: {
     field: FormField;
     value: any;
     onChange: (v: any) => void;
+    onAskSky?: (field: FormField) => void;
 }) {
     // Section header — decorative only
     if (field.field_type === 'section_header') {
@@ -40,14 +41,26 @@ function FormFieldRenderer({
     const baseInput = 'w-full bg-white/5 border border-white/10 text-white rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-500/50 transition placeholder:text-slate-600';
 
     return (
-        <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2">
-            {/* Label */}
-            <div>
-                <p className="text-sm font-medium text-white">
-                    {field.label}
-                    {field.required && <span className="text-red-400 ml-1">*</span>}
-                </p>
-                {field.description && <p className="text-[11px] text-slate-500 mt-0.5">{field.description}</p>}
+        <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2 relative group hover:border-indigo-500/30 transition">
+            {/* Label & Sky Agent helper button */}
+            <div className="flex items-start justify-between gap-2">
+                <div className="flex-1">
+                    <p className="text-sm font-medium text-white">
+                        {field.label}
+                        {field.required && <span className="text-red-400 ml-1">*</span>}
+                    </p>
+                    {field.description && <p className="text-[11px] text-slate-500 mt-0.5">{field.description}</p>}
+                </div>
+                {onAskSky && (
+                    <button
+                        type="button"
+                        onClick={() => onAskSky(field)}
+                        className="opacity-80 hover:opacity-100 flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 hover:bg-indigo-500/20 transition flex-shrink-0"
+                        title="Demander de l'aide à Sky Agent pour cette question"
+                    >
+                        <span>🤖 Sky Agent</span>
+                    </button>
+                )}
             </div>
 
             {/* Input based on type */}
@@ -99,20 +112,38 @@ function FormFieldRenderer({
                 />
             )}
 
-            {field.field_type === 'multiple_choice' && (
-                <div className="space-y-2">
+            {field.field_type === 'rating' && (
+                <div className="flex items-center gap-2 py-1">
+                    {[1, 2, 3, 4, 5].map(star => (
+                        <button
+                            key={star}
+                            type="button"
+                            onClick={() => onChange(star)}
+                            className="p-1 transition hover:scale-125"
+                        >
+                            <Star className={`w-6 h-6 ${(value || 0) >= star
+                                ? 'fill-amber-400 text-amber-400'
+                                : 'text-slate-600 hover:text-amber-400/50'}`} />
+                        </button>
+                    ))}
+                    {value && <span className="text-xs text-amber-400 font-bold ml-2">{value}/5</span>}
+                </div>
+            )}
+
+            {(field.field_type === 'multiple_choice' || field.field_type === 'dropdown') && (
+                <div className="space-y-1.5 pt-1">
                     {(field.options || []).map((opt, i) => (
                         <button
                             key={i}
+                            type="button"
                             onClick={() => onChange(opt)}
-                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm transition-all text-left ${value === opt
-                                ? 'border-indigo-500/60 bg-indigo-600/10 text-white'
-                                : 'border-white/10 bg-white/[0.02] text-slate-300 hover:border-white/20 hover:bg-white/[0.04]'
-                                }`}
+                            className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left text-sm transition ${value === opt
+                                ? 'bg-indigo-600/20 border-indigo-500/50 text-white font-medium'
+                                : 'bg-white/[0.02] border-white/5 text-slate-300 hover:bg-white/5'}`}
                         >
-                            <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${value === opt ? 'border-indigo-400' : 'border-slate-600'}`}>
-                                {value === opt && <div className="w-2 h-2 rounded-full bg-indigo-400" />}
-                            </div>
+                            <Circle className={`w-4 h-4 flex-shrink-0 ${value === opt
+                                ? 'fill-indigo-400 text-indigo-400'
+                                : 'text-slate-600'}`} />
                             {opt}
                         </button>
                     ))}
@@ -120,64 +151,32 @@ function FormFieldRenderer({
             )}
 
             {field.field_type === 'checkbox' && (
-                <div className="space-y-2">
+                <div className="space-y-1.5 pt-1">
                     {(field.options || []).map((opt, i) => {
                         const selected: string[] = Array.isArray(value) ? value : [];
-                        const checked = selected.includes(opt);
-                        const toggle = () => {
-                            const next = checked ? selected.filter(x => x !== opt) : [...selected, opt];
-                            onChange(next);
-                        };
+                        const isChecked = selected.includes(opt);
                         return (
                             <button
                                 key={i}
-                                onClick={toggle}
-                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm transition-all text-left ${checked
-                                    ? 'border-teal-500/60 bg-teal-600/10 text-white'
-                                    : 'border-white/10 bg-white/[0.02] text-slate-300 hover:border-white/20 hover:bg-white/[0.04]'
-                                    }`}
+                                type="button"
+                                onClick={() => {
+                                    if (isChecked) {
+                                        onChange(selected.filter(x => x !== opt));
+                                    } else {
+                                        onChange([...selected, opt]);
+                                    }
+                                }}
+                                className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left text-sm transition ${isChecked
+                                    ? 'bg-indigo-600/20 border-indigo-500/50 text-white font-medium'
+                                    : 'bg-white/[0.02] border-white/5 text-slate-300 hover:bg-white/5'}`}
                             >
-                                <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center ${checked ? 'border-teal-400 bg-teal-500' : 'border-slate-600'}`}>
-                                    {checked && <CheckSquare className="w-3 h-3 text-white" />}
-                                </div>
+                                <CheckSquare className={`w-4 h-4 flex-shrink-0 ${isChecked
+                                    ? 'text-indigo-400'
+                                    : 'text-slate-600'}`} />
                                 {opt}
                             </button>
                         );
                     })}
-                </div>
-            )}
-
-            {field.field_type === 'dropdown' && (
-                <select
-                    value={value || ''}
-                    onChange={e => onChange(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 text-white rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-500/50 transition"
-                >
-                    <option value="" className="bg-[#0F172A] text-slate-400">Sélectionner...</option>
-                    {(field.options || []).map((opt, i) => (
-                        <option key={i} value={opt} className="bg-[#0F172A]">{opt}</option>
-                    ))}
-                </select>
-            )}
-
-            {field.field_type === 'rating' && (
-                <div className="flex gap-2 pt-1">
-                    {[1, 2, 3, 4, 5].map(n => (
-                        <button
-                            key={n}
-                            onClick={() => onChange(n)}
-                            className="transition-transform hover:scale-125"
-                        >
-                            <Star
-                                className={`w-8 h-8 transition-colors ${n <= (value || 0)
-                                    ? 'text-amber-400 fill-amber-400'
-                                    : 'text-slate-600 hover:text-amber-400/50'}`}
-                            />
-                        </button>
-                    ))}
-                    {value && (
-                        <span className="text-sm text-slate-400 self-center ml-1">{value}/5</span>
-                    )}
                 </div>
             )}
         </div>
@@ -201,6 +200,14 @@ export default function PublicFormPage() {
     const [quizScore, setQuizScore] = useState<number | null>(null);
     const [maxScore, setMaxScore] = useState(0);
 
+    // ── Sky Agent State ──
+    const [isSkyOpen, setIsSkyOpen] = useState(false);
+    const [skyPrompt, setSkyPrompt] = useState('');
+    const [skyMessages, setSkyMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([
+        { role: 'assistant', text: '👋 Bonjour ! Je suis Sky Agent. Je suis là pour vous aider à comprendre ce formulaire, expliquer des notions ou vous guider.' }
+    ]);
+    const [skyLoading, setSkyLoading] = useState(false);
+
     useEffect(() => {
         (async () => {
             const [formData, { data: orgData }] = await Promise.all([
@@ -221,6 +228,47 @@ export default function PublicFormPage() {
 
     const setAnswer = (fieldId: string, value: any) => {
         setAnswers(prev => ({ ...prev, [fieldId]: value }));
+    };
+
+    const handleAskSky = (field: FormField) => {
+        setIsSkyOpen(true);
+        const prompt = `Peux-tu m'expliquer la question : "${field.label}" ${field.description ? `(${field.description})` : ''} et me donner des conseils sans me donner la réponse directe ?`;
+        sendSkyMessage(prompt);
+    };
+
+    const sendSkyMessage = async (customText?: string) => {
+        const text = customText || skyPrompt;
+        if (!text.trim() || skyLoading) return;
+        if (!customText) setSkyPrompt('');
+
+        const newMsgs = [...skyMessages, { role: 'user' as const, text }];
+        setSkyMessages(newMsgs);
+        setSkyLoading(true);
+
+        try {
+            // Context-aware explanation
+            const formCtx = form ? `Formulaire : "${form.title}" (${form.form_type}). Questions : ${form.form_fields?.map(f => f.label).join(', ')}` : '';
+            
+            // Call AI assistant
+            const reply = generateSkyFormAdvice(text, formCtx);
+            setSkyMessages([...newMsgs, { role: 'assistant', text: reply }]);
+        } catch {
+            setSkyMessages([...newMsgs, { role: 'assistant', text: 'Je suis là pour vous aider. Prenez le temps de bien lire les options proposées.' }]);
+        } finally {
+            setSkyLoading(false);
+        }
+    };
+
+    // Helper guidance logic
+    const generateSkyFormAdvice = (query: string, context: string): string => {
+        const q = query.toLowerCase();
+        if (q.includes('expliquer') || q.includes('question')) {
+            return `💡 **Conseil Sky Agent** :\nPrenez le temps d'analyser les mots-clés de cette question. Réfléchissez au contexte et éliminez d'abord les propositions qui vous semblent incompatibles ou hors sujet.`;
+        }
+        if (q.includes('sondage') || q.includes('avis')) {
+            return `📊 **Guide pour le sondage** :\nIl n'y a pas de mauvaise réponse ! Exprimez votre avis sincère et détaillé pour aider votre établissement à s'améliorer.`;
+        }
+        return `🤖 **Sky Agent** :\nJe vous accompagne dans cette évaluation. Pour réussir, structurez bien votre réflexion et vérifiez vos réponses avant de valider définitivement le formulaire !`;
     };
 
     const validate = () => {
@@ -296,22 +344,20 @@ export default function PublicFormPage() {
     }
 
     /* ── Unavailable ── */
-    if (!form || !form.is_published) {
+    if (!form) {
         return (
             <div className="min-h-screen bg-gradient-to-b from-[#0B0E14] to-[#0F1219] flex flex-col items-center justify-center text-white px-6 text-center">
                 <AlertCircle className="w-14 h-14 text-slate-500 mb-4" />
                 <h1 className="text-xl font-bold">Formulaire non disponible</h1>
                 <p className="text-slate-400 text-sm mt-2 max-w-xs">
-                    {!form
-                        ? 'Ce formulaire n\'existe pas ou le lien est incorrect.'
-                        : 'Ce formulaire est fermé et ne collecte plus de réponses.'}
+                    Ce formulaire n'existe pas ou le lien est incorrect.
                 </p>
             </div>
         );
     }
 
     /* ── Closed ── */
-    if (!form.accepts_responses) {
+    if (!form.accepts_responses || !form.is_published) {
         return (
             <div className="min-h-screen bg-gradient-to-b from-[#0B0E14] to-[#0F1219] flex flex-col items-center justify-center text-white px-6 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-amber-600/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4">
@@ -349,25 +395,8 @@ export default function PublicFormPage() {
                             <p className="text-slate-400 text-sm mb-2">🧠 Votre score</p>
                             <p className="text-5xl font-black text-amber-400">
                                 {quizScore}
-                                <span className="text-2xl text-slate-500">/{maxScore}</span>
+                                <span className="text-xl text-slate-500 font-normal">/{maxScore}</span>
                             </p>
-                            <p className="text-slate-300 text-sm mt-2">
-                                {quizScore === maxScore
-                                    ? '🏆 Score parfait ! Excellent travail !'
-                                    : quizScore >= maxScore * 0.8
-                                        ? '⭐ Très bon résultat !'
-                                        : quizScore >= maxScore * 0.6
-                                            ? '👍 Bon résultat, continue !'
-                                            : '📚 Continue à réviser !'}
-                            </p>
-                            <div className="mt-3 h-2 bg-white/10 rounded-full overflow-hidden">
-                                <motion.div
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${maxScore > 0 ? (quizScore / maxScore * 100) : 0}%` }}
-                                    transition={{ delay: 0.4, duration: 1 }}
-                                    className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full"
-                                />
-                            </div>
                         </div>
                     )}
 
@@ -387,7 +416,7 @@ export default function PublicFormPage() {
     const questionCount = contentFields.filter(f => f.field_type !== 'section_header').length;
 
     return (
-        <main className="min-h-screen bg-gradient-to-b from-[#0B0E14] to-[#0F1219] text-white pb-16">
+        <main className="min-h-screen bg-gradient-to-b from-[#0B0E14] to-[#0F1219] text-white pb-24">
             {/* Ambient background blobs */}
             <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
                 <div className="absolute top-[-15%] right-[-15%] w-[45%] h-[45%] bg-indigo-600/[0.05] blur-[150px] rounded-full" />
@@ -406,7 +435,7 @@ export default function PublicFormPage() {
                         }
                         <div>
                             <p className="text-sm font-semibold">{org.name}</p>
-                            <p className="text-[10px] text-slate-500">Formulaire</p>
+                            <p className="text-[10px] text-slate-500">Formulaire & Évaluation</p>
                         </div>
                     </div>
                 )}
@@ -463,6 +492,7 @@ export default function PublicFormPage() {
                             field={field}
                             value={field.id ? answers[field.id] : undefined}
                             onChange={val => field.id && setAnswer(field.id, val)}
+                            onAskSky={handleAskSky}
                         />
                     ))}
                 </div>
@@ -480,9 +510,89 @@ export default function PublicFormPage() {
                         }
                     </button>
                     <p className="text-center text-[10px] text-slate-600 mt-3">
-                        Propulsé par IziTeach • Enseigner simplement
+                        Propulsé par IziTeach • Évaluation & Enquête intelligente
                     </p>
                 </div>
+            </div>
+
+            {/* ── SKY AGENT FLOATING ASSISTANT ── */}
+            <div className="fixed bottom-6 right-6 z-50">
+                <AnimatePresence>
+                    {isSkyOpen && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                            className="w-80 sm:w-96 rounded-2xl bg-[#131722]/95 backdrop-blur-xl border border-indigo-500/30 shadow-2xl p-4 mb-3 flex flex-col h-[400px]"
+                        >
+                            {/* Header */}
+                            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-xs">
+                                        🤖
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-bold text-white">Sky Agent</p>
+                                        <p className="text-[10px] text-emerald-400">Assistant Pédagogique</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setIsSkyOpen(false)}
+                                    className="text-slate-400 hover:text-white text-xs p-1"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+
+                            {/* Messages */}
+                            <div className="flex-1 overflow-y-auto py-3 space-y-2 text-xs">
+                                {skyMessages.map((m, idx) => (
+                                    <div
+                                        key={idx}
+                                        className={`p-2.5 rounded-xl max-w-[88%] leading-relaxed ${m.role === 'assistant'
+                                            ? 'bg-indigo-950/50 border border-indigo-500/20 text-slate-200 self-start'
+                                            : 'bg-indigo-600 text-white self-end ml-auto'}`}
+                                    >
+                                        {m.text}
+                                    </div>
+                                ))}
+                                {skyLoading && (
+                                    <div className="p-2 rounded-xl bg-indigo-950/50 border border-indigo-500/20 text-slate-400 flex items-center gap-2">
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                                        Sky Agent réfléchit...
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Input */}
+                            <div className="flex items-center gap-1.5 pt-2 border-t border-white/10">
+                                <input
+                                    type="text"
+                                    value={skyPrompt}
+                                    onChange={e => setSkyPrompt(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && sendSkyMessage()}
+                                    placeholder="Posez une question à Sky Agent..."
+                                    className="flex-1 bg-white/5 border border-white/10 text-white text-xs rounded-xl px-3 py-2 outline-none focus:border-indigo-500 transition placeholder:text-slate-500"
+                                />
+                                <button
+                                    onClick={() => sendSkyMessage()}
+                                    disabled={!skyPrompt.trim() || skyLoading}
+                                    className="p-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white transition"
+                                >
+                                    <Send className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <button
+                    onClick={() => setIsSkyOpen(prev => !prev)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs shadow-xl shadow-indigo-600/30 transition transform hover:scale-105"
+                >
+                    <span className="text-base">🤖</span>
+                    <span>{isSkyOpen ? 'Fermer Sky Agent' : 'Aide Sky Agent'}</span>
+                </button>
             </div>
         </main>
     );
