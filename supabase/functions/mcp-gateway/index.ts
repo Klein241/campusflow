@@ -390,12 +390,14 @@ Deno.serve(async (req: Request) => {
     const startTime = Date.now();
 
     // ── 1. Extraire et vérifier la clé API ─────────────────────────────────
-    const authHeader = req.headers.get('Authorization') || '';
-    const rawKey = authHeader.replace(/^Bearer\s+/i, '').trim();
+    const url = new URL(req.url);
+    const authHeader = req.headers.get('Authorization') || req.headers.get('x-api-key') || req.headers.get('x-mcp-token') || '';
+    const queryKey = url.searchParams.get('token') || url.searchParams.get('key') || url.searchParams.get('apiKey') || '';
+    const rawKey = (authHeader.replace(/^Bearer\s+/i, '').trim()) || queryKey.trim();
 
     if (!rawKey || !rawKey.startsWith('cf_live_')) {
         return jsonResponse(
-            mcpError(null, -32001, 'Clé API manquante. Utilisez: Authorization: Bearer cf_live_xxxxx'),
+            mcpError(null, -32001, 'Clé API manquante. Utilisez: Authorization: Bearer cf_live_xxxxx ou le paramètre ?key='),
             401
         );
     }

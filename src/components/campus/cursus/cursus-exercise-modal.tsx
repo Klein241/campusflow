@@ -38,8 +38,23 @@ export function CursusExerciseModal({ exercise, studentId, onClose, onComplete }
     const [submitting, setSubmitting] = useState(false);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-    const questions: any[] = exercise.questions || [];
-    const progress = ((currentQ + 1) / questions.length) * 100;
+    const rawQuestions: any[] = Array.isArray(exercise.questions) && exercise.questions.length > 0
+        ? exercise.questions
+        : exercise.question
+            ? [{
+                id: 'q_1',
+                question: exercise.question,
+                type: exercise.type || 'qcm',
+                options: exercise.options || exercise.choices || [],
+                choices: exercise.choices || exercise.options || [],
+                answer: exercise.correct_answer || exercise.answer || '',
+                correct_answer: exercise.correct_answer || exercise.answer || '',
+                explanation: exercise.explanation || null
+              }]
+            : [];
+
+    const questions: any[] = rawQuestions;
+    const progress = questions.length > 0 ? ((currentQ + 1) / questions.length) * 100 : 100;
 
     useEffect(() => {
         if (submitted) return;
@@ -66,8 +81,9 @@ export function CursusExerciseModal({ exercise, studentId, onClose, onComplete }
         const details: any[] = [];
 
         questions.forEach((q: any, i: number) => {
-            const userAns = answers[i]; // peut être texte d'option ou index (string)
+            const userAns = answers[i];
             const userAnsStr = String(userAns ?? '').trim().toLowerCase();
+            const qType = (q.type || exercise.type || 'qcm').toLowerCase();
 
             // ── Déterminer la bonne réponse ──
             let correctText = String(q.answer ?? q.correct_answer ?? q.correctAnswer ?? '').trim().toLowerCase();
@@ -75,39 +91,55 @@ export function CursusExerciseModal({ exercise, studentId, onClose, onComplete }
             if (typeof q.correct_option === 'number') correctIndex = q.correct_option;
             else if (typeof q.correct_option === 'string' && !isNaN(Number(q.correct_option))) correctIndex = Number(q.correct_option);
 
-            // Si correct_option (index) disponible, récupère aussi le texte de la bonne option
-            if (correctIndex !== null && Array.isArray(q.options) && q.options[correctIndex] !== undefined) {
-                correctText = String(q.options[correctIndex]).trim().toLowerCase();
+            const qOptions = Array.isArray(q.options) && q.options.length > 0
+                ? q.options
+                : Array.isArray(q.choices) && q.choices.length > 0
+                    ? q.choices
+                    : [];
+
+            if (correctIndex !== null && qOptions[correctIndex] !== undefined) {
+                correctText = String(qOptions[correctIndex]).trim().toLowerCase();
             }
 
             let correct = false;
 
             if (userAnsStr) {
-                // 1. Comparaison directe texte-texte (QCM: student selects option text)
-                if (correctText && userAnsStr === correctText) {
+                // 1. Gestion spécifique Vrai / Faux
+                if (qType === 'true_false' || qType === 'vrai_faux' || qType === 'boolean') {
+                    const isUserTrue = ['vrai', 'true', 'v', 't', '1', 'oui', 'yes'].includes(userAnsStr);
+                    const isUserFalse = ['faux', 'false', 'f', '0', 'non', 'no'].includes(userAnsStr);
+                    const isCorrectTrue = ['vrai', 'true', 'v', 't', '1', 'oui', 'yes'].includes(correctText);
+                    const isCorrectFalse = ['faux', 'false', 'f', '0', 'non', 'no'].includes(correctText);
+
+                    if ((isUserTrue && isCorrectTrue) || (isUserFalse && isCorrectFalse)) {
+                        correct = true;
+                    }
+                }
+                // 2. Comparaison directe texte-texte (QCM ou texte exact)
+                else if (correctText && userAnsStr === correctText) {
                     correct = true;
                 }
-                // 2. L'étudiant a répondu par index numérique (string) — ex: "2"
+                // 3. L'étudiant a répondu par index numérique (ex: "2")
                 else if (correctIndex !== null && String(userAns).trim() === String(correctIndex)) {
                     correct = true;
                 }
-                // 3. L'étudiant a tapé un texte mais la réponse attendue est via index → compare texte de la bonne option
-                else if (correctIndex !== null && Array.isArray(q.options)) {
-                    const optionText = String(q.options[correctIndex] ?? '').trim().toLowerCase();
+                // 4. Comparaison via index option
+                else if (correctIndex !== null && qOptions[correctIndex]) {
+                    const optionText = String(qOptions[correctIndex]).trim().toLowerCase();
                     if (optionText && userAnsStr === optionText) correct = true;
                 }
-                // 4. Exercices texte libre / ouverts : si l'étudiant a écrit quelque chose et qu'il n'y a pas de réponse attendue précise → accorder
-                else if (exercise.type !== 'qcm' && exercise.type !== 'quiz' && !correctText && userAnsStr.length > 2) {
+                // 5. Exercices texte avec réponse attendue (inclusion)
+                else if (correctText && (userAnsStr.includes(correctText) || correctText.includes(userAnsStr))) {
                     correct = true;
                 }
-                // 5. Exercices texte avec réponse attendue → inclusion partielle
-                else if (exercise.type !== 'qcm' && correctText && userAnsStr.includes(correctText)) {
+                // 6. Exercices ouverts sans réponse attendue stricte (si > 2 caractères)
+                else if (!correctText && userAnsStr.length > 2) {
                     correct = true;
                 }
             }
 
             if (correct) score += ptsPerQ;
-            const correctDisplay = correctText || (correctIndex !== null && Array.isArray(q.options) ? q.options[correctIndex] : '') || q.answer || '';
+            const correctDisplay = correctText || (correctIndex !== null && qOptions[correctIndex] ? qOptions[correctIndex] : '') || q.answer || '';
             details.push({ question: q.question, answer: userAns || '', correctAnswer: correctDisplay, correct, pts: correct ? ptsPerQ : 0 });
         });
 
@@ -127,7 +159,6 @@ export function CursusExerciseModal({ exercise, studentId, onClose, onComplete }
                 graded: true
             });
         } else {
-            // Already submitted — update answers/score if needed (e.g. retry allowed)
             await supabase.from('exercise_submissions').update({
                 answers,
                 score,
@@ -142,11 +173,11 @@ export function CursusExerciseModal({ exercise, studentId, onClose, onComplete }
             if (prof) {
                 await supabase.from('student_profiles').update({ sky_points: (prof.sky_points || 0) + skyGain }).eq('id', studentId);
                 await supabase.from('sky_transactions').insert({
-                    user_id: studentId,        // required – original column
-                    student_id: studentId,     // extended column (fix_sky_transactions.sql)
+                    user_id: studentId,
+                    student_id: studentId,
                     amount: skyGain,
-                    type: 'exercise_score',    // required – original column
-                    transaction_type: 'exercise_score', // extended column
+                    type: 'exercise_score',
+                    transaction_type: 'exercise_score',
                     description: `Score: ${score}/${exercise.max_score} (+${skyGain} Sky) — ${exercise.title}`
                 });
             }
@@ -219,6 +250,16 @@ export function CursusExerciseModal({ exercise, studentId, onClose, onComplete }
     const q = questions[currentQ];
     if (!q) return null;
 
+    const qType = (q.type || exercise.type || 'qcm').toLowerCase();
+    const qOptions: string[] = Array.isArray(q.options) && q.options.length > 0
+        ? q.options
+        : Array.isArray(q.choices) && q.choices.length > 0
+            ? q.choices
+            : [];
+
+    const isTrueFalse = qType === 'true_false' || qType === 'vrai_faux' || qType === 'boolean';
+    const isQcm = (qType === 'qcm' || qType === 'quiz') && qOptions.length > 0;
+
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4">
             <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-[#0f1117] border border-white/10 rounded-3xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]">
@@ -227,7 +268,9 @@ export function CursusExerciseModal({ exercise, studentId, onClose, onComplete }
                     <div>
                         <h3 className="font-bold text-white text-sm">{exercise.title}</h3>
                         <div className="flex items-center gap-2 mt-1">
-                            <Badge variant="outline" className="text-[10px] border-indigo-500/30 text-indigo-400">{exercise.type.toUpperCase()}</Badge>
+                            <Badge variant="outline" className="text-[10px] border-indigo-500/30 text-indigo-400">
+                                {isTrueFalse ? 'VRAI / FAUX' : isQcm ? 'QCM' : 'RÉPONSE ÉCRITE'}
+                            </Badge>
                             <span className="text-[10px] text-slate-500">Question {currentQ + 1}/{questions.length}</span>
                         </div>
                     </div>
@@ -243,34 +286,81 @@ export function CursusExerciseModal({ exercise, studentId, onClose, onComplete }
 
                 {/* Question */}
                 <div className="flex-1 overflow-y-auto p-5 space-y-4">
-                    <div className="bg-white/[0.04] rounded-2xl p-5">
-                        <p className="text-white font-medium leading-relaxed">{q.question}</p>
+                    <div className="bg-white/[0.04] rounded-2xl p-5 border border-white/[0.06]">
+                        <p className="text-white font-medium leading-relaxed text-base">{q.question}</p>
                     </div>
 
-                    {/* Answer area */}
-                    {(exercise.type === 'qcm') && q.options && (
-                        <div className="space-y-2">
-                            {(q.options as string[]).map((opt: string, oi: number) => (
-                                <button key={oi} onClick={() => setAnswers(prev => ({ ...prev, [currentQ]: opt }))}
-                                    className={cn("w-full text-left p-3.5 rounded-xl border text-sm transition-all",
+                    {/* Answer area : 1. Vrai / Faux */}
+                    {isTrueFalse && (
+                        <div className="grid grid-cols-2 gap-3 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => setAnswers(prev => ({ ...prev, [currentQ]: 'Vrai' }))}
+                                className={cn(
+                                    "p-5 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-2 font-bold text-base",
+                                    answers[currentQ] === 'Vrai'
+                                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 shadow-lg shadow-emerald-500/10 ring-2 ring-emerald-500/50 scale-[1.02]'
+                                        : 'bg-white/[0.03] border-white/10 text-slate-300 hover:bg-emerald-500/10 hover:border-emerald-500/30'
+                                )}
+                            >
+                                <span className="text-2xl">✅</span>
+                                <span>Vrai</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setAnswers(prev => ({ ...prev, [currentQ]: 'Faux' }))}
+                                className={cn(
+                                    "p-5 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-2 font-bold text-base",
+                                    answers[currentQ] === 'Faux'
+                                        ? 'bg-rose-500/20 border-rose-500 text-rose-300 shadow-lg shadow-rose-500/10 ring-2 ring-rose-500/50 scale-[1.02]'
+                                        : 'bg-white/[0.03] border-white/10 text-slate-300 hover:bg-rose-500/10 hover:border-rose-500/30'
+                                )}
+                            >
+                                <span className="text-2xl">❌</span>
+                                <span>Faux</span>
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Answer area : 2. QCM avec choix multiples */}
+                    {!isTrueFalse && isQcm && (
+                        <div className="space-y-2.5 pt-1">
+                            {qOptions.map((opt: string, oi: number) => (
+                                <button
+                                    key={oi}
+                                    type="button"
+                                    onClick={() => setAnswers(prev => ({ ...prev, [currentQ]: opt }))}
+                                    className={cn("w-full text-left p-4 rounded-2xl border text-sm transition-all flex items-center gap-3",
                                         answers[currentQ] === opt
-                                            ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300 font-medium'
+                                            ? 'bg-indigo-500/20 border-indigo-500 text-indigo-200 font-semibold shadow-lg ring-1 ring-indigo-500/50'
                                             : 'bg-white/[0.02] border-white/[0.06] text-slate-300 hover:border-white/20 hover:bg-white/[0.04]'
+                                    )}
+                                >
+                                    <span className={cn(
+                                        "w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 transition-all",
+                                        answers[currentQ] === opt ? "bg-indigo-600 text-white" : "bg-white/5 text-slate-400"
                                     )}>
-                                    <span className="text-slate-500 mr-2">{String.fromCharCode(65 + oi)}.</span> {opt}
+                                        {String.fromCharCode(65 + oi)}
+                                    </span>
+                                    <span className="flex-1 leading-snug">{opt}</span>
                                 </button>
                             ))}
                         </div>
                     )}
 
-                    {(exercise.type === 'quiz' || exercise.type === 'qa' || exercise.type === 'open') && (
-                        <Textarea
-                            value={answers[currentQ] || ''}
-                            onChange={e => setAnswers(prev => ({ ...prev, [currentQ]: e.target.value }))}
-                            placeholder={exercise.type === 'open' ? 'Rédigez votre réponse détaillée...' : 'Votre réponse...'}
-                            className="bg-white/[0.04] border-white/10 text-white placeholder:text-slate-600 resize-none rounded-xl"
-                            rows={exercise.type === 'open' ? 6 : 3}
-                        />
+                    {/* Answer area : 3. Réponse Écrite / Texte / Open */}
+                    {!isTrueFalse && !isQcm && (
+                        <div className="space-y-2 pt-1">
+                            <label className="text-xs text-slate-400 font-medium block">Votre réponse écrite :</label>
+                            <Textarea
+                                value={answers[currentQ] || ''}
+                                onChange={e => setAnswers(prev => ({ ...prev, [currentQ]: e.target.value }))}
+                                placeholder="Tapez votre réponse ici..."
+                                className="bg-white/[0.04] border-white/15 text-white placeholder:text-slate-500 resize-none rounded-2xl p-4 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 min-h-[120px]"
+                                rows={4}
+                            />
+                        </div>
                     )}
                 </div>
 
@@ -280,13 +370,13 @@ export function CursusExerciseModal({ exercise, studentId, onClose, onComplete }
                         <ChevronLeft className="w-4 h-4 mr-1" /> Précédent
                     </Button>
                     {currentQ < questions.length - 1 ? (
-                        <Button onClick={() => setCurrentQ(q => q + 1)} disabled={!answers[currentQ] && exercise.type !== 'open'}
-                            className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl px-6">
+                        <Button onClick={() => setCurrentQ(q => q + 1)} disabled={!answers[currentQ]}
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl px-6 font-bold shadow-md">
                             Suivant <ChevronRight className="w-4 h-4 ml-1" />
                         </Button>
                     ) : (
-                        <Button onClick={handleSubmit} disabled={submitting}
-                            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl px-6">
+                        <Button onClick={handleSubmit} disabled={submitting || !answers[currentQ]}
+                            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl px-6 font-bold shadow-lg">
                             {submitting ? 'Envoi...' : 'Soumettre'} <Send className="w-4 h-4 ml-1" />
                         </Button>
                     )}

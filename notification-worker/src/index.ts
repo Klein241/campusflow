@@ -3480,11 +3480,13 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
         });
     }
 
-    const authHeader = request.headers.get('Authorization') || '';
-    const rawKey = authHeader.replace(/^Bearer\s+/i, '').trim();
+    const url = new URL(request.url);
+    const authHeader = request.headers.get('Authorization') || request.headers.get('x-api-key') || request.headers.get('x-mcp-token') || '';
+    const queryKey = url.searchParams.get('token') || url.searchParams.get('key') || url.searchParams.get('apiKey') || '';
+    const rawKey = (authHeader.replace(/^Bearer\s+/i, '').trim()) || queryKey.trim();
 
     if (!rawKey || !rawKey.startsWith('cf_live_')) {
-        return json({ jsonrpc: '2.0', error: { code: -32001, message: 'Clé API manquante. Utilisez: Authorization: Bearer cf_live_xxxxx' }, id: null }, 401);
+        return json({ jsonrpc: '2.0', error: { code: -32001, message: 'Clé API manquante. Utilisez: Authorization: Bearer cf_live_xxxxx ou le paramètre ?key=' }, id: null }, 401);
     }
 
     // 1. SHA-256 de la clé API
