@@ -949,10 +949,10 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
             <AnimatePresence>
                 {gradingEx && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 bg-black/85 flex items-end sm:items-center justify-center p-4"
+                        className="fixed inset-0 z-[200] bg-black/85 flex items-center justify-center p-3 sm:p-4"
                         onClick={() => setGradingEx(null)}>
-                        <motion.div initial={{ y: 60 }} animate={{ y: 0 }} exit={{ y: 60 }}
-                            className="bg-[#0a0c14] border border-emerald-500/20 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"
+                        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+                            className="bg-[#0a0c14] border border-emerald-500/20 rounded-2xl w-full max-w-2xl max-h-[88vh] flex flex-col shadow-2xl"
                             onClick={e => e.stopPropagation()}>
                             {/* Header */}
                             <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.07] shrink-0">
@@ -1059,16 +1059,16 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
             <AnimatePresence>
                 {showNewEx && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-4"
+                        className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-3 sm:p-4"
                         onClick={() => setShowNewEx(false)}>
-                        <motion.div initial={{ y: 50 }} animate={{ y: 0 }} exit={{ y: 50 }}
-                            className="bg-[#0f1117] border border-violet-500/20 rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-5"
+                        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+                            className="bg-[#0f1117] border border-violet-500/20 rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-5 shadow-2xl space-y-4"
                             onClick={e => e.stopPropagation()}>
-                            <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center justify-between mb-2">
                                 <h3 className="font-bold text-white">Créer un exercice</h3>
                                 <button onClick={() => setShowNewEx(false)}><X className="w-4 h-4 text-slate-400" /></button>
                             </div>
-                            <div className="space-y-3">
+                            <div className="space-y-3 pb-2">
                                 <Input value={exForm.title} onChange={e => setExForm(p => ({ ...p, title: e.target.value }))}
                                     placeholder="Titre de l'exercice..." className="bg-white/[0.05] border-white/10 text-white rounded-xl" />
                                 <div className="grid grid-cols-3 gap-2">
@@ -1110,7 +1110,7 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
                                     </div>
                                 </div>
                                 <Button onClick={createExercise} disabled={savingEx || !exForm.title.trim()}
-                                    className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl h-10 font-bold">
+                                    className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl h-11 font-bold shadow-lg">
                                     {savingEx ? 'Création...' : "Créer l'exercice"}
                                 </Button>
                             </div>
@@ -1123,10 +1123,10 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
             <AnimatePresence>
                 {editEx && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-4"
+                        className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-3 sm:p-4"
                         onClick={() => setEditEx(null)}>
-                        <motion.div initial={{ y: 50 }} animate={{ y: 0 }} exit={{ y: 50 }}
-                            className="bg-[#0f1117] border border-violet-500/30 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5"
+                        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+                            className="bg-[#0f1117] border border-violet-500/30 rounded-2xl w-full max-w-lg max-h-[88vh] overflow-y-auto p-5 shadow-2xl space-y-4"
                             onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="font-bold text-white flex items-center gap-2"><Edit2 className="w-4 h-4 text-violet-400" />Modifier l&apos;exercice</h3>

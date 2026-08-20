@@ -730,8 +730,8 @@ function AdminPageContent() {
                 const { data: rm } = await supabase.from('rooms').select('*').eq('organization_id', o.id).order('name');
                 if (cancelled) return;
                 setRooms((rm || []).map((x: any) => ({ id: x.id, name: x.name })));
-                // Charger les filières (table globale, pas de filtre organization_id)
-                const { data: fil } = await supabase.from('filieres').select('id, nom').order('nom');
+                // Charger les filières de l'organisation uniquement
+                const { data: fil } = await supabase.from('filieres').select('id, nom').eq('organization_id', o.id).order('nom');
                 if (!cancelled) setFilieres(fil || []);
                 if (!o.setup_completed && (c || []).length === 0) setTab('setup');
             } catch (err: any) {

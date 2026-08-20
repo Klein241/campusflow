@@ -2682,7 +2682,7 @@ export default {
             if (pathname === '/api/email/status'  && method === 'GET')  return handleEmailStatus(request, env);
 
             // ── MCP IziTeach — Cloudflare D1 Primary Edge Gateway ──
-            if ((pathname === '/mcp-gateway' || pathname === '/api/mcp' || pathname === '/api/mcp-gateway') && method === 'POST') {
+            if (pathname === '/mcp-gateway' || pathname === '/api/mcp' || pathname === '/api/mcp-gateway' || pathname === '/mcp' || pathname === '/sse') {
                 return handleMcpGateway(request, env);
             }
 
@@ -3441,6 +3441,45 @@ const WORKER_MCP_TOOLS = [
 
 async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
     const startTime = Date.now();
+    const { pathname } = new URL(request.url);
+
+    // ── GESTION DES REQUÊTES GET (Navigateur & Flux SSE Claude) ──
+    if (request.method === 'GET') {
+        const accept = request.headers.get('Accept') || '';
+        if (accept.includes('text/event-stream')) {
+            const stream = new ReadableStream({
+                start(controller) {
+                    controller.enqueue(new TextEncoder().encode(`event: endpoint\ndata: ${pathname}\n\n`));
+                }
+            });
+            return new Response(stream, {
+                headers: {
+                    'Content-Type': 'text/event-stream',
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive',
+                    ...CORS_HEADERS,
+                },
+            });
+        }
+
+        return json({
+            status: 'online',
+            server: 'MCP IziTeach Gateway',
+            engine: 'Cloudflare D1 SQLite (Edge Engine)',
+            protocol: 'jsonrpc-2.0',
+            version: '2.0.0',
+            transport: ['HTTP POST (JSON-RPC 2.0)', 'Server-Sent Events (SSE)'],
+            description: 'Passerelle MCP IziTeach haute performance pour Claude Desktop, Manus IA, Cursor, ChatGPT et agents IA autonomes.',
+            authentication: 'Bearer token header (Authorization: Bearer cf_live_...)',
+            endpoints: {
+                jsonrpc: `POST https://campusflow-worker.kleintaptue1.workers.dev/mcp-gateway`,
+                sse: `GET https://campusflow-worker.kleintaptue1.workers.dev/mcp-gateway`,
+            },
+            supported_methods: ['tools/list', 'tools/call', 'initialize', 'ping'],
+            tools_count: WORKER_MCP_TOOLS.length,
+        });
+    }
+
     const authHeader = request.headers.get('Authorization') || '';
     const rawKey = authHeader.replace(/^Bearer\s+/i, '').trim();
 
@@ -3715,14 +3754,62 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
 
         // ── CREATE EXERCISE ──
         case 'create_exercise': {
-            if (!args.lesson_id || !args.title || !args.question || !args.type || !args.correct_answer) throw { code: -32602, message: 'Champs requis manquants' };
+            if (!args.lesson_id || !args.title) throw { code: -32602, message: 'lesson_id et title requis' };
             const id = crypto.randomUUID();
             const now = new Date().toISOString();
-            const choicesStr = args.choices ? JSON.stringify(args.choices) : null;
-            await db.prepare(`INSERT INTO exercises (id, lesson_id, title, question, type, choices, correct_answer, explanation, max_score, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 10, ?9, ?9)`)
-                .bind(id, args.lesson_id, args.title, args.question, args.type, choicesStr, args.correct_answer, args.explanation || null, now).run();
-            syncToSupabase(env, 'exercises', 'INSERT', { id, lesson_id: args.lesson_id, title: args.title, question: args.question, type: args.type, choices: args.choices, correct_answer: args.correct_answer, explanation: args.explanation, max_score: 10 });
-            return { success: true, exercise_id: id, message: `✅ Exercice "${args.title}" créé sur Cloudflare D1` };
+            const targetOrgId = args.org_id || ctx.orgId;
+
+            // Construire questions JSONB
+            let questionsToSave: any[] = [];
+            if (Array.isArray(args.questions) && args.questions.length > 0) {
+                questionsToSave = args.questions.map((q: any, i: number) => ({
+                    id: q.id || `q_${i + 1}`,
+                    question: q.question || '',
+                    type: q.type || args.type || 'qcm',
+                    options: q.options || q.choices || [],
+                    choices: q.choices || q.options || [],
+                    answer: q.answer || q.correct_answer || '',
+                    correct_answer: q.correct_answer || q.answer || '',
+                    explanation: q.explanation || null,
+                }));
+            } else if (args.question) {
+                questionsToSave = [{
+                    id: 'q_1',
+                    question: args.question,
+                    type: args.type || 'qcm',
+                    options: args.options || args.choices || [],
+                    choices: args.choices || args.options || [],
+                    answer: args.correct_answer || args.answer || '',
+                    correct_answer: args.correct_answer || args.answer || '',
+                    explanation: args.explanation || null,
+                }];
+            }
+
+            const questionsStr = JSON.stringify(questionsToSave);
+            const duration = Number(args.duration_minutes) || 10;
+            const maxScore = Number(args.max_score) || 20;
+
+            await db.prepare(`INSERT INTO exercises (id, organization_id, lesson_id, title, type, questions, duration_minutes, max_score, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`)
+                .bind(id, targetOrgId, args.lesson_id, args.title, args.type || 'qcm', questionsStr, duration, maxScore, now).run();
+
+            syncToSupabase(env, 'exercises', 'INSERT', {
+                id,
+                organization_id: targetOrgId,
+                lesson_id: args.lesson_id,
+                title: args.title,
+                type: args.type || 'qcm',
+                questions: questionsToSave,
+                duration_minutes: duration,
+                max_score: maxScore,
+                created_by_ai: true,
+                ai_agent_name: 'Sky Agent',
+            });
+
+            return {
+                success: true,
+                exercise_id: id,
+                message: `✅ Exercice "${args.title}" créé sur Cloudflare D1 (${questionsToSave.length} question(s))`,
+            };
         }
 
         // ── LIST STUDENTS ──

@@ -365,10 +365,22 @@ Deno.serve(async (req: Request) => {
         return new Response(null, {
             headers: {
                 'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
                 'Access-Control-Allow-Headers': 'authorization, content-type',
             },
         });
+    }
+
+    if (req.method === 'GET') {
+        return jsonResponse({
+            status: 'online',
+            server: 'MCP IziTeach Gateway (Supabase Failover Engine)',
+            protocol: 'jsonrpc-2.0',
+            version: '2.0.0',
+            transport: ['HTTP POST (JSON-RPC 2.0)'],
+            description: 'Passerelle de secours Supabase Edge Function pour agents IA.',
+            authentication: 'Bearer token header (Authorization: Bearer cf_live_...)',
+        }, 200);
     }
 
     if (req.method !== 'POST') {
@@ -749,36 +761,64 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
 
         // ── CREATE EXERCISE ───────────────────────────────────────────────────
         case 'create_exercise': {
-            if (!args.lesson_id || !args.title || !args.question || !args.type || !args.correct_answer) {
-                throw { code: -32602, message: 'Champs requis manquants' };
-            }
-            if (!['qcm', 'text', 'true_false'].includes(args.type as string)) {
-                throw { code: -32602, message: 'type doit être "qcm", "text" ou "true_false"' };
+            if (!args.lesson_id || !args.title) {
+                throw { code: -32602, message: '"lesson_id" et "title" sont requis' };
             }
 
-            let orderIndex = args.order_index as number;
-            if (!orderIndex) {
-                const { count } = await supabase
-                    .from('exercises')
-                    .select('id', { count: 'exact', head: true })
-                    .eq('lesson_id', args.lesson_id as string);
-                orderIndex = (count || 0) + 1;
+            // Récupérer lesson → chapter_id & organization_id
+            let chapterId = args.chapter_id as string;
+            let targetOrgId = (args.org_id as string) || agent.orgId;
+            if (args.lesson_id) {
+                const { data: les } = await supabase
+                    .from('lessons')
+                    .select('chapter_id, organization_id')
+                    .eq('id', args.lesson_id as string)
+                    .maybeSingle();
+                if (les) {
+                    if (!chapterId) chapterId = les.chapter_id;
+                    if (!targetOrgId) targetOrgId = les.organization_id;
+                }
+            }
+
+            // Construire le tableau questions JSONB
+            let questionsToSave: any[] = [];
+            if (Array.isArray(args.questions) && args.questions.length > 0) {
+                questionsToSave = args.questions.map((q: any, i: number) => ({
+                    id: q.id || `q_${i + 1}`,
+                    question: q.question || '',
+                    type: q.type || args.type || 'qcm',
+                    options: q.options || q.choices || [],
+                    choices: q.choices || q.options || [],
+                    answer: q.answer || q.correct_answer || '',
+                    correct_answer: q.correct_answer || q.answer || '',
+                    explanation: q.explanation || null,
+                }));
+            } else if (args.question) {
+                questionsToSave = [{
+                    id: 'q_1',
+                    question: args.question,
+                    type: args.type || 'qcm',
+                    options: args.options || args.choices || [],
+                    choices: args.choices || args.options || [],
+                    answer: args.correct_answer || args.answer || '',
+                    correct_answer: args.correct_answer || args.answer || '',
+                    explanation: args.explanation || null,
+                }];
             }
 
             const { data, error } = await supabase
                 .from('exercises')
                 .insert({
-                    lesson_id:      args.lesson_id,
-                    title:          args.title,
-                    question:       args.question,
-                    type:           args.type,
-                    choices:        args.choices || null,
-                    correct_answer: args.correct_answer,
-                    explanation:    args.explanation || null,
-                    max_score:      args.max_score || 10,
-                    order_index:    orderIndex,
-                    created_by_ai:  true,
-                    ai_agent_name:  agent.agentName,
+                    organization_id:  targetOrgId,
+                    chapter_id:       chapterId || null,
+                    lesson_id:        args.lesson_id,
+                    title:            args.title,
+                    type:             (args.type as string) || 'qcm',
+                    questions:        questionsToSave,
+                    duration_minutes: Number(args.duration_minutes) || 10,
+                    max_score:        Number(args.max_score) || 20,
+                    created_by_ai:    true,
+                    ai_agent_name:    agent.agentName,
                 })
                 .select()
                 .single();
@@ -786,7 +826,7 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             return {
                 success: true,
                 exercise: data,
-                message: `✅ Exercice "${args.title}" créé`,
+                message: `✅ Exercice "${args.title}" créé avec succès (${questionsToSave.length} question(s))`,
             };
         }
 
