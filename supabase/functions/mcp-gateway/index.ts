@@ -450,7 +450,7 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             if (!args.chapter_id) throw { code: -32602, message: 'chapter_id requis' };
             const { data, error } = await supabase
                 .from('lessons')
-                .select('id, title, position, duration_minutes, status, content_type')
+                .select('id, title, position, estimated_minutes, status')
                 .eq('chapter_id', args.chapter_id as string)
                 .order('position');
             if (error) throw { code: -32002, message: error.message };
@@ -553,15 +553,15 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             const { data, error } = await supabase
                 .from('lessons')
                 .insert({
-                    chapter_id:       args.chapter_id,
-                    title:            args.title,
-                    content:          args.content,
-                    position:         orderIndex,
-                    duration_minutes: args.duration_minutes || null,
-                    status:           'draft',
-                    content_type:     'text',
-                    created_by_ai:    true,
-                    ai_agent_name:    agent.agentName,
+                    chapter_id:        args.chapter_id,
+                    organization_id:   agent.orgId,
+                    title:             args.title,
+                    content:           args.content,
+                    position:          orderIndex,
+                    estimated_minutes: args.duration_minutes || null,
+                    status:            'published',
+                    created_by_ai:     true,
+                    ai_agent_name:     agent.agentName,
                 })
                 .select()
                 .single();

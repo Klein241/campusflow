@@ -106,6 +106,60 @@ const STATUS_CONFIG = {
     rejected:         { icon: Ban,         color: 'text-slate-400',   bg: 'bg-slate-500/10',   label: 'Rejeté' },
 };
 
+// ── Helpers lisibilité journal ────────────────────────────────────
+const TOOL_LABELS: Record<string, string> = {
+    create_lesson:   'Création de leçon',
+    create_chapter:  'Création de chapitre',
+    create_subject:  'Création de matière',
+    create_exercise: 'Création d\'exercice',
+    list_students:   'Consultation des étudiants',
+    list_subjects:   'Consultation des matières',
+    list_chapters:   'Consultation des chapitres',
+    list_lessons:    'Consultation des leçons',
+    list_classes:    'Consultation des classes',
+    get_org_info:    'Informations organisation',
+    get_grades:      'Consultation des notes',
+    bulk_create:     'Création en masse',
+    ping:            'Test de connexion',
+};
+
+function extractInputInfo(toolName: string, inputSummary: string | null): string {
+    if (!inputSummary) return '';
+    try {
+        // Format: "toolName({...json...})"
+        const match = inputSummary.match(/^\w+\((.*)\)$/s);
+        const jsonStr = match ? match[1] : inputSummary;
+        const args = JSON.parse(jsonStr);
+        if (args.title)   return `📌 "${args.title}"`;
+        if (args.name)    return `📌 "${args.name}"`;
+        if (args.message) return args.message;
+        const keys = Object.keys(args).filter(k => !k.endsWith('_id') && !k.endsWith('content'));
+        if (keys.length > 0) return keys.map(k => `${k}: ${String(args[k]).slice(0, 40)}`).join(' • ');
+    } catch {}
+    // Fallback : tronquer lisiblement
+    return inputSummary.replace(/"[0-9a-f-]{36}"/g, '"..."').slice(0, 120);
+}
+
+function extractOutputInfo(toolName: string, outputSummary: string | null, status: string): string {
+    if (!outputSummary) return '';
+    try {
+        const data = JSON.parse(outputSummary);
+        if (data.message)                return data.message.replace(/^[✅⚠️❌]\s*/, '');
+        if (data.lesson?.title)          return `Leçon créée : "${data.lesson.title}"`;
+        if (data.chapter?.title)         return `Chapitre créé : "${data.chapter.title}"`;
+        if (data.subject?.name)          return `Matière créée : "${data.subject.name}"`;
+        if (data.exercise?.title)        return `Exercice créé : "${data.exercise.title}"`;
+        if (data.students !== undefined) return `${data.total ?? data.students?.length ?? 0} étudiant(s) récupéré(s)`;
+        if (data.subjects !== undefined) return `${data.total ?? 0} matière(s) récupérée(s)`;
+        if (data.chapters !== undefined) return `${data.total ?? 0} chapitre(s) récupéré(s)`;
+        if (data.lessons  !== undefined) return `${data.total ?? 0} leçon(s) récupérée(s)`;
+        if (data.organization?.name)     return `Organisation : ${data.organization.name}`;
+        if (data.pong)                   return 'Connexion vérifiée ✓';
+    } catch {}
+    if (status === 'error') return outputSummary.slice(0, 120);
+    return '';
+}
+
 // ── Main Component ────────────────────────────────────────────────
 export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
     const [subTab, setSubTab] = useState<'keys' | 'logs' | 'pending'>('keys');
@@ -579,7 +633,7 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
 
             {/* ── TAB : LOGS ─────────────────────────────────────────── */}
             {subTab === 'logs' && (
-                <div className="space-y-2">
+                <div className="space-y-3">
                     {logs.length === 0 ? (
                         <div className="text-center py-12 text-slate-500">
                             <Activity className="w-12 h-12 mx-auto mb-3 opacity-30" />
@@ -587,42 +641,76 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
                         </div>
                     ) : (
                         logs.map(log => {
-                            const cfg = STATUS_CONFIG[log.status];
+                            const cfg        = STATUS_CONFIG[log.status];
                             const StatusIcon = cfg.icon;
-                            const agentKey = agentKeys.find(k => k.id === log.agent_key_id);
+                            const agentKey   = agentKeys.find(k => k.id === log.agent_key_id);
+                            const toolLabel  = TOOL_LABELS[log.tool_name] || log.tool_name;
+                            const toolIcon   = TOOL_ICONS[log.tool_name]  || '🤖';
+                            const inputInfo  = extractInputInfo(log.tool_name, log.input_summary);
+                            const outputInfo = extractOutputInfo(log.tool_name, log.output_summary, log.status);
+                            const timeStr    = new Date(log.executed_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                            const dateStr    = new Date(log.executed_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
                             return (
-                                <div key={log.id} className={`flex items-start gap-3 p-3 rounded-xl border border-white/8 ${cfg.bg}`}>
-                                    <StatusIcon className={`w-4 h-4 mt-0.5 shrink-0 ${cfg.color}`} />
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <span className="text-sm font-semibold text-white">
-                                                {TOOL_ICONS[log.tool_name] || '🤖'} {log.tool_name}
-                                            </span>
-                                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${cfg.bg} ${cfg.color}`}>
+                                <div key={log.id} className={`rounded-2xl border p-4 space-y-2 ${
+                                    log.status === 'success'
+                                        ? 'bg-emerald-500/5 border-emerald-500/20'
+                                        : log.status === 'error'
+                                        ? 'bg-red-500/5 border-red-500/20'
+                                        : 'bg-amber-500/5 border-amber-500/20'
+                                }`}>
+                                    {/* Header */}
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex items-center gap-2.5">
+                                            <span className="text-xl">{toolIcon}</span>
+                                            <div>
+                                                <p className="text-sm font-bold text-white leading-tight">{toolLabel}</p>
+                                                {agentKey && (
+                                                    <p className="text-xs text-slate-500 mt-0.5">
+                                                        Agent : <span className="text-violet-400">{agentKey.name}</span>
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                            <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-semibold ${cfg.bg} ${cfg.color}`}>
                                                 {cfg.label}
                                             </span>
-                                            {agentKey && (
-                                                <span className="text-xs text-slate-500">— {agentKey.name}</span>
+                                            <p className="text-xs text-slate-500 mt-1">{dateStr} à {timeStr}</p>
+                                            {log.duration_ms && (
+                                                <p className="text-xs text-slate-600">{log.duration_ms}ms</p>
                                             )}
                                         </div>
-                                        {log.input_summary && (
-                                            <p className="text-xs text-slate-400 mt-0.5">{log.input_summary}</p>
-                                        )}
-                                        {log.output_summary && (
-                                            <p className="text-xs text-slate-300 mt-0.5">{log.output_summary}</p>
-                                        )}
-                                        {log.error_message && (
-                                            <p className="text-xs text-red-400 mt-0.5 font-mono">{log.error_message}</p>
-                                        )}
                                     </div>
-                                    <div className="text-right shrink-0">
-                                        <p className="text-xs text-slate-500">
-                                            {new Date(log.executed_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                                        </p>
-                                        {log.duration_ms && (
-                                            <p className="text-xs text-slate-600">{log.duration_ms}ms</p>
-                                        )}
-                                    </div>
+
+                                    {/* Ce que l'agent a fait */}
+                                    {inputInfo && (
+                                        <div className="flex items-start gap-2 bg-black/20 rounded-xl px-3 py-2">
+                                            <span className="text-slate-500 text-xs mt-0.5 shrink-0">Action :</span>
+                                            <p className="text-sm text-slate-200">{inputInfo}</p>
+                                        </div>
+                                    )}
+
+                                    {/* Résultat */}
+                                    {outputInfo && (
+                                        <div className={`flex items-start gap-2 rounded-xl px-3 py-2 ${
+                                            log.status === 'success'
+                                                ? 'bg-emerald-500/10'
+                                                : 'bg-red-500/10'
+                                        }`}>
+                                            <span className="text-slate-500 text-xs mt-0.5 shrink-0">Résultat :</span>
+                                            <p className={`text-sm font-medium ${
+                                                log.status === 'success' ? 'text-emerald-300' : 'text-red-300'
+                                            }`}>{outputInfo}</p>
+                                        </div>
+                                    )}
+
+                                    {/* Message d'erreur */}
+                                    {log.error_message && (
+                                        <div className="flex items-start gap-2 bg-red-500/10 rounded-xl px-3 py-2">
+                                            <span className="text-red-400 text-xs mt-0.5 shrink-0">⚠️ Erreur :</span>
+                                            <p className="text-sm text-red-300">{log.error_message}</p>
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })

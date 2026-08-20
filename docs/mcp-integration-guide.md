@@ -1,230 +1,224 @@
-# 🤖 Guide d'Intégration MCP — CampusFlow
+# 📘 Guide Complet — Agent IA dans IziTeach
 
-## Qu'est-ce que le MCP Gateway ?
-
-Le **MCP (Model Context Protocol)** de CampusFlow permet aux agents IA (MANUS, Claude, GPT, etc.) de se connecter à votre école de manière **sécurisée et contrôlée**.
-
-> **Avant ce système** : L'agent IA devait utiliser les vrais identifiants d'un professeur ou étudiant — risqué et non traçable.  
-> **Maintenant** : L'agent utilise une **clé API dédiée** avec des permissions définies par l'admin.
+> **Pour qui ?** Ce guide est destiné à tout agent IA (Claude, Manus, ChatGPT, etc.) qui reçoit une clé API IziTeach. Il décrit comment se connecter, quelles actions sont disponibles, et comment les utiliser.
 
 ---
 
-## Pour l'Administrateur
+## 🔌 Connexion au Gateway MCP
 
-### Créer une clé pour un agent IA
-
-1. Connectez-vous au **Panel Admin**
-2. Dans le menu latéral, cliquez sur **🤖 Agents IA**
-3. Cliquez sur **"Autoriser un nouvel agent IA"**
-4. Remplissez :
-   - **Nom** : Ex. `MANUS Créateur de Cursus`
-   - **Permissions** : Cochez uniquement ce que l'IA peut faire
-   - **Seuil d'approbation** : Au-delà de X items → vous devez approuver
-5. Cliquez **"Générer la clé"**
-6. **Copiez la clé immédiatement** — elle ne sera plus affichée
-
-### Permissions disponibles
-
-| Permission | Ce que l'IA peut faire | Risque |
-|-----------|----------------------|--------|
-| `read:curriculum` | Lire matières, chapitres, leçons | Faible |
-| `read:students` | Voir la liste des étudiants | Faible |
-| `write:curriculum` | Créer/modifier matières, chapitres, leçons | Moyen |
-| `write:exercises` | Créer des exercices | Moyen |
-| `read:grades` | Voir les notes | Moyen |
-| `write:grades` | Saisir des notes | Élevé |
-| `write:bulk` | Opérations massives | Moyen |
-
-### Révoquer une clé
-
-Dans **🤖 Agents IA** → cliquez sur la clé → **"Révoquer cette clé"**. L'agent perd l'accès immédiatement.
-
----
-
-## Pour les Développeurs / Agents IA
-
-### Authentification
-
-Toutes les requêtes MCP doivent inclure la clé dans le header `Authorization` :
+### Endpoint unique
 
 ```
-Authorization: Bearer cf_live_xxxxxxxx...
+POST https://nuisijvopyudmbcqpaua.supabase.co/functions/v1/mcp-gateway
 ```
 
-### Endpoint MCP
-
-```
-POST https://[votre-projet].supabase.co/functions/v1/mcp-gateway
-Content-Type: application/json
-Authorization: Bearer cf_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
-
-### Format JSON-RPC 2.0
-
-#### Lister les outils disponibles
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "tools/list",
-  "id": 1
-}
-```
-
-#### Appeler un outil
+### Format de requête (JSON-RPC 2.0)
 
 ```json
 {
   "jsonrpc": "2.0",
   "method": "tools/call",
+  "id": 1,
   "params": {
-    "name": "create_lesson",
-    "arguments": {
-      "chapter_id": "uuid-du-chapitre",
-      "title": "Introduction aux fonctions",
-      "content": "Une fonction est...",
-      "order_index": 1
-    }
-  },
-  "id": 2
-}
-```
-
-### Outils disponibles
-
-#### `list_subjects` — Lister les matières
-**Permission requise** : `read:curriculum`
-```json
-{
-  "arguments": {}
-}
-```
-
-#### `list_chapters` — Lister les chapitres
-**Permission requise** : `read:curriculum`
-```json
-{
-  "arguments": {
-    "subject_id": "uuid-de-la-matiere"
+    "name": "NOM_DE_L_OUTIL",
+    "arguments": { }
   }
 }
 ```
+
+### En-têtes obligatoires
+
+```
+Authorization: Bearer cf_live_VOTRE_CLE
+Content-Type: application/json
+```
+
+### Vérifier la connexion
+
+```json
+{ "jsonrpc": "2.0", "method": "ping", "id": 0 }
+```
+
+Réponse attendue :
+```json
+{ "jsonrpc": "2.0", "result": { "pong": true, "agent": "NomAgent" }, "id": 0 }
+```
+
+---
+
+## Outils disponibles
+
+### Consulter les données
+
+#### `get_org_info` — Informations de l'école
+```json
+{ "name": "get_org_info", "arguments": {} }
+```
+Retourne : nom, ville, type, slug.
+
+---
+
+#### `list_classes` — Liste des classes
+```json
+{ "name": "list_classes", "arguments": {} }
+```
+
+---
+
+#### `list_subjects` — Liste des matières
+```json
+{ "name": "list_subjects", "arguments": { "class_id": "UUID" } }
+```
+`class_id` est optionnel.
+
+---
+
+#### `list_chapters` — Chapitres d'une matière
+```json
+{ "name": "list_chapters", "arguments": { "subject_id": "UUID" } }
+```
+
+---
+
+#### `list_lessons` — Leçons d'un chapitre
+```json
+{ "name": "list_lessons", "arguments": { "chapter_id": "UUID" } }
+```
+
+---
+
+#### `list_students` — Étudiants
+```json
+{ "name": "list_students", "arguments": { "class_id": "UUID" } }
+```
+`class_id` est optionnel.
+
+---
+
+### Créer du contenu
 
 #### `create_subject` — Créer une matière
-**Permission requise** : `write:curriculum`
 ```json
 {
+  "name": "create_subject",
   "arguments": {
-    "name": "Mathématiques Avancées",
-    "description": "Cours de maths niveau terminale",
-    "class_id": "uuid-de-la-classe"
+    "name": "Algorithmique",
+    "class_id": "UUID"
   }
 }
 ```
+
+---
 
 #### `create_chapter` — Créer un chapitre
-**Permission requise** : `write:curriculum`
 ```json
 {
+  "name": "create_chapter",
   "arguments": {
-    "subject_id": "uuid-de-la-matiere",
-    "title": "Chapitre 1 : Les fonctions",
-    "description": "Introduction aux fonctions mathématiques",
+    "subject_id": "UUID",
+    "title": "Introduction à la POO",
+    "description": "Optionnel",
     "order_index": 1
   }
 }
 ```
+
+---
 
 #### `create_lesson` — Créer une leçon
-**Permission requise** : `write:curriculum`
 ```json
 {
+  "name": "create_lesson",
   "arguments": {
-    "chapter_id": "uuid-du-chapitre",
-    "title": "Qu'est-ce qu'une fonction ?",
-    "content": "Contenu de la leçon en markdown...",
+    "chapter_id": "UUID",
+    "title": "Les variables en Python",
+    "content": "## Introduction\nUne variable est...",
+    "duration_minutes": 30,
     "order_index": 1
   }
 }
 ```
+Le contenu supporte le **Markdown** (titres, listes, code).
+
+---
 
 #### `create_exercise` — Créer un exercice
-**Permission requise** : `write:exercises` ou `write:curriculum`
 ```json
 {
+  "name": "create_exercise",
   "arguments": {
-    "lesson_id": "uuid-de-la-lecon",
-    "title": "Exercice 1",
-    "question": "Calculez f(2) si f(x) = 3x + 1",
+    "lesson_id": "UUID",
+    "title": "QCM Variables",
+    "question": "Quelle instruction déclare une variable en Python ?",
     "type": "qcm",
-    "choices": ["7", "8", "5", "6"],
-    "correct_answer": "7",
-    "max_score": 5
+    "choices": ["var x = 5", "x = 5", "int x = 5"],
+    "correct_answer": "x = 5",
+    "explanation": "En Python on écrit simplement x = valeur.",
+    "max_score": 10
   }
 }
 ```
+Types : `"qcm"` | `"text"` | `"true_false"`
 
-#### `list_students` — Voir les étudiants
-**Permission requise** : `read:students`
-```json
-{
-  "arguments": {
-    "class_id": "uuid-de-la-classe"
-  }
-}
+---
+
+## Permissions requises par outil
+
+| Outil | Permission nécessaire |
+|-------|-----------------------|
+| `get_org_info`, `list_*` | `read:curriculum` |
+| `list_students` | `read:students` |
+| `create_subject`, `create_chapter`, `create_lesson` | `write:curriculum` |
+| `create_exercise` | `write:exercises` |
+
+---
+
+## Limites et quotas
+
+| Paramètre | Valeur |
+|-----------|--------|
+| Requêtes / minute | 20 req/min |
+| Seuil d'approbation | Au-delà de 10 éléments en masse |
+| Expiration clé | Selon configuration admin |
+
+---
+
+## Flux de travail typique pour créer une leçon
+
+```
+1. get_org_info       — identifier l'organisation
+2. list_subjects      — choisir une matière
+3. list_chapters      — choisir un chapitre (ou create_chapter)
+4. create_lesson      — créer la leçon avec son contenu
+5. create_exercise    — ajouter des exercices
 ```
 
 ---
 
-## Exemple avec MANUS IA
+## Fonctionnement autonome (24h/24)
 
-### Configuration dans MANUS
+**Oui**, l'agent peut travailler même quand l'admin n'est pas connecté.
 
-1. Allez dans les paramètres de connexion de MANUS
-2. Ajoutez une connexion MCP avec :
-   - **URL** : `https://[votre-projet].supabase.co/functions/v1/mcp-gateway`
-   - **Type d'auth** : Bearer Token
-   - **Token** : `cf_live_votre_cle_ici`
-
-### Prompt exemple pour MANUS
-
-```
-Tu es un assistant pédagogique pour l'école [Nom de l'école].
-Tu as accès au système via le MCP CampusFlow.
-
-Ta mission : Créer le plan complet du cours de Mathématiques Terminale :
-1. Liste d'abord les matières existantes
-2. Crée un chapitre "Fonctions et Limites"
-3. Crée 5 leçons dans ce chapitre
-4. Ajoute 2 exercices par leçon
-
-Utilise uniquement les outils MCP disponibles. 
-Ne modifie jamais les données des étudiants ou les notes.
-```
+| Scénario | Résultat |
+|----------|---------|
+| Créer leçons la nuit | Oui |
+| Lire données sans admin connecté | Oui |
+| Actions en masse au-delà du seuil | Mise en attente — l'admin approuve au prochain login |
+| Clé révoquée | Accès coupé immédiatement |
 
 ---
 
-## Sécurité : Ce que l'IA NE PEUT PAS faire
+## Codes d'erreur
 
-Même avec une clé active, il est **impossible** pour un agent IA de :
-
-- ❌ Supprimer des utilisateurs (étudiants, professeurs)
-- ❌ Modifier des mots de passe ou codes PIN
-- ❌ Accéder aux données financières
-- ❌ Lire les messages privés des étudiants
-- ❌ Modifier les rôles des utilisateurs
-- ❌ Exporter des données en masse
-- ❌ Accéder à d'autres organisations
+| Code | Signification |
+|------|--------------|
+| `-32602` | Paramètre manquant ou invalide |
+| `-32001` | Clé API invalide ou expirée |
+| `-32002` | Erreur base de données |
+| `-32003` | Ressource introuvable |
+| `-32004` | Limite de requêtes dépassée |
+| `-32005` | Accès refusé (permission manquante) |
 
 ---
 
-## Traçabilité
-
-Chaque action d'un agent IA est enregistrée dans les logs :
-- Outil utilisé
-- Paramètres (résumé)
-- Résultat
-- Timestamp
-- Durée d'exécution
-
-Accessible dans **🤖 Agents IA** → **Journal d'activité**
+*IziTeach MCP Gateway v1.0 — Compatible JSON-RPC 2.0*
