@@ -32,6 +32,7 @@ import { ReviewSection } from '@/components/shared/ReviewSection';
 import { BugReportButton } from '@/components/shared/BugReportButton';
 import { EmailModal } from '@/components/campus/email-modal';
 import { IziTeachLogo } from '@/components/brand/iziteach-logo';
+import { AiAgentsManager } from '@/components/admin/AiAgentsManager';
 
 // ═══ ERROR BOUNDARY (catches React render errors) ═══
 class AdminErrorBoundary extends Component<{ children: ReactNode; orgSlug: string }, { hasError: boolean; error: Error | null }> {
@@ -4747,29 +4748,8 @@ ${bodyHtml}
 
                     {/* ── AGENTS IA — Redirige vers la page dédiée ── */}
                     {tab === 'ai_agents' && org && (
-                        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center">
-                            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-violet-600/30 to-indigo-600/20 border border-violet-500/30 flex items-center justify-center">
-                                <Bot className="w-10 h-10 text-violet-300" />
-                            </div>
-                            <div>
-                                <h2 className="text-2xl font-black text-white mb-2">🤖 Agents IA — MCP Gateway</h2>
-                                <p className="text-slate-400 text-sm max-w-md leading-relaxed">
-                                    La gestion des agents IA dispose de sa propre page dédiée pour une meilleure expérience.
-                                    Compatible avec <strong className="text-violet-300">Claude</strong>,{' '}
-                                    <strong className="text-blue-300">MANUS</strong>,{' '}
-                                    <strong className="text-emerald-300">ChatGPT</strong> et tout outil MCP.
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => router.push(`/${orgSlug}/admin/agents`)}
-                                className="flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-2xl font-bold text-sm shadow-xl shadow-violet-600/25 transition-all active:scale-95"
-                            >
-                                <Bot className="w-4 h-4" />
-                                Ouvrir la page Agents IA
-                            </button>
-                            <p className="text-xs text-slate-600">
-                                URL directe : <code className="text-slate-400">/{orgSlug}/admin/agents</code>
-                            </p>
+                        <div className="max-w-5xl mx-auto">
+                            <AiAgentsManager orgId={org.id} orgSlug={orgSlug} />
                         </div>
                     )}
 
