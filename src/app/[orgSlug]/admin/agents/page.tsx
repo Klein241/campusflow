@@ -29,29 +29,58 @@ function useAdminSession() {
     useEffect(() => {
         if (!orgSlug || orgSlug === '_') return;
 
-        const stored = typeof window !== 'undefined'
-            ? localStorage.getItem(`campusflow_admin_session_${orgSlug}`)
-            : null;
-        if (!stored) {
-            router.replace(`/${orgSlug}/admin`);
-            return;
+        let cancelled = false;
+
+        async function checkAuth() {
+            try {
+                // 1. Vérifier la session Supabase Auth
+                const { data: { session: authSession } } = await supabase.auth.getSession();
+                if (!authSession) {
+                    router.replace(`/${orgSlug}/admin`);
+                    return;
+                }
+                if (cancelled) return;
+                setSession(authSession);
+
+                // 2. Vérifier que l'user est admin/director de cette org
+                const { data: profile } = await supabase
+                    .from('teacher_profiles')
+                    .select('id, role, organization_id')
+                    .eq('id', authSession.user.id)
+                    .maybeSingle();
+
+                if (cancelled) return;
+
+                if (!profile || !['director', 'superadmin', 'admin'].includes(profile.role)) {
+                    router.replace(`/${orgSlug}/admin`);
+                    return;
+                }
+
+                // 3. Charger l'organisation
+                const { data: orgData } = await supabase
+                    .from('organizations')
+                    .select('id, name, slug, logo_url, is_active, sky_points')
+                    .eq('slug', orgSlug)
+                    .maybeSingle();
+
+                if (cancelled) return;
+
+                if (!orgData) {
+                    router.replace(`/${orgSlug}/admin`);
+                    return;
+                }
+
+                setOrg(orgData);
+            } catch (err) {
+                console.error('[AgentsPage] Auth error:', err);
+                router.replace(`/${orgSlug}/admin`);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
         }
 
-        let parsedSession: any;
-        try { parsedSession = JSON.parse(stored); } catch { router.replace(`/${orgSlug}/admin`); return; }
-
-        setSession(parsedSession);
-
-        supabase
-            .from('organizations')
-            .select('id, name, slug, logo_url, is_active, sky_points')
-            .eq('slug', orgSlug)
-            .maybeSingle()
-            .then(({ data }) => {
-                if (!data) { router.replace(`/${orgSlug}/admin`); return; }
-                setOrg(data);
-                setLoading(false);
-            });
+        checkAuth();
+        return () => { cancelled = true; };
     }, [orgSlug, router]);
 
     return { org, session, loading, orgSlug };
@@ -62,10 +91,8 @@ export default function AgentsIAPage() {
     const { org, session, loading, orgSlug } = useAdminSession();
     const router = useRouter();
 
-    const handleLogout = () => {
-        if (typeof window !== 'undefined') {
-            localStorage.removeItem(`campusflow_admin_session_${orgSlug}`);
-        }
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
         router.push(`/${orgSlug}/admin`);
     };
 
