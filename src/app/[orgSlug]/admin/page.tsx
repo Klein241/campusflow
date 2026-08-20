@@ -729,8 +729,8 @@ function AdminPageContent() {
                 const { data: rm } = await supabase.from('rooms').select('*').eq('organization_id', o.id).order('name');
                 if (cancelled) return;
                 setRooms((rm || []).map((x: any) => ({ id: x.id, name: x.name })));
-                // Charger les filières
-                const { data: fil } = await supabase.from('filieres').select('id, name').eq('organization_id', o.id).order('name');
+                // Charger les filières (table globale, pas de filtre organization_id)
+                const { data: fil } = await supabase.from('filieres').select('id, nom').order('nom');
                 if (!cancelled) setFilieres(fil || []);
                 if (!o.setup_completed && (c || []).length === 0) setTab('setup');
             } catch (err: any) {
@@ -3307,7 +3307,7 @@ ${bodyHtml}
                                                 <Label className="text-slate-400 text-xs">Filière cible</Label>
                                                 <select value={migrateNewFiliereId} onChange={e => setMigrateNewFiliereId(e.target.value)} className="mt-1 w-full h-10 rounded-xl bg-white/5 border border-white/10 text-white px-3 text-sm">
                                                     <option value="" className="bg-slate-900">-- Aucune filière --</option>
-                                                    {filieres.map((f: any) => <option key={f.id} value={f.id} className="bg-slate-900">{f.name}</option>)}
+                                                    {filieres.map((f: any) => <option key={f.id} value={f.id} className="bg-slate-900">{f.nom}</option>)}
                                                 </select>
                                             </div>
                                         )}
