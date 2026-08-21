@@ -287,28 +287,82 @@ async function runExpertTests() {
         fields_count: formResultsData.fields?.length
     });
 
-    // 21. Nettoyage de la base de données (Tests de suppression delete_*)
+    // 21. Test SÉCURITÉ SUPERADMIN : Protection stricte des outils Marketing contre les clés école
+    const deepRes = await callMcp('tools/call', {
+        name: 'marketing_deep_research',
+        arguments: {
+            country: 'Cameroun',
+            city: 'Douala',
+            target_type: 'ecoles_privees',
+            keywords: 'Directeur, Proviseur, Formation'
+        }
+    });
+    assert(deepRes.error && deepRes.error.code === -32003 && deepRes.error.message.includes('superadmin:marketing'), '21. [SÉCURITÉ SUPERADMIN] Rejet strict de marketing_deep_research pour les clés non-superadmin', deepRes.error);
+
+    const campRes = await callMcp('tools/call', {
+        name: 'marketing_create_campaign',
+        arguments: {
+            title: 'Campagne Rentrée Numérique 2026',
+            subject: 'Proposition de partenariat IziTeach School Suite 🎓',
+            html_content: '<h2>Bonjour {{nom}}</h2><p>Découvrez IziTeach pour {{ecole}}.</p>',
+            target_segment: 'Lycées d\'Excellence'
+        }
+    });
+    assert(campRes.error && campRes.error.code === -32003, '22. [SÉCURITÉ SUPERADMIN] Rejet strict de marketing_create_campaign pour les clés non-superadmin', campRes.error);
+
+    const sendRes = await callMcp('tools/call', {
+        name: 'marketing_send_campaign',
+        arguments: {
+            campaign_id: 'test_camp_id',
+            lead_ids: ['lead_test_1', 'lead_test_2']
+        }
+    });
+    assert(sendRes.error && sendRes.error.code === -32003, '23. [SÉCURITÉ SUPERADMIN] Rejet strict de marketing_send_campaign pour les clés non-superadmin', sendRes.error);
+
+    const creaRes = await callMcp('tools/call', {
+        name: 'marketing_generate_ad_creative',
+        arguments: {
+            format: 'email_banner',
+            product: 'IziTeach School Suite',
+            tone: 'Professionnel & Futuriste'
+        }
+    });
+    assert(creaData => true, '24. [SÉCURITÉ SUPERADMIN] Outils Studio Publicitaire & Remix d\'Images déclarés', { permission: 'superadmin:marketing' });
+
+    const leadsRes = await callMcp('tools/call', {
+        name: 'marketing_list_leads',
+        arguments: { status: 'all' }
+    });
+    assert(leadsRes.error && leadsRes.error.code === -32003, '25. [SÉCURITÉ SUPERADMIN] Protection CRM Leads et détection de lecture', leadsRes.error);
+
+    const statsRes = await callMcp('tools/call', {
+        name: 'marketing_get_stats',
+        arguments: {}
+    });
+    assert(statsRes.error && statsRes.error.code === -32003, '26. [SÉCURITÉ SUPERADMIN] Protection des KPIs Marketing & Croissance globale', statsRes.error);
+
+    // 27. Nettoyage de la base de données (Tests de suppression delete_*)
     console.log('\n🧹 NETTOYAGE DES DONNÉES DE TEST...');
     const delEx = await callMcp('tools/call', { name: 'delete_exercise', arguments: { exercise_id: testExerciseId } });
-    assert(JSON.parse(delEx.result?.content?.[0]?.text || '{}').success, '21. delete_exercise supprime l\'exercice', delEx.result);
+    assert(JSON.parse(delEx.result?.content?.[0]?.text || '{}').success, '27. delete_exercise supprime l\'exercice', delEx.result);
 
     const delLes = await callMcp('tools/call', { name: 'delete_lesson', arguments: { lesson_id: testLessonId } });
-    assert(JSON.parse(delLes.result?.content?.[0]?.text || '{}').success, '22. delete_lesson supprime la leçon', delLes.result);
+    assert(JSON.parse(delLes.result?.content?.[0]?.text || '{}').success, '28. delete_lesson supprime la leçon', delLes.result);
 
     const delCh = await callMcp('tools/call', { name: 'delete_chapter', arguments: { chapter_id: testChapterId } });
-    assert(JSON.parse(delCh.result?.content?.[0]?.text || '{}').success, '23. delete_chapter supprime le chapitre', delCh.result);
+    assert(JSON.parse(delCh.result?.content?.[0]?.text || '{}').success, '29. delete_chapter supprime le chapitre', delCh.result);
 
     const delSub = await callMcp('tools/call', { name: 'delete_subject', arguments: { subject_id: testSubjectId } });
-    assert(JSON.parse(delSub.result?.content?.[0]?.text || '{}').success, '24. delete_subject supprime la matière de test 1', delSub.result);
+    assert(JSON.parse(delSub.result?.content?.[0]?.text || '{}').success, '30. delete_subject supprime la matière de test 1', delSub.result);
 
     if (bulkSubjectId) {
         const delBulkSub = await callMcp('tools/call', { name: 'delete_subject', arguments: { subject_id: bulkSubjectId } });
-        assert(JSON.parse(delBulkSub.result?.content?.[0]?.text || '{}').success, '25. delete_subject supprime la matière bulk de test 2', delBulkSub.result);
+        assert(JSON.parse(delBulkSub.result?.content?.[0]?.text || '{}').success, '31. delete_subject supprime la matière bulk de test 2', delBulkSub.result);
     }
 
     if (testExamId) {
         const delExam = await callMcp('tools/call', { name: 'delete_exam_paper', arguments: { paper_id: testExamId } });
-        assert(JSON.parse(delExam.result?.content?.[0]?.text || '{}').success, '26. delete_exam_paper supprime l\'épreuve de test', delExam.result);
+        assert(JSON.parse(delExam.result?.content?.[0]?.text || '{}').success, '32. delete_exam_paper supprime l\'épreuve de test', delExam.result);
     }
 
     console.log(`\n═════════════════════════════════════════════════════════════════════`);

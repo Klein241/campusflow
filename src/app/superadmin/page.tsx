@@ -23,6 +23,7 @@ import { SuperadminOrgCards } from '@/components/superadmin/superadmin-org-cards
 import { SuperadminNotificationBell } from '@/components/superadmin/SuperadminNotificationBell';
 import { IziTeachLogo } from '@/components/brand/iziteach-logo';
 import { SkyAgentSuperadminManager } from '@/components/superadmin/SkyAgentSuperadminManager';
+import { MarketingHub } from '@/components/superadmin/marketing/MarketingHub';
 
 // ═══════════════════════════════════════════════════════════════════════
 // IZITEACH — SUPERADMIN PANEL
@@ -30,7 +31,7 @@ import { SkyAgentSuperadminManager } from '@/components/superadmin/SkyAgentSuper
 // Protected by platform_admins table (Supabase Auth + RLS)
 // ═══════════════════════════════════════════════════════════════════════
 
-type Tab = 'overview' | 'orgs' | 'users' | 'domains' | 'announcements' | 'points' | 'pricing' | 'requests' | 'ads' | 'email' | 'bugs' | 'compte' | 'sky_agent';
+type Tab = 'overview' | 'orgs' | 'users' | 'domains' | 'announcements' | 'points' | 'pricing' | 'requests' | 'ads' | 'marketing' | 'email' | 'bugs' | 'compte' | 'sky_agent';
 
 interface Stats {
     total_orgs: number;
@@ -83,6 +84,7 @@ const SIDEBAR: { id: Tab; label: string; icon: any; emoji?: string }[] = [
     { id: 'requests',       label: 'Demandes',         icon: MessageSquare,   emoji: '💬' },
     { id: 'bugs',           label: 'Bugs & Rapports',  icon: Bug,             emoji: '🐛' },
     { id: 'ads',            label: 'Publicités',       icon: Target,          emoji: '📺' },
+    { id: 'marketing',      label: 'Marketing & IA',   icon: Sparkles,        emoji: '🚀' },
     { id: 'email',          label: 'Email Providers',  icon: Mail,            emoji: '📧' },
     { id: 'domains',        label: 'Domaines',         icon: Globe,           emoji: '🌐' },
     { id: 'announcements',  label: 'Annonces',         icon: Megaphone,       emoji: '📢' },
@@ -2413,6 +2415,15 @@ export default function SuperAdminPage() {
                                 </motion.div>
                             );
                         })()}
+
+                        {/* ══════════════════════════════════════════
+                            MARKETING & CROISSANCE IA
+                        ══════════════════════════════════════════ */}
+                        {tab === 'marketing' && (
+                            <motion.div key="marketing" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                                <MarketingHub />
+                            </motion.div>
+                        )}
 
                         {/* ══════════════════════════════════════════
                             SKY AGENT SUPERADMIN
