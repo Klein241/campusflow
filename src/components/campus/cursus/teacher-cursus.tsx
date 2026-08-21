@@ -24,6 +24,8 @@ import { RichContentEditor, parseContent, serializeContent, type ContentBlock } 
 import { updateSkyPoints, deductSkyPoints } from '@/lib/sky-points-service';
 import { DiscussButton } from '../discuss-button';
 import { EmailModal } from '@/components/campus/email-modal';
+import { ClassSelectorCards } from './class-selector-cards';
+import { PeriodLockManager } from './period-lock-manager';
 
 // ─── Helper: envoyer une notification push via le Worker ────────────────────
 const WORKER_URL = process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL || process.env.NEXT_PUBLIC_WORKER_URL || '';
@@ -171,7 +173,9 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
     const loadData = async () => {
         setLoading(true);
         const { data: subs } = await supabase.from('subjects')
-            .select('*, classrooms:classroom_id(id, name)').eq('organization_id', orgId).eq('teacher_id', userId);
+            .select('*, classrooms:classroom_id(id, name)')
+            .eq('organization_id', orgId)
+            .or(`teacher_id.eq.${userId},teacher_id.is.null`);
         const allSubs = subs || [];
         setSubjects(allSubs);
         const subjectIds = allSubs.map((s: any) => s.id);
@@ -205,6 +209,32 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
 
     useEffect(() => { loadData(); }, [orgId, userId]);
 
+    // ── Navigation par Classe & Drip ──
+    const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+
+    // Calcul des classes du professeur
+    const teacherClassIds = [...new Set((subjects || []).map((s: any) => s.classroom_id).filter(Boolean))];
+    const teacherClasses = teacherClassIds.length > 0
+        ? allClasses.filter((c: any) => teacherClassIds.includes(c.id))
+        : allClasses;
+
+    const classFilteredSubjects = selectedClassId
+        ? subjects.filter(s => s.classroom_id === selectedClassId)
+        : subjects;
+
+    // Handlers de sauvegarde Drip Content
+    const saveChapterDrip = async (chapterId: string, updated: any) => {
+        const { error } = await supabase.from('chapters').update(updated).eq('id', chapterId);
+        if (error) throw error;
+        setChapters(prev => prev.map(c => c.id === chapterId ? { ...c, ...updated } : c));
+    };
+
+    const saveLessonDrip = async (lessonId: string, updated: any) => {
+        const { error } = await supabase.from('lessons').update(updated).eq('id', lessonId);
+        if (error) throw error;
+        setLessons(prev => prev.map(l => l.id === lessonId ? { ...l, ...updated } : l));
+    };
+
     // ── Derived data ──
     const selectedSub  = subjects.find(s => s.id === selectedSubId);
     const selectedCh   = chapters.find(c => c.id === selectedChId);
@@ -219,17 +249,18 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
     // ═══════════════════════════════ CRUD ═══════════════════════════════════
 
     const createSubject = async () => {
-        if (!subForm.name || !subForm.classroom_id) return toast.error('Remplissez le nom et la classe');
+        const targetClassId = subForm.classroom_id || selectedClassId;
+        if (!subForm.name || !targetClassId) return toast.error('Remplissez le nom et la classe');
         setSavingSub(true);
         const { data, error } = await supabase.from('subjects').insert({
             name: subForm.name.trim(), coefficient: parseFloat(subForm.coefficient) || 1,
-            classroom_id: subForm.classroom_id, organization_id: orgId, teacher_id: userId
+            classroom_id: targetClassId, organization_id: orgId, teacher_id: userId
         }).select('*, classrooms:classroom_id(id,name)').single();
         if (error) toast.error(error.message);
         else {
             setSubjects(prev => [...prev, data]); setShowNewSub(false);
-            setSubForm({ name: '', coefficient: '1', classroom_id: '' }); toast.success('Matière créée ✅');
-            const { data: students } = await supabase.from('student_profiles').select('id').eq('classroom_id', subForm.classroom_id).eq('organization_id', orgId);
+            setSubForm({ name: '', coefficient: '1', classroom_id: selectedClassId || '' }); toast.success('Matière créée ✅');
+            const { data: students } = await supabase.from('student_profiles').select('id').eq('classroom_id', targetClassId).eq('organization_id', orgId);
             if (students?.length) await sendCursusNotification({ actorId: userId, actorName: userName, orgId, actionType: 'new_subject', targetId: data.id, targetName: data.name, recipientIds: students.map((s: any) => s.id) });
         }
         setSavingSub(false);
@@ -566,6 +597,23 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
                 </motion.div>
             )}
 
+            {/* ── Sélecteur de Classes & Filières ── */}
+            <ClassSelectorCards
+                classes={teacherClasses}
+                subjects={subjects}
+                chapters={chapters}
+                lessons={lessons}
+                selectedClassId={selectedClassId}
+                onSelectClass={(clsId) => {
+                    setSelectedClassId(clsId);
+                    setSelectedSubId(null);
+                    setSelectedChId(null);
+                }}
+                role="teacher"
+                title="Mes Classes & Formations"
+                subtitle="Sélectionnez une classe pour afficher et organiser ses matières"
+            />
+
             {/* ══════════════ MILLER COLUMNS ══════════════ */}
             <div className="rounded-2xl overflow-hidden border border-white/[0.07] bg-[#0c0e16]">
 
@@ -573,7 +621,7 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
                 <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-white/[0.06] bg-white/[0.02]">
                     <button onClick={() => { setSelectedSubId(null); setSelectedChId(null); }}
                         className={cn('text-xs font-semibold transition-colors', !selectedSubId ? 'text-white' : 'text-slate-500 hover:text-slate-300')}>
-                        📚 Cursus
+                        📚 {selectedClassId ? (allClasses.find(c => c.id === selectedClassId)?.name || 'Classe') : 'Cursus'}
                     </button>
                     {selectedSub && (
                         <>
@@ -596,22 +644,26 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
                 {!selectedSubId && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 space-y-2">
                         <div className="flex items-center justify-between mb-1 px-1">
-                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Mes Matières</span>
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                {selectedClassId ? `Matières — ${allClasses.find(c => c.id === selectedClassId)?.name || 'Classe'}` : 'Mes Matières'}
+                            </span>
                             <button onClick={() => setShowNewSub(true)}
                                 className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-violet-600/80 hover:bg-violet-500 text-white text-xs font-semibold transition-all">
                                 <Plus className="w-3.5 h-3.5" /> Matière
                             </button>
                         </div>
 
-                        {subjects.length === 0 && !showNewSub && (
+                        {classFilteredSubjects.length === 0 && !showNewSub && (
                             <div className="text-center py-14">
                                 <BookOpen className="w-12 h-12 mx-auto mb-3 text-slate-700" />
                                 <p className="text-slate-500 text-sm">Aucune matière</p>
-                                <p className="text-xs text-slate-600 mt-1">Créez votre première matière</p>
+                                <p className="text-xs text-slate-600 mt-1">
+                                    {selectedClassId ? 'Aucune matière dans cette classe. Créez-en une !' : 'Créez votre première matière'}
+                                </p>
                             </div>
                         )}
 
-                        {subjects.map((sub: any, si: number) => {
+                        {classFilteredSubjects.map((sub: any, si: number) => {
                             const col = getColor(si);
                             const subChaps = chapters.filter(c => c.subject_id === sub.id);
                             const pubChaps = subChaps.filter(c => c.status === 'published').length;
@@ -743,12 +795,19 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
                                                     <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-cyan-400 transition-colors shrink-0" />
                                                 </button>
                                                 {/* Toolbar */}
-                                                <div className="flex items-center gap-1.5 px-3 pb-3">
+                                                <div className="flex items-center gap-1.5 px-3 pb-3 flex-wrap">
                                                     <button onClick={() => toggleChapterStatus(ch)}
                                                         className={cn('flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all',
                                                             pub ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25' : 'bg-slate-700/40 text-slate-400 hover:bg-slate-700/60')}>
                                                         {pub ? <><Eye className="w-3 h-3" />Publié</> : <><EyeOff className="w-3 h-3" />Brouillon</>}
                                                     </button>
+                                                    <PeriodLockManager
+                                                        item={ch}
+                                                        type="chapter"
+                                                        canEdit={true}
+                                                        onSave={(u) => saveChapterDrip(ch.id, u)}
+                                                        compact
+                                                    />
                                                     <div className="flex-1" />
                                                     <DiscussButton context={{ type: 'chapter', id: ch.id, title: ch.title, parentTitle: selectedSub?.name }}
                                                         orgId={orgId} userId={userId} userName={userName}
@@ -845,6 +904,13 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
                                                 <p className="text-sm font-semibold text-white">{lesson.title}</p>
                                                 {lesson.estimated_minutes && <p className="text-[10px] text-slate-400 mt-0.5">⏱ {lesson.estimated_minutes} min</p>}
                                             </div>
+                                            <PeriodLockManager
+                                                item={lesson}
+                                                type="lesson"
+                                                canEdit={true}
+                                                onSave={(u) => saveLessonDrip(lesson.id, u)}
+                                                compact
+                                            />
                                             <button onClick={() => { setEditLesson(lesson.id); setEditLessonBlocks(parseContent(lesson.content)); }}
                                                 className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-400 transition-all">
                                                 <Edit2 className="w-3.5 h-3.5" />

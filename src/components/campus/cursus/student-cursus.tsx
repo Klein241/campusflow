@@ -19,6 +19,8 @@ import { RichContentRenderer } from './rich-content-renderer';
 import { DiscussButton } from '../discuss-button';
 import { LessonReader } from './lesson-reader';
 import { deductSkyPoints } from '@/lib/sky-points-service';
+import { isContentUnlocked } from '@/lib/cursus-drip-service';
+import { ClassSelectorCards } from './class-selector-cards';
 import type { ContentBlock } from './rich-content-editor';
 
 // ─── Palette couleurs ──────────────────────────────────────────────────────
@@ -54,6 +56,10 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
     const [progress,    setProgress]    = useState<any[]>([]);
     const [loading,     setLoading]     = useState(true);
 
+    // ── Multi-classes & Filières ──
+    const [studentClasses,  setStudentClasses]  = useState<any[]>([]);
+    const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+
     // ── Navigation Miller Columns ──
     const [selectedSubId, setSelectedSubId] = useState<string | null>(null);
     const [selectedChId,  setSelectedChId]  = useState<string | null>(null);
@@ -81,17 +87,42 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
     const loadData = async () => {
         setLoading(true);
         try {
+            // 1. Récupérer les classes & filières de l'étudiant (principale + additionnelles)
+            const { data: profile } = await supabase.from('student_profiles')
+                .select('classroom_id, additional_classroom_ids, filiere_ids')
+                .eq('id', userId)
+                .maybeSingle();
+
+            const allClassIds = Array.from(new Set([
+                classroomId,
+                profile?.classroom_id,
+                ...(profile?.additional_classroom_ids || [])
+            ].filter(Boolean) as string[]));
+
+            let stuClasses: any[] = [];
+            if (allClassIds.length > 0) {
+                const { data: clsData } = await supabase.from('classrooms')
+                    .select('id, name, level, filiere_id')
+                    .in('id', allClassIds);
+                stuClasses = clsData || [];
+            }
+            setStudentClasses(stuClasses);
+
+            const activeClassId = selectedClassId || (stuClasses.length > 0 ? stuClasses[0].id : classroomId);
+
             let subs: any[] = [];
-            // Priorité 1 : par classroom_id (filtre strict)
-            if (classroomId) {
+            // Priorité 1 : par activeClassId
+            if (activeClassId) {
                 const { data } = await supabase.from('subjects')
                     .select('*, teacher_profiles:teacher_id(first_name, last_name, photo_url)')
-                    .eq('classroom_id', classroomId).order('name');
+                    .eq('classroom_id', activeClassId).order('name');
                 subs = data || [];
-            }
-            // Priorité 2 : si pas de classroom mais une filière, filtrer par filière via les classrooms
-            if (subs.length === 0 && filiereId) {
-                // Récupérer les classrooms de cette filière
+            } else if (allClassIds.length > 0) {
+                const { data } = await supabase.from('subjects')
+                    .select('*, teacher_profiles:teacher_id(first_name, last_name, photo_url)')
+                    .in('classroom_id', allClassIds).order('name');
+                subs = data || [];
+            } else if (filiereId) {
                 const { data: filCls } = await supabase.from('classrooms')
                     .select('id').eq('filiere_id', filiereId).eq('organization_id', orgId);
                 const filClsIds = (filCls || []).map((c: any) => c.id);
@@ -102,9 +133,15 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                     subs = data || [];
                 }
             }
-            // PAS de fallback global org — un étudiant ne voit QUE sa filière
+
             setSubjects(subs);
-            if (subs.length === 0) { setLoading(false); return; }
+            if (subs.length === 0) {
+                setChapters([]);
+                setLessons([]);
+                setExercises([]);
+                setLoading(false);
+                return;
+            }
 
             const subjectIds = subs.map((s: any) => s.id);
 
@@ -121,6 +158,8 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                     .select('*').in('chapter_id', chapterIds)
                     .in('status', ['published', 'completed']).order('position');
                 setLessons(lsns || []);
+            } else {
+                setLessons([]);
             }
 
             let exs: any[] = [];
@@ -150,7 +189,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
         setLoading(false);
     };
 
-    useEffect(() => { loadData(); }, [orgId, userId, classroomId]);
+    useEffect(() => { loadData(); }, [orgId, userId, classroomId, selectedClassId]);
 
     // ── Load lesson IDs that have notes ───────────────────────────────────────
     useEffect(() => {
@@ -666,6 +705,25 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                 );
             })()}
 
+            {/* ── Sélecteur de Filières / Classes (si étudiant multi-filières ou multi-classes) ── */}
+            {studentClasses.length > 1 && (
+                <ClassSelectorCards
+                    classes={studentClasses}
+                    subjects={subjects}
+                    chapters={chapters}
+                    lessons={lessons}
+                    selectedClassId={selectedClassId || studentClasses[0]?.id}
+                    onSelectClass={(clsId) => {
+                        setSelectedClassId(clsId);
+                        setSelectedSubId(null);
+                        setSelectedChId(null);
+                    }}
+                    role="student"
+                    title="Mes Filières & Classes"
+                    subtitle="Basculez entre vos filières pour consulter leurs matières respectives"
+                />
+            )}
+
             {/* ══════════════ MILLER COLUMNS ══════════════ */}
             <div className="rounded-2xl overflow-hidden border border-white/[0.07] bg-[#0c0e16]">
 
@@ -673,7 +731,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                 <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-white/[0.06] bg-white/[0.02]">
                     <button onClick={() => { setSelectedSubId(null); setSelectedChId(null); }}
                         className={cn('text-xs font-semibold transition-colors', !selectedSubId ? 'text-white' : 'text-slate-500 hover:text-slate-300')}>
-                        📚 Mes Matières
+                        📚 {selectedClassId ? (studentClasses.find(c => c.id === selectedClassId)?.name || 'Mes Matières') : 'Mes Matières'}
                     </button>
                     {selectedSub && (
                         <>
@@ -696,7 +754,9 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                 {!selectedSubId && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 space-y-2">
                         <div className="px-1 mb-2">
-                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Toutes les matières</span>
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                {selectedClassId ? `Matières — ${studentClasses.find(c => c.id === selectedClassId)?.name || 'Filière'}` : 'Toutes les matières'}
+                            </span>
                         </div>
 
                         {subjects.length === 0 && (
@@ -802,17 +862,36 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                                         const chScore = getChapterScore(ch.id);
                                         const chAvg   = chScore ? (chScore.score / chScore.max) * 20 : null;
                                         const chDoneExs = chExs.filter(e => getSubmission(e.id)).length;
+                                        const chDrip  = isContentUnlocked(ch);
 
                                         return (
                                             <motion.button key={ch.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ci * 0.04 }}
-                                                onClick={() => { setSelectedChId(ch.id); setActiveTab('lessons'); }}
-                                                className="w-full text-left rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 transition-all group hover:border-teal-500/30 hover:bg-teal-500/[0.05] hover:scale-[1.01]">
+                                                onClick={() => {
+                                                    if (!chDrip.isUnlocked) {
+                                                        toast.info(chDrip.reason || 'Ce chapitre n\'est pas encore disponible');
+                                                        return;
+                                                    }
+                                                    setSelectedChId(ch.id);
+                                                    setActiveTab('lessons');
+                                                }}
+                                                className={cn('w-full text-left rounded-2xl border p-4 transition-all group',
+                                                    !chDrip.isUnlocked
+                                                        ? 'border-amber-500/20 bg-amber-500/[0.03] opacity-80 cursor-pointer'
+                                                        : 'border-white/[0.08] bg-white/[0.03] hover:border-teal-500/30 hover:bg-teal-500/[0.05] hover:scale-[1.01]')}>
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-xl bg-teal-500/15 flex items-center justify-center shrink-0">
-                                                        <span className="text-sm font-black text-teal-400">{ci + 1}</span>
+                                                    <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
+                                                        !chDrip.isUnlocked ? 'bg-amber-500/15 text-amber-400' : 'bg-teal-500/15 text-teal-400')}>
+                                                        {!chDrip.isUnlocked ? <Lock className="w-4 h-4" /> : <span className="text-sm font-black">{ci + 1}</span>}
                                                     </div>
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-bold text-white leading-tight">{ch.title}</p>
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <p className="text-sm font-bold text-white leading-tight">{ch.title}</p>
+                                                            {!chDrip.isUnlocked && chDrip.statusBadgeLabel && (
+                                                                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                                                    🔒 {chDrip.statusBadgeLabel}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                         <div className="flex items-center gap-2 mt-0.5">
                                                             <span className="text-[10px] text-slate-400">{chLsns.length} leçon{chLsns.length > 1 ? 's' : ''}</span>
                                                             {chExs.length > 0 && (
@@ -924,20 +1003,38 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
 
                                 {chLessons.map((lesson: any, li: number) => {
                                     const done = isLessonCompleted(lesson.id);
+                                    const lessonDrip = isContentUnlocked(lesson);
                                     return (
                                         <motion.div key={lesson.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: li * 0.04 }}
                                             className={cn('rounded-xl border overflow-hidden transition-all',
-                                                done ? 'border-emerald-500/25 bg-emerald-500/[0.05]' : 'border-white/[0.08] bg-white/[0.03]')}>
+                                                !lessonDrip.isUnlocked
+                                                    ? 'border-amber-500/20 bg-amber-500/[0.03]'
+                                                    : done
+                                                        ? 'border-emerald-500/25 bg-emerald-500/[0.05]'
+                                                        : 'border-white/[0.08] bg-white/[0.03]')}>
                                             <div className="flex items-center gap-2.5 px-3 py-3">
                                                 <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
-                                                    done ? 'bg-emerald-500/20' : 'bg-white/[0.06]')}>
-                                                    {done
-                                                        ? <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                                                        : <Play className="w-3.5 h-3.5 text-slate-400" />}
+                                                    !lessonDrip.isUnlocked
+                                                        ? 'bg-amber-500/15'
+                                                        : done
+                                                            ? 'bg-emerald-500/20'
+                                                            : 'bg-white/[0.06]')}>
+                                                    {!lessonDrip.isUnlocked ? (
+                                                        <Lock className="w-4 h-4 text-amber-400" />
+                                                    ) : done ? (
+                                                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                                    ) : (
+                                                        <Play className="w-3.5 h-3.5 text-slate-400" />
+                                                    )}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-sm font-semibold text-white leading-tight">{lesson.title}</p>
-                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                                        {!lessonDrip.isUnlocked && lessonDrip.statusBadgeLabel ? (
+                                                            <span className="text-[9px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded-md">
+                                                                🔒 {lessonDrip.statusBadgeLabel}
+                                                            </span>
+                                                        ) : null}
                                                         {lesson.estimated_minutes && (
                                                             <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
                                                                 <Clock className="w-2.5 h-2.5" />{lesson.estimated_minutes} min
@@ -950,39 +1047,47 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                                                     <DiscussButton context={{ type: 'lesson', id: lesson.id, title: lesson.title, parentTitle: selectedCh?.title }}
                                                         orgId={orgId} userId={userId} userName={userName}
                                                         onOpenChat={onOpenGroupChat || (() => {})} size="xs" />
-                                                    {/* Bloc Notes button */}
-                                                    <button
-                                                        onClick={() => setBlocNotesLesson({ ...lesson, chapter_title: selectedCh?.title })}
-                                                        title="Bloc Notes"
-                                                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-semibold hover:bg-indigo-500/20 transition-all">
-                                                        📝
-                                                    </button>
-                                                    {lesson.content && (
-                                                        <button onClick={() => setReaderLesson({ ...lesson, chapter_title: selectedCh?.title })}
-                                                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-500/15 border border-indigo-500/25 text-indigo-400 text-[10px] font-semibold hover:bg-indigo-500/25 transition-all">
-                                                            <Maximize2 className="w-3 h-3" />Lire
-                                                        </button>
-                                                    )}
-                                                    {lesson.video_url && (
-                                                        <button onClick={async () => {
-                                                            setVideoPopup({ url: lesson.video_url, title: lesson.title, contentId: lesson.id, contentType: 'lesson' });
-                                                            setVideoNote('');
-                                                            setVideoStartTime(Date.now());
-                                                            // Track view
-                                                            await supabase.from('lesson_video_views').upsert(
-                                                                { user_id: userId, content_type: 'lesson', content_id: lesson.id, organization_id: orgId, opened_at: new Date().toISOString() },
-                                                                { onConflict: 'user_id,content_type,content_id', ignoreDuplicates: false }
-                                                            );
-                                                        }}
-                                                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-violet-500/15 border border-violet-500/25 text-violet-400 text-[10px] font-semibold hover:bg-violet-500/25 transition-all">
-                                                            🎦 Vidéo
-                                                        </button>
-                                                    )}
-                                                    {!done && (
-                                                        <button onClick={() => markLessonDone(lesson.id)}
-                                                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 text-[10px] font-semibold hover:bg-emerald-500/25 transition-all">
-                                                            ✅ Fait
-                                                        </button>
+                                                    {!lessonDrip.isUnlocked ? (
+                                                        <div className="text-[10px] text-amber-400 font-medium px-2 py-1 bg-amber-500/10 rounded-lg border border-amber-500/20">
+                                                            🔒 Verrouillé
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            {/* Bloc Notes button */}
+                                                            <button
+                                                                onClick={() => setBlocNotesLesson({ ...lesson, chapter_title: selectedCh?.title })}
+                                                                title="Bloc Notes"
+                                                                className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-semibold hover:bg-indigo-500/20 transition-all">
+                                                                📝
+                                                            </button>
+                                                            {lesson.content && (
+                                                                <button onClick={() => setReaderLesson({ ...lesson, chapter_title: selectedCh?.title })}
+                                                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-500/15 border border-indigo-500/25 text-indigo-400 text-[10px] font-semibold hover:bg-indigo-500/25 transition-all">
+                                                                    <Maximize2 className="w-3 h-3" />Lire
+                                                                </button>
+                                                            )}
+                                                            {lesson.video_url && (
+                                                                <button onClick={async () => {
+                                                                    setVideoPopup({ url: lesson.video_url, title: lesson.title, contentId: lesson.id, contentType: 'lesson' });
+                                                                    setVideoNote('');
+                                                                    setVideoStartTime(Date.now());
+                                                                    // Track view
+                                                                    await supabase.from('lesson_video_views').upsert(
+                                                                        { user_id: userId, content_type: 'lesson', content_id: lesson.id, organization_id: orgId, opened_at: new Date().toISOString() },
+                                                                        { onConflict: 'user_id,content_type,content_id', ignoreDuplicates: false }
+                                                                    );
+                                                                }}
+                                                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-violet-500/15 border border-violet-500/25 text-violet-400 text-[10px] font-semibold hover:bg-violet-500/25 transition-all">
+                                                                    🎦 Vidéo
+                                                                </button>
+                                                            )}
+                                                            {!done && (
+                                                                <button onClick={() => markLessonDone(lesson.id)}
+                                                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 text-[10px] font-semibold hover:bg-emerald-500/25 transition-all">
+                                                                    ✅ Fait
+                                                                </button>
+                                                            )}
+                                                        </>
                                                     )}
                                                 </div>
                                             </div>

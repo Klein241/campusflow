@@ -19,6 +19,8 @@ import { cn } from '@/lib/utils';
 import { RichContentEditor, parseContent, serializeContent, type ContentBlock } from './rich-content-editor';
 import { EmailModal } from '@/components/campus/email-modal';
 import { checkHumanActionRateLimit } from '@/lib/anti-bot-guard';
+import { ClassSelectorCards } from './class-selector-cards';
+import { PeriodLockManager } from './period-lock-manager';
 
 // ─── Helper notifications push cursus (admin) ────────────────────────────────
 const WORKER_URL = process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL || process.env.NEXT_PUBLIC_WORKER_URL || '';
@@ -209,8 +211,24 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
 
     useEffect(() => { loadData(); }, [orgId]);
 
+    // ── Navigation par Classe & Drip ──
+    const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+
+    const saveChapterDrip = async (chapterId: string, updated: any) => {
+        const { error } = await supabase.from('chapters').update(updated).eq('id', chapterId);
+        if (error) throw error;
+        setChapters(prev => prev.map(c => c.id === chapterId ? { ...c, ...updated } : c));
+    };
+
+    const saveLessonDrip = async (lessonId: string, updated: any) => {
+        const { error } = await supabase.from('lessons').update(updated).eq('id', lessonId);
+        if (error) throw error;
+        setLessons(prev => prev.map(l => l.id === lessonId ? { ...l, ...updated } : l));
+    };
+
     // ── Dérivés ──
     const filteredSubjects = subjects.filter(s => {
+        if (selectedClassId && s.classroom_id !== selectedClassId) return false;
         if (filterClass !== 'all' && s.classroom_id !== filterClass) return false;
         if (filterTeacher !== 'all' && s.teacher_id !== filterTeacher) return false;
         if (searchQ && !s.name.toLowerCase().includes(searchQ.toLowerCase())) return false;
@@ -226,22 +244,23 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
 
     // ── CRUD ──
     const createSubject = async () => {
-        if (!subForm.name || !subForm.classroom_id) return toast.error('Nom et classe requis');
+        const targetClassId = subForm.classroom_id || selectedClassId;
+        if (!subForm.name || !targetClassId) return toast.error('Nom et classe requis');
         setSavingSub(true);
         const { data, error } = await supabase.from('subjects').insert({
             name: subForm.name.trim(), coefficient: parseFloat(subForm.coefficient) || 1,
-            classroom_id: subForm.classroom_id, organization_id: orgId,
+            classroom_id: targetClassId, organization_id: orgId,
             teacher_id: subForm.teacher_id || null
         }).select('*, classrooms:classroom_id(id,name), teacher_profiles:teacher_id(id,first_name,last_name)').single();
         if (error) toast.error(error.message);
         else {
             setSubjects(p => [...p, data]);
             setShowNewSub(false);
-            setSubForm({ name: '', coefficient: '1', classroom_id: '', teacher_id: '' });
+            setSubForm({ name: '', coefficient: '1', classroom_id: selectedClassId || '', teacher_id: '' });
             toast.success('Matière créée ✅');
             // 🔔 Notifier les étudiants de la classe
             const { data: students } = await supabase.from('student_profiles').select('id')
-                .eq('classroom_id', subForm.classroom_id).eq('organization_id', orgId);
+                .eq('classroom_id', targetClassId).eq('organization_id', orgId);
             if (students?.length) {
                 const slug = (await supabase.from('organizations').select('slug').eq('id', orgId).single()).data?.slug;
                 sendAdminCursusNotification({
@@ -649,6 +668,29 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
                 )}
             </AnimatePresence>
 
+            {/* ── Sélecteur de Classes & Filières (Admin) ── */}
+            <ClassSelectorCards
+                classes={allClasses}
+                subjects={subjects}
+                chapters={chapters}
+                lessons={lessons}
+                selectedClassId={selectedClassId}
+                onSelectClass={(clsId) => {
+                    setSelectedClassId(clsId);
+                    setSelectedSubId(null);
+                    setSelectedChId(null);
+                }}
+                role="admin"
+                title="Classes & Filières de l'Établissement"
+                subtitle="Sélectionnez une classe pour gérer ses matières, chapitres et calendrier de diffusion"
+                onCreateSubject={(clsId) => {
+                    setSelectedClassId(clsId);
+                    setSelectedSubId(null);
+                    setSelectedChId(null);
+                    setShowNewSub(true);
+                }}
+            />
+
             {/* ══════════════ MILLER COLUMNS ══════════════ */}
             <div className="rounded-2xl overflow-hidden border border-white/[0.07] bg-[#0c0e16]">
 
@@ -658,7 +700,7 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
                     <div className="flex items-center gap-1.5 px-4 py-2.5">
                         <button onClick={() => { setSelectedSubId(null); setSelectedChId(null); }}
                             className={cn('text-xs font-semibold transition-colors', !selectedSubId ? 'text-white' : 'text-slate-500 hover:text-slate-300')}>
-                            🎓 Admin Cursus
+                            🎓 {selectedClassId ? (allClasses.find(c => c.id === selectedClassId)?.name || 'Classe') : 'Admin Cursus'}
                         </button>
                         {selectedSub && (
                             <>
@@ -718,7 +760,9 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
                 {!selectedSubId && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 space-y-2">
                         <div className="flex items-center justify-between mb-1 px-1">
-                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Toutes les matières</span>
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                {selectedClassId ? `Matières — ${allClasses.find(c => c.id === selectedClassId)?.name || 'Classe'}` : 'Toutes les matières'}
+                            </span>
                             <button onClick={() => setShowNewSub(true)}
                                 className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-orange-600/80 hover:bg-orange-500 text-white text-xs font-semibold transition-all">
                                 <Plus className="w-3.5 h-3.5" /> Matière
@@ -896,12 +940,19 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
                                                     <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-teal-400 transition-colors shrink-0" />
                                                 </button>
                                                 {/* Toolbar */}
-                                                <div className="flex items-center gap-1.5 px-3 pb-3">
+                                                <div className="flex items-center gap-1.5 px-3 pb-3 flex-wrap">
                                                     <button onClick={() => toggleChapterStatus(ch)}
                                                         className={cn('flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all',
                                                             pub ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25' : 'bg-slate-700/40 text-slate-400 hover:bg-slate-700/60')}>
                                                         {pub ? <><Eye className="w-3 h-3" />Publié</> : <><EyeOff className="w-3 h-3" />Brouillon</>}
                                                     </button>
+                                                    <PeriodLockManager
+                                                        item={ch}
+                                                        type="chapter"
+                                                        canEdit={true}
+                                                        onSave={(u) => saveChapterDrip(ch.id, u)}
+                                                        compact
+                                                    />
                                                     <div className="flex-1" />
                                                     <button onClick={() => { setEditCh(ch.id); setEditChBlocks(parseContent(ch.content)); }}
                                                         className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-400 transition-all">
@@ -1008,6 +1059,13 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
                                             <FileText className="w-3.5 h-3.5 text-teal-400 shrink-0" />
                                             <span className="text-xs font-semibold text-white flex-1 truncate">{l.title}</span>
                                             <span className="text-[10px] text-slate-500 shrink-0">{l.estimated_minutes}min</span>
+                                            <PeriodLockManager
+                                                item={l}
+                                                type="lesson"
+                                                canEdit={true}
+                                                onSave={(u) => saveLessonDrip(l.id, u)}
+                                                compact
+                                            />
                                             <button onClick={() => { setEditLesson(l.id); setEditLessonBlocks(parseContent(l.content)); }}
                                                 className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-400 transition-all">
                                                 <Edit2 className="w-3 h-3" />

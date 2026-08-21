@@ -8,11 +8,12 @@ import {
     ChevronLeft, ChevronRight, Copy,
     Check, Trash2, FileText,
     Eye, Code2, ChevronDown, ChevronUp,
-    Mic, Play, Pause, Download, Loader2
+    Mic, Play, Pause, Download, Loader2, Lock
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { isContentUnlocked } from '@/lib/cursus-drip-service';
 import type { ContentBlock } from './rich-content-editor';
 import { deductSkyPoints } from '@/lib/sky-points-service';
 
@@ -482,6 +483,49 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
     HIGHLIGHT_COLORS.forEach(c => { colorMap[c.id] = c.css; });
 
     if (!isOpen) return null;
+
+    const drip = isContentUnlocked(lesson as any);
+
+    if (!drip.isUnlocked) {
+        return (
+            <AnimatePresence>
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[200] bg-[#060810]/95 backdrop-blur-2xl flex items-center justify-center p-6"
+                >
+                    <div className="max-w-md w-full rounded-3xl border border-amber-500/25 bg-[#0e1220] p-8 text-center shadow-2xl space-y-5">
+                        <div className="w-16 h-16 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
+                            <Lock className="w-8 h-8" />
+                        </div>
+                        <div className="space-y-2">
+                            <p className="text-xs uppercase font-bold text-amber-400/80 tracking-wider">
+                                {lesson.subject_title || 'Contenu Pédagogique'}
+                            </p>
+                            <h3 className="text-lg font-bold text-white leading-tight">{lesson.title}</h3>
+                            <p className="text-xs text-slate-400 leading-relaxed pt-1">
+                                {drip.reason || 'Cette leçon est actuellement verrouillée selon le calendrier pédagogique fixé par l\'établissement.'}
+                            </p>
+                            {drip.statusBadgeLabel && (
+                                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold mt-2">
+                                    🔒 {drip.statusBadgeLabel}
+                                </div>
+                            )}
+                        </div>
+                        <div className="pt-2">
+                            <button
+                                onClick={onClose}
+                                className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition"
+                            >
+                                Fermer et retourner au cours
+                            </button>
+                        </div>
+                    </div>
+                </motion.div>
+            </AnimatePresence>
+        );
+    }
 
     return (
         <AnimatePresence>

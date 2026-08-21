@@ -1095,6 +1095,8 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
                 coefficient: 1,
             };
             if (args.class_id)    payload.classroom_id = args.class_id;
+            if (args.classroom_id) payload.classroom_id = args.classroom_id;
+            if (args.teacher_id)  payload.teacher_id  = args.teacher_id;
             if (args.description) payload.description  = args.description;
 
             const { data, error } = await supabase
