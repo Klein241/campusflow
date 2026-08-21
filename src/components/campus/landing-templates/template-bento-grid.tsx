@@ -410,7 +410,7 @@ export function TemplateBentoGrid({
                                     </div>
                                 ))}
                             </div>
-                        ) : (
+                        ) : classrooms.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {classrooms.map((c: any) => (
                                     <div key={c.id} className="p-5 rounded-2xl bg-[#0D121D]/90 border border-white/10 space-y-3">
@@ -421,6 +421,16 @@ export function TemplateBentoGrid({
                                         </Button>
                                     </div>
                                 ))}
+                            </div>
+                        ) : (
+                            <div className="p-8 rounded-2xl bg-[#0D121D]/90 border border-white/10 text-center space-y-3">
+                                <h3 className="font-bold text-lg text-white">Inscriptions et admissions ouvertes à {org.name}</h3>
+                                <p className="text-xs text-slate-400 max-w-md mx-auto">
+                                    Déposez dès maintenant votre dossier pour rejoindre nos prochaines promotions d'étudiants.
+                                </p>
+                                <Button onClick={onOpenInscription} className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl px-6">
+                                    Formulaire d'Admission
+                                </Button>
                             </div>
                         )}
                     </div>

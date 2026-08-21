@@ -491,7 +491,7 @@ function AdminPageContent() {
         setLHeroTitle(org.hero_title || '');
         setLHeroSubtitle(org.hero_subtitle || '');
         const localTpl = typeof window !== 'undefined' ? (localStorage.getItem(`campusflow_hero_template_${org.id}`) || localStorage.getItem(`campusflow_hero_template_${org.slug}`)) : null;
-        setLHeroTemplate((org.hero_template as any) || (localTpl as any) || 'full');
+        setLHeroTemplate((org.hero_template as any) || (localTpl as any) || 'split');
         setLAboutText(org.about_text || '');
         setLAboutImage(org.about_image_url || '');
         setLGalleryImages(org.gallery_images || []);

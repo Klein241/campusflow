@@ -242,6 +242,8 @@ export default function OnboardingPage() {
                     owner_last_name: data.lastName,
                     is_online_academy: data.schoolType === 'academie_en_ligne',
                     certification_badge: 'none',
+                    landing_layout: 'bento_grid',
+                    hero_template: 'split',
                 })
                 .select()
                 .single();

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Sparkles, Check, Eye, X, Coins, Loader2, CheckCircle2,
-    ZoomIn, Crown, Lock
+    ZoomIn, Crown, Lock, Sliders
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -18,6 +18,7 @@ import {
     type HeroBannerStyle,
     type LandingLayoutTemplate
 } from '@/lib/premium-styles-config';
+import { TemplateCustomizerModal } from '@/components/campus/template-customizer-modal';
 
 interface AdminPremiumStylesProps {
     org: any;
@@ -268,10 +269,15 @@ export function AdminPremiumStyles({
 }: AdminPremiumStylesProps) {
     const [prices, setPrices] = useState<Record<string, number>>({});
     const [loadingPrices, setLoadingPrices] = useState(true);
-    const [selectedBanner, setSelectedBanner] = useState<string>(org?.hero_template || 'minimal');
-    const [selectedLayout, setSelectedLayout] = useState<string>(org?.landing_layout || 'classic');
+    const [selectedBanner, setSelectedBanner] = useState<string>(org?.hero_template || 'split');
+    const [selectedLayout, setSelectedLayout] = useState<string>(org?.landing_layout || 'bento_grid');
     const [previewImg, setPreviewImg] = useState<{ src: string; title: string } | null>(null);
     const [processingId, setProcessingId] = useState<string | null>(null);
+    const [customizerOpen, setCustomizerOpen] = useState(false);
+    const [localOrg, setLocalOrg] = useState<any>(org);
+
+    const FORMATEUR_TEMPLATES = ['coach_pastelle', 'creative_studio', 'tech_mentor', 'product_mastery'];
+    const isFormateurTemplate = FORMATEUR_TEMPLATES.includes(selectedLayout);
 
     // Toujours charger les prix depuis Supabase (jamais depuis le cache)
     const loadPrices = useCallback(async () => {
@@ -464,7 +470,43 @@ export function AdminPremiumStyles({
                         />
                     ))}
                 </div>
+
+                {/* ── Bouton Personnaliser le contenu du template ─── */}
+                {isFormateurTemplate && (
+                    <div className="mt-6 p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 to-orange-500/5 border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                            <p className="font-black text-white text-sm flex items-center gap-2">
+                                <Sliders className="w-4 h-4 text-amber-400" />
+                                Personnaliser le contenu du template
+                            </p>
+                            <p className="text-xs text-slate-400 mt-1">
+                                Modifiez les textes, photos, filières, stats affichées et sections visibles de votre portail public.
+                            </p>
+                        </div>
+                        <Button
+                            onClick={() => setCustomizerOpen(true)}
+                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl px-6 h-10 shrink-0 flex items-center gap-2 shadow-lg shadow-amber-500/20"
+                        >
+                            <Sliders className="w-4 h-4" />
+                            Ouvrir le Personnaliseur
+                        </Button>
+                    </div>
+                )}
             </div>
+
+            {/* ── MODALE PERSONNALISATION ───────────────────────────── */}
+            {customizerOpen && (
+                <TemplateCustomizerModal
+                    isOpen={customizerOpen}
+                    onClose={() => setCustomizerOpen(false)}
+                    org={localOrg}
+                    currentTemplateId={selectedLayout}
+                    onSaveSuccess={(updatedOrg) => {
+                        setLocalOrg(updatedOrg);
+                        onUpdateOrg(updatedOrg);
+                    }}
+                />
+            )}
 
             {/* ── MODALE PLEIN ÉCRAN ────────────────────────────────── */}
             <AnimatePresence>

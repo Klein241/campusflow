@@ -24,6 +24,10 @@ import { TemplateSegmentedHub } from '@/components/campus/landing-templates/temp
 import { TemplateGlassShowcase } from '@/components/campus/landing-templates/template-glass-showcase';
 import { TemplateBentoGrid } from '@/components/campus/landing-templates/template-bento-grid';
 import { TemplateBentoBox } from '@/components/campus/landing-templates/template-bento-box';
+import { TemplateCoachPastelle } from '@/components/campus/landing-templates/template-coach-pastelle';
+import { TemplateCreativeStudio } from '@/components/campus/landing-templates/template-creative-studio';
+import { TemplateTechMentor } from '@/components/campus/landing-templates/template-tech-mentor';
+import { TemplateProductMastery } from '@/components/campus/landing-templates/template-product-mastery';
 import { SchoolReviewsSection } from '@/components/campus/school-reviews';
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -311,8 +315,8 @@ export default function SchoolLandingPage() {
     const bc   = org.brand_color || '#14b8a6';
     const hero = org.hero_title || org.name;
     const sub  = org.hero_subtitle || org.motto || `Bienvenue sur le portail officiel de ${org.name}`;
-    const heroTemplate = org.hero_template || (typeof window !== 'undefined' ? (localStorage.getItem(`campusflow_hero_template_${org.id}`) || localStorage.getItem(`campusflow_hero_template_${org.slug}`)) : null) || 'full';
-    const landingLayout = org.landing_layout || (typeof window !== 'undefined' ? (localStorage.getItem(`campusflow_landing_layout_${org.id}`) || localStorage.getItem(`campusflow_landing_layout_${org.slug}`)) : null) || 'classic';
+    const heroTemplate = org.hero_template || (typeof window !== 'undefined' ? (localStorage.getItem(`campusflow_hero_template_${org.id}`) || localStorage.getItem(`campusflow_hero_template_${org.slug}`)) : null) || 'split';
+    const landingLayout = org.landing_layout || (typeof window !== 'undefined' ? (localStorage.getItem(`campusflow_landing_layout_${org.id}`) || localStorage.getItem(`campusflow_landing_layout_${org.slug}`)) : null) || 'bento_grid';
     const gallery = org.gallery_images || [];
     const socials = [
         { url: org.social_facebook,  icon: Facebook,  label: 'Facebook' },
@@ -741,6 +745,54 @@ export default function SchoolLandingPage() {
                 />
             ) : landingLayout === 'bento_box' ? (
                 <TemplateBentoBox
+                    org={org}
+                    orgSlug={orgSlug}
+                    classrooms={classrooms}
+                    filieres={filieres}
+                    teacherCount={teacherCount}
+                    studentCount={studentCount}
+                    gallery={gallery}
+                    bc={bc}
+                    onOpenInscription={scrollToInscription}
+                />
+            ) : landingLayout === 'coach_pastelle' ? (
+                <TemplateCoachPastelle
+                    org={org}
+                    orgSlug={orgSlug}
+                    classrooms={classrooms}
+                    filieres={filieres}
+                    teacherCount={teacherCount}
+                    studentCount={studentCount}
+                    gallery={gallery}
+                    bc={bc}
+                    onOpenInscription={scrollToInscription}
+                />
+            ) : landingLayout === 'creative_studio' ? (
+                <TemplateCreativeStudio
+                    org={org}
+                    orgSlug={orgSlug}
+                    classrooms={classrooms}
+                    filieres={filieres}
+                    teacherCount={teacherCount}
+                    studentCount={studentCount}
+                    gallery={gallery}
+                    bc={bc}
+                    onOpenInscription={scrollToInscription}
+                />
+            ) : landingLayout === 'tech_mentor' ? (
+                <TemplateTechMentor
+                    org={org}
+                    orgSlug={orgSlug}
+                    classrooms={classrooms}
+                    filieres={filieres}
+                    teacherCount={teacherCount}
+                    studentCount={studentCount}
+                    gallery={gallery}
+                    bc={bc}
+                    onOpenInscription={scrollToInscription}
+                />
+            ) : landingLayout === 'product_mastery' ? (
+                <TemplateProductMastery
                     org={org}
                     orgSlug={orgSlug}
                     classrooms={classrooms}

@@ -117,28 +117,40 @@ export function TemplateHubOnglets({
             <AnimatePresence mode="wait">
                 {activeTab === 'programs' && (
                     <motion.div key="programs" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} className="space-y-6">
-                        {filieres.length > 0 ? (
+                        {(filieres.length > 0 || classrooms.length > 0) ? (
                             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {filieres.map((f: any) => (
-                                    <div key={f.id} className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-white/20 transition group">
-                                        <div className="flex justify-between items-start mb-3">
-                                            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${f.couleur || bc}20` }}>
-                                                <BookOpen className="w-5 h-5" style={{ color: f.couleur || bc }} />
+                                {(filieres.length > 0 ? filieres : classrooms).map((f: any, idx: number) => {
+                                    const isClass = filieres.length === 0;
+                                    return (
+                                        <div key={f.id || idx} className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-white/20 transition group">
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${f.couleur || bc}20` }}>
+                                                    <BookOpen className="w-5 h-5" style={{ color: f.couleur || bc }} />
+                                                </div>
+                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-slate-300">
+                                                    {f.duree_mois ? `${f.duree_mois} mois` : (isClass ? (f.academic_year || 'Annuel') : 'Cursus')}
+                                                </span>
                                             </div>
-                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-slate-300">{f.duree_mois} mois</span>
+                                            <h3 className="font-bold text-white text-base mb-1">{f.nom || f.name}</h3>
+                                            <p className="text-xs text-slate-400 line-clamp-2 mb-3">
+                                                {f.description || (isClass ? `Classe active au sein de ${org.name}.` : 'Formation complète avec suivi pédagogique certifié.')}
+                                            </p>
+                                            <div className="pt-3 border-t border-white/5 flex justify-between items-center text-xs">
+                                                <span className="text-slate-500">{isClass ? 'Niveau :' : 'Scolarité :'}</span>
+                                                <span className="font-black text-emerald-400">
+                                                    {isClass ? (f.level || 'Général') : (f.frais_scolarite ? `${new Intl.NumberFormat('fr-FR').format(f.frais_scolarite)} XAF` : 'Sur demande')}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <h3 className="font-bold text-white text-base mb-1">{f.nom}</h3>
-                                        <p className="text-xs text-slate-400 line-clamp-2 mb-3">{f.description || 'Formation complète avec suivi pédagogique certifié.'}</p>
-                                        <div className="pt-3 border-t border-white/5 flex justify-between items-center text-xs">
-                                            <span className="text-slate-500">Scolarité :</span>
-                                            <span className="font-black text-emerald-400">{new Intl.NumberFormat('fr-FR').format(f.frais_scolarite)} XAF</span>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         ) : (
-                            <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 text-center text-slate-400 text-sm">
-                                Aucun programme enregistré pour le moment.
+                            <div className="p-8 rounded-2xl bg-white/[0.02] border border-white/5 text-center space-y-2">
+                                <p className="text-white font-bold text-base">Inscriptions ouvertes pour {org.name}</p>
+                                <p className="text-slate-400 text-xs max-w-md mx-auto">
+                                    Déposez dès maintenant votre demande d'admission pour intégrer la prochaine session académique.
+                                </p>
                             </div>
                         )}
 

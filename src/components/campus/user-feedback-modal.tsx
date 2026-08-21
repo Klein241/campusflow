@@ -293,16 +293,15 @@ export function UserFeedbackModal({
             const pointsToAward = getPointsForRating(appRating);
 
             const { error } = await supabase.from('platform_reviews').insert({
-                organization_id: orgId || null,
-                school_name: orgName,
-                user_id: userId,
-                author_name: userName,
-                author_role: userRole === 'teacher' ? 'Professeur' : 'Étudiant',
-                rating: appRating,
-                comment: appComment.trim(),
-                sky_points_awarded: pointsToAward,
-                is_published: true,
-                is_featured: true
+                organization_id:    orgId || null,
+                school_name:        orgName,
+                user_id:            userId,
+                author_name:        userName,
+                author_role:        userRole === 'teacher' ? 'Professeur' : 'Étudiant',
+                rating:             Number(appRating),
+                comment:            appComment.trim(),
+                sky_points_awarded: Number(pointsToAward),
+                is_featured:        true
             });
 
             if (error) throw error;

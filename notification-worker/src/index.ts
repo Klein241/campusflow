@@ -5002,16 +5002,30 @@ function syncToSupabase(env: Env, tableName: string, operation: string, payload:
     if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return;
     const recordId = payload.id || crypto.randomUUID();
 
+    let url = `${env.SUPABASE_URL}/rest/v1/${tableName}`;
+    let method = 'POST';
+    const headers: Record<string, string> = {
+        'apikey': env.SUPABASE_SERVICE_KEY,
+        'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates',
+    };
+
+    if (operation === 'DELETE') {
+        method = 'DELETE';
+        url += `?id=eq.${encodeURIComponent(recordId)}`;
+    } else if (operation === 'UPDATE') {
+        method = 'PATCH';
+        url += `?id=eq.${encodeURIComponent(recordId)}`;
+    } else if (operation === 'INSERT') {
+        method = 'POST';
+    }
+
     // Async push direct vers Supabase REST
-    fetch(`${env.SUPABASE_URL}/rest/v1/${tableName}`, {
-        method: operation === 'INSERT' ? 'POST' : 'PATCH',
-        headers: {
-            'apikey': env.SUPABASE_SERVICE_KEY,
-            'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'resolution=merge-duplicates',
-        },
-        body: JSON.stringify(payload),
+    fetch(url, {
+        method,
+        headers,
+        body: operation === 'DELETE' ? undefined : JSON.stringify(payload),
     }).catch(() => {
         // En cas d'erreur de Supabase, enregistrer dans pending_supabase_sync sur D1 pour réconciliation automatique
         env.CAMPUSFLOW_DB.prepare(

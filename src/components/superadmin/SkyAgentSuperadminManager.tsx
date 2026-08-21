@@ -77,6 +77,7 @@ const SUPERADMIN_PERMISSIONS = [
     { id: 'superadmin:announcements', label: '📢 Annonces Globales', desc: 'Diffuser des annonces aux organisations', risk: 'high' },
     { id: 'superadmin:orgs', label: '🏫 Audit & Relance Écoles', desc: 'Détecter les orgs inactives et les relancer', risk: 'medium' },
     { id: 'superadmin:emails', label: '📧 Envoi d\'Emails', desc: 'Envoi d\'emails système ou de notifications', risk: 'medium' },
+    { id: 'superadmin:marketing', label: '🚀 Marketing & Croissance IA', desc: 'Scraping web, campagnes email ciblées, tracking ouverture, studio publicitaire & CRM prospects', risk: 'high' },
 ];
 
 const TOOL_LABELS: Record<string, { label: string; icon: string }> = {
@@ -89,6 +90,13 @@ const TOOL_LABELS: Record<string, { label: string; icon: string }> = {
     send_superadmin_announcement:{ label: 'Diffusion annonce globale', icon: '📢' },
     get_platform_stats:          { label: 'Statistiques globales', icon: '📊' },
     ping:                        { label: 'Test de connexion', icon: '⚡' },
+    // ── Marketing & Croissance IA ──
+    marketing_deep_research:     { label: 'Deep Research & Scraping Prospects IA', icon: '🔍' },
+    marketing_create_campaign:   { label: 'Création Campagne Email Ciblée', icon: '✉️' },
+    marketing_send_campaign:     { label: 'Envoi Campagne avec Tracking Pixel', icon: '📤' },
+    marketing_generate_ad_creative: { label: 'Génération Publicité & Remix Image IA', icon: '🎨' },
+    marketing_list_leads:        { label: 'CRM Prospects & Détection d\'Ouverture', icon: '👁️' },
+    marketing_get_stats:         { label: 'KPIs Marketing & Taux de Conversion', icon: '📈' },
 };
 
 function formatInput(toolName: string, inputSummary: string | null): string {

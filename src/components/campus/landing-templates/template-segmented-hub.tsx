@@ -39,12 +39,26 @@ export function TemplateSegmentedHub({
     const [selectedProgramIdx, setSelectedProgramIdx] = useState<number>(0);
     const [openAccordion, setOpenAccordion] = useState<string>('mission');
 
-    const programCards = filieres && filieres.length > 0 ? filieres : [
-        { id: '1', nom: 'Excellence & Management', duree_mois: 24, description: 'Programme intensif pour leaders stratégiques et cadres dirigeants.', icon: Briefcase },
-        { id: '2', nom: 'Santé & Sciences Biomédicales', duree_mois: 36, description: 'Santé publique, soins infirmiers et technologies médicales.', icon: Globe },
-        { id: '3', nom: 'Ingénierie, Numérique & IA', duree_mois: 24, description: 'Développement logiciel, cybersécurité et intelligence artificielle.', icon: Cpu },
-        { id: '4', nom: 'Lettres, Droit & Sciences Humaines', duree_mois: 12, description: 'Communication, relations publiques, droit et gouvernance.', icon: Users },
-    ];
+    const programCards = (filieres && filieres.length > 0)
+        ? filieres.map((f: any) => ({
+            id: f.id,
+            nom: f.nom || f.name,
+            duree_mois: f.duree_mois || f.duration || 12,
+            description: f.description || `Programme d'excellence académique à ${org.name}.`,
+            icon: Briefcase,
+        }))
+        : (classrooms && classrooms.length > 0)
+            ? classrooms.map((c: any, i: number) => ({
+                id: c.id || `c_${i}`,
+                nom: c.name,
+                duree_mois: c.academic_year ? 12 : 9,
+                description: `Classe et programme académique officiel niveau ${c.level || 'Général'}.`,
+                icon: i % 2 === 0 ? Briefcase : Cpu,
+            }))
+            : [
+                { id: '1', nom: `Cursus d'Excellence — ${org.name}`, duree_mois: 12, description: `Formation complète avec encadrement certifié à ${org.name}.`, icon: Briefcase },
+                { id: '2', nom: `Programme Professionnel & Pratique`, duree_mois: 24, description: 'Apprentissage concret et orienté compétences métiers.', icon: Cpu },
+            ];
 
     const accordionItems = [
         {

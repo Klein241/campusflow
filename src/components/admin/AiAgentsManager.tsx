@@ -268,9 +268,17 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
     const handleRevokeKey = async (keyId: string, keyName: string) => {
         if (!confirm(`Révoquer la clé "${keyName}" ? L'agent ne pourra plus se connecter immédiatement.`)) return;
         try {
-            const { error } = await supabase.rpc('revoke_ai_agent_key', { p_key_id: keyId });
-            if (error) throw error;
-            toast.success('Clé révoquée');
+            // Try RPC first
+            const { error: rpcError } = await supabase.rpc('revoke_ai_agent_key', { p_key_id: keyId });
+            if (rpcError) {
+                // Fallback: direct update (works for admin dashboard since service_role bypass RLS)
+                const { error: updateError } = await supabase
+                    .from('ai_agent_keys')
+                    .update({ is_active: false, updated_at: new Date().toISOString() })
+                    .eq('id', keyId);
+                if (updateError) throw updateError;
+            }
+            toast.success('🔒 Clé révoquée — l\'agent ne peut plus se connecter.');
             await loadData();
         } catch (e: any) {
             toast.error(e.message || 'Erreur lors de la révocation');
