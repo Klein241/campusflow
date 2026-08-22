@@ -28,6 +28,7 @@ import { TemplateCoachPastelle } from '@/components/campus/landing-templates/tem
 import { TemplateCreativeStudio } from '@/components/campus/landing-templates/template-creative-studio';
 import { TemplateTechMentor } from '@/components/campus/landing-templates/template-tech-mentor';
 import { TemplateProductMastery } from '@/components/campus/landing-templates/template-product-mastery';
+import { TemplateNexisStudio } from '@/components/campus/landing-templates/template-nexis-studio';
 import { SchoolReviewsSection } from '@/components/campus/school-reviews';
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -793,6 +794,18 @@ export default function SchoolLandingPage() {
                 />
             ) : landingLayout === 'product_mastery' ? (
                 <TemplateProductMastery
+                    org={org}
+                    orgSlug={orgSlug}
+                    classrooms={classrooms}
+                    filieres={filieres}
+                    teacherCount={teacherCount}
+                    studentCount={studentCount}
+                    gallery={gallery}
+                    bc={bc}
+                    onOpenInscription={scrollToInscription}
+                />
+            ) : landingLayout === 'nexis_studio' ? (
+                <TemplateNexisStudio
                     org={org}
                     orgSlug={orgSlug}
                     classrooms={classrooms}

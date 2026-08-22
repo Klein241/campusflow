@@ -2,11 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import {
-    ArrowRight, Zap, Shield, Cpu, Star,
-    Code2, Globe, BrainCircuit, Layers3, ChevronRight, Lock
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ArrowRight, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-modal';
@@ -23,251 +19,343 @@ interface TemplateProps {
     onOpenInscription?: () => void;
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   MODÈLE "JENNA ORTEGA" — Dark Cyber Néon & Tech Trainer
+   Référence exacte :
+   - Fond bleu marine très sombre (#0A0F1E), accent bleu néon (#00B4D8)
+   - NavBar horizontale avec pill "JENNA ORTEGA" en label + liens + CTA
+   - Hero : Texte "HAY! JE SUIS JENNA / FORMATEUR TECH" gauche,
+     photo de face avec sphères 3D déco à droite
+   - Bandeau logos partenaires défilant
+   - Section "À PROPOS" : photo gauche (portrait 3/4), texte + stats droite
+   - Section "MON TRAVAIL" : Grille 3 projets avec image + arrow button
+   - Section "SERVICES" : Grille de services titre + photo couverture
+═══════════════════════════════════════════════════════════════════ */
 export function TemplateTechMentor({
     org, orgSlug, classrooms, filieres, teacherCount, studentCount, gallery, bc, onOpenInscription
 }: TemplateProps) {
     const cfg: TemplateCustomConfig = org.template_config || {};
 
-    const trainerName = cfg.trainer_name || org.name || 'Jenna Dev';
-    const trainerTitle = cfg.trainer_title || org.motto || 'Développeuse Full-Stack, Architecte Cloud & Tech Mentor';
-    const trainerSubtitle = cfg.trainer_subtitle || org.hero_subtitle || 'Maîtrisez le code, construisez des systèmes à l\'échelle mondiale.';
-    const trainerBio = cfg.trainer_bio || org.about_text || 'Académie tech de haut niveau dédiée aux développeurs, ingénieurs et architectes de demain.';
+    const trainerName     = cfg.trainer_name    || org.name       || 'Jenna Ortega';
+    const trainerTitle1   = cfg.trainer_title   || org.motto      || 'FORMATRICE TECH';
+    const trainerSubtitle = cfg.trainer_subtitle || org.hero_subtitle || 'Experte en développement web, design UI/UX et accompagnement digital pour les professionnels de demain.';
+    const aboutTitle      = cfg.about_title     || 'JE SUIS DISPONIBLE POUR UN PROJET UI/UX DESIGN';
+    const aboutText       = cfg.trainer_bio     || org.about_text || 'Chaque projet est une opportunité unique de créer une expérience exceptionnelle. Mon approche combine expertise technique et sensibilité créative pour des résultats qui dépassent les attentes.';
+    const pressLogos      = (cfg.press_logos_text || 'logoipsum, LOGOIPSUM, logoipsum, LOGO IPSUM, logoipsum').split(',').map(s => s.trim());
+    const reviewCount     = cfg.review_count     || '280+';
+    const yearsExp        = cfg.years_experience_value || '15+';
+    const awardsCount     = cfg.awards_count     || '49+';
 
-    const heroImage = cfg.trainer_photo_url || org.hero_image_url || org.about_image_url || (gallery && gallery[0]) || 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=1000&auto=format&fit=crop&q=80';
-    const pressLogos = (cfg.press_logos_text || 'GitHub, Cloudflare, Vercel, Supabase, Google Cloud').split(',').map(s => s.trim());
+    const heroImage       = cfg.trainer_photo_url || org.hero_image_url || (gallery?.[0]) || 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=800&auto=format&fit=crop&q=80';
+    const aboutImage      = cfg.trainer_photo_secondary_url || (gallery?.[1]) || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=700&auto=format&fit=crop&q=80';
 
-    const programs = (filieres && filieres.length > 0)
-        ? filieres
-        : (classrooms && classrooms.length > 0)
-            ? classrooms.map((c, i) => ({
-                id: c.id || `c_${i}`,
-                nom: c.name,
-                description: `Cursus intensif niveau ${c.level || 'Senior'}. Projets réels en production, mentorat live.`,
-                duree_mois: 6,
-                frais_scolarite: 300000,
-                icon: i % 3 === 0 ? Code2 : i % 3 === 1 ? BrainCircuit : Globe,
+    const navLinks = ['Accueil', 'À Propos', 'Projets', 'Services', 'Contact'];
+
+    const projects = filieres?.length > 0
+        ? filieres.slice(0, 3).map((f: any, i) => ({
+            id: f.id || `f_${i}`, nom: f.nom || f.name,
+            cat: ['Web Design', 'App Design', 'UI/UX Design'][i % 3],
+            image: gallery?.[i + 1] || null,
+        }))
+        : classrooms?.length > 0
+            ? classrooms.slice(0, 3).map((c: any, i) => ({
+                id: c.id || `c_${i}`, nom: c.name,
+                cat: ['Web Design', 'App Design', 'UI/UX Design'][i % 3],
+                image: gallery?.[i + 1] || null,
             }))
             : [
-                { id: '1', nom: 'Fullstack Web & Cloud Engineering', description: 'Next.js, React, Node.js, Cloudflare Workers & bases de données en temps réel.', duree_mois: 6, frais_scolarite: 300000, icon: Code2 },
-                { id: '2', nom: 'Architecture Microservices & DevOps', description: 'CI/CD, conteneurs Docker, pipelines automatisés et déploiements en continu.', duree_mois: 4, frais_scolarite: 280000, icon: Layers3 },
-                { id: '3', nom: 'IA Générative & Agents LLM Autonomes', description: 'Protocole MCP, intégration d\'agents IA, fine-tuning et automatisation de workflows.', duree_mois: 5, frais_scolarite: 380000, icon: BrainCircuit },
+                { id: '1', nom: 'Apps Graphiques Numériques', cat: 'Web Design, App Design', image: null },
+                { id: '2', nom: 'Prix Crypto Quotidiens', cat: 'Web Design', image: null },
+                { id: '3', nom: 'Interface de Gestion', cat: 'Web Design, App Design', image: null },
             ];
 
-    const techStack = ['React', 'Next.js', 'TypeScript', 'Node.js', 'Supabase', 'Cloudflare', 'Docker', 'Python', 'TailwindCSS', 'OpenAI', 'PostgreSQL', 'Git'];
+    const services = filieres?.length > 0
+        ? filieres.map((f: any, i) => ({ id: f.id || i, nom: f.nom || f.name, cat: 'Formation', image: gallery?.[i] || null }))
+        : classrooms?.length > 0
+            ? classrooms.map((c: any, i) => ({ id: c.id || i, nom: c.name, cat: 'Formation', image: gallery?.[i] || null }))
+            : [
+                { id: 'a', nom: 'Design Web & Applications', cat: 'UI/UX & Frontend', image: null },
+                { id: 'b', nom: 'Stratégie Business Digitale', cat: 'STRATÉGIE', image: null },
+                { id: 'c', nom: 'Développement Full-Stack', cat: 'DEV', image: null },
+                { id: 'd', nom: 'Coaching & Mentorat Design', cat: 'COACHING', image: null },
+            ];
+
+    const ACCENT = '#00B4D8';    // bleu néon
+    const BG     = '#0A0F1E';    // bleu marine très sombre
+    const CARD   = '#0F1628';    // card légèrement plus clair
 
     return (
-        <div className="min-h-screen bg-[#050912] text-white font-mono antialiased overflow-x-hidden selection:bg-blue-500/30">
-            {/* Animated Grid Background */}
-            <div className="fixed inset-0 pointer-events-none z-0">
-                <div className="absolute inset-0" style={{
-                    backgroundImage: 'linear-gradient(rgba(30,64,175,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(30,64,175,0.08) 1px, transparent 1px)',
-                    backgroundSize: '60px 60px'
-                }} />
-                <div className="absolute top-[-20%] right-[-10%] w-[70vw] h-[70vw] max-w-[800px] max-h-[800px] bg-blue-600/8 rounded-full blur-[200px]" />
-                <div className="absolute bottom-[-10%] left-[-5%] w-[50vw] h-[50vw] max-w-[600px] max-h-[600px] bg-cyan-500/6 rounded-full blur-[160px]" />
-            </div>
+        <div className="min-h-screen text-white font-sans antialiased overflow-x-hidden" style={{ background: BG }}>
 
-            {/* ═══ Header Cyber Style ═══ */}
-            <header className="relative z-30 max-w-7xl mx-auto px-4 sm:px-8 py-6">
-                <div className="flex items-center justify-between p-3 px-6 rounded-xl bg-white/[0.03] backdrop-blur-2xl border border-blue-500/20 shadow-xl shadow-blue-500/5">
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
-                            <Zap className="w-4 h-4 text-white" />
-                        </div>
-                        <span className="font-black text-sm tracking-tight text-white font-sans uppercase">
-                            {trainerName}
-                        </span>
-                        <span className="hidden sm:inline-flex text-[10px] text-blue-400 font-bold border border-blue-400/30 px-2 py-0.5 rounded font-mono">
-                            {org.type || 'TECH ACADEMY'}
-                        </span>
-                    </div>
-
+            {/* ══ NAVBAR ══ */}
+            <header className="sticky top-0 z-50 border-b border-white/5" style={{ background: BG + 'E6', backdropFilter: 'blur(12px)' }}>
+                <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+                    {/* Logo */}
                     <div className="flex items-center gap-2">
-                        <Link href={orgPath(orgSlug, 'login')}>
-                            <Button variant="ghost" className="text-xs text-slate-400 hover:text-white rounded-lg hidden sm:flex font-mono">
-                                <Lock className="w-3 h-3 mr-1.5" />
-                                Espace Étudiant
-                            </Button>
-                        </Link>
-                        <Button
-                            onClick={onOpenInscription}
-                            className="bg-blue-600 hover:bg-blue-500 text-white font-black text-xs rounded-lg px-5 h-9 shadow-lg shadow-blue-500/30"
-                        >
-                            Rejoindre la Formation
-                        </Button>
+                        {org.logo_url
+                            ? <img src={org.logo_url} alt={trainerName} className="h-8 w-auto object-contain" />
+                            : (
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded border flex items-center justify-center text-xs font-black" style={{ borderColor: ACCENT, color: ACCENT }}>
+                                        {trainerName.slice(0, 1)}
+                                    </div>
+                                    <span className="font-black text-xs tracking-widest text-white uppercase">
+                                        {trainerName}
+                                    </span>
+                                </div>
+                            )
+                        }
                     </div>
+
+                    {/* Nav */}
+                    <nav className="hidden md:flex items-center gap-8">
+                        {navLinks.map((lnk, i) => (
+                            <span key={i} className="text-xs font-medium cursor-pointer transition-colors"
+                                style={{ color: i === 0 ? ACCENT : '#9CA3AF' }}>
+                                {lnk}
+                            </span>
+                        ))}
+                    </nav>
+
+                    <button
+                        onClick={onOpenInscription}
+                        className="text-xs font-black rounded-full px-5 h-9 transition-all"
+                        style={{ background: ACCENT, color: '#000' }}
+                    >
+                        Prendre Contact →
+                    </button>
                 </div>
             </header>
 
-            {/* ═══ Hero Section Cyber ═══ */}
-            <section className="relative z-10 max-w-7xl mx-auto px-4 sm:px-8 pt-12 pb-24">
-                <div className="grid lg:grid-cols-2 gap-16 items-center">
-                    <div className="space-y-8">
-                        {/* Status Badge */}
-                        <div className="flex items-center gap-3 text-xs font-mono">
-                            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400">
-                                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                                INSCRIPTIONS OUVERTES
-                            </span>
-                            <span className="text-slate-500 hidden sm:block">{org.city || 'Campus Connecté'} · {org.country || 'Cameroun'}</span>
-                        </div>
+            {/* ══ HERO ══ */}
+            <section className="max-w-7xl mx-auto px-6 pt-16 pb-20">
+                <div className="grid lg:grid-cols-2 gap-12 items-center">
 
-                        <div className="space-y-4">
-                            <p className="text-blue-400 text-sm font-bold tracking-widest uppercase font-mono">
-                                {'>'} {trainerTitle}
+                    {/* Texte gauche */}
+                    <div className="space-y-6">
+                        <div className="space-y-1">
+                            <p className="text-xs font-bold tracking-widest uppercase" style={{ color: ACCENT }}>
+                                {trainerName}
                             </p>
-                            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black font-sans leading-[1.0] tracking-tighter">
-                                {trainerSubtitle.split(',')[0]}&nbsp;
-                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
-                                    {trainerSubtitle.split(',').slice(1).join(',') || 'à l\'échelle.'}
-                                </span>
+                            <h1 className="text-5xl sm:text-7xl font-black leading-[1.0] tracking-tighter">
+                                HAY! JE SUIS<br />
+                                <span style={{ color: ACCENT }}>{trainerName.split(' ')[0].toUpperCase()}</span><br />
+                                <span className="text-white">{trainerTitle1} |</span>
                             </h1>
                         </div>
 
-                        <p className="text-slate-400 text-sm leading-relaxed max-w-lg font-sans">
-                            {trainerBio}
-                        </p>
+                        <p className="text-sm text-gray-400 leading-relaxed max-w-md">{trainerSubtitle}</p>
 
-                        {/* Stat Grid */}
-                        <div className="grid grid-cols-3 gap-3">
-                            {cfg.show_student_count !== false && (
-                                <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5 text-center">
-                                    <p className="text-2xl font-black text-blue-400">{cfg.student_count_override || studentCount || '1K'}+</p>
-                                    <p className="text-[10px] text-slate-500 font-mono mt-1">DIPLÔMÉS</p>
-                                </div>
-                            )}
-                            {cfg.show_years_experience !== false && (
-                                <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5 text-center">
-                                    <p className="text-2xl font-black text-cyan-400">{cfg.years_experience_value || '8'}+</p>
-                                    <p className="text-[10px] text-slate-500 font-mono mt-1">ANNÉES EXP.</p>
-                                </div>
-                            )}
-                            {cfg.show_rating_stars !== false && (
-                                <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5 text-center">
-                                    <p className="text-2xl font-black text-amber-400">5.0★</p>
-                                    <p className="text-[10px] text-slate-500 font-mono mt-1">NOTE MÈNTORS</p>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                            <Button
+                        <div className="flex items-center gap-4">
+                            <button
                                 onClick={onOpenInscription}
-                                className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-black text-xs px-8 h-12 rounded-xl shadow-2xl shadow-blue-500/25 flex items-center gap-2 font-sans"
+                                className="inline-flex items-center gap-2 font-black text-xs rounded-full px-7 h-12 transition-all shadow-lg"
+                                style={{ background: ACCENT, color: '#000', boxShadow: `0 8px 30px ${ACCENT}30` }}
                             >
-                                Accéder à la Formation
-                                <ArrowRight className="w-4 h-4" />
-                            </Button>
-                        </div>
-                    </div>
-
-                    {/* Photo Hero Cyber with Sphere Rings */}
-                    <div className="relative flex justify-center lg:justify-end">
-                        <div className="relative">
-                            {/* Concentric rings */}
-                            <div className="absolute inset-[-20%] rounded-full border border-blue-500/15 animate-spin" style={{ animationDuration: '20s' }} />
-                            <div className="absolute inset-[-35%] rounded-full border border-cyan-500/10" style={{ animation: 'spin 35s linear infinite reverse' }} />
-
-                            <div className="relative w-72 sm:w-96 aspect-square rounded-full overflow-hidden border-2 border-blue-500/30 shadow-2xl shadow-blue-500/20">
-                                <img
-                                    src={heroImage}
-                                    alt={trainerName}
-                                    className="w-full h-full object-cover"
-                                />
-                                <div className="absolute inset-0 bg-gradient-to-t from-[#050912]/60 via-transparent to-transparent" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            {/* ═══ Tech Stack Scrolling Bar ═══ */}
-            {cfg.show_press_logos !== false && (
-                <div className="relative z-10 border-t border-b border-white/5 py-5 bg-white/[0.01] overflow-hidden">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-8 flex items-center gap-3 overflow-x-auto scrollbar-none">
-                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest shrink-0 font-mono">STACK TECH</span>
-                        <div className="flex items-center gap-6 overflow-x-auto">
-                            {pressLogos.map((tech, i) => (
-                                <span key={i} className="text-sm font-black text-slate-600 hover:text-blue-400 transition font-mono shrink-0 uppercase tracking-widest">
-                                    {tech}
-                                </span>
+                                PRENDRE CONTACT →
+                            </button>
+                            {/* Social Icons */}
+                            {['f', 'in', '📷'].map((icon, i) => (
+                                <button key={i} className="w-9 h-9 rounded-full border flex items-center justify-center text-xs transition-colors hover:border-blue-400"
+                                    style={{ borderColor: '#ffffff20' }}>
+                                    <span className="text-gray-400">{icon}</span>
+                                </button>
                             ))}
                         </div>
                     </div>
-                </div>
-            )}
 
-            {/* ═══ Programmes & Certifications ═══ */}
-            <section className="relative z-10 max-w-7xl mx-auto px-4 sm:px-8 py-24">
-                <div className="mb-12 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-                    <div>
-                        <p className="text-blue-400 text-xs font-mono mb-2 uppercase tracking-widest">{'>'} PARCOURS CERTIFIANTS</p>
-                        <h2 className="text-3xl sm:text-5xl font-black font-sans">
-                            Spécialisations & Bootcamps
-                        </h2>
+                    {/* Portrait + sphères 3D */}
+                    <div className="relative flex justify-center lg:justify-end">
+                        {/* Sphères décoratives */}
+                        <div className="absolute top-4 left-4 w-12 h-12 rounded-full blur-sm opacity-60"
+                            style={{ background: `radial-gradient(circle, ${ACCENT}, #1a1a4e)` }} />
+                        <div className="absolute bottom-8 right-8 w-8 h-8 rounded-full blur-sm opacity-40"
+                            style={{ background: `radial-gradient(circle, ${ACCENT}, transparent)` }} />
+                        <div className="absolute top-1/2 right-0 w-16 h-16 rounded-full blur-md opacity-30"
+                            style={{ background: ACCENT }} />
+
+                        {/* Photo */}
+                        <div className="relative w-80 h-96 rounded-3xl overflow-hidden shadow-2xl"
+                            style={{ border: `1px solid ${ACCENT}30` }}>
+                            <img
+                                src={heroImage}
+                                alt={trainerName}
+                                className="w-full h-full object-cover object-top"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#0A0F1E]/50 to-transparent" />
+                        </div>
                     </div>
-                    <Button
-                        onClick={onOpenInscription}
-                        variant="outline"
-                        className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 text-xs font-mono rounded-lg shrink-0"
-                    >
-                        Voir tous les cursus →
-                    </Button>
-                </div>
-
-                <div className="grid md:grid-cols-3 gap-5">
-                    {programs.map((p: any, idx: number) => {
-                        const IconComp = p.icon || Code2;
-                        return (
-                            <div
-                                key={p.id || idx}
-                                className="p-7 rounded-2xl bg-[#0C1120] border border-white/5 hover:border-blue-500/30 transition group flex flex-col justify-between space-y-6"
-                            >
-                                <div className="space-y-4">
-                                    <div className="w-12 h-12 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
-                                        <IconComp className="w-6 h-6" />
-                                    </div>
-                                    <div>
-                                        <span className="text-[10px] font-bold font-mono text-blue-400 uppercase tracking-wider">
-                                            {p.duree_mois ? `${p.duree_mois} MOIS` : 'BOOTCAMP'}
-                                        </span>
-                                        <h3 className="text-base font-black font-sans text-white mt-1 group-hover:text-blue-400 transition">
-                                            {p.nom || p.name}
-                                        </h3>
-                                    </div>
-                                    <p className="text-xs text-slate-400 leading-relaxed font-sans">
-                                        {p.description || 'Apprentissage intensif orienté projets en production réelle.'}
-                                    </p>
-                                </div>
-
-                                <div className="pt-4 border-t border-white/5 flex items-center justify-between">
-                                    <span className="text-xs font-black text-cyan-400 font-mono">
-                                        {p.frais_scolarite ? `${new Intl.NumberFormat('fr-FR').format(p.frais_scolarite)} XAF` : 'SUR DOSSIER'}
-                                    </span>
-                                    <Button
-                                        onClick={onOpenInscription}
-                                        className="w-9 h-9 rounded-xl bg-blue-600 hover:bg-blue-500 text-white p-0 flex items-center justify-center shadow-lg"
-                                    >
-                                        <ChevronRight className="w-4 h-4" />
-                                    </Button>
-                                </div>
-                            </div>
-                        );
-                    })}
                 </div>
             </section>
 
-            {/* ═══ Footer Cyber ═══ */}
-            <footer className="border-t border-white/5 bg-[#030609] py-10 relative z-10">
-                <div className="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row items-center justify-between gap-6">
-                    <p className="font-black text-white font-sans text-sm tracking-tight uppercase">{trainerName}</p>
-                    <p className="text-[10px] text-slate-600 font-mono">© {new Date().getFullYear()} — PROPULSÉ PAR IZITEACH PLATFORM</p>
-                    <Button
-                        onClick={onOpenInscription}
-                        className="bg-blue-600 hover:bg-blue-500 text-white font-black text-xs rounded-lg px-6 h-9 shadow-lg shadow-blue-500/20"
-                    >
-                        Rejoindre la Formation →
-                    </Button>
+            {/* ══ BANDEAU LOGOS PARTENAIRES ══ */}
+            <div className="border-y py-5 overflow-hidden" style={{ borderColor: '#ffffff10', background: CARD }}>
+                <div className="flex items-center gap-16 whitespace-nowrap animate-none px-8 flex-wrap justify-center">
+                    {[...pressLogos, ...pressLogos].map((logo, i) => (
+                        <span key={i} className="text-xs font-bold tracking-widest text-gray-500 uppercase shrink-0">
+                            {logo}
+                        </span>
+                    ))}
+                </div>
+            </div>
+
+            {/* ══ À PROPOS ══ */}
+            <section className="py-20" style={{ background: CARD }}>
+                <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center">
+                    {/* Portrait */}
+                    <div className="relative hidden lg:flex justify-center">
+                        <div className="w-80 h-96 rounded-3xl overflow-hidden shadow-2xl">
+                            <img
+                                src={aboutImage}
+                                alt={trainerName + ' profil'}
+                                className="w-full h-full object-cover object-top"
+                            />
+                        </div>
+                        {/* Demi-cercle déco */}
+                        <div className="absolute -right-6 top-1/2 -translate-y-1/2 w-24 h-24 rounded-full border-4 opacity-30"
+                            style={{ borderColor: ACCENT }} />
+                    </div>
+
+                    {/* Texte */}
+                    <div className="space-y-6">
+                        <div>
+                            <p className="text-xs font-bold tracking-widest uppercase mb-2" style={{ color: ACCENT }}>
+                                À PROPOS
+                            </p>
+                            <h2 className="text-2xl sm:text-3xl font-black leading-tight">
+                                {aboutTitle}
+                            </h2>
+                        </div>
+
+                        <p className="text-sm text-gray-400 leading-relaxed">{aboutText}</p>
+
+                        {/* Stats */}
+                        <div className="grid grid-cols-3 gap-4">
+                            {[
+                                { val: reviewCount, label: 'Avis Google' },
+                                { val: yearsExp,    label: "Ans d'Expérience" },
+                                { val: awardsCount, label: 'Prix Gagnés' },
+                            ].map((stat, i) => (
+                                <div key={i} className="text-center p-4 rounded-2xl" style={{ background: BG }}>
+                                    <p className="text-2xl font-black" style={{ color: ACCENT }}>{stat.val}</p>
+                                    <p className="text-xs text-gray-500 mt-1">{stat.label}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        <button
+                            onClick={onOpenInscription}
+                            className="inline-flex items-center gap-2 font-black text-xs rounded-full px-7 h-11 transition-all"
+                            style={{ background: ACCENT, color: '#000' }}
+                        >
+                            PRENDRE CONTACT →
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            {/* ══ MON TRAVAIL (Projets) ══ */}
+            <section className="py-20" style={{ background: BG }}>
+                <div className="max-w-7xl mx-auto px-6">
+                    <div className="mb-10">
+                        <p className="text-xs font-bold tracking-widest uppercase mb-2" style={{ color: ACCENT }}>
+                            MON TRAVAIL
+                        </p>
+                        <h2 className="text-3xl font-black">PROJETS RÉCENTS</h2>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                        {projects.map((proj: any, idx: number) => (
+                            <motion.div
+                                key={proj.id}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: idx * 0.1 }}
+                                className="rounded-2xl overflow-hidden"
+                                style={{ background: CARD, border: '1px solid #ffffff08' }}
+                            >
+                                <div className="aspect-video relative overflow-hidden"
+                                    style={{ background: idx === 0 ? '#1a0f3e' : idx === 1 ? '#0f1e2e' : '#1e1a0f' }}>
+                                    {proj.image
+                                        ? <img src={proj.image} alt={proj.nom} className="w-full h-full object-cover opacity-70" />
+                                        : (
+                                            <div className="w-full h-full flex items-center justify-center text-5xl opacity-20">
+                                                {idx === 0 ? '💜' : idx === 1 ? '💰' : '📊'}
+                                            </div>
+                                        )
+                                    }
+                                    <button
+                                        onClick={onOpenInscription}
+                                        className="absolute bottom-3 right-3 w-10 h-10 rounded-full flex items-center justify-center text-black font-black text-xs shadow-xl"
+                                        style={{ background: ACCENT }}
+                                    >
+                                        →
+                                    </button>
+                                </div>
+                                <div className="p-5">
+                                    <h3 className="font-black text-sm text-white">{proj.nom}</h3>
+                                    <p className="text-xs text-gray-500 mt-1">{proj.cat}</p>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+
+                    {/* Dots */}
+                    <div className="flex justify-center gap-2 mt-8">
+                        <div className="w-8 h-2 rounded-full" style={{ background: ACCENT }} />
+                        <div className="w-2 h-2 rounded-full bg-gray-700" />
+                    </div>
+                </div>
+            </section>
+
+            {/* ══ SERVICES ══ */}
+            <section className="py-20" style={{ background: CARD }}>
+                <div className="max-w-7xl mx-auto px-6">
+                    <div className="mb-10">
+                        <p className="text-xs font-bold tracking-widest uppercase mb-2" style={{ color: ACCENT }}>SERVICES</p>
+                        <h2 className="text-3xl font-black">
+                            SERVICES <span style={{ color: ACCENT }}>QUE JE PROPOSE</span>
+                        </h2>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {services.map((svc: any, i: number) => (
+                            <div key={svc.id}
+                                className="rounded-2xl overflow-hidden hover:shadow-xl transition-all cursor-pointer group"
+                                style={{ background: BG, border: '1px solid #ffffff08' }}
+                                onClick={onOpenInscription}
+                            >
+                                <div className="aspect-video overflow-hidden relative"
+                                    style={{ background: ['#1a0a2e', '#0a1e1a', '#1e1a0a', '#0a0f1e'][i % 4] }}>
+                                    {svc.image
+                                        ? <img src={svc.image} alt={svc.nom} className="w-full h-full object-cover opacity-60" />
+                                        : <div className="w-full h-full flex items-center justify-center text-4xl opacity-20">
+                                            {['🖥', '📊', '⚙️', '🧑‍🏫'][i % 4]}
+                                          </div>
+                                    }
+                                </div>
+                                <div className="p-4">
+                                    <p className="text-xs text-gray-500 mb-1">{svc.cat}</p>
+                                    <h3 className="font-black text-sm text-white group-hover:text-blue-300 transition-colors">{svc.nom}</h3>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* ══ FOOTER ══ */}
+            <footer className="border-t py-8" style={{ background: BG, borderColor: '#ffffff10' }}>
+                <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <span className="font-black text-xs uppercase tracking-widest" style={{ color: ACCENT }}>
+                        {trainerName}
+                    </span>
+                    <p className="text-xs text-gray-600">© {new Date().getFullYear()} {trainerName} · Tous droits réservés</p>
+                    <Link href={orgPath(orgSlug, 'login')}>
+                        <button className="text-xs text-gray-500 hover:text-white transition-colors">
+                            Espace Étudiant
+                        </button>
+                    </Link>
                 </div>
             </footer>
         </div>

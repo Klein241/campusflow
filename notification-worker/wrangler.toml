@@ -33,16 +33,15 @@ id = "a69d6d564ebf4137802f80d4bbb72a87"
 # queue = "notification-push-queue"
 # binding = "PUSH_QUEUE"
 
-# ── Cron Triggers ────────────────────────────────────────
-# Runs every hour to check for:
-# - Prayer requests without responses (48h+)
-# - Evaluation reminders (J-1)
+# ── Cron Triggers (Surveillance Autonome toutes les 5 minutes) ──
 [triggers]
-crons = ["0 * * * *"]
+crons = ["*/5 * * * *"]
 
 # ── Environment Variables ────────────────────────────────
 [vars]
 VAPID_EMAIL = "mailto:kleintaptue1@gmail.com"
+SUPABASE_URL = "https://nuisijvopyudmbcqpaua.supabase.co"
+SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51aXNpanZvcHl1ZG1iY3FwYXVhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NDM1NDIwOSwiZXhwIjoyMDg5OTMwMjA5fQ.iiQ84MBnoamamIfDf2iBGgYfrgQwR9n-YClhV5TBI_w"
 # Rate limits
 RATE_LIMIT_PUSH_INTERVAL_MS = "10000"    # 10s between pushes per user
 RATE_LIMIT_HOURLY_MAX = "50"             # Max 50 notifs/hour per user

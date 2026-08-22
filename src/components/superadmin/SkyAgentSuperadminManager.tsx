@@ -102,7 +102,7 @@ const TOOL_LABELS: Record<string, { label: string; icon: string }> = {
 function formatInput(toolName: string, inputSummary: string | null): string {
     if (!inputSummary) return '';
     try {
-        const match = inputSummary.match(/^\w+\((.*)\)$/s);
+        const match = inputSummary.match(/^\w+\(([\s\S]*)\)$/);
         const jsonStr = match ? match[1] : inputSummary;
         const args = JSON.parse(jsonStr);
         if (args.title) return `📌 "${args.title}"`;

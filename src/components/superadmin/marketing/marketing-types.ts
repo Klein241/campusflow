@@ -8,7 +8,7 @@ export interface MarketingLead {
     email: string;
     phone?: string;
     website?: string;
-    source: 'google' | 'linkedin' | 'facebook' | 'directory' | 'manual' | 'ai_deep_research';
+    source: 'google' | 'linkedin' | 'facebook' | 'directory' | 'manual' | 'ai_deep_research' | 'yellow_pages';
     country: string;
     city: string;
     score: number; // 1-100 (Qualification Score)

@@ -884,7 +884,7 @@ export function FormsView({ orgId, orgSlug, userId, userRole, userName }: FormsV
                                                         <Copy className="w-3 h-3" />Lien
                                                     </button>
                                                     <button
-                                                        onClick={() => openForm(form.slug)}
+                                                        onClick={() => openForm(form)}
                                                         className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 text-[11px] transition"
                                                     >
                                                         <ExternalLink className="w-3 h-3" />Voir
@@ -953,7 +953,7 @@ export function FormsView({ orgId, orgSlug, userId, userRole, userName }: FormsV
                                                 </div>
                                             </div>
                                             <button
-                                                onClick={() => openForm(form.slug)}
+                                                onClick={() => openForm(form)}
                                                 className="flex items-center gap-1 px-3 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-xs font-medium shadow-lg shadow-indigo-600/20 transition hover:shadow-indigo-600/30 flex-shrink-0"
                                             >
                                                 <Send className="w-3 h-3" />

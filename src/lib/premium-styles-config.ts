@@ -19,10 +19,10 @@ export interface HeroBannerStyle {
 }
 
 export interface LandingLayoutTemplate {
-    id: 'classic' | 'hub_onglets' | 'segmented_hub' | 'glass_showcase' | 'bento_grid' | 'bento_box' | 'coach_pastelle' | 'creative_studio' | 'tech_mentor' | 'product_mastery';
+    id: 'classic' | 'hub_onglets' | 'segmented_hub' | 'glass_showcase' | 'bento_grid' | 'bento_box' | 'coach_pastelle' | 'creative_studio' | 'tech_mentor' | 'product_mastery' | 'nexis_studio';
     name: string;
     description: string;
-    category?: 'general' | 'formateur' | 'prestige';
+    category?: 'general' | 'formateur' | 'prestige' | 'entreprise';
     defaultPrice: number;
     icon: string;
     badgeText?: string;
@@ -182,6 +182,17 @@ export const LANDING_LAYOUT_TEMPLATES: LandingLayoutTemplate[] = [
         badgeText: 'Mentor & Design',
         highlights: ['Design audacieux orange & carbone 3D', 'Badge d\'expérience 5 étoiles', 'Carrousel de modules avec maquettes mobiles'],
         previewImage: '/templates/product_mastery.jpg',
+    },
+    {
+        id: 'nexis_studio',
+        name: '🏢 Modèle Nexis — Studio Noir & Jaune Corporate',
+        description: 'Design d\'agence corporate audacieux noir & jaune avec bandeau de stats, section services en cartes bicolores, galerie de projets et formulaire de contact intégré.',
+        category: 'entreprise',
+        defaultPrice: 14000,
+        icon: '🏢',
+        badgeText: 'Corporate',
+        highlights: ['Palette noir & jaune premium corporate', 'Bandeau stats & section services bicolores', 'Galerie de projets filtrée + formulaire contact'],
+        previewImage: '/templates/nexis_studio.jpg',
     },
 ];
 

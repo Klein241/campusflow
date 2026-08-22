@@ -18,7 +18,7 @@ import {
     type HeroBannerStyle,
     type LandingLayoutTemplate
 } from '@/lib/premium-styles-config';
-import { TemplateCustomizerModal } from '@/components/campus/template-customizer-modal';
+import { TemplateCustomizerStudio } from '@/components/campus/template-customizer-studio';
 
 interface AdminPremiumStylesProps {
     org: any;
@@ -229,7 +229,7 @@ function LayoutCard({
                         onClick={onPreview}
                         className="flex-1 h-8 text-xs text-slate-400 hover:text-white border border-white/10 hover:border-white/20 rounded-xl"
                     >
-                        <Eye className="w-3.5 h-3.5 mr-1" /> Voir
+                        <Eye className="w-3.5 h-3.5 mr-1" /> Aperçu
                     </Button>
                     <Button
                         size="sm"
@@ -237,7 +237,7 @@ function LayoutCard({
                         disabled={processing || isActive}
                         className={`flex-1 h-8 text-xs font-bold rounded-xl ${
                             isActive
-                                ? 'bg-white/5 text-slate-500 cursor-default'
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 cursor-default'
                                 : isUnlocked
                                     ? 'bg-teal-600 hover:bg-teal-500 text-white'
                                     : cost === 0
@@ -247,7 +247,7 @@ function LayoutCard({
                     >
                         {processing
                             ? <Loader2 className="w-3 h-3 animate-spin" />
-                            : isActive ? 'Appliqué'
+                            : isActive ? '✓ Actif'
                             : isUnlocked ? 'Appliquer'
                             : cost === 0 ? 'Appliquer'
                             : `Débloquer`
@@ -471,36 +471,38 @@ export function AdminPremiumStyles({
                     ))}
                 </div>
 
-                {/* ── Bouton Personnaliser le contenu du template ─── */}
-                {isFormateurTemplate && (
-                    <div className="mt-6 p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 to-orange-500/5 border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                        <div>
-                            <p className="font-black text-white text-sm flex items-center gap-2">
-                                <Sliders className="w-4 h-4 text-amber-400" />
-                                Personnaliser le contenu du template
-                            </p>
-                            <p className="text-xs text-slate-400 mt-1">
-                                Modifiez les textes, photos, filières, stats affichées et sections visibles de votre portail public.
-                            </p>
+                {/* ── Bannière d'accès au Studio de Personnalisation en Temps Réel ─── */}
+                <div className="mt-8 p-6 rounded-3xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-teal-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 shadow-2xl">
+                    <div className="space-y-1.5 max-w-xl">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-black border border-amber-500/30">
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Studio de Personnalisation Plein Écran
                         </div>
-                        <Button
-                            onClick={() => setCustomizerOpen(true)}
-                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl px-6 h-10 shrink-0 flex items-center gap-2 shadow-lg shadow-amber-500/20"
-                        >
-                            <Sliders className="w-4 h-4" />
-                            Ouvrir le Personnaliseur
-                        </Button>
+                        <h4 className="font-black text-white text-base sm:text-lg">
+                            Personnalisez le contenu de votre landing page en direct
+                        </h4>
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                            Modifiez les textes, photos de profil HD, livres, podcasts, filières, avis clients et indicateurs de statistiques avec un aperçu interactif réactif (Bureau, Tablette, Mobile).
+                        </p>
                     </div>
-                )}
+                    <Button
+                        onClick={() => setCustomizerOpen(true)}
+                        size="lg"
+                        className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs sm:text-sm rounded-2xl px-8 h-12 shrink-0 flex items-center gap-2.5 shadow-xl shadow-amber-500/25 transition-all hover:scale-105"
+                    >
+                        <Sliders className="w-4 h-4" />
+                        Ouvrir le Studio de Personnalisation
+                    </Button>
+                </div>
             </div>
 
-            {/* ── MODALE PERSONNALISATION ───────────────────────────── */}
+            {/* ── STUDIO DE PERSONNALISATION PLEIN ÉCRAN ────────────── */}
             {customizerOpen && (
-                <TemplateCustomizerModal
-                    isOpen={customizerOpen}
-                    onClose={() => setCustomizerOpen(false)}
+                <TemplateCustomizerStudio
                     org={localOrg}
+                    orgSlug={orgSlug}
                     currentTemplateId={selectedLayout}
+                    onClose={() => setCustomizerOpen(false)}
                     onSaveSuccess={(updatedOrg) => {
                         setLocalOrg(updatedOrg);
                         onUpdateOrg(updatedOrg);

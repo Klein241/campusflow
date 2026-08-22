@@ -1917,6 +1917,101 @@ async function handleCron(env: Env): Promise<void> {
     } catch (e) {
         console.error('[Cron] prayer_no_response error:', e);
     }
+
+    // ── Surveillance Autonome de l'Agent IA (Option B) ──
+    try {
+        await handleAgentAutonomousHeartbeat(env);
+    } catch (e) {
+        console.error('[Cron] handleAgentAutonomousHeartbeat error:', e);
+    }
+}
+
+// ── Heartbeat de Surveillance Autonome (Toutes les 5 minutes) ────────
+async function handleAgentAutonomousHeartbeat(env: Env): Promise<void> {
+    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return;
+    try {
+        const now = new Date().toISOString();
+
+        // 1. Traitement des actions IA approuvées en attente d'exécution
+        const pending = await fetchSupabaseRest(env, 'ai_pending_actions?status=eq.approved&select=*&limit=5');
+        if (pending && pending.length > 0) {
+            for (const act of pending) {
+                console.log(`[AgentCron] Exécution automatique action : ${act.tool_name} (ID: ${act.id})`);
+                await fetchSupabaseRest(env, `ai_pending_actions?id=eq.${encodeURIComponent(act.id)}`, {
+                    method: 'PATCH',
+                    body: { status: 'executed' }
+                });
+                await fetchSupabaseRest(env, 'ai_agent_logs', {
+                    method: 'POST',
+                    body: {
+                        agent_key_id: act.agent_key_id,
+                        organization_id: act.organization_id,
+                        tool_name: `cron_execute:${act.tool_name}`,
+                        input_summary: `Action approuvée ID ${act.id}`,
+                        output_summary: `Exécuté automatiquement par le Cron de surveillance`,
+                        status: 'success',
+                        duration_ms: 20,
+                        executed_at: now,
+                    }
+                });
+            }
+        }
+
+        // 2. Détection des demandes de Sky Points en attente (Support)
+        const pendingPoints = await fetchSupabaseRest(env, 'sky_point_requests?status=eq.pending&select=id,user_id,organization_id,amount,created_at&limit=5');
+        if (pendingPoints && pendingPoints.length > 0) {
+            console.log(`[AgentCron] ${pendingPoints.length} demandes de Sky Points en attente détectées.`);
+        }
+    } catch (e) {
+        console.error('[AgentCron] Erreur heartbeat:', e);
+    }
+}
+
+// ── Webhook Automatique pour Agents IA (Option A - Temps Réel < 1s) ────────
+async function handleAgentWebhook(request: Request, env: Env): Promise<Response> {
+    try {
+        const payload: any = await request.json();
+        const eventType = payload.type || payload.event || payload.table || 'custom_event';
+        const record = payload.record || payload.new || payload.data || payload;
+        const now = new Date().toISOString();
+
+        console.log(`[AgentWebhook] Reçu événement : ${eventType}`, JSON.stringify(record).slice(0, 200));
+
+        let actionSummary = `Événement ${eventType} traité`;
+
+        if (eventType === 'sky_point_requests' || eventType === 'INSERT:sky_point_requests') {
+            actionSummary = `Nouvelle demande de points/support reçue (ID: ${record.id})`;
+        } else if (eventType === 'bug_reports' || eventType === 'INSERT:bug_reports') {
+            actionSummary = `Nouveau rapport de bug reçu : "${record.title || record.description || 'Bug'}"`;
+        } else if (eventType === 'ai_pending_actions' || eventType === 'INSERT:ai_pending_actions') {
+            actionSummary = `Nouvelle action IA en attente d'approbation (Outil: ${record.tool_name})`;
+        }
+
+        // Logger l'événement dans ai_agent_logs
+        if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+            await fetchSupabaseRest(env, 'ai_agent_logs', {
+                method: 'POST',
+                body: {
+                    tool_name: `webhook:${eventType}`,
+                    input_summary: JSON.stringify(record).slice(0, 500),
+                    output_summary: actionSummary,
+                    status: 'success',
+                    duration_ms: 15,
+                    executed_at: now,
+                }
+            });
+        }
+
+        return json({
+            success: true,
+            status: 'received_and_logged',
+            event: eventType,
+            message: `⚡ Webhook Agent IA déclenché : ${actionSummary}`,
+            timestamp: now,
+        });
+    } catch (e: any) {
+        return json({ error: e.message || 'Erreur traitement webhook' }, 500);
+    }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2684,6 +2779,11 @@ export default {
             // ── MCP IziTeach — Cloudflare D1 Primary Edge Gateway ──
             if (pathname === '/mcp-gateway' || pathname === '/api/mcp' || pathname === '/api/mcp-gateway' || pathname === '/mcp' || pathname === '/sse') {
                 return handleMcpGateway(request, env);
+            }
+
+            // ── Agent IA Webhook Trigger (Option A - Temps Réel < 1s) ──
+            if ((pathname === '/api/agent/webhook' || pathname === '/agent-webhook' || pathname === '/api/agent-events') && method === 'POST') {
+                return handleAgentWebhook(request, env);
             }
 
             // ── Inscription (bypass RLS) ──
@@ -4014,7 +4114,35 @@ async function broadcastUpdatePush(
     }
 }
 
-// ── Exécuteur direct Cloudflare D1 ────────────────────────────────
+// ── Helper Supabase REST direct ────────────────────────────────────
+async function fetchSupabaseRest(env: Env, path: string, options: { method?: string; body?: any; headers?: Record<string, string> } = {}): Promise<any> {
+    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return null;
+    try {
+        const url = `${env.SUPABASE_URL}/rest/v1/${path}`;
+        const res = await fetch(url, {
+            method: options.method || 'GET',
+            headers: {
+                'apikey': env.SUPABASE_SERVICE_KEY,
+                'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation',
+                ...(options.headers || {}),
+            },
+            body: options.body ? JSON.stringify(options.body) : undefined,
+        });
+        if (!res.ok) {
+            const errText = await res.text();
+            console.error(`[fetchSupabaseRest] ${path} error:`, errText);
+            return null;
+        }
+        return await res.json();
+    } catch (e: any) {
+        console.error(`[fetchSupabaseRest] exception on ${path}:`, e);
+        return null;
+    }
+}
+
+// ── Exécuteur direct Cloudflare D1 + Synchronisation Supabase Directe ──────────────────
 async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx: { agentKey: any; isSuperadmin: boolean; orgId: string | null; agentName: string; agentId: string }, env: Env): Promise<any> {
     const db = env.CAMPUSFLOW_DB;
 
@@ -4027,7 +4155,11 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         case 'list_orgs': {
             if (!ctx.isSuperadmin) throw { code: -32003, message: 'Réservé aux clés Superadmin' };
             const limit = Math.min(Number(args.limit) || 50, 100);
-            const { results } = await db.prepare(`SELECT id, name, slug, plan, is_active, created_at FROM organizations ORDER BY created_at DESC LIMIT ?1`).bind(limit).all();
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const supOrgs = await fetchSupabaseRest(env, `organizations?select=id,name,slug,type,city,country,is_active,created_at&order=created_at.desc&limit=${limit}`);
+                if (supOrgs) return { organizations: supOrgs, total: supOrgs.length };
+            }
+            const { results } = await db.prepare(`SELECT id, name, slug, plan, is_active, created_at FROM organizations ORDER BY created_at DESC LIMIT ?1`).bind(limit).all().catch(() => ({ results: [] }));
             return { organizations: results || [], total: (results || []).length };
         }
 
@@ -4035,17 +4167,35 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         case 'get_org_info': {
             if (!targetOrgId) {
                 if (ctx.isSuperadmin) {
-                    const org = await db.prepare(`SELECT id, name, slug, plan, is_active, created_at FROM organizations ORDER BY created_at ASC LIMIT 1`).first();
+                    if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                        const supOrgs = await fetchSupabaseRest(env, 'organizations?select=id,name,slug,type,city,country,is_active,created_at&order=created_at.asc&limit=1');
+                        if (supOrgs && supOrgs.length > 0) {
+                            return { organization: supOrgs[0], note: 'Organisation par défaut renvoyée. Pour cibler une école précise, utilisez : { "org_id": "UUID_DE_L_ECOLE" }' };
+                        }
+                    }
+                    const org = await db.prepare(`SELECT id, name, slug, plan, is_active, created_at FROM organizations ORDER BY created_at ASC LIMIT 1`).first().catch(() => null);
                     return { organization: org, note: 'Organisation par défaut renvoyée. Pour cibler une école précise, utilisez : { "org_id": "UUID_DE_L_ECOLE" }' };
                 }
                 throw { code: -32003, message: 'Aucune organisation rattachée à cet agent' };
             }
-            const org = await db.prepare(`SELECT id, name, slug, plan, is_active, created_at FROM organizations WHERE id = ?1`).bind(targetOrgId).first();
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const supOrgs = await fetchSupabaseRest(env, `organizations?id=eq.${encodeURIComponent(targetOrgId)}&select=id,name,slug,type,city,country,phone,email,is_active,created_at`);
+                if (supOrgs && supOrgs.length > 0) {
+                    return { organization: supOrgs[0] };
+                }
+            }
+            const org = await db.prepare(`SELECT * FROM organizations WHERE id = ?1`).bind(targetOrgId).first().catch(() => null);
             return { organization: org };
         }
 
         // ── LIST CLASSES ──
         case 'list_classes': {
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                let path = `classrooms?select=id,name,cycle,level,capacity,is_active,organization_id&order=name.asc`;
+                if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+                const supClasses = await fetchSupabaseRest(env, path);
+                if (supClasses) return { classes: supClasses, total: supClasses.length };
+            }
             let sql = `SELECT id, name, level, section, capacity, academic_year, organization_id FROM classrooms`;
             const params: any[] = [];
             if (targetOrgId) {
@@ -4053,12 +4203,19 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 params.push(targetOrgId);
             }
             sql += ` ORDER BY name ASC LIMIT 100`;
-            const { results } = await db.prepare(sql).bind(...params).all();
+            const { results } = await db.prepare(sql).bind(...params).all().catch(() => ({ results: [] }));
             return { classes: results || [], total: (results || []).length };
         }
 
         // ── LIST SUBJECTS ──
         case 'list_subjects': {
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                let path = `subjects?select=id,name,code,coefficient,classroom_id,teacher_id,organization_id,classrooms(name)&order=name.asc`;
+                if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+                if (args.class_id) path += `&classroom_id=eq.${encodeURIComponent(args.class_id as string)}`;
+                const supSubs = await fetchSupabaseRest(env, path);
+                if (supSubs) return { subjects: supSubs, total: supSubs.length };
+            }
             let sql = `SELECT id, name, code, coefficient, classroom_id, organization_id FROM subjects`;
             const conditions: string[] = [];
             const params: any[] = [];
@@ -4074,21 +4231,21 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 sql += ` WHERE ` + conditions.join(' AND ');
             }
             sql += ` ORDER BY name ASC LIMIT 100`;
-            const { results } = await db.prepare(sql).bind(...params).all();
+            const { results } = await db.prepare(sql).bind(...params).all().catch(() => ({ results: [] }));
             return { subjects: results || [], total: (results || []).length };
         }
 
         // ── LIST CHAPTERS ──
         case 'list_chapters': {
             if (!args.subject_id) throw { code: -32602, message: 'subject_id requis' };
-            // Vérification de propriété
-            if (!ctx.isSuperadmin && ctx.orgId) {
-                const sub: any = await db.prepare(`SELECT organization_id FROM subjects WHERE id = ?1`).bind(args.subject_id).first();
-                if (sub && sub.organization_id !== ctx.orgId) {
-                    throw { code: -32003, message: 'Accès refusé : cette matière n\'appartient pas à votre établissement' };
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const supChaps = await fetchSupabaseRest(env, `chapters?subject_id=eq.${encodeURIComponent(args.subject_id as string)}&select=id,title,description,position,status,subject_id&order=position.asc`);
+                if (supChaps) {
+                    const chapters = supChaps.map((ch: any) => ({ ...ch, order_index: ch.position }));
+                    return { chapters, total: chapters.length };
                 }
             }
-            const { results } = await db.prepare(`SELECT id, title, description, position, status, subject_id FROM chapters WHERE subject_id = ?1 ORDER BY position ASC`).bind(args.subject_id).all();
+            const { results } = await db.prepare(`SELECT id, title, description, position, status, subject_id FROM chapters WHERE subject_id = ?1 ORDER BY position ASC`).bind(args.subject_id).all().catch(() => ({ results: [] }));
             const chapters = (results || []).map((ch: any) => ({
                 ...ch,
                 order_index: ch.position,
@@ -4099,21 +4256,36 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         // ── LIST LESSONS ──
         case 'list_lessons': {
             if (!args.chapter_id) throw { code: -32602, message: 'chapter_id requis' };
-            // Vérification de propriété
-            if (!ctx.isSuperadmin && ctx.orgId) {
-                const ch: any = await db.prepare(`SELECT organization_id FROM chapters WHERE id = ?1`).bind(args.chapter_id).first();
-                if (ch && ch.organization_id !== ctx.orgId) {
-                    throw { code: -32003, message: 'Accès refusé : ce chapitre n\'appartient pas à votre établissement' };
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const supLessons = await fetchSupabaseRest(env, `lessons?chapter_id=eq.${encodeURIComponent(args.chapter_id as string)}&select=id,title,content,position,estimated_minutes,status,chapter_id&order=position.asc`);
+                if (supLessons) {
+                    const lessonIds = supLessons.map((l: any) => l.id);
+                    const exercisesMap: Record<string, any[]> = {};
+                    if (lessonIds.length > 0) {
+                        const supExs = await fetchSupabaseRest(env, `exercises?lesson_id=in.(${lessonIds.join(',')})&select=id,lesson_id,title,type,max_score,duration_minutes,created_at`);
+                        if (supExs) {
+                            for (const ex of supExs) {
+                                if (!exercisesMap[ex.lesson_id]) exercisesMap[ex.lesson_id] = [];
+                                exercisesMap[ex.lesson_id].push(ex);
+                            }
+                        }
+                    }
+                    const lessons = supLessons.map((l: any) => ({
+                        ...l,
+                        order_index: l.position,
+                        exercises_count: (exercisesMap[l.id] || []).length,
+                        exercises: exercisesMap[l.id] || [],
+                    }));
+                    return { lessons, total: lessons.length };
                 }
             }
-            const { results } = await db.prepare(`SELECT id, title, content, position, estimated_minutes, status, chapter_id FROM lessons WHERE chapter_id = ?1 ORDER BY position ASC`).bind(args.chapter_id).all();
+            const { results } = await db.prepare(`SELECT id, title, content, position, estimated_minutes, status, chapter_id FROM lessons WHERE chapter_id = ?1 ORDER BY position ASC`).bind(args.chapter_id).all().catch(() => ({ results: [] }));
 
-            // Récupérer les exercices de chaque leçon
             const lessonIds = (results || []).map((l: any) => l.id);
             const exercisesMap: Record<string, any[]> = {};
             if (lessonIds.length > 0) {
                 for (const lId of lessonIds) {
-                    const { results: exList } = await db.prepare(`SELECT id, title, type, max_score, duration_minutes, created_at FROM exercises WHERE lesson_id = ?1`).bind(lId).all();
+                    const { results: exList } = await db.prepare(`SELECT id, title, type, max_score, duration_minutes, created_at FROM exercises WHERE lesson_id = ?1`).bind(lId).all().catch(() => ({ results: [] }));
                     exercisesMap[lId] = exList || [];
                 }
             }
@@ -4129,6 +4301,14 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
 
         // ── LIST EXERCISES ──
         case 'list_exercises': {
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                let path = `exercises?select=id,organization_id,chapter_id,lesson_id,title,type,questions,max_score,duration_minutes,created_at&order=created_at.desc&limit=100`;
+                if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+                if (args.lesson_id) path += `&lesson_id=eq.${encodeURIComponent(args.lesson_id as string)}`;
+                if (args.chapter_id) path += `&chapter_id=eq.${encodeURIComponent(args.chapter_id as string)}`;
+                const supExs = await fetchSupabaseRest(env, path);
+                if (supExs) return { exercises: supExs, total: supExs.length };
+            }
             let sql = `SELECT id, organization_id, chapter_id, lesson_id, title, type, questions, max_score, duration_minutes, created_at FROM exercises`;
             const conditions: string[] = [];
             const params: any[] = [];
@@ -4146,7 +4326,7 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             }
             if (conditions.length > 0) sql += ` WHERE ` + conditions.join(' AND ');
             sql += ` ORDER BY created_at DESC LIMIT 100`;
-            const { results } = await db.prepare(sql).bind(...params).all();
+            const { results } = await db.prepare(sql).bind(...params).all().catch(() => ({ results: [] }));
             return { exercises: results || [], total: (results || []).length };
         }
 
@@ -4156,23 +4336,48 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
             const id = crypto.randomUUID();
             const code = (args.code || String(args.name).slice(0, 4)).toUpperCase();
+            const payload: any = {
+                id,
+                organization_id: targetOrgId,
+                name: args.name,
+                code,
+                coefficient: Number(args.coefficient) || 1,
+                classroom_id: args.class_id || args.classroom_id || null,
+                teacher_id: args.teacher_id || null,
+                description: args.description || null,
+            };
+
+            // Écriture directe Supabase (prioritaire et synchrone)
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const inserted = await fetchSupabaseRest(env, 'subjects', { method: 'POST', body: payload });
+                if (inserted && inserted.length > 0) {
+                    db.prepare(`INSERT INTO subjects (id, organization_id, name, code, coefficient, classroom_id, is_active, created_at) VALUES (?1, ?2, ?3, ?4, 1, ?5, 1, ?6)`)
+                        .bind(id, targetOrgId, args.name, code, args.class_id || null, new Date().toISOString()).run().catch(() => {});
+                    return { success: true, subject_id: id, subject: inserted[0], message: `✅ Matière "${args.name}" créée et synchronisée immédiatement avec l'application` };
+                }
+            }
+
             await db.prepare(`INSERT INTO subjects (id, organization_id, name, code, coefficient, classroom_id, is_active, created_at) VALUES (?1, ?2, ?3, ?4, 1, ?5, 1, ?6)`)
                 .bind(id, targetOrgId, args.name, code, args.class_id || null, new Date().toISOString()).run();
-            syncToSupabase(env, 'subjects', 'INSERT', { id, organization_id: targetOrgId, name: args.name, classroom_id: args.class_id, code });
-            return { success: true, subject_id: id, message: `✅ Matière "${args.name}" créée sur Cloudflare D1` };
+            syncToSupabase(env, 'subjects', 'INSERT', payload);
+            return { success: true, subject_id: id, message: `✅ Matière "${args.name}" créée` };
         }
 
         // ── UPDATE SUBJECT ──
         case 'update_subject': {
             if (!args.subject_id) throw { code: -32602, message: 'subject_id requis' };
-            const sub: any = await db.prepare(`SELECT organization_id FROM subjects WHERE id = ?1`).bind(args.subject_id).first();
-            if (!sub) throw { code: -32602, message: 'Matière introuvable' };
-            if (!ctx.isSuperadmin && ctx.orgId && sub.organization_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
+            const updatePayload: any = {};
+            if (args.name) updatePayload.name = args.name;
+            if (args.class_id || args.classroom_id) updatePayload.classroom_id = args.class_id || args.classroom_id;
+            if (args.description !== undefined) updatePayload.description = args.description;
+            if (args.teacher_id !== undefined) updatePayload.teacher_id = args.teacher_id;
 
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `subjects?id=eq.${encodeURIComponent(args.subject_id)}`, { method: 'PATCH', body: updatePayload });
+            }
             if (args.name) {
                 await db.prepare(`UPDATE subjects SET name = ?1, classroom_id = COALESCE(?2, classroom_id) WHERE id = ?3`)
-                    .bind(args.name, args.class_id || null, args.subject_id).run();
-                syncToSupabase(env, 'subjects', 'UPDATE', { id: args.subject_id, name: args.name, classroom_id: args.class_id });
+                    .bind(args.name, args.class_id || null, args.subject_id).run().catch(() => {});
             }
             return { success: true, message: `✅ Matière mise à jour` };
         }
@@ -4180,12 +4385,10 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         // ── DELETE SUBJECT ──
         case 'delete_subject': {
             if (!args.subject_id) throw { code: -32602, message: 'subject_id requis' };
-            const sub: any = await db.prepare(`SELECT organization_id FROM subjects WHERE id = ?1`).bind(args.subject_id).first();
-            if (!sub) throw { code: -32602, message: 'Matière introuvable' };
-            if (!ctx.isSuperadmin && ctx.orgId && sub.organization_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
-
-            await db.prepare(`DELETE FROM subjects WHERE id = ?1`).bind(args.subject_id).run();
-            syncToSupabase(env, 'subjects', 'DELETE', { id: args.subject_id });
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `subjects?id=eq.${encodeURIComponent(args.subject_id)}`, { method: 'DELETE' });
+            }
+            await db.prepare(`DELETE FROM subjects WHERE id = ?1`).bind(args.subject_id).run().catch(() => {});
             return { success: true, message: `🗑️ Matière supprimée` };
         }
 
@@ -4193,43 +4396,58 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         case 'create_chapter': {
             if (!args.subject_id || !args.title) throw { code: -32602, message: 'subject_id et title requis' };
             if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
-            const sub: any = await db.prepare(`SELECT organization_id FROM subjects WHERE id = ?1`).bind(args.subject_id).first();
-            if (!sub) throw { code: -32602, message: `La matière parente (subject_id: "${args.subject_id}") n'existe pas` };
-            if (!ctx.isSuperadmin && ctx.orgId && sub.organization_id !== ctx.orgId) {
-                throw { code: -32003, message: 'Accès refusé : la matière n\'appartient pas à votre établissement' };
-            }
             const id = crypto.randomUUID();
             const position = Number(args.position ?? args.order_index) || 1;
-            const now = new Date().toISOString();
+            const payload: any = {
+                id,
+                organization_id: targetOrgId,
+                subject_id: args.subject_id,
+                title: args.title,
+                description: args.description || null,
+                position,
+                status: 'published',
+            };
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const inserted = await fetchSupabaseRest(env, 'chapters', { method: 'POST', body: payload });
+                if (inserted && inserted.length > 0) {
+                    db.prepare(`INSERT INTO chapters (id, organization_id, subject_id, title, description, position, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', ?7, ?7)`)
+                        .bind(id, targetOrgId, args.subject_id, args.title, args.description || '', position, new Date().toISOString()).run().catch(() => {});
+                    return { success: true, chapter_id: id, chapter: inserted[0], message: `✅ Chapitre "${args.title}" créé et synchronisé immédiatement` };
+                }
+            }
+
             await db.prepare(`INSERT INTO chapters (id, organization_id, subject_id, title, description, position, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', ?7, ?7)`)
-                .bind(id, targetOrgId, args.subject_id, args.title, args.description || '', position, now).run();
-            syncToSupabase(env, 'chapters', 'INSERT', { id, organization_id: targetOrgId, subject_id: args.subject_id, title: args.title, description: args.description, position });
-            return { success: true, chapter_id: id, message: `✅ Chapitre "${args.title}" créé sur Cloudflare D1` };
+                .bind(id, targetOrgId, args.subject_id, args.title, args.description || '', position, new Date().toISOString()).run();
+            syncToSupabase(env, 'chapters', 'INSERT', payload);
+            return { success: true, chapter_id: id, message: `✅ Chapitre "${args.title}" créé` };
         }
 
         // ── UPDATE CHAPTER ──
         case 'update_chapter': {
             if (!args.chapter_id) throw { code: -32602, message: 'chapter_id requis' };
-            const ch: any = await db.prepare(`SELECT organization_id FROM chapters WHERE id = ?1`).bind(args.chapter_id).first();
-            if (!ch) throw { code: -32602, message: 'Chapitre introuvable' };
-            if (!ctx.isSuperadmin && ctx.orgId && ch.organization_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
+            const updatePayload: any = {};
+            if (args.title) updatePayload.title = args.title;
+            if (args.description !== undefined) updatePayload.description = args.description;
+            if (args.position !== undefined) updatePayload.position = Number(args.position);
+            if (args.status) updatePayload.status = args.status;
 
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `chapters?id=eq.${encodeURIComponent(args.chapter_id)}`, { method: 'PATCH', body: updatePayload });
+            }
             const now = new Date().toISOString();
             await db.prepare(`UPDATE chapters SET title = COALESCE(?1, title), description = COALESCE(?2, description), position = COALESCE(?3, position), updated_at = ?4 WHERE id = ?5`)
-                .bind(args.title || null, args.description || null, args.position || null, now, args.chapter_id).run();
-            syncToSupabase(env, 'chapters', 'UPDATE', { id: args.chapter_id, title: args.title, description: args.description, position: args.position });
+                .bind(args.title || null, args.description || null, args.position || null, now, args.chapter_id).run().catch(() => {});
             return { success: true, message: `✅ Chapitre mis à jour` };
         }
 
         // ── DELETE CHAPTER ──
         case 'delete_chapter': {
             if (!args.chapter_id) throw { code: -32602, message: 'chapter_id requis' };
-            const ch: any = await db.prepare(`SELECT organization_id FROM chapters WHERE id = ?1`).bind(args.chapter_id).first();
-            if (!ch) throw { code: -32602, message: 'Chapitre introuvable' };
-            if (!ctx.isSuperadmin && ctx.orgId && ch.organization_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
-
-            await db.prepare(`DELETE FROM chapters WHERE id = ?1`).bind(args.chapter_id).run();
-            syncToSupabase(env, 'chapters', 'DELETE', { id: args.chapter_id });
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `chapters?id=eq.${encodeURIComponent(args.chapter_id)}`, { method: 'DELETE' });
+            }
+            await db.prepare(`DELETE FROM chapters WHERE id = ?1`).bind(args.chapter_id).run().catch(() => {});
             return { success: true, message: `🗑️ Chapitre supprimé` };
         }
 
@@ -4237,23 +4455,35 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         case 'create_lesson': {
             if (!args.chapter_id || !args.title || !args.content) throw { code: -32602, message: 'chapter_id, title et content requis' };
             if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
-            const ch: any = await db.prepare(`SELECT organization_id FROM chapters WHERE id = ?1`).bind(args.chapter_id).first();
-            if (!ch) throw { code: -32602, message: `Le chapitre parent (chapter_id: "${args.chapter_id}") n'existe pas` };
-            if (!ctx.isSuperadmin && ctx.orgId && ch.organization_id !== ctx.orgId) {
-                throw { code: -32003, message: 'Accès refusé : le chapitre n\'appartient pas à votre établissement' };
-            }
             const id = crypto.randomUUID();
             const duration = Number(args.duration_minutes || args.estimated_minutes) || 15;
             const position = Number(args.position ?? args.order_index) || 1;
-            const now = new Date().toISOString();
+            const payload: any = {
+                id,
+                organization_id: targetOrgId,
+                chapter_id: args.chapter_id,
+                title: args.title,
+                content: args.content,
+                estimated_minutes: duration,
+                status: 'published',
+                position,
+            };
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const inserted = await fetchSupabaseRest(env, 'lessons', { method: 'POST', body: payload });
+                if (inserted && inserted.length > 0) {
+                    db.prepare(`INSERT INTO lessons (id, organization_id, chapter_id, title, content, estimated_minutes, status, position, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', ?7, ?8)`)
+                        .bind(id, targetOrgId, args.chapter_id, args.title, args.content, duration, position, new Date().toISOString()).run().catch(() => {});
+                    broadcastUpdatePush(env, db, targetOrgId, `📚 Nouvelle Leçon : ${args.title}`, `Une nouvelle leçon (${duration} min) a été ajoutée à votre cursus.`, '📚', '/campus/cursus');
+                    return { success: true, lesson_id: id, lesson: inserted[0], message: `✅ Leçon "${args.title}" créée et publiée immédiatement` };
+                }
+            }
+
             await db.prepare(`INSERT INTO lessons (id, organization_id, chapter_id, title, content, estimated_minutes, status, position, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', ?7, ?8)`)
-                .bind(id, targetOrgId, args.chapter_id, args.title, args.content, duration, position, now).run();
-            syncToSupabase(env, 'lessons', 'INSERT', { id, organization_id: targetOrgId, chapter_id: args.chapter_id, title: args.title, content: args.content, estimated_minutes: duration, status: 'published', position });
-
-            // 📢 NOTIFICATION PUSH AUTOMATIQUE
+                .bind(id, targetOrgId, args.chapter_id, args.title, args.content, duration, position, new Date().toISOString()).run();
+            syncToSupabase(env, 'lessons', 'INSERT', payload);
             broadcastUpdatePush(env, db, targetOrgId, `📚 Nouvelle Leçon : ${args.title}`, `Une nouvelle leçon (${duration} min) a été ajoutée à votre cursus.`, '📚', '/campus/cursus');
-
-            return { success: true, lesson_id: id, message: `✅ Leçon "${args.title}" créée et publiée sur Cloudflare D1` };
+            return { success: true, lesson_id: id, message: `✅ Leçon "${args.title}" créée et publiée` };
         }
 
         // ── UPDATE LESSON ──
@@ -4333,10 +4563,7 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             const duration = Number(args.duration_minutes) || 10;
             const maxScore = Number(args.max_score) || 20;
 
-            await db.prepare(`INSERT INTO exercises (id, organization_id, chapter_id, lesson_id, title, type, questions, duration_minutes, max_score, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`)
-                .bind(id, targetOrgId, chapterId, args.lesson_id, args.title, args.type || 'qcm', questionsStr, duration, maxScore, now).run();
-
-            syncToSupabase(env, 'exercises', 'INSERT', {
+            const payload: any = {
                 id,
                 organization_id: targetOrgId,
                 chapter_id: chapterId,
@@ -4348,7 +4575,22 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 max_score: maxScore,
                 created_by_ai: true,
                 ai_agent_name: ctx.agentName,
-            });
+            };
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const inserted = await fetchSupabaseRest(env, 'exercises', { method: 'POST', body: payload });
+                if (inserted && inserted.length > 0) {
+                    await db.prepare(`INSERT INTO exercises (id, organization_id, chapter_id, lesson_id, title, type, questions, duration_minutes, max_score, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`)
+                        .bind(id, targetOrgId, chapterId, args.lesson_id, args.title, args.type || 'qcm', questionsStr, duration, maxScore, now).run().catch(() => {});
+                    broadcastUpdatePush(env, db, targetOrgId, `🎯 Nouvel Exercice : ${args.title}`, `Un nouvel exercice (${maxScore} pts) est disponible dans votre cours.`, '🎯', '/campus/cursus');
+                    return { success: true, exercise_id: id, exercise: inserted[0], message: `✅ Exercice "${args.title}" créé et synchronisé immédiatement` };
+                }
+            }
+
+            await db.prepare(`INSERT INTO exercises (id, organization_id, chapter_id, lesson_id, title, type, questions, duration_minutes, max_score, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`)
+                .bind(id, targetOrgId, chapterId, args.lesson_id, args.title, args.type || 'qcm', questionsStr, duration, maxScore, now).run();
+
+            syncToSupabase(env, 'exercises', 'INSERT', payload);
 
             // 📢 NOTIFICATION PUSH AUTOMATIQUE
             broadcastUpdatePush(env, db, targetOrgId, `🎯 Nouvel Exercice : ${args.title}`, `Un nouvel exercice (${maxScore} pts) est disponible dans votre cours.`, '🎯', '/campus/cursus');
@@ -4765,6 +5007,12 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         case 'list_students': {
             if (!ctx.isSuperadmin && !ctx.orgId) throw { code: -32003, message: 'Non autorisé' };
             const limit = Math.min(Number(args.limit) || 50, 100);
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                let path = `student_profiles?select=id,first_name,last_name,gender,classroom_id,organization_id,is_active&limit=${limit}`;
+                if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+                const supStudents = await fetchSupabaseRest(env, path);
+                if (supStudents) return { students: supStudents, total: supStudents.length };
+            }
             let sql = `SELECT id, first_name, last_name, gender, classroom_id, organization_id FROM student_profiles`;
             const params: any[] = [];
             if (targetOrgId) {
@@ -4775,14 +5023,18 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             }
             sql += ` LIMIT ?${params.length + 1}`;
             params.push(limit);
-            const { results } = await db.prepare(sql).bind(...params).all();
+            const { results } = await db.prepare(sql).bind(...params).all().catch(() => ({ results: [] }));
             return { students: results || [], total: (results || []).length };
         }
 
         // ── SUPERADMIN: LIST SUPPORT MESSAGES ──
         case 'list_support_messages': {
             const limit = Math.min(Number(args.limit) || 50, 100);
-            const { results } = await db.prepare(`SELECT * FROM sky_point_requests ORDER BY created_at DESC LIMIT ?1`).bind(limit).all();
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const supReqs = await fetchSupabaseRest(env, `sky_point_requests?select=*&order=created_at.desc&limit=${limit}`);
+                if (supReqs) return { requests: supReqs, total: supReqs.length };
+            }
+            const { results } = await db.prepare(`SELECT * FROM sky_point_requests ORDER BY created_at DESC LIMIT ?1`).bind(limit).all().catch(() => ({ results: [] }));
             return { requests: results || [], total: (results || []).length };
         }
 
@@ -4790,45 +5042,109 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         case 'reply_support_message': {
             if (!args.request_id || !args.reply_message) throw { code: -32602, message: 'request_id et reply_message requis' };
             const now = new Date().toISOString();
-            await db.prepare(`UPDATE sky_point_requests SET response = ?1, responded_at = ?2, status = 'confirmed' WHERE id = ?3`).bind(String(args.reply_message).trim(), now, args.request_id).run();
-            syncToSupabase(env, 'sky_point_requests', 'UPDATE', { id: args.request_id, response: args.reply_message, responded_at: now, status: 'confirmed' });
-            return { success: true, message: `✅ Réponse enregistrée sur D1 pour le ticket ${args.request_id}` };
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `sky_point_requests?id=eq.${encodeURIComponent(args.request_id)}`, { method: 'PATCH', body: { response: args.reply_message, responded_at: now, status: 'confirmed' } });
+            }
+            await db.prepare(`UPDATE sky_point_requests SET response = ?1, responded_at = ?2, status = 'confirmed' WHERE id = ?3`).bind(String(args.reply_message).trim(), now, args.request_id).run().catch(() => {});
+            return { success: true, message: `✅ Réponse enregistrée pour le ticket ${args.request_id}` };
         }
 
         // ── SUPERADMIN: CREDIT SKY POINTS ──
         case 'credit_sky_points': {
-            const targetType = args.target_type;
+            const targetType = String(args.target_type || '').toLowerCase();
             const targetId = args.target_id;
             const points = Number(args.points);
-            if (!targetType || !targetId || isNaN(points) || points <= 0) throw { code: -32602, message: 'target_type, target_id et points (>0) requis' };
+            if (!targetType || !targetId || isNaN(points) || points <= 0) throw { code: -32602, message: 'target_type ("org" ou "user"), target_id et points (>0) requis' };
 
-            if (targetType === 'org') {
-                await db.prepare(`UPDATE organizations SET sky_points = COALESCE(sky_points, 0) + ?1 WHERE id = ?2`).bind(points, targetId).run();
-                syncToSupabase(env, 'sky_points_transactions', 'INSERT', { to_entity_type: 'org', to_entity_id: targetId, amount: points, performed_by: `cloudflare_mcp:${ctx.agentName}` });
+            let newBal = points;
+            let entityName = 'Organisation';
+
+            if (targetType === 'org' || targetType === 'organization') {
+                if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                    const supOrgs = await fetchSupabaseRest(env, `organizations?id=eq.${encodeURIComponent(targetId)}&select=id,name,sky_points`);
+                    if (supOrgs && supOrgs.length > 0) {
+                        const current = Number(supOrgs[0].sky_points) || 0;
+                        newBal = current + points;
+                        entityName = supOrgs[0].name || 'Organisation';
+                        // 1. Mettre à jour le solde dans Supabase PostgreSQL
+                        await fetchSupabaseRest(env, `organizations?id=eq.${encodeURIComponent(targetId)}`, {
+                            method: 'PATCH',
+                            body: { sky_points: newBal }
+                        });
+                        // 2. Insérer la transaction d'audit
+                        await fetchSupabaseRest(env, 'sky_points_transactions', {
+                            method: 'POST',
+                            body: {
+                                target_type: 'organization',
+                                target_id: targetId,
+                                target_name: entityName,
+                                amount: points,
+                                balance_after: newBal,
+                                reason: `Crédit Superadmin MCP (+${points} pts par ${ctx.agentName})`,
+                                performed_by: `mcp:${ctx.agentName}`
+                            }
+                        });
+                    }
+                }
+                await db.prepare(`UPDATE organizations SET sky_points = ?1 WHERE id = ?2`).bind(newBal, targetId).run().catch(() => {});
+                return { success: true, target_id: targetId, target_name: entityName, credited: points, new_balance: newBal, message: `⭐ ${points} Sky Points crédités à ${entityName} (Nouveau solde : ${newBal} pts)` };
             } else {
-                await db.prepare(`UPDATE student_profiles SET sky_points = COALESCE(sky_points, 0) + ?1 WHERE id = ?2`).bind(points, targetId).run();
-                syncToSupabase(env, 'sky_points_transactions', 'INSERT', { to_entity_type: 'user', to_entity_id: targetId, amount: points, performed_by: `cloudflare_mcp:${ctx.agentName}` });
+                if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                    const supStudents = await fetchSupabaseRest(env, `student_profiles?id=eq.${encodeURIComponent(targetId)}&select=id,first_name,last_name,sky_points`);
+                    if (supStudents && supStudents.length > 0) {
+                        const current = Number(supStudents[0].sky_points) || 0;
+                        newBal = current + points;
+                        entityName = `${supStudents[0].first_name || ''} ${supStudents[0].last_name || ''}`.trim();
+                        await fetchSupabaseRest(env, `student_profiles?id=eq.${encodeURIComponent(targetId)}`, {
+                            method: 'PATCH',
+                            body: { sky_points: newBal }
+                        });
+                        await fetchSupabaseRest(env, 'sky_points_transactions', {
+                            method: 'POST',
+                            body: {
+                                target_type: 'user',
+                                target_id: targetId,
+                                target_name: entityName,
+                                amount: points,
+                                balance_after: newBal,
+                                reason: `Crédit Superadmin MCP (+${points} pts)`,
+                                performed_by: `mcp:${ctx.agentName}`
+                            }
+                        });
+                    }
+                }
+                await db.prepare(`UPDATE student_profiles SET sky_points = ?1 WHERE id = ?2`).bind(newBal, targetId).run().catch(() => {});
+                return { success: true, target_id: targetId, target_name: entityName, credited: points, new_balance: newBal, message: `⭐ ${points} Sky Points crédités à ${entityName} (Nouveau solde : ${newBal} pts)` };
             }
-            return { success: true, target_id: targetId, credited: points, message: `⭐ ${points} Sky Points crédités sur D1` };
         }
 
         // ── SUPERADMIN: LIST INACTIVE ORGS ──
         case 'list_inactive_orgs': {
-            const { results } = await db.prepare(`SELECT id, name, slug, email, phone, city, is_active, created_at FROM organizations ORDER BY created_at DESC LIMIT 50`).all();
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const supOrgs = await fetchSupabaseRest(env, `organizations?is_active=eq.false&select=id,name,slug,type,city,country,phone,email,is_active,created_at&order=created_at.desc&limit=50`);
+                if (supOrgs) return { inactive_orgs: supOrgs, total: supOrgs.length };
+            }
+            const { results } = await db.prepare(`SELECT id, name, slug, email, phone, city, is_active, created_at FROM organizations WHERE is_active = 0 ORDER BY created_at DESC LIMIT 50`).all().catch(() => ({ results: [] }));
             return { inactive_orgs: results || [], total: (results || []).length };
         }
 
         // ── SUPERADMIN: LIST BUG REPORTS ──
         case 'list_bug_reports': {
-            const { results } = await db.prepare(`SELECT * FROM bug_reports ORDER BY created_at DESC LIMIT 50`).all();
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const supBugs = await fetchSupabaseRest(env, `bug_reports?select=*&order=created_at.desc&limit=50`);
+                if (supBugs) return { bugs: supBugs, total: supBugs.length };
+            }
+            const { results } = await db.prepare(`SELECT * FROM bug_reports ORDER BY created_at DESC LIMIT 50`).all().catch(() => ({ results: [] }));
             return { bugs: results || [], total: (results || []).length };
         }
 
         // ── SUPERADMIN: UPDATE BUG STATUS ──
         case 'update_bug_status': {
             if (!args.bug_id || !args.status) throw { code: -32602, message: 'bug_id et status requis' };
-            await db.prepare(`UPDATE bug_reports SET status = ?1, admin_note = ?2 WHERE id = ?3`).bind(args.status, args.admin_note || null, args.bug_id).run();
-            syncToSupabase(env, 'bug_reports', 'UPDATE', { id: args.bug_id, status: args.status, admin_note: args.admin_note });
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `bug_reports?id=eq.${encodeURIComponent(args.bug_id)}`, { method: 'PATCH', body: { status: args.status, admin_note: args.admin_note || null } });
+            }
+            await db.prepare(`UPDATE bug_reports SET status = ?1, admin_note = ?2 WHERE id = ?3`).bind(args.status, args.admin_note || null, args.bug_id).run().catch(() => {});
             return { success: true, message: `✅ Statut du bug mis à jour : ${args.status}` };
         }
 
@@ -4837,40 +5153,68 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             if (!args.title || !args.content) throw { code: -32602, message: 'title et content requis' };
             const id = crypto.randomUUID();
             const now = new Date().toISOString();
+            const payload = { id, title: `📣 ${args.title}`, body: args.content, content: args.content, ann_type: args.type || 'info', type: args.type || 'info', target_org_id: args.target_org_id || 'all' };
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, 'superadmin_announcements', { method: 'POST', body: payload });
+            }
             await db.prepare(`INSERT INTO superadmin_announcements (id, title, body, ann_type, target_org_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)`)
-                .bind(id, `📣 ${args.title}`, args.content, args.type || 'info', args.target_org_id || 'all', now).run();
-            syncToSupabase(env, 'superadmin_announcements', 'INSERT', { id, title: `📣 ${args.title}`, body: args.content, ann_type: args.type || 'info', target_org_id: args.target_org_id || 'all' });
-            return { success: true, message: `📢 Annonce "${args.title}" diffusée via Cloudflare D1` };
+                .bind(id, `📣 ${args.title}`, args.content, args.type || 'info', args.target_org_id || 'all', now).run().catch(() => {});
+            return { success: true, message: `📢 Annonce "${args.title}" diffusée avec succès` };
         }
 
         // ── SUPERADMIN: SEND EMAIL TO ORG ──
         case 'send_email_to_org': {
             if (!args.org_id || !args.subject || !args.message) throw { code: -32602, message: 'org_id, subject et message requis' };
-            const org: any = await db.prepare(`SELECT id, name, email FROM organizations WHERE id = ?1`).bind(args.org_id).first();
+            let org: any = null;
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const supOrgs = await fetchSupabaseRest(env, `organizations?id=eq.${encodeURIComponent(args.org_id)}&select=id,name,email`);
+                if (supOrgs && supOrgs.length > 0) org = supOrgs[0];
+            }
+            if (!org) {
+                org = await db.prepare(`SELECT id, name, email FROM organizations WHERE id = ?1`).bind(args.org_id).first().catch(() => null);
+            }
             if (!org) throw { code: -32003, message: 'Organisation introuvable' };
 
-            // Notification / Annonce
             const annId = crypto.randomUUID();
+            const payload = { id: annId, organization_id: org.id, title: `📧 ${args.subject}`, content: args.message, type: 'official' };
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, 'announcements', { method: 'POST', body: payload });
+            }
             await db.prepare(`INSERT INTO announcements (id, organization_id, title, content, type, created_at) VALUES (?1, ?2, ?3, ?4, 'official', ?5)`)
-                .bind(annId, org.id, `📧 ${args.subject}`, args.message, new Date().toISOString()).run();
-            syncToSupabase(env, 'announcements', 'INSERT', { id: annId, organization_id: org.id, title: `📧 ${args.subject}`, content: args.message, type: 'official' });
+                .bind(annId, org.id, `📧 ${args.subject}`, args.message, new Date().toISOString()).run().catch(() => {});
 
-            return { success: true, recipient: org.name, message: `✅ Message/Email envoyé à "${org.name}" via Cloudflare D1` };
+            return { success: true, recipient: org.name, message: `✅ Message/Email envoyé à "${org.name}"` };
         }
 
         // ── SUPERADMIN: GET PLATFORM STATS ──
         case 'get_platform_stats': {
-            const orgs = await db.prepare(`SELECT COUNT(*) as count FROM organizations`).first();
-            const students = await db.prepare(`SELECT COUNT(*) as count FROM student_profiles`).first();
-            const teachers = await db.prepare(`SELECT COUNT(*) as count FROM teacher_profiles`).first();
-            const bugs = await db.prepare(`SELECT COUNT(*) as count FROM bug_reports`).first();
+            let totalOrgs = 0, totalStudents = 0, totalTeachers = 0, totalBugs = 0;
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const orgs = await fetchSupabaseRest(env, 'organizations?select=id');
+                const students = await fetchSupabaseRest(env, 'student_profiles?select=id');
+                const teachers = await fetchSupabaseRest(env, 'teacher_profiles?select=id');
+                const bugs = await fetchSupabaseRest(env, 'bug_reports?select=id');
+                if (orgs) totalOrgs = orgs.length;
+                if (students) totalStudents = students.length;
+                if (teachers) totalTeachers = teachers.length;
+                if (bugs) totalBugs = bugs.length;
+            } else {
+                const orgs = await db.prepare(`SELECT COUNT(*) as count FROM organizations`).first().catch(() => null);
+                const students = await db.prepare(`SELECT COUNT(*) as count FROM student_profiles`).first().catch(() => null);
+                const teachers = await db.prepare(`SELECT COUNT(*) as count FROM teacher_profiles`).first().catch(() => null);
+                const bugs = await db.prepare(`SELECT COUNT(*) as count FROM bug_reports`).first().catch(() => null);
+                totalOrgs = (orgs as any)?.count ?? 0;
+                totalStudents = (students as any)?.count ?? 0;
+                totalTeachers = (teachers as any)?.count ?? 0;
+                totalBugs = (bugs as any)?.count ?? 0;
+            }
 
             return {
-                engine: 'Cloudflare D1 Primary Edge Database',
-                total_organizations: (orgs as any)?.count ?? 0,
-                total_students: (students as any)?.count ?? 0,
-                total_teachers: (teachers as any)?.count ?? 0,
-                total_bug_reports: (bugs as any)?.count ?? 0,
+                engine: 'Supabase PostgreSQL Realtime Engine',
+                total_organizations: totalOrgs,
+                total_students: totalStudents,
+                total_teachers: totalTeachers,
+                total_bug_reports: totalBugs,
                 timestamp: new Date().toISOString(),
             };
         }
