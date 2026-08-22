@@ -327,6 +327,15 @@ export const IZITEACH_SUPPORTED_LANGUAGES: Record<string, SupportedLanguage> = {
     run: { code: 'run', name_fr: 'Kirundi',       name_native: 'Ikirundi',     tier: 2, m2m_code: 'rw', countries: ['BI'], is_african: true },
 };
 
+function hasRepetitiveLoop(text: string): boolean {
+    if (!text || text.length < 30) return false;
+    // Détecte répétition d'un même mot 4x d'affilée ("masoko ya masoko ya masoko ya masoko")
+    if (/\b(\w{3,})\b(?:\s+\b\1\b){3,}/i.test(text)) return true;
+    // Détecte répétition de segment identique 3x
+    if (/(.{8,30}?)\1{3,}/i.test(text)) return true;
+    return false;
+}
+
 export async function translateTextWithAi(
     env: Env,
     text: string,
@@ -334,50 +343,87 @@ export async function translateTextWithAi(
     sourceLangCode = 'fr'
 ): Promise<{ translated_text: string; method: string; note?: string; language_info?: SupportedLanguage }> {
     const rawTarget = (targetLangCode || 'fr').toLowerCase().trim();
-    const langInfo = IZITEACH_SUPPORTED_LANGUAGES[rawTarget];
+    const langInfo = IZITEACH_SUPPORTED_LANGUAGES[rawTarget] || {
+        code: rawTarget,
+        name_fr: rawTarget.toUpperCase(),
+        name_native: rawTarget.toUpperCase(),
+        tier: 2,
+        countries: [],
+        is_african: true,
+    };
 
-    if (rawTarget === sourceLangCode || rawTarget === 'fr') {
+    if (rawTarget === sourceLangCode || (rawTarget === 'fr' && sourceLangCode === 'fr')) {
         return { translated_text: text, method: 'original', language_info: langInfo };
     }
 
-    if (!langInfo) {
-        return {
-            translated_text: `> ℹ️ **Notice Pédagogique IziTeach** : Variante linguistique *'${targetLangCode}'* non encore nativement supportée par les modèles neuronaux. Le contenu de référence est conservé en français standard.\n\n${text}`,
-            method: 'fallback_with_notice',
-            note: `Langue '${targetLangCode}' non répertoriée. Contenu conservé en français avec notice explicative.`,
-        };
-    }
-
-    // Traduction neuronale via Cloudflare AI (M2M-100 Meta)
     if (env.AI && typeof env.AI.run === 'function') {
+        // 1️⃣ Moteur Principal : Meta LLaMA 3.1 8B Instruct (Haute fidélité multilingue, sans boucle)
         try {
-            const m2mTarget = langInfo.m2m_code || rawTarget;
-            const m2mSource = IZITEACH_SUPPORTED_LANGUAGES[sourceLangCode]?.m2m_code || sourceLangCode;
+            const systemPrompt = `You are a professional educational polyglot translator specializing in African and international languages.
+Translate educational course materials faithfully, idiomatically and naturally into ${langInfo.name_fr} (${langInfo.name_native || rawTarget}).
 
-            const aiRes: any = await env.AI.run('@cf/meta/m2m100-1.2b', {
-                text: text.slice(0, 4000),
-                source_lang: m2mSource,
-                target_lang: m2mTarget,
-            });
+RULES:
+1. Translate accurately into fluent ${langInfo.name_native || langInfo.name_fr}.
+2. DO NOT hallucinate, repeat phrases or enter infinite loops.
+3. Keep code blocks (Python, JavaScript, SQL, HTML), formulas, and technical keywords intact.
+4. Preserve all Markdown elements (#, ##, bullet points, bold text, blockquotes).
+5. Output ONLY the translated Markdown content. Never add conversational filler, intros, or outros.`;
 
-            if (aiRes && aiRes.translated_text) {
+            const userPrompt = `Translate the following text from ${sourceLangCode.toUpperCase()} into ${langInfo.name_fr} (${langInfo.name_native || rawTarget}):\n\n${text.slice(0, 3500)}`;
+
+            const aiRes: any = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userPrompt },
+                ],
+                temperature: 0.1,
+                max_tokens: 2048,
+            }).catch(() => null);
+
+            const resultText = aiRes?.response?.trim() || aiRes?.translated_text?.trim() || '';
+            if (resultText && resultText.length > 10 && !hasRepetitiveLoop(resultText)) {
                 return {
-                    translated_text: aiRes.translated_text,
-                    method: 'cloudflare_m2m100',
+                    translated_text: resultText,
+                    method: 'cloudflare_llama3_instruct',
                     language_info: langInfo,
-                    note: `Traduit avec succès en ${langInfo.name_fr} (${langInfo.name_native}) via IA neuronale Cloudflare.`
+                    note: `Traduit avec haute fidélité en ${langInfo.name_fr} (${langInfo.name_native}) via Meta LLaMA 3.1 Instruct.`,
                 };
             }
         } catch (e: any) {
-            console.error('[IziTeach Language AI] Erreur Cloudflare M2M100:', e?.message || e);
+            console.error('[IziTeach LLaMA AI] Erreur LLaMA 3.1:', e?.message || e);
+        }
+
+        // 2️⃣ Moteur Secondaire : Mistral 7B Instruct
+        try {
+            const aiRes: any = await env.AI.run('@cf/mistral/mistral-7b-instruct-v0.2', {
+                messages: [
+                    { role: 'system', content: `Translate this educational lesson to ${langInfo.name_fr} (${langInfo.name_native}). Return ONLY the translated markdown, no preamble.` },
+                    { role: 'user', content: text.slice(0, 3000) }
+                ],
+                temperature: 0.1,
+                max_tokens: 2048,
+            }).catch(() => null);
+
+            const resultText = aiRes?.response?.trim() || '';
+            if (resultText && resultText.length > 10 && !hasRepetitiveLoop(resultText)) {
+                return {
+                    translated_text: resultText,
+                    method: 'cloudflare_mistral_instruct',
+                    language_info: langInfo,
+                    note: `Traduit en ${langInfo.name_fr} via Mistral Instruct.`,
+                };
+            }
+        } catch (e: any) {
+            console.error('[IziTeach Mistral AI] Erreur Mistral:', e?.message || e);
         }
     }
 
+    // 3️⃣ Fallback propre si l'IA Cloudflare ne répond pas
     return {
-        translated_text: `> 🌍 **IziTeach Éducation** — Version locale : *${langInfo.name_fr} (${langInfo.name_native})*\n\n${text}`,
-        method: 'llm_native_formatted',
+        translated_text: text,
+        method: 'original_preserved',
         language_info: langInfo,
-        note: `Langue configurée pour ${langInfo.name_fr}`
+        note: `Contenu conservé fidèlement en ${sourceLangCode}. Vous pouvez également injecter une traduction manuelle contrôlée via custom_translated_text.`
     };
 }
 
@@ -3704,18 +3750,19 @@ const WORKER_MCP_TOOLS = [
     },
     {
         name: 'translate_content',
-        description: 'Traduire un texte pédagogique vers une langue locale africaine ou internationale via IA neuronale (Cloudflare M2M100 Meta) avec mise à jour automatique optionnelle d\'une leçon ou d\'un exercice',
+        description: 'Traduire un texte pédagogique vers une langue locale africaine ou internationale via Meta LLaMA 3.1 Instruct ou injecter une traduction manuelle contrôlée avec mise à jour automatique bilingue d\'une leçon (content + content_original) ou d\'un exercice',
         permission: 'write:curriculum',
         inputSchema: {
             type: 'object',
             properties: {
-                text: { type: 'string', description: 'Texte pédagogique à traduire' },
+                text: { type: 'string', description: 'Texte pédagogique original à traduire' },
                 target_language: { type: 'string', description: 'Code de la langue cible (ex: sw, ha, yo, ig, lin, ful, ewo, dua, bam, kin, mlg, etc.)' },
                 source_language: { type: 'string', description: 'Code langue source (défaut: fr)' },
-                lesson_id: { type: 'string', description: 'ID optionnel d\'une leçon existante à mettre à jour avec cette traduction' },
+                custom_translated_text: { type: 'string', description: 'Traduction manuelle ou contrôlée fournie directement par l\'agent pour enregistrement immédiat sans passer par le modèle' },
+                lesson_id: { type: 'string', description: 'ID optionnel d\'une leçon existante à mettre à jour avec cette traduction (active le lecteur bilingue synchronisé)' },
                 exercise_id: { type: 'string', description: 'ID optionnel d\'un exercice existant à mettre à jour' },
             },
-            required: ['text', 'target_language'],
+            required: ['target_language'],
         },
     },
     {
@@ -4751,12 +4798,14 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             // Multilinguisme
             const langCode = (args.language || 'fr').toLowerCase().trim();
             let finalContent = args.content;
-            const originalContent = args.content;
+            let originalContent = args.content_original || (langCode === 'fr' ? null : args.content);
             let langNotice = '';
 
-            if (langCode !== 'fr') {
+            // Si langue non-française et que le texte n'a pas été explicitement pré-traduit
+            if (langCode !== 'fr' && !args.content_original && !args.is_already_translated) {
                 const tr = await translateTextWithAi(env, args.content, langCode, 'fr');
                 finalContent = tr.translated_text;
+                originalContent = args.content; // conserve la version française comme référence originale
                 if (tr.note) langNotice = ` (${tr.note})`;
             }
 
@@ -4791,7 +4840,7 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                                 field_name: 'content',
                                 translated_text: finalContent,
                                 source_language: 'fr',
-                                translation_method: 'cloudflare_m2m100',
+                                translation_method: 'cloudflare_llama3_instruct',
                             }
                         }).catch(() => {});
                     }
@@ -4828,6 +4877,8 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             const updatePayload: any = {};
             if (args.title !== undefined) updatePayload.title = args.title;
             if (args.content !== undefined) updatePayload.content = args.content;
+            if (args.content_original !== undefined) updatePayload.content_original = args.content_original;
+            if (args.language !== undefined) updatePayload.language = String(args.language).toLowerCase().trim();
             if (args.duration_minutes !== undefined || args.estimated_minutes !== undefined) {
                 updatePayload.estimated_minutes = Number(args.duration_minutes ?? args.estimated_minutes);
             }
@@ -4843,7 +4894,7 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             // 📢 NOTIFICATION PUSH AUTOMATIQUE
             broadcastUpdatePush(env, db, lesOrgId || targetOrgId || '', `📝 Mise à jour de la leçon : ${args.title || 'Contenu modifié'}`, `Le contenu de la leçon a été mis à jour.`, '📝', '/campus/cursus');
 
-            return { success: true, message: `✅ Leçon mise à jour` };
+            return { success: true, message: `✅ Leçon mise à jour avec succès` };
         }
 
         // ── DELETE LESSON ──
@@ -5108,23 +5159,46 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             };
         }
 
-        // ── TRANSLATE CONTENT (CLOUDFLARE AI M2M100) ──
+        // ── TRANSLATE CONTENT (META LLAMA 3.1 INSTRUCT & DIRECT CUSTOM INJECTION) ──
         case 'translate_content': {
-            if (!args.text || !args.target_language) throw { code: -32602, message: 'text et target_language requis' };
-            const targetLang = String(args.target_language).toLowerCase().trim();
+            const targetLang = String(args.target_language || '').toLowerCase().trim();
             const sourceLang = String(args.source_language || 'fr').toLowerCase().trim();
+            if (!targetLang) throw { code: -32602, message: 'target_language requis' };
 
-            const translation = await translateTextWithAi(env, String(args.text), targetLang, sourceLang);
+            let finalTranslatedText = '';
+            let translationMethod = 'cloudflare_llama3_instruct';
+            let translationNote = '';
+            let langInfo = IZITEACH_SUPPORTED_LANGUAGES[targetLang];
 
-            // Mise à jour optionnelle d'une leçon existante
+            // 1. Si l'agent fournit directement sa propre traduction contrôlée
+            if (args.custom_translated_text || args.translated_text) {
+                finalTranslatedText = String(args.custom_translated_text || args.translated_text).trim();
+                translationMethod = 'agent_controlled_custom';
+                translationNote = 'Traduction de haute qualité fournie directement par l\'agent IA client.';
+            } else if (args.text) {
+                const tr = await translateTextWithAi(env, String(args.text), targetLang, sourceLang);
+                finalTranslatedText = tr.translated_text;
+                translationMethod = tr.method;
+                translationNote = tr.note || '';
+                langInfo = tr.language_info || langInfo;
+            } else {
+                throw { code: -32602, message: 'text ou custom_translated_text requis' };
+            }
+
+            // Mise à jour optionnelle d'une leçon existante avec synchronisation bilingue
             if (args.lesson_id) {
+                const lessonPatch: any = {
+                    content: finalTranslatedText,
+                    language: targetLang,
+                };
+                if (args.text) {
+                    lessonPatch.content_original = String(args.text);
+                }
+
                 if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
                     await fetchSupabaseRest(env, `lessons?id=eq.${encodeURIComponent(String(args.lesson_id))}`, {
                         method: 'PATCH',
-                        body: {
-                            content: translation.translated_text,
-                            language: targetLang,
-                        }
+                        body: lessonPatch,
                     });
                 }
                 if (targetOrgId) {
@@ -5136,9 +5210,9 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                             organization_id: targetOrgId,
                             language_code: targetLang,
                             field_name: 'content',
-                            translated_text: translation.translated_text,
+                            translated_text: finalTranslatedText,
                             source_language: sourceLang,
-                            translation_method: translation.method,
+                            translation_method: translationMethod,
                         }
                     }).catch(() => {});
                 }
@@ -5158,11 +5232,12 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 success: true,
                 target_language: targetLang,
                 source_language: sourceLang,
-                translated_text: translation.translated_text,
-                translation_method: translation.method,
-                language_info: translation.language_info,
-                note: translation.note,
-                message: `✅ Traduction vers ${targetLang.toUpperCase()} terminée (${translation.method})`,
+                translated_text: finalTranslatedText,
+                translation_method: translationMethod,
+                language_info: langInfo,
+                note: translationNote,
+                lesson_updated: Boolean(args.lesson_id),
+                message: `✅ Traduction vers ${targetLang.toUpperCase()} terminée (${translationMethod})`,
             };
         }
 
