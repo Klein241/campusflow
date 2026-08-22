@@ -2,7 +2,7 @@
 ## *Cahier de Référence Technique & Guide Complet d'Utilisation*
 
 **Version du document :** 2.0.0 (Édition 2026)  
-**Plateforme :** IziTeach School Suite & CampusFlow  
+**Plateforme :** IziTeach School Suite  
 **Auteur :** Équipe d'Ingénierie & Architecture IA IziTeach  
 **Statut :** Production Live (`Cloudflare D1 Primary Edge + Supabase Dual Sync`)
 
@@ -192,18 +192,19 @@ Ces outils permettent de concevoir et structurer l'intégralité du programme p�
 - **Description :** Modifie ou supprime un chapitre.
 
 #### `create_lesson`
-- **Description :** Crée et publie une leçon complète avec support riche Markdown, formules LaTeX et vidéos.
+- **Description :** Crée et publie une leçon complète avec support riche Markdown, formules LaTeX, vidéos et **génération/traduction multilingue (Français, Anglais, Arabe + 20 langues locales africaines)**.
 - **Paramètres :**
   - `chapter_id` *(string, requis)* : UUID du chapitre.
   - `title` *(string, requis)* : Titre de la leçon.
   - `content` *(string, requis)* : Contenu pédagogique riche.
-  - `duration_minutes` *(number, optionnel)* : Durée estimée en minutes (défaut : 30).
-  - `video_url` *(string, optionnel)* : Lien vidéo complémentaire.
+  - `language` *(string, optionnel)* : Code ISO ou code langue (ex: `sw`, `ha`, `yo`, `ig`, `lin`, `ful`, `ewo`, `dua`, `bam`, `kin`, `mlg`, `fr`, `en`, `ar`, etc. — Défaut : `fr`).
+  - `duration_minutes` *(number, optionnel)* : Durée estimée en minutes (défaut : 15).
+  - `position` *(number, optionnel)* : Ordre d'affichage dans le chapitre.
 
 #### `create_exercise`
 - **Description :** Crée un exercice ou quiz interactif rattaché à une leçon.
 - **Sécurité FK :** Rejette immédiatement si la leçon parente n'appartient pas à l'école.
-- **Types supportés :** `qcm`, `true_false`, `open_text`, `short_answer`.
+- **Types supportés :** `qcm`, `true_false`, `text`.
 - **Paramètres :**
   - `lesson_id` *(string, requis)* : UUID de la leçon.
   - `title` *(string, requis)* : Titre de l'exercice.
@@ -213,10 +214,53 @@ Ces outils permettent de concevoir et structurer l'intégralité du programme p�
   - `correct_answer` *(string)* : Bonne réponse attendue.
   - `explanation` *(string)* : Explication pédagogique détaillée.
   - `max_score` *(number)* : Barème / Points accordés (ex: `20`).
+  - `language` *(string, optionnel)* : Code langue de l'exercice.
 
 #### `bulk_create` ⚡
-- **Description :** Crée en **un seul appel éclair** une matière complète avec tous ses chapitres, leçons et exercices associés.
-- **Paramètres :** Arborescence imbriquée complète JSON.
+- **Description :** Crée en **un seul appel éclair** une matière complète avec tous ses chapitres, leçons et exercices associés, avec propagation automatique de la langue.
+- **Paramètres :** Arborescence imbriquée complète JSON avec support de `language`.
+
+#### `list_supported_languages` 🌍 *(Nouveau)*
+- **Description :** Liste l'intégralité des langues supportées par le moteur IA d'IziTeach (5 langues internationales + 20 langues africaines locales).
+- **Paramètres :**
+  - `only_african` *(boolean, optionnel)* : Si `true`, retourne uniquement les langues africaines locales.
+
+#### `translate_content` ⚡ *(Nouveau)*
+- **Description :** Traduit à la volée un texte ou contenu pédagogique vers une langue locale africaine (ou internationale) via le modèle neuronal **Cloudflare AI M2M-100 Meta**. Permet également de mettre à jour directement une leçon (`lesson_id`) ou un exercice (`exercise_id`).
+- **Paramètres :**
+  - `text` *(string, requis)* : Texte à traduire.
+  - `target_language` *(string, requis)* : Code de la langue cible (ex: `sw`, `lin`, `ful`, `ha`, `yo`, `ewo`, `dua`, etc.).
+  - `source_language` *(string, optionnel)* : Code langue d'origine (défaut : `fr`).
+  - `lesson_id` *(string, optionnel)* : ID d'une leçon à mettre à jour directement.
+  - `exercise_id` *(string, optionnel)* : ID d'un exercice à mettre à jour.
+
+---
+
+### 4.1.bis Référentiel des Langues Africaines Supportées
+
+| Code | Langue | Nom Natif | Niveau IA | Pays Principaux | Locuteurs |
+|---|---|---|---|---|---|
+| `sw` | Swahili | Kiswahili | 🟢 Tier 1 (Natif) | Kenya, Tanzanie, RDC, Ouganda, Rwanda | 200M |
+| `ha` | Haoussa | Hausa | 🟢 Tier 1 (Natif) | Nigeria, Niger, Cameroun | 85M |
+| `yo` | Yoruba | Yorùbá | 🟢 Tier 1 (Natif) | Nigeria, Bénin, Togo | 50M |
+| `ig` | Igbo | Igbo | 🟢 Tier 1 (Natif) | Nigeria | 44M |
+| `am` | Amharique | አማርኛ | 🟢 Tier 1 (Natif) | Éthiopie | 57M |
+| `zu` | Zoulou | isiZulu | 🟢 Tier 1 (Natif) | Afrique du Sud | 13M |
+| `wo` | Wolof | Wolof | 🟢 Tier 1 (Natif) | Sénégal, Gambie | 12M |
+| `tw` | Twi (Akan) | Twi | 🟢 Tier 1 (Natif) | Ghana | 10M |
+| `so` | Somali | Soomaali | 🟢 Tier 1 (Natif) | Somalie, Djibouti, Éthiopie | 22M |
+| `lin` | Lingala | Lingála | ⚡ Tier 2 (M2M100) | RDC, Congo | 80M |
+| `ful` | Fulfulde/Peul | Fulfulde | ⚡ Tier 2 (M2M100) | Cameroun, Guinée, Mali, Sénégal, Niger | 40M |
+| `bam` | Bambara | Bamanankan | ⚡ Tier 2 (M2M100) | Mali | 15M |
+| `kin` | Kinyarwanda | Kinyarwanda | ⚡ Tier 2 (M2M100) | Rwanda, Ouganda, RDC | 12M |
+| `mlg` | Malgache | Malagasy | ⚡ Tier 2 (M2M100) | Madagascar | 25M |
+| `dyu` | Dioula | Dioula | ⚡ Tier 2 (M2M100) | Burkina Faso, Côte d'Ivoire | 12M |
+| `bci` | Baoulé | Baoulé | ⚡ Tier 2 (M2M100) | Côte d'Ivoire | 4M |
+| `dje` | Zarma | Zarma | ⚡ Tier 2 (M2M100) | Niger | 5M |
+| `ewo` | Ewondo | Ewondo | ⚡ Tier 2 (M2M100) | Cameroun (Centre/Sud) | 1M+ |
+| `dua` | Duala | Duala | ⚡ Tier 2 (M2M100) | Cameroun (Littoral) | 1M+ |
+| `fan` | Beti-Fang | Fang | ⚡ Tier 2 (M2M100) | Cameroun, Gabon, Guinée Éq. | 1M+ |
+
 
 ---
 
@@ -264,14 +308,51 @@ Permet de recueillir l'avis des étudiants, des enseignants ou du public via un 
 
 ---
 
-### 4.4. Gestion Académique & Vie Scolaire
+### 4.4. Gestion Académique, Administration & Finances Scolaires
 
-- **`list_students` :** Consulte la liste des étudiants inscrits (filtrable par classe).
-- **`list_classes` :** Liste toutes les classes et filières de l'établissement.
-- **`create_grade` :** Enregistre une note officielle sur le bulletin d'un élève.
-- **`list_grades` :** Consulte les notes d'un élève ou d'une classe.
-- **`list_attendance` :** Consulte le registre des présences et absences.
-- **`list_schedule` / `update_schedule` :** Consulte et met à jour l'emploi du temps hebdomadaire de chaque classe.
+#### `list_students`
+- **Description :** Consulte la liste des élèves inscrits (nom, prénom, classe, matricule, contacts parents).
+- **Paramètres :** `class_id` *(optionnel)*, `search` *(optionnel)*, `limit` *(optionnel, max: 100)*.
+
+#### `create_student` *(Nouveau)*
+- **Description :** Inscrit un nouvel élève avec génération automatique de matricule (`IZI-2026-XXXX`) et rattachement à sa classe.
+- **Paramètres :**
+  - `first_name` *(string, requis)* : Prénom de l'élève.
+  - `last_name` *(string, requis)* : Nom de famille.
+  - `classroom_id` *(string, optionnel)* : UUID de la classe.
+  - `matricule` *(string, optionnel)* : Matricule personnalisé.
+  - `parent_name` / `parent_phone` *(string, optionnel)* : Coordonnées du tuteur légal.
+
+#### `update_student` / `delete_student` *(Nouveaux)*
+- **Description :** Modifie les informations ou supprime le dossier d'un élève.
+
+#### `list_teachers` / `create_teacher` *(Nouveaux)*
+- **Description :** Liste ou enregistre les professeurs avec leur spécialité, leurs diplômes et la génération automatique d'un code d'accès (`ENS-XXXXXX`).
+
+#### `record_payment` 💰 *(Nouveau)*
+- **Description :** Enregistre un versement de frais de scolarité (Cash, Orange Money, MTN MoMo, Virement bancaire, etc.) avec reçu certifié et notification Push automatique.
+- **Paramètres :**
+  - `student_id` *(string, requis)* : UUID de l'élève.
+  - `amount` *(number, requis)* : Montant versé en XAF.
+  - `payment_method` *(string)* : `'cash'`, `'momo'`, `'orange_money'`, `'bank'`, `'other'`.
+  - `term` *(string)* : `'Trimestre 1'`, `'Trimestre 2'`, `'Trimestre 3'`, `'Inscription'`.
+  - `academic_year` *(string)* : Ex. `'2025-2026'`.
+  - `reference` *(string, optionnel)* : Numéro de reçu ou référence transaction.
+
+#### `list_payments` 💰 *(Nouveau)*
+- **Description :** Consulte l'historique financier avec calcul automatique du total encaissé (`total_amount_xaf`).
+
+#### `get_school_stats` 📊 *(Nouveau)*
+- **Description :** Fournit le tableau de bord chiffré en direct : effectif total élèves, total professeurs, nombre de classes, matières, leçons, épreuves et total des revenus scolarité perçus.
+
+#### `create_grade` / `list_grades`
+- **Description :** Enregistre ou consulte les notes et moyennes officielles des élèves.
+
+#### `list_attendance`
+- **Description :** Consulte l'historique d'assiduité et le registre des présences.
+
+#### `list_schedule` / `update_schedule`
+- **Description :** Consulte et met à jour l'emploi du temps hebdomadaire de chaque classe.
 
 ---
 

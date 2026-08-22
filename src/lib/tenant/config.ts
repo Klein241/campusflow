@@ -12,7 +12,7 @@ export const CENTRE_CONFIG = {
   ville:        'Yaoundé',                   // ← Remplacer
   pays:         'Cameroun',                  // ← Remplacer
   telephone:    '+237 000 000 000',          // ← Remplacer
-  email:        'contact@campusflow.cm',// ← Remplacer
+  email:        'contact@iziteach.com',// ← IziTeach officiel
   logo_url:     '/logo.png',
   couleur_primaire: '#4F46E5',
   couleur_secondaire: '#0891B2',

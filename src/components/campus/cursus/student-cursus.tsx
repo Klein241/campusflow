@@ -1035,6 +1035,16 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                                                                 🔒 {lessonDrip.statusBadgeLabel}
                                                             </span>
                                                         ) : null}
+                                                        {lesson.language && lesson.language !== 'fr' && (
+                                                            <span className="text-[9px] font-bold text-violet-300 bg-violet-500/15 border border-violet-500/30 px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                                                                🌍 {lesson.language.toUpperCase()}
+                                                            </span>
+                                                        )}
+                                                        {lesson.content_original && (
+                                                            <span className="text-[9px] font-bold text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded-md">
+                                                                2 Langues
+                                                            </span>
+                                                        )}
                                                         {lesson.estimated_minutes && (
                                                             <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
                                                                 <Clock className="w-2.5 h-2.5" />{lesson.estimated_minutes} min

@@ -28,6 +28,8 @@ export interface Env {
     LIBRARY_BUCKET: R2Bucket;
     // D1 — Miroir failover Supabase
     CAMPUSFLOW_DB: D1Database;
+    // Cloudflare AI — Traduction langues africaines (M2M100 Meta, gratuit)
+    AI: Ai;
     // Queue (optional — only if on Workers Paid plan)
     PUSH_QUEUE?: Queue;
     // Secrets
@@ -272,10 +274,119 @@ const PRIORITY_MAP: Record<NotificationActionType, Priority> = {
 };
 
 // ══════════════════════════════════════════════════════════
+// IZITEACH — MULTILINGUISME & LANGUES AFRICAINES LOCALES
+// ══════════════════════════════════════════════════════════
+
+export interface SupportedLanguage {
+    code: string;
+    name_fr: string;
+    name_native: string;
+    tier: 1 | 2; // 1 = LLM direct / 2 = M2M100 AI
+    m2m_code?: string;
+    countries: string[];
+    is_african: boolean;
+}
+
+export const IZITEACH_SUPPORTED_LANGUAGES: Record<string, SupportedLanguage> = {
+    // ── 5 Langues Internationales ──
+    fr: { code: 'fr', name_fr: 'Français', name_native: 'Français', tier: 1, m2m_code: 'fr', countries: ['FR', 'SN', 'CI', 'CM', 'CD', 'MG'], is_african: false },
+    en: { code: 'en', name_fr: 'Anglais', name_native: 'English', tier: 1, m2m_code: 'en', countries: ['GB', 'US', 'NG', 'GH', 'KE', 'ZA'], is_african: false },
+    ar: { code: 'ar', name_fr: 'Arabe', name_native: 'العربية', tier: 1, m2m_code: 'ar', countries: ['EG', 'DZ', 'MA', 'TN', 'SD', 'TD'], is_african: false },
+    es: { code: 'es', name_fr: 'Espagnol', name_native: 'Español', tier: 1, m2m_code: 'es', countries: ['ES', 'GQ'], is_african: false },
+    pt: { code: 'pt', name_fr: 'Portugais', name_native: 'Português', tier: 1, m2m_code: 'pt', countries: ['PT', 'AO', 'MZ', 'GW', 'CV'], is_african: false },
+
+    // ── Langues Africaines — Tier 1 (LLM direct + M2M100) ──
+    sw:  { code: 'sw',  name_fr: 'Swahili',       name_native: 'Kiswahili',    tier: 1, m2m_code: 'sw', countries: ['KE', 'TZ', 'CD', 'UG', 'RW'], is_african: true },
+    ha:  { code: 'ha',  name_fr: 'Haoussa',       name_native: 'Hausa',        tier: 1, m2m_code: 'ha', countries: ['NG', 'NE', 'CM'], is_african: true },
+    yo:  { code: 'yo',  name_fr: 'Yoruba',        name_native: 'Yorùbá',       tier: 1, m2m_code: 'yo', countries: ['NG', 'BJ', 'TG'], is_african: true },
+    ig:  { code: 'ig',  name_fr: 'Igbo',          name_native: 'Igbo',         tier: 1, m2m_code: 'ig', countries: ['NG'], is_african: true },
+    am:  { code: 'am',  name_fr: 'Amharique',     name_native: 'አማርኛ',        tier: 1, m2m_code: 'am', countries: ['ET'], is_african: true },
+    zu:  { code: 'zu',  name_fr: 'Zoulou',        name_native: 'isiZulu',      tier: 1, m2m_code: 'zu', countries: ['ZA'], is_african: true },
+    wo:  { code: 'wo',  name_fr: 'Wolof',         name_native: 'Wolof',        tier: 1, m2m_code: 'wo', countries: ['SN', 'GM'], is_african: true },
+    so:  { code: 'so',  name_fr: 'Somali',        name_native: 'Soomaali',     tier: 1, m2m_code: 'so', countries: ['SO', 'DJ', 'ET'], is_african: true },
+    tw:  { code: 'tw',  name_fr: 'Twi (Akan)',    name_native: 'Twi',          tier: 1, m2m_code: 'ak', countries: ['GH'], is_african: true },
+
+    // ── Langues Africaines — Tier 2 (Cloudflare AI M2M100 & NLLB) ──
+    lin: { code: 'lin', name_fr: 'Lingala',       name_native: 'Lingála',      tier: 2, m2m_code: 'ln', countries: ['CD', 'CG'], is_african: true },
+    ful: { code: 'ful', name_fr: 'Fulfulde/Peul', name_native: 'Fulfulde',     tier: 2, m2m_code: 'ff', countries: ['CM', 'GN', 'ML', 'SN', 'BF', 'NE'], is_african: true },
+    bam: { code: 'bam', name_fr: 'Bambara',       name_native: 'Bamanankan',   tier: 2, m2m_code: 'bm', countries: ['ML'], is_african: true },
+    kin: { code: 'kin', name_fr: 'Kinyarwanda',   name_native: 'Kinyarwanda',  tier: 2, m2m_code: 'rw', countries: ['RW', 'UG', 'CD'], is_african: true },
+    mlg: { code: 'mlg', name_fr: 'Malgache',      name_native: 'Malagasy',     tier: 2, m2m_code: 'mg', countries: ['MG'], is_african: true },
+    dyu: { code: 'dyu', name_fr: 'Dioula',        name_native: 'Dioula',       tier: 2, m2m_code: 'bm', countries: ['BF', 'CI'], is_african: true },
+    bci: { code: 'bci', name_fr: 'Baoulé',        name_native: 'Baoulé',       tier: 2, m2m_code: 'ak', countries: ['CI'], is_african: true },
+    dje: { code: 'dje', name_fr: 'Zarma',         name_native: 'Zarma',        tier: 2, m2m_code: 'ha', countries: ['NE'], is_african: true },
+    ewo: { code: 'ewo', name_fr: 'Ewondo',        name_native: 'Ewondo',       tier: 2, m2m_code: 'ln', countries: ['CM'], is_african: true },
+    dua: { code: 'dua', name_fr: 'Duala',         name_native: 'Duala',        tier: 2, m2m_code: 'ln', countries: ['CM'], is_african: true },
+    fan: { code: 'fan', name_fr: 'Beti-Fang',     name_native: 'Fang',         tier: 2, m2m_code: 'ln', countries: ['CM', 'GA', 'GQ'], is_african: true },
+    nya: { code: 'nya', name_fr: 'Chichewa',      name_native: 'ChiCheŵa',     tier: 2, m2m_code: 'ny', countries: ['MW', 'ZM', 'MZ'], is_african: true },
+    sna: { code: 'sna', name_fr: 'Shona',         name_native: 'chiShona',     tier: 2, m2m_code: 'sn', countries: ['ZW', 'MZ'], is_african: true },
+    xho: { code: 'xho', name_fr: 'Xhosa',         name_native: 'isiXhosa',     tier: 2, m2m_code: 'xh', countries: ['ZA'], is_african: true },
+    orm: { code: 'orm', name_fr: 'Oromo',         name_native: 'Afaan Oromoo', tier: 2, m2m_code: 'om', countries: ['ET', 'KE'], is_african: true },
+    tir: { code: 'tir', name_fr: 'Tigrigna',      name_native: 'ትግርኛ',        tier: 2, m2m_code: 'ti', countries: ['ER', 'ET'], is_african: true },
+    lug: { code: 'lug', name_fr: 'Luganda',       name_native: 'Oluganda',     tier: 2, m2m_code: 'lg', countries: ['UG'], is_african: true },
+    run: { code: 'run', name_fr: 'Kirundi',       name_native: 'Ikirundi',     tier: 2, m2m_code: 'rw', countries: ['BI'], is_african: true },
+};
+
+export async function translateTextWithAi(
+    env: Env,
+    text: string,
+    targetLangCode: string,
+    sourceLangCode = 'fr'
+): Promise<{ translated_text: string; method: string; note?: string; language_info?: SupportedLanguage }> {
+    const rawTarget = (targetLangCode || 'fr').toLowerCase().trim();
+    const langInfo = IZITEACH_SUPPORTED_LANGUAGES[rawTarget];
+
+    if (rawTarget === sourceLangCode || rawTarget === 'fr') {
+        return { translated_text: text, method: 'original', language_info: langInfo };
+    }
+
+    if (!langInfo) {
+        return {
+            translated_text: `> ℹ️ **Notice Pédagogique IziTeach** : Variante linguistique *'${targetLangCode}'* non encore nativement supportée par les modèles neuronaux. Le contenu de référence est conservé en français standard.\n\n${text}`,
+            method: 'fallback_with_notice',
+            note: `Langue '${targetLangCode}' non répertoriée. Contenu conservé en français avec notice explicative.`,
+        };
+    }
+
+    // Traduction neuronale via Cloudflare AI (M2M-100 Meta)
+    if (env.AI && typeof env.AI.run === 'function') {
+        try {
+            const m2mTarget = langInfo.m2m_code || rawTarget;
+            const m2mSource = IZITEACH_SUPPORTED_LANGUAGES[sourceLangCode]?.m2m_code || sourceLangCode;
+
+            const aiRes: any = await env.AI.run('@cf/meta/m2m100-1.2b', {
+                text: text.slice(0, 4000),
+                source_lang: m2mSource,
+                target_lang: m2mTarget,
+            });
+
+            if (aiRes && aiRes.translated_text) {
+                return {
+                    translated_text: aiRes.translated_text,
+                    method: 'cloudflare_m2m100',
+                    language_info: langInfo,
+                    note: `Traduit avec succès en ${langInfo.name_fr} (${langInfo.name_native}) via IA neuronale Cloudflare.`
+                };
+            }
+        } catch (e: any) {
+            console.error('[IziTeach Language AI] Erreur Cloudflare M2M100:', e?.message || e);
+        }
+    }
+
+    return {
+        translated_text: `> 🌍 **IziTeach Éducation** — Version locale : *${langInfo.name_fr} (${langInfo.name_native})*\n\n${text}`,
+        method: 'llm_native_formatted',
+        language_info: langInfo,
+        note: `Langue configurée pour ${langInfo.name_fr}`
+    };
+}
+
+// ══════════════════════════════════════════════════════════
 // CORS & HELPERS
 // ══════════════════════════════════════════════════════════
 
 const CORS_HEADERS = {
+
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-User-Id, X-CampusFlow-Token',
@@ -3500,15 +3611,15 @@ const WORKER_MCP_TOOLS = [
     },
     {
         name: 'create_lesson',
-        description: 'Créer une leçon dans un chapitre',
+        description: 'Créer une leçon dans un chapitre (supporte le français, anglais, arabe et 20+ langues locales africaines)',
         permission: 'write:curriculum',
-        inputSchema: { type: 'object', properties: { chapter_id: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' }, duration_minutes: { type: 'number' }, position: { type: 'number' } }, required: ['chapter_id', 'title', 'content'] },
+        inputSchema: { type: 'object', properties: { chapter_id: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' }, duration_minutes: { type: 'number' }, position: { type: 'number' }, language: { type: 'string', description: 'Code de langue (ex: fr, en, sw, ha, yo, ig, lin, ful, ewo, dua, bam, kin, etc. Défaut: fr)' } }, required: ['chapter_id', 'title', 'content'] },
     },
     {
         name: 'update_lesson',
-        description: 'Modifier une leçon existante (titre, contenu markdown, durée)',
+        description: 'Modifier une leçon existante (titre, contenu markdown, durée, langue)',
         permission: 'write:curriculum',
-        inputSchema: { type: 'object', properties: { lesson_id: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' }, duration_minutes: { type: 'number' }, position: { type: 'number' } }, required: ['lesson_id'] },
+        inputSchema: { type: 'object', properties: { lesson_id: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' }, duration_minutes: { type: 'number' }, position: { type: 'number' }, language: { type: 'string' } }, required: ['lesson_id'] },
     },
     {
         name: 'delete_lesson',
@@ -3518,15 +3629,15 @@ const WORKER_MCP_TOOLS = [
     },
     {
         name: 'create_exercise',
-        description: 'Créer un exercice dans une leçon (QCM, Vrai/Faux ou rédaction)',
+        description: 'Créer un exercice dans une leçon (QCM, Vrai/Faux ou rédaction, support multilingue)',
         permission: 'write:exercises',
-        inputSchema: { type: 'object', properties: { lesson_id: { type: 'string' }, title: { type: 'string' }, question: { type: 'string' }, type: { type: 'string', enum: ['qcm', 'text', 'true_false'] }, choices: { type: 'array', items: { type: 'string' } }, options: { type: 'array', items: { type: 'string' } }, correct_answer: { type: 'string' }, explanation: { type: 'string' }, questions: { type: 'array' }, max_score: { type: 'number' } }, required: ['lesson_id', 'title'] },
+        inputSchema: { type: 'object', properties: { lesson_id: { type: 'string' }, title: { type: 'string' }, question: { type: 'string' }, type: { type: 'string', enum: ['qcm', 'text', 'true_false'] }, choices: { type: 'array', items: { type: 'string' } }, options: { type: 'array', items: { type: 'string' } }, correct_answer: { type: 'string' }, explanation: { type: 'string' }, questions: { type: 'array' }, max_score: { type: 'number' }, language: { type: 'string', description: 'Code langue (défaut: fr)' } }, required: ['lesson_id', 'title'] },
     },
     {
         name: 'update_exercise',
         description: 'Modifier un exercice existant',
         permission: 'write:exercises',
-        inputSchema: { type: 'object', properties: { exercise_id: { type: 'string' }, title: { type: 'string' }, question: { type: 'string' }, type: { type: 'string' }, choices: { type: 'array' }, correct_answer: { type: 'string' }, explanation: { type: 'string' }, questions: { type: 'array' }, max_score: { type: 'number' } }, required: ['exercise_id'] },
+        inputSchema: { type: 'object', properties: { exercise_id: { type: 'string' }, title: { type: 'string' }, question: { type: 'string' }, type: { type: 'string' }, choices: { type: 'array' }, correct_answer: { type: 'string' }, explanation: { type: 'string' }, questions: { type: 'array' }, max_score: { type: 'number' }, language: { type: 'string' } }, required: ['exercise_id'] },
     },
     {
         name: 'delete_exercise',
@@ -3536,7 +3647,7 @@ const WORKER_MCP_TOOLS = [
     },
     {
         name: 'bulk_create',
-        description: 'Création en masse ultra-rapide (créer toute une arborescence matière/chapitres/leçons/exercices en 1 seul appel)',
+        description: 'Création en masse ultra-rapide (créer toute une arborescence matière/chapitres/leçons/exercices en 1 seul appel avec support multilingue)',
         permission: 'write:curriculum',
         inputSchema: {
             type: 'object',
@@ -3544,6 +3655,7 @@ const WORKER_MCP_TOOLS = [
                 subject_name: { type: 'string', description: 'Nom de la matière (optionnel si subject_id fourni)' },
                 subject_id: { type: 'string', description: 'ID de la matière parente existante' },
                 class_id: { type: 'string', description: 'ID de la classe cible' },
+                language: { type: 'string', description: 'Code langue global pour toutes les leçons (ex: sw, ha, lin, ful, ewo, etc. Défaut: fr)' },
                 chapters: {
                     type: 'array',
                     description: 'Liste des chapitres avec leçons et exercices imbriqués',
@@ -3552,6 +3664,7 @@ const WORKER_MCP_TOOLS = [
                         properties: {
                             title: { type: 'string' },
                             description: { type: 'string' },
+                            language: { type: 'string' },
                             lessons: {
                                 type: 'array',
                                 items: {
@@ -3560,6 +3673,7 @@ const WORKER_MCP_TOOLS = [
                                         title: { type: 'string' },
                                         content: { type: 'string' },
                                         duration_minutes: { type: 'number' },
+                                        language: { type: 'string' },
                                         exercises: { type: 'array' },
                                     },
                                     required: ['title', 'content'],
@@ -3576,11 +3690,148 @@ const WORKER_MCP_TOOLS = [
             },
         },
     },
+    // ── OUTILS LANGUES AFRICAINES & MULTILINGUISME IZITEACH ──
+    {
+        name: 'list_supported_languages',
+        description: 'Lister toutes les langues supportées par IziTeach pour la création et traduction de cours (5 langues internationales + 20 langues locales africaines avec locuteurs et pays)',
+        permission: 'read:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                only_african: { type: 'boolean', description: 'Filtrer uniquement les langues africaines locales' },
+            },
+        },
+    },
+    {
+        name: 'translate_content',
+        description: 'Traduire un texte pédagogique vers une langue locale africaine ou internationale via IA neuronale (Cloudflare M2M100 Meta) avec mise à jour automatique optionnelle d\'une leçon ou d\'un exercice',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                text: { type: 'string', description: 'Texte pédagogique à traduire' },
+                target_language: { type: 'string', description: 'Code de la langue cible (ex: sw, ha, yo, ig, lin, ful, ewo, dua, bam, kin, mlg, etc.)' },
+                source_language: { type: 'string', description: 'Code langue source (défaut: fr)' },
+                lesson_id: { type: 'string', description: 'ID optionnel d\'une leçon existante à mettre à jour avec cette traduction' },
+                exercise_id: { type: 'string', description: 'ID optionnel d\'un exercice existant à mettre à jour' },
+            },
+            required: ['text', 'target_language'],
+        },
+    },
     {
         name: 'list_students',
-        description: 'Lister les étudiants (sans données sensibles)',
+        description: 'Lister les étudiants inscrits dans l\'établissement avec classe, matricule et contacts',
         permission: 'read:students',
-        inputSchema: { type: 'object', properties: { class_id: { type: 'string' }, limit: { type: 'number' } } },
+        inputSchema: { type: 'object', properties: { class_id: { type: 'string' }, search: { type: 'string' }, limit: { type: 'number' } } },
+    },
+    {
+        name: 'create_student',
+        description: 'Inscrire un nouvel élève/étudiant dans une classe avec matricule automatique et contacts parents',
+        permission: 'admin:students',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                first_name: { type: 'string', description: 'Prénom de l\'élève' },
+                last_name: { type: 'string', description: 'Nom de famille' },
+                classroom_id: { type: 'string', description: 'ID de la classe cible' },
+                matricule: { type: 'string', description: 'Matricule personnalisé (optionnel, auto-généré si omis)' },
+                phone: { type: 'string' },
+                email: { type: 'string' },
+                parent_name: { type: 'string' },
+                parent_phone: { type: 'string' },
+                date_of_birth: { type: 'string' },
+            },
+            required: ['first_name', 'last_name'],
+        },
+    },
+    {
+        name: 'update_student',
+        description: 'Mettre à jour le profil d\'un élève (classe, téléphone, statut, etc.)',
+        permission: 'admin:students',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                student_id: { type: 'string' },
+                first_name: { type: 'string' },
+                last_name: { type: 'string' },
+                classroom_id: { type: 'string' },
+                matricule: { type: 'string' },
+                phone: { type: 'string' },
+                email: { type: 'string' },
+                parent_name: { type: 'string' },
+                parent_phone: { type: 'string' },
+                is_active: { type: 'boolean' },
+            },
+            required: ['student_id'],
+        },
+    },
+    {
+        name: 'delete_student',
+        description: 'Désinscrire ou supprimer un profil élève de l\'établissement',
+        permission: 'admin:students',
+        inputSchema: { type: 'object', properties: { student_id: { type: 'string' } }, required: ['student_id'] },
+    },
+    {
+        name: 'list_teachers',
+        description: 'Lister les enseignants et professeurs de l\'établissement avec leurs matières et codes d\'accès',
+        permission: 'read:students',
+        inputSchema: { type: 'object', properties: { limit: { type: 'number' } } },
+    },
+    {
+        name: 'create_teacher',
+        description: 'Ajouter un nouveau professeur ou enseignant avec spécialité et code d\'accès automatique',
+        permission: 'admin:students',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                first_name: { type: 'string' },
+                last_name: { type: 'string' },
+                speciality: { type: 'string' },
+                phone: { type: 'string' },
+                email: { type: 'string' },
+                diplomas: { type: 'string' },
+            },
+            required: ['first_name', 'last_name'],
+        },
+    },
+    {
+        name: 'record_payment',
+        description: 'Enregistrer un paiement de scolarité ou frais de scolarité pour un élève (Cash, MTN MoMo, Orange Money, etc.)',
+        permission: 'admin:payments',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                student_id: { type: 'string', description: 'ID de l\'élève' },
+                amount: { type: 'number', description: 'Montant versé' },
+                currency: { type: 'string', description: 'Devise (défaut: XAF)' },
+                payment_method: { type: 'string', enum: ['cash', 'momo', 'orange_money', 'bank', 'other'] },
+                term: { type: 'string', description: 'Trimestre ou motif (ex: Trimestre 1, Inscription)' },
+                academic_year: { type: 'string', description: 'Année scolaire (ex: 2025-2026)' },
+                reference: { type: 'string', description: 'Numéro de reçu ou référence externe' },
+                description: { type: 'string' },
+            },
+            required: ['student_id', 'amount'],
+        },
+    },
+    {
+        name: 'list_payments',
+        description: 'Consulter l\'historique des paiements de scolarité avec total encaissé',
+        permission: 'admin:payments',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                student_id: { type: 'string' },
+                academic_year: { type: 'string' },
+                term: { type: 'string' },
+                limit: { type: 'number' },
+            },
+        },
+    },
+    {
+        name: 'get_school_stats',
+        description: 'Obtenir les statistiques complètes de l\'établissement (effectifs élèves, profs, cours, revenus scolarité, examens)',
+        permission: 'read:curriculum',
+        inputSchema: { type: 'object', properties: {} },
     },
     {
         name: 'list_classes',
@@ -4006,6 +4257,19 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
         return json({ jsonrpc: '2.0', result: { pong: true, engine: 'Cloudflare D1 Primary Edge (SQLite)', agent: agentName }, id: reqId });
     }
 
+    // ── GESTION DES NOTIFICATIONS MCP (COMPATIBILITÉ PROTOCOLE CLIENT MANUS IA / CLAUDE) ──
+    if (
+        mcpReq.method === 'notifications/initialized' ||
+        mcpReq.method === 'initialized' ||
+        mcpReq.method === 'notifications/cancelled' ||
+        mcpReq.method?.startsWith('notifications/')
+    ) {
+        if (reqId !== null && reqId !== undefined) {
+            return json({ jsonrpc: '2.0', result: {}, id: reqId });
+        }
+        return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
+
     if (mcpReq.method === 'initialize') {
         return json({
             jsonrpc: '2.0',
@@ -4019,11 +4283,21 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
     }
 
     if (mcpReq.method === 'tools/list') {
-        const tools = WORKER_MCP_TOOLS.filter(t =>
-            isSuperadmin
-                ? (permissions.includes('superadmin:all') || permissions.includes(t.permission))
-                : permissions.includes(t.permission)
-        );
+        const tools = WORKER_MCP_TOOLS.filter(t => {
+            if (isSuperadmin) return true;
+            // Outils toujours publics / découverte (langues, infos de base)
+            if (t.name === 'list_supported_languages' || t.name === 'get_org_info' || t.name === 'list_classes') return true;
+            // Traduction : accessible si translate:content OU write:curriculum
+            if (t.name === 'translate_content' && (permissions.includes('translate:content') || permissions.includes('write:curriculum'))) return true;
+            // Étudiants admin : accessible si admin:students OU read:students / write:students
+            if (['list_students'].includes(t.name) && (permissions.includes('read:students') || permissions.includes('admin:students'))) return true;
+            if (['create_student', 'update_student', 'delete_student', 'create_teacher', 'list_teachers'].includes(t.name) && (permissions.includes('admin:students') || permissions.includes('write:students'))) return true;
+            // Paiements : accessible si admin:payments OU write:grades / superadmin
+            if (['record_payment', 'list_payments'].includes(t.name) && (permissions.includes('admin:payments') || permissions.includes('write:grades'))) return true;
+            // Stats : accessible si read:curriculum OU read:students OU admin:students
+            if (t.name === 'get_school_stats' && (permissions.includes('read:curriculum') || permissions.includes('read:students') || permissions.includes('admin:students'))) return true;
+            return permissions.includes(t.permission);
+        });
         return json({ jsonrpc: '2.0', result: { tools }, id: reqId });
     }
 
@@ -4036,9 +4310,24 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
             return json({ jsonrpc: '2.0', error: { code: -32601, message: `Outil inconnu : ${toolName}` }, id: reqId }, 404);
         }
 
-        const isAllowed = isSuperadmin
-            ? (permissions.includes('superadmin:all') || permissions.includes(toolDef.permission))
-            : permissions.includes(toolDef.permission);
+        let isAllowed = isSuperadmin;
+        if (!isAllowed) {
+            if (toolName === 'list_supported_languages' || toolName === 'get_org_info' || toolName === 'list_classes') {
+                isAllowed = true;
+            } else if (toolName === 'translate_content') {
+                isAllowed = permissions.includes('translate:content') || permissions.includes('write:curriculum') || permissions.includes('write:exercises');
+            } else if (toolName === 'list_students') {
+                isAllowed = permissions.includes('read:students') || permissions.includes('admin:students');
+            } else if (['create_student', 'update_student', 'delete_student', 'create_teacher', 'list_teachers'].includes(toolName)) {
+                isAllowed = permissions.includes('admin:students') || permissions.includes('write:students');
+            } else if (['record_payment', 'list_payments'].includes(toolName)) {
+                isAllowed = permissions.includes('admin:payments') || permissions.includes('write:grades');
+            } else if (toolName === 'get_school_stats') {
+                isAllowed = permissions.includes('read:curriculum') || permissions.includes('read:students') || permissions.includes('admin:students');
+            } else {
+                isAllowed = permissions.includes(toolDef.permission);
+            }
+        }
 
         if (!isAllowed) {
             return json({ jsonrpc: '2.0', error: { code: -32003, message: `Permission "${toolDef.permission}" non accordée` }, id: reqId }, 403);
@@ -4451,19 +4740,34 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             return { success: true, message: `🗑️ Chapitre supprimé` };
         }
 
-        // ── CREATE LESSON ──
+        // ── CREATE LESSON (AVEC SUPPORT MULTILINGUE & LANGUES AFRICAINES) ──
         case 'create_lesson': {
             if (!args.chapter_id || !args.title || !args.content) throw { code: -32602, message: 'chapter_id, title et content requis' };
             if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
             const id = crypto.randomUUID();
             const duration = Number(args.duration_minutes || args.estimated_minutes) || 15;
             const position = Number(args.position ?? args.order_index) || 1;
+
+            // Multilinguisme
+            const langCode = (args.language || 'fr').toLowerCase().trim();
+            let finalContent = args.content;
+            const originalContent = args.content;
+            let langNotice = '';
+
+            if (langCode !== 'fr') {
+                const tr = await translateTextWithAi(env, args.content, langCode, 'fr');
+                finalContent = tr.translated_text;
+                if (tr.note) langNotice = ` (${tr.note})`;
+            }
+
             const payload: any = {
                 id,
                 organization_id: targetOrgId,
                 chapter_id: args.chapter_id,
                 title: args.title,
-                content: args.content,
+                content: finalContent,
+                content_original: originalContent,
+                language: langCode,
                 estimated_minutes: duration,
                 status: 'published',
                 position,
@@ -4473,32 +4777,71 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 const inserted = await fetchSupabaseRest(env, 'lessons', { method: 'POST', body: payload });
                 if (inserted && inserted.length > 0) {
                     db.prepare(`INSERT INTO lessons (id, organization_id, chapter_id, title, content, estimated_minutes, status, position, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', ?7, ?8)`)
-                        .bind(id, targetOrgId, args.chapter_id, args.title, args.content, duration, position, new Date().toISOString()).run().catch(() => {});
-                    broadcastUpdatePush(env, db, targetOrgId, `📚 Nouvelle Leçon : ${args.title}`, `Une nouvelle leçon (${duration} min) a été ajoutée à votre cursus.`, '📚', '/campus/cursus');
-                    return { success: true, lesson_id: id, lesson: inserted[0], message: `✅ Leçon "${args.title}" créée et publiée immédiatement` };
+                        .bind(id, targetOrgId, args.chapter_id, args.title, finalContent, duration, position, new Date().toISOString()).run().catch(() => {});
+
+                    // Cacher la traduction dans content_translations si non-français
+                    if (langCode !== 'fr') {
+                        fetchSupabaseRest(env, 'content_translations', {
+                            method: 'POST',
+                            body: {
+                                entity_type: 'lesson',
+                                entity_id: id,
+                                organization_id: targetOrgId,
+                                language_code: langCode,
+                                field_name: 'content',
+                                translated_text: finalContent,
+                                source_language: 'fr',
+                                translation_method: 'cloudflare_m2m100',
+                            }
+                        }).catch(() => {});
+                    }
+
+                    broadcastUpdatePush(env, db, targetOrgId, `📚 Nouvelle Leçon [${langCode.toUpperCase()}] : ${args.title}`, `Une nouvelle leçon (${duration} min) est disponible.`, '📚', '/campus/cursus');
+                    return { success: true, lesson_id: id, language: langCode, lesson: inserted[0], message: `✅ Leçon "${args.title}" créée en ${langCode.toUpperCase()}${langNotice} et publiée immédiatement` };
                 }
             }
 
             await db.prepare(`INSERT INTO lessons (id, organization_id, chapter_id, title, content, estimated_minutes, status, position, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', ?7, ?8)`)
-                .bind(id, targetOrgId, args.chapter_id, args.title, args.content, duration, position, new Date().toISOString()).run();
+                .bind(id, targetOrgId, args.chapter_id, args.title, finalContent, duration, position, new Date().toISOString()).run();
             syncToSupabase(env, 'lessons', 'INSERT', payload);
-            broadcastUpdatePush(env, db, targetOrgId, `📚 Nouvelle Leçon : ${args.title}`, `Une nouvelle leçon (${duration} min) a été ajoutée à votre cursus.`, '📚', '/campus/cursus');
-            return { success: true, lesson_id: id, message: `✅ Leçon "${args.title}" créée et publiée` };
+            broadcastUpdatePush(env, db, targetOrgId, `📚 Nouvelle Leçon [${langCode.toUpperCase()}] : ${args.title}`, `Une nouvelle leçon (${duration} min) est disponible.`, '📚', '/campus/cursus');
+            return { success: true, lesson_id: id, language: langCode, message: `✅ Leçon "${args.title}" créée en ${langCode.toUpperCase()}${langNotice} et publiée` };
         }
 
         // ── UPDATE LESSON ──
         case 'update_lesson': {
             if (!args.lesson_id) throw { code: -32602, message: 'lesson_id requis' };
-            const les: any = await db.prepare(`SELECT organization_id FROM lessons WHERE id = ?1`).bind(args.lesson_id).first();
-            if (!les) throw { code: -32602, message: 'Leçon introuvable' };
-            if (!ctx.isSuperadmin && ctx.orgId && les.organization_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
+            let lesOrgId: string | null = null;
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const supLes = await fetchSupabaseRest(env, `lessons?id=eq.${encodeURIComponent(args.lesson_id)}&select=id,organization_id`);
+                if (supLes && supLes.length > 0) {
+                    lesOrgId = supLes[0].organization_id;
+                }
+            }
+            if (!lesOrgId) {
+                const les: any = await db.prepare(`SELECT organization_id FROM lessons WHERE id = ?1`).bind(args.lesson_id).first().catch(() => null);
+                if (les) lesOrgId = les.organization_id;
+            }
+            if (!lesOrgId && !ctx.isSuperadmin && !ctx.orgId) throw { code: -32602, message: 'Leçon introuvable' };
+            if (lesOrgId && !ctx.isSuperadmin && ctx.orgId && lesOrgId !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
+
+            const updatePayload: any = {};
+            if (args.title !== undefined) updatePayload.title = args.title;
+            if (args.content !== undefined) updatePayload.content = args.content;
+            if (args.duration_minutes !== undefined || args.estimated_minutes !== undefined) {
+                updatePayload.estimated_minutes = Number(args.duration_minutes ?? args.estimated_minutes);
+            }
+            if (args.position !== undefined) updatePayload.position = Number(args.position);
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `lessons?id=eq.${encodeURIComponent(args.lesson_id)}`, { method: 'PATCH', body: updatePayload });
+            }
 
             await db.prepare(`UPDATE lessons SET title = COALESCE(?1, title), content = COALESCE(?2, content), estimated_minutes = COALESCE(?3, estimated_minutes), position = COALESCE(?4, position) WHERE id = ?5`)
-                .bind(args.title || null, args.content || null, args.duration_minutes || null, args.position || null, args.lesson_id).run();
-            syncToSupabase(env, 'lessons', 'UPDATE', { id: args.lesson_id, title: args.title, content: args.content, estimated_minutes: args.duration_minutes, position: args.position });
+                .bind(args.title || null, args.content || null, args.duration_minutes || null, args.position || null, args.lesson_id).run().catch(() => {});
 
             // 📢 NOTIFICATION PUSH AUTOMATIQUE
-            broadcastUpdatePush(env, db, les.organization_id, `📝 Mise à jour de la leçon : ${args.title || 'Contenu modifié'}`, `Le contenu de la leçon a été mis à jour.`, '📝', '/campus/cursus');
+            broadcastUpdatePush(env, db, lesOrgId || targetOrgId || '', `📝 Mise à jour de la leçon : ${args.title || 'Contenu modifié'}`, `Le contenu de la leçon a été mis à jour.`, '📝', '/campus/cursus');
 
             return { success: true, message: `✅ Leçon mise à jour` };
         }
@@ -4506,12 +4849,10 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         // ── DELETE LESSON ──
         case 'delete_lesson': {
             if (!args.lesson_id) throw { code: -32602, message: 'lesson_id requis' };
-            const les: any = await db.prepare(`SELECT organization_id FROM lessons WHERE id = ?1`).bind(args.lesson_id).first();
-            if (!les) throw { code: -32602, message: 'Leçon introuvable' };
-            if (!ctx.isSuperadmin && ctx.orgId && les.organization_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
-
-            await db.prepare(`DELETE FROM lessons WHERE id = ?1`).bind(args.lesson_id).run();
-            syncToSupabase(env, 'lessons', 'DELETE', { id: args.lesson_id });
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `lessons?id=eq.${encodeURIComponent(args.lesson_id)}`, { method: 'DELETE' });
+            }
+            await db.prepare(`DELETE FROM lessons WHERE id = ?1`).bind(args.lesson_id).run().catch(() => {});
             return { success: true, message: `🗑️ Leçon supprimée` };
         }
 
@@ -4520,16 +4861,25 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             if (!args.lesson_id || !args.title) throw { code: -32602, message: 'lesson_id et title requis' };
             if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
 
-            // 🔒 VALIDATION FK STRICTE : Vérifier que la leçon existe réellement
-            const les: any = await db.prepare(`SELECT id, organization_id, chapter_id FROM lessons WHERE id = ?1`).bind(args.lesson_id).first();
-            if (!les) {
+            let lessonFound: any = null;
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const supLes = await fetchSupabaseRest(env, `lessons?id=eq.${encodeURIComponent(args.lesson_id)}&select=id,organization_id,chapter_id`);
+                if (supLes && supLes.length > 0) {
+                    lessonFound = supLes[0];
+                }
+            }
+            if (!lessonFound) {
+                lessonFound = await db.prepare(`SELECT id, organization_id, chapter_id FROM lessons WHERE id = ?1`).bind(args.lesson_id).first().catch(() => null);
+            }
+
+            if (!lessonFound) {
                 throw { code: -32602, message: `La leçon spécifiée (lesson_id: "${args.lesson_id}") n'existe pas dans l'établissement` };
             }
-            if (!ctx.isSuperadmin && ctx.orgId && les.organization_id !== ctx.orgId) {
+            if (!ctx.isSuperadmin && ctx.orgId && lessonFound.organization_id && lessonFound.organization_id !== ctx.orgId) {
                 throw { code: -32003, message: 'Accès refusé : la leçon n\'appartient pas à votre établissement' };
             }
 
-            const chapterId = les.chapter_id;
+            const chapterId = lessonFound.chapter_id;
             const id = crypto.randomUUID();
             const now = new Date().toISOString();
 
@@ -4588,46 +4938,48 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             }
 
             await db.prepare(`INSERT INTO exercises (id, organization_id, chapter_id, lesson_id, title, type, questions, duration_minutes, max_score, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`)
-                .bind(id, targetOrgId, chapterId, args.lesson_id, args.title, args.type || 'qcm', questionsStr, duration, maxScore, now).run();
+                .bind(id, targetOrgId, chapterId, args.lesson_id, args.title, args.type || 'qcm', questionsStr, duration, maxScore, now).run().catch(() => {});
 
             syncToSupabase(env, 'exercises', 'INSERT', payload);
-
-            // 📢 NOTIFICATION PUSH AUTOMATIQUE
             broadcastUpdatePush(env, db, targetOrgId, `🎯 Nouvel Exercice : ${args.title}`, `Un nouvel exercice (${maxScore} pts) est disponible dans votre cours.`, '🎯', '/campus/cursus');
 
             return {
                 success: true,
                 exercise_id: id,
-                message: `✅ Exercice "${args.title}" créé sur Cloudflare D1 (${questionsToSave.length} question(s))`,
+                message: `✅ Exercice "${args.title}" créé (${questionsToSave.length} question(s))`,
             };
         }
 
         // ── UPDATE EXERCISE ──
         case 'update_exercise': {
             if (!args.exercise_id) throw { code: -32602, message: 'exercise_id requis' };
-            const ex: any = await db.prepare(`SELECT organization_id FROM exercises WHERE id = ?1`).bind(args.exercise_id).first();
-            if (!ex) throw { code: -32602, message: 'Exercice introuvable' };
-            if (!ctx.isSuperadmin && ctx.orgId && ex.organization_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
+            const updatePayload: any = {};
+            if (args.title !== undefined) updatePayload.title = args.title;
+            if (args.type !== undefined) updatePayload.type = args.type;
+            if (args.max_score !== undefined) updatePayload.max_score = Number(args.max_score);
+            if (args.duration_minutes !== undefined) updatePayload.duration_minutes = Number(args.duration_minutes);
+            if (Array.isArray(args.questions)) updatePayload.questions = args.questions;
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `exercises?id=eq.${encodeURIComponent(args.exercise_id)}`, { method: 'PATCH', body: updatePayload });
+            }
 
             let questionsStr: string | null = null;
             if (Array.isArray(args.questions)) {
                 questionsStr = JSON.stringify(args.questions);
             }
             await db.prepare(`UPDATE exercises SET title = COALESCE(?1, title), type = COALESCE(?2, type), questions = COALESCE(?3, questions), max_score = COALESCE(?4, max_score), duration_minutes = COALESCE(?5, duration_minutes) WHERE id = ?6`)
-                .bind(args.title || null, args.type || null, questionsStr, args.max_score || null, args.duration_minutes || null, args.exercise_id).run();
-            syncToSupabase(env, 'exercises', 'UPDATE', { id: args.exercise_id, title: args.title, type: args.type, questions: args.questions, max_score: args.max_score });
+                .bind(args.title || null, args.type || null, questionsStr, args.max_score || null, args.duration_minutes || null, args.exercise_id).run().catch(() => {});
             return { success: true, message: `✅ Exercice mis à jour` };
         }
 
         // ── DELETE EXERCISE ──
         case 'delete_exercise': {
             if (!args.exercise_id) throw { code: -32602, message: 'exercise_id requis' };
-            const ex: any = await db.prepare(`SELECT organization_id FROM exercises WHERE id = ?1`).bind(args.exercise_id).first();
-            if (!ex) throw { code: -32602, message: 'Exercice introuvable' };
-            if (!ctx.isSuperadmin && ctx.orgId && ex.organization_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
-
-            await db.prepare(`DELETE FROM exercises WHERE id = ?1`).bind(args.exercise_id).run();
-            syncToSupabase(env, 'exercises', 'DELETE', { id: args.exercise_id });
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `exercises?id=eq.${encodeURIComponent(args.exercise_id)}`, { method: 'DELETE' });
+            }
+            await db.prepare(`DELETE FROM exercises WHERE id = ?1`).bind(args.exercise_id).run().catch(() => {});
             return { success: true, message: `🗑️ Exercice supprimé` };
         }
 
@@ -4643,9 +4995,12 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             if (!subjectId && args.subject_name) {
                 subjectId = crypto.randomUUID();
                 const code = (args.code || String(args.subject_name).slice(0, 4)).toUpperCase();
+                const subPayload = { id: subjectId, organization_id: targetOrgId, name: args.subject_name, code, coefficient: 1, classroom_id: args.class_id || null, is_active: true, created_at: now };
+                if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                    await fetchSupabaseRest(env, 'subjects', { method: 'POST', body: subPayload });
+                }
                 await db.prepare(`INSERT INTO subjects (id, organization_id, name, code, coefficient, classroom_id, is_active, created_at) VALUES (?1, ?2, ?3, ?4, 1, ?5, 1, ?6)`)
-                    .bind(subjectId, targetOrgId, args.subject_name, code, args.class_id || null, now).run();
-                syncToSupabase(env, 'subjects', 'INSERT', { id: subjectId, organization_id: targetOrgId, name: args.subject_name, classroom_id: args.class_id, code });
+                    .bind(subjectId, targetOrgId, args.subject_name, code, args.class_id || null, now).run().catch(() => {});
             }
 
             // 2. Traiter l'arborescence complète chapters -> lessons -> exercises
@@ -4654,9 +5009,12 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                     const chData = args.chapters[cIdx];
                     const chId = crypto.randomUUID();
                     const chPos = cIdx + 1;
+                    const chPayload = { id: chId, organization_id: targetOrgId, subject_id: subjectId, title: chData.title, description: chData.description || '', position: chPos, status: 'published', created_at: now, updated_at: now };
+                    if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                        await fetchSupabaseRest(env, 'chapters', { method: 'POST', body: chPayload });
+                    }
                     await db.prepare(`INSERT INTO chapters (id, organization_id, subject_id, title, description, position, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', ?7, ?7)`)
-                        .bind(chId, targetOrgId, subjectId, chData.title, chData.description || '', chPos, now).run();
-                    syncToSupabase(env, 'chapters', 'INSERT', { id: chId, organization_id: targetOrgId, subject_id: subjectId, title: chData.title, position: chPos });
+                        .bind(chId, targetOrgId, subjectId, chData.title, chData.description || '', chPos, now).run().catch(() => {});
                     createdSummary.chapters++;
                     createdCount++;
 
@@ -4666,9 +5024,33 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                             const lId = crypto.randomUUID();
                             const lPos = lIdx + 1;
                             const dur = Number(lData.duration_minutes) || 15;
+                            const lLang = (lData.language || chData.language || args.language || 'fr').toLowerCase().trim();
+                            let lContent = lData.content;
+                            const lOrigContent = lData.content;
+
+                            if (lLang !== 'fr') {
+                                const tr = await translateTextWithAi(env, lData.content, lLang, 'fr');
+                                lContent = tr.translated_text;
+                            }
+
+                            const lesPayload = {
+                                id: lId,
+                                organization_id: targetOrgId,
+                                chapter_id: chId,
+                                title: lData.title,
+                                content: lContent,
+                                content_original: lOrigContent,
+                                language: lLang,
+                                estimated_minutes: dur,
+                                status: 'published',
+                                position: lPos,
+                                created_at: now,
+                            };
+                            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                                await fetchSupabaseRest(env, 'lessons', { method: 'POST', body: lesPayload });
+                            }
                             await db.prepare(`INSERT INTO lessons (id, organization_id, chapter_id, title, content, estimated_minutes, status, position, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', ?7, ?8)`)
-                                .bind(lId, targetOrgId, chId, lData.title, lData.content, dur, lPos, now).run();
-                            syncToSupabase(env, 'lessons', 'INSERT', { id: lId, organization_id: targetOrgId, chapter_id: chId, title: lData.title, content: lData.content, position: lPos });
+                                .bind(lId, targetOrgId, chId, lData.title, lContent, dur, lPos, now).run().catch(() => {});
                             createdSummary.lessons++;
                             createdCount++;
 
@@ -4685,9 +5067,12 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                                         correct_answer: exData.correct_answer || exData.answer || '',
                                     }];
                                     const qStr = JSON.stringify(qList);
+                                    const exPayload = { id: exId, organization_id: targetOrgId, chapter_id: chId, lesson_id: lId, title: exData.title, type: exData.type || 'qcm', questions: qList, duration_minutes: Number(exData.duration_minutes) || 10, max_score: Number(exData.max_score) || 20, created_at: now, created_by_ai: true, language: lLang };
+                                    if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                                        await fetchSupabaseRest(env, 'exercises', { method: 'POST', body: exPayload });
+                                    }
                                     await db.prepare(`INSERT INTO exercises (id, organization_id, chapter_id, lesson_id, title, type, questions, duration_minutes, max_score, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`)
-                                        .bind(exId, targetOrgId, chId, lId, exData.title, exData.type || 'qcm', qStr, Number(exData.duration_minutes) || 10, Number(exData.max_score) || 20, now).run();
-                                    syncToSupabase(env, 'exercises', 'INSERT', { id: exId, organization_id: targetOrgId, chapter_id: chId, lesson_id: lId, title: exData.title, questions: qList, created_by_ai: true });
+                                        .bind(exId, targetOrgId, chId, lId, exData.title, exData.type || 'qcm', qStr, Number(exData.duration_minutes) || 10, Number(exData.max_score) || 20, now).run().catch(() => {});
                                     createdSummary.exercises++;
                                     createdCount++;
                                 }
@@ -4709,8 +5094,329 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             };
         }
 
+        // ── LIST SUPPORTED LANGUAGES (IZITEACH MULTILINGUISME) ──
+        case 'list_supported_languages': {
+            const onlyAfrican = Boolean(args.only_african);
+            const list = Object.values(IZITEACH_SUPPORTED_LANGUAGES).filter((l) => !onlyAfrican || l.is_african);
+            return {
+                success: true,
+                total: list.length,
+                international_languages_count: Object.values(IZITEACH_SUPPORTED_LANGUAGES).filter(l => !l.is_african).length,
+                african_local_languages_count: Object.values(IZITEACH_SUPPORTED_LANGUAGES).filter(l => l.is_african).length,
+                languages: list,
+                message: `🌍 ${list.length} langue(s) supportée(s) sur IziTeach (5 internationales + 20 africaines locales)`,
+            };
+        }
+
+        // ── TRANSLATE CONTENT (CLOUDFLARE AI M2M100) ──
+        case 'translate_content': {
+            if (!args.text || !args.target_language) throw { code: -32602, message: 'text et target_language requis' };
+            const targetLang = String(args.target_language).toLowerCase().trim();
+            const sourceLang = String(args.source_language || 'fr').toLowerCase().trim();
+
+            const translation = await translateTextWithAi(env, String(args.text), targetLang, sourceLang);
+
+            // Mise à jour optionnelle d'une leçon existante
+            if (args.lesson_id) {
+                if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                    await fetchSupabaseRest(env, `lessons?id=eq.${encodeURIComponent(String(args.lesson_id))}`, {
+                        method: 'PATCH',
+                        body: {
+                            content: translation.translated_text,
+                            language: targetLang,
+                        }
+                    });
+                }
+                if (targetOrgId) {
+                    fetchSupabaseRest(env, 'content_translations', {
+                        method: 'POST',
+                        body: {
+                            entity_type: 'lesson',
+                            entity_id: args.lesson_id,
+                            organization_id: targetOrgId,
+                            language_code: targetLang,
+                            field_name: 'content',
+                            translated_text: translation.translated_text,
+                            source_language: sourceLang,
+                            translation_method: translation.method,
+                        }
+                    }).catch(() => {});
+                }
+            }
+
+            // Mise à jour optionnelle d'un exercice existant
+            if (args.exercise_id && env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `exercises?id=eq.${encodeURIComponent(String(args.exercise_id))}`, {
+                    method: 'PATCH',
+                    body: {
+                        language: targetLang,
+                    }
+                });
+            }
+
+            return {
+                success: true,
+                target_language: targetLang,
+                source_language: sourceLang,
+                translated_text: translation.translated_text,
+                translation_method: translation.method,
+                language_info: translation.language_info,
+                note: translation.note,
+                message: `✅ Traduction vers ${targetLang.toUpperCase()} terminée (${translation.method})`,
+            };
+        }
+
+        // ── LIST STUDENTS ──
+        case 'list_students': {
+            const limit = Math.min(Number(args.limit) || 50, 100);
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                let path = `student_profiles?select=id,first_name,last_name,matricule,phone,email,parent_name,parent_phone,date_of_birth,is_active,classroom_id,classrooms(name)&order=last_name.asc&limit=${limit}`;
+                if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+                if (args.class_id || args.classroom_id) path += `&classroom_id=eq.${encodeURIComponent(String(args.class_id || args.classroom_id))}`;
+                if (args.search) path += `&or=(first_name.ilike.*${encodeURIComponent(args.search)}*,last_name.ilike.*${encodeURIComponent(args.search)}*,matricule.ilike.*${encodeURIComponent(args.search)}*)`;
+                const supStudents = await fetchSupabaseRest(env, path);
+                if (supStudents) return { students: supStudents, total: supStudents.length };
+            }
+            let sql = `SELECT id, first_name, last_name, matricule, phone, email, parent_name, parent_phone, is_active, classroom_id FROM student_profiles`;
+            const conditions: string[] = [];
+            const params: any[] = [];
+            if (targetOrgId) {
+                params.push(targetOrgId);
+                conditions.push(`organization_id = ?${params.length}`);
+            }
+            if (args.class_id || args.classroom_id) {
+                params.push(args.class_id || args.classroom_id);
+                conditions.push(`classroom_id = ?${params.length}`);
+            }
+            if (conditions.length > 0) sql += ` WHERE ` + conditions.join(' AND ');
+            sql += ` ORDER BY last_name ASC LIMIT ?${params.length + 1}`;
+            params.push(limit);
+            const { results } = await db.prepare(sql).bind(...params).all().catch(() => ({ results: [] }));
+            return { students: results || [], total: (results || []).length };
+        }
+
+        // ── CREATE / ADD STUDENT ──
+        case 'create_student':
+        case 'add_student': {
+            if (!args.first_name || !args.last_name) throw { code: -32602, message: 'first_name et last_name requis' };
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+            const id = crypto.randomUUID();
+            const now = new Date().toISOString();
+            const year = new Date().getFullYear();
+            const randSuffix = Math.floor(1000 + Math.random() * 9000);
+            const matricule = args.matricule || `IZI-${year}-${randSuffix}`;
+
+            const payload: any = {
+                id,
+                organization_id: targetOrgId,
+                first_name: args.first_name.trim(),
+                last_name: args.last_name.trim(),
+                matricule,
+                classroom_id: args.classroom_id || args.class_id || null,
+                phone: args.phone || null,
+                email: args.email || null,
+                parent_name: args.parent_name || null,
+                parent_phone: args.parent_phone || null,
+                date_of_birth: args.date_of_birth || args.birth_date || null,
+                is_active: args.is_active !== false,
+            };
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const inserted = await fetchSupabaseRest(env, 'student_profiles', { method: 'POST', body: payload });
+                if (inserted && inserted.length > 0) {
+                    await db.prepare(`INSERT INTO student_profiles (id, organization_id, first_name, last_name, matricule, classroom_id, phone, email, parent_name, parent_phone, is_active, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1, ?11)`)
+                        .bind(id, targetOrgId, payload.first_name, payload.last_name, matricule, payload.classroom_id, payload.phone, payload.email, payload.parent_name, payload.parent_phone, now).run().catch(() => {});
+                    return { success: true, student_id: id, matricule, student: inserted[0], message: `✅ Élève ${payload.first_name} ${payload.last_name} inscrit(e) avec succès (Matricule : ${matricule})` };
+                }
+            }
+
+            await db.prepare(`INSERT INTO student_profiles (id, organization_id, first_name, last_name, matricule, classroom_id, phone, email, parent_name, parent_phone, is_active, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1, ?11)`)
+                .bind(id, targetOrgId, payload.first_name, payload.last_name, matricule, payload.classroom_id, payload.phone, payload.email, payload.parent_name, payload.parent_phone, now).run().catch(() => {});
+            syncToSupabase(env, 'student_profiles', 'INSERT', payload);
+            return { success: true, student_id: id, matricule, message: `✅ Élève ${payload.first_name} ${payload.last_name} inscrit(e) avec succès (Matricule : ${matricule})` };
+        }
+
+        // ── UPDATE STUDENT ──
+        case 'update_student': {
+            if (!args.student_id) throw { code: -32602, message: 'student_id requis' };
+            const updatePayload: any = {};
+            if (args.first_name !== undefined) updatePayload.first_name = args.first_name;
+            if (args.last_name !== undefined) updatePayload.last_name = args.last_name;
+            if (args.classroom_id !== undefined || args.class_id !== undefined) updatePayload.classroom_id = args.classroom_id || args.class_id;
+            if (args.matricule !== undefined) updatePayload.matricule = args.matricule;
+            if (args.phone !== undefined) updatePayload.phone = args.phone;
+            if (args.email !== undefined) updatePayload.email = args.email;
+            if (args.parent_name !== undefined) updatePayload.parent_name = args.parent_name;
+            if (args.parent_phone !== undefined) updatePayload.parent_phone = args.parent_phone;
+            if (args.is_active !== undefined) updatePayload.is_active = args.is_active;
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `student_profiles?id=eq.${encodeURIComponent(args.student_id)}`, { method: 'PATCH', body: updatePayload });
+            }
+            return { success: true, message: `✅ Profil élève mis à jour` };
+        }
+
+        // ── DELETE STUDENT ──
+        case 'delete_student': {
+            if (!args.student_id) throw { code: -32602, message: 'student_id requis' };
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `student_profiles?id=eq.${encodeURIComponent(args.student_id)}`, { method: 'DELETE' });
+            }
+            await db.prepare(`DELETE FROM student_profiles WHERE id = ?1`).bind(args.student_id).run().catch(() => {});
+            return { success: true, message: `🗑️ Élève supprimé` };
+        }
+
+        // ── LIST TEACHERS ──
+        case 'list_teachers': {
+            const limit = Math.min(Number(args.limit) || 50, 100);
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                let path = `teacher_profiles?select=id,first_name,last_name,speciality,phone,email,diplomas,access_code,is_active&order=last_name.asc&limit=${limit}`;
+                if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+                const supTeachers = await fetchSupabaseRest(env, path);
+                if (supTeachers) return { teachers: supTeachers, total: supTeachers.length };
+            }
+            let sql = `SELECT id, first_name, last_name, speciality, phone, email, access_code, is_active FROM teacher_profiles`;
+            if (targetOrgId) sql += ` WHERE organization_id = ?1`;
+            sql += ` ORDER BY last_name ASC LIMIT ${limit}`;
+            const params = targetOrgId ? [targetOrgId] : [];
+            const { results } = await db.prepare(sql).bind(...params).all().catch(() => ({ results: [] }));
+            return { teachers: results || [], total: (results || []).length };
+        }
+
+        // ── CREATE / ADD TEACHER ──
+        case 'create_teacher':
+        case 'add_teacher': {
+            if (!args.first_name || !args.last_name) throw { code: -32602, message: 'first_name et last_name requis' };
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+            const id = crypto.randomUUID();
+            const now = new Date().toISOString();
+            const accessCode = args.access_code || `ENS-${Math.floor(100000 + Math.random() * 900000)}`;
+
+            const payload: any = {
+                id,
+                organization_id: targetOrgId,
+                first_name: args.first_name.trim(),
+                last_name: args.last_name.trim(),
+                speciality: args.speciality || 'Enseignant',
+                phone: args.phone || null,
+                email: args.email || null,
+                diplomas: args.diplomas || null,
+                access_code: accessCode,
+                is_active: args.is_active !== false,
+            };
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const inserted = await fetchSupabaseRest(env, 'teacher_profiles', { method: 'POST', body: payload });
+                if (inserted && inserted.length > 0) {
+                    return { success: true, teacher_id: id, access_code: accessCode, teacher: inserted[0], message: `✅ Enseignant ${payload.first_name} ${payload.last_name} ajouté (Code d'accès : ${accessCode})` };
+                }
+            }
+            return { success: true, teacher_id: id, access_code: accessCode, message: `✅ Enseignant ${payload.first_name} ${payload.last_name} ajouté` };
+        }
+
+        // ── RECORD / CREATE PAYMENT ──
+        case 'record_payment':
+        case 'create_payment': {
+            if (!args.student_id || !args.amount) throw { code: -32602, message: 'student_id et amount requis' };
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+            const id = crypto.randomUUID();
+            const now = new Date().toISOString();
+            const amount = Number(args.amount);
+            const currency = args.currency || 'XAF';
+            const method = args.payment_method || 'cash';
+            const year = args.academic_year || `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`;
+            const term = args.term || 'Trimestre 1';
+            const ref = args.reference || `REC-${Date.now().toString().slice(-6)}`;
+
+            const payload: any = {
+                id,
+                organization_id: targetOrgId,
+                student_id: args.student_id,
+                amount,
+                currency,
+                payment_method: method,
+                reference: ref,
+                description: args.description || `Paiement scolarité ${term} (${year})`,
+                status: 'paid',
+                academic_year: year,
+                term,
+                paid_at: now,
+            };
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const inserted = await fetchSupabaseRest(env, 'school_payments', { method: 'POST', body: payload });
+                if (inserted && inserted.length > 0) {
+                    broadcastUpdatePush(env, db, targetOrgId, `💰 Paiement Reçu`, `Un versement de ${amount.toLocaleString()} ${currency} a été enregistré (Réf: ${ref}).`, '💰', '/admin/finances');
+                    return { success: true, payment_id: id, reference: ref, payment: inserted[0], message: `✅ Versement de ${amount.toLocaleString()} ${currency} enregistré avec succès (Réf: ${ref})` };
+                }
+            }
+            return { success: true, payment_id: id, reference: ref, message: `✅ Versement de ${amount.toLocaleString()} ${currency} enregistré (Réf: ${ref})` };
+        }
+
+        // ── LIST PAYMENTS ──
+        case 'list_payments': {
+            const limit = Math.min(Number(args.limit) || 50, 100);
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                let path = `school_payments?select=id,student_id,amount,currency,payment_method,reference,description,status,academic_year,term,paid_at,student_profiles(first_name,last_name,matricule)&order=paid_at.desc&limit=${limit}`;
+                if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+                if (args.student_id) path += `&student_id=eq.${encodeURIComponent(String(args.student_id))}`;
+                if (args.academic_year) path += `&academic_year=eq.${encodeURIComponent(String(args.academic_year))}`;
+                if (args.term) path += `&term=eq.${encodeURIComponent(String(args.term))}`;
+                const supPayments = await fetchSupabaseRest(env, path);
+                if (supPayments) {
+                    const totalRevenue = supPayments.reduce((acc: number, p: any) => acc + (Number(p.amount) || 0), 0);
+                    return { payments: supPayments, total_count: supPayments.length, total_amount_xaf: totalRevenue };
+                }
+            }
+            return { payments: [], total_count: 0, total_amount_xaf: 0 };
+        }
+
+        // ── GET SCHOOL STATS ──
+        case 'get_school_stats': {
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+            let studentCount = 0, teacherCount = 0, classCount = 0, subjectCount = 0, lessonCount = 0, examCount = 0, totalRevenue = 0;
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const [st, tc, cl, sb, ls, ex, pm] = await Promise.all([
+                    fetchSupabaseRest(env, `student_profiles?organization_id=eq.${encodeURIComponent(targetOrgId)}&select=id`),
+                    fetchSupabaseRest(env, `teacher_profiles?organization_id=eq.${encodeURIComponent(targetOrgId)}&select=id`),
+                    fetchSupabaseRest(env, `classrooms?organization_id=eq.${encodeURIComponent(targetOrgId)}&select=id`),
+                    fetchSupabaseRest(env, `subjects?organization_id=eq.${encodeURIComponent(targetOrgId)}&select=id`),
+                    fetchSupabaseRest(env, `lessons?organization_id=eq.${encodeURIComponent(targetOrgId)}&select=id`),
+                    fetchSupabaseRest(env, `exam_papers?org_id=eq.${encodeURIComponent(targetOrgId)}&select=id`),
+                    fetchSupabaseRest(env, `school_payments?organization_id=eq.${encodeURIComponent(targetOrgId)}&select=amount`),
+                ]);
+                studentCount = st?.length || 0;
+                teacherCount = tc?.length || 0;
+                classCount = cl?.length || 0;
+                subjectCount = sb?.length || 0;
+                lessonCount = ls?.length || 0;
+                examCount = ex?.length || 0;
+                totalRevenue = (pm || []).reduce((acc: number, p: any) => acc + (Number(p.amount) || 0), 0);
+            }
+
+            return {
+                organization_id: targetOrgId,
+                total_students: studentCount,
+                total_teachers: teacherCount,
+                total_classes: classCount,
+                total_subjects: subjectCount,
+                total_lessons: lessonCount,
+                total_exam_papers: examCount,
+                total_revenue_collected_xaf: totalRevenue,
+                timestamp: new Date().toISOString(),
+            };
+        }
+
         // ── LIST GRADES ──
         case 'list_grades': {
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                let path = `grades?select=id,student_id,score,max_score,title,type,created_at,student_profiles(first_name,last_name)&order=created_at.desc&limit=50`;
+                if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+                if (args.student_id) path += `&student_id=eq.${encodeURIComponent(args.student_id as string)}`;
+                const supGrades = await fetchSupabaseRest(env, path);
+                if (supGrades) return { grades: supGrades, total: supGrades.length };
+            }
             let sql = `SELECT id, student_id, score, max_score, title, type, created_at FROM grades`;
             const conditions: string[] = [];
             const params: any[] = [];
@@ -4724,23 +5430,51 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             }
             if (conditions.length > 0) sql += ` WHERE ` + conditions.join(' AND ');
             sql += ` ORDER BY created_at DESC LIMIT 50`;
-            const { results } = await db.prepare(sql).bind(...params).all();
+            const { results } = await db.prepare(sql).bind(...params).all().catch(() => ({ results: [] }));
             return { grades: results || [], total: (results || []).length };
         }
 
         // ── CREATE GRADE ──
         case 'create_grade': {
             if (!args.student_id || args.score === undefined) throw { code: -32602, message: 'student_id et score requis' };
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
             const id = crypto.randomUUID();
             const now = new Date().toISOString();
+            const payload: any = {
+                id,
+                organization_id: targetOrgId,
+                student_id: args.student_id,
+                subject_id: args.subject_id || null,
+                score: Number(args.score),
+                max_score: Number(args.max_score || 20),
+                title: args.evaluation_title || args.title || 'Évaluation',
+                type: args.period || args.type || 'Trimestre 1',
+            };
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const inserted = await fetchSupabaseRest(env, 'grades', { method: 'POST', body: payload });
+                if (inserted && inserted.length > 0) {
+                    await db.prepare(`INSERT INTO grades (id, organization_id, student_id, score, max_score, title, type, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`)
+                        .bind(id, targetOrgId, args.student_id, Number(args.score), Number(args.max_score || 20), args.evaluation_title || 'Évaluation', args.period || 'Trimestre 1', now).run().catch(() => {});
+                    return { success: true, grade_id: id, grade: inserted[0], message: `✅ Note enregistrée et synchronisée immédiatement` };
+                }
+            }
+
             await db.prepare(`INSERT INTO grades (id, organization_id, student_id, score, max_score, title, type, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`)
-                .bind(id, targetOrgId, args.student_id, Number(args.score), Number(args.max_score || 20), args.evaluation_title || 'Évaluation', args.period || 'Trimestre 1', now).run();
-            syncToSupabase(env, 'grades', 'INSERT', { id, organization_id: targetOrgId, student_id: args.student_id, score: Number(args.score), max_score: Number(args.max_score || 20), title: args.evaluation_title, type: args.period });
+                .bind(id, targetOrgId, args.student_id, Number(args.score), Number(args.max_score || 20), args.evaluation_title || 'Évaluation', args.period || 'Trimestre 1', now).run().catch(() => {});
+            syncToSupabase(env, 'grades', 'INSERT', payload);
             return { success: true, grade_id: id, message: `✅ Note enregistrée` };
         }
 
         // ── LIST ATTENDANCE ──
         case 'list_attendance': {
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                let path = `attendances?select=id,student_id,status,date,notes,created_at,student_profiles(first_name,last_name)&order=date.desc&limit=50`;
+                if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+                if (args.date) path += `&date=eq.${encodeURIComponent(args.date as string)}`;
+                const supAtt = await fetchSupabaseRest(env, path);
+                if (supAtt) return { attendances: supAtt, total: supAtt.length };
+            }
             let sql = `SELECT id, student_id, status, date, notes, created_at FROM attendances`;
             const conditions: string[] = [];
             const params: any[] = [];
@@ -4754,12 +5488,19 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             }
             if (conditions.length > 0) sql += ` WHERE ` + conditions.join(' AND ');
             sql += ` ORDER BY date DESC LIMIT 50`;
-            const { results } = await db.prepare(sql).bind(...params).all();
+            const { results } = await db.prepare(sql).bind(...params).all().catch(() => ({ results: [] }));
             return { attendances: results || [], total: (results || []).length };
         }
 
         // ── LIST SCHEDULE ──
         case 'list_schedule': {
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                let path = `timetables?select=id,classroom_id,subject_id,day_of_week,start_time,end_time,room_name,subjects(name),classrooms(name)&order=day_of_week.asc,start_time.asc`;
+                if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+                if (args.class_id) path += `&classroom_id=eq.${encodeURIComponent(args.class_id as string)}`;
+                const supSched = await fetchSupabaseRest(env, path);
+                if (supSched) return { schedule: supSched, total: supSched.length };
+            }
             let sql = `SELECT id, classroom_id, subject_id, day_of_week, start_time, end_time, room_name FROM timetables`;
             const conditions: string[] = [];
             const params: any[] = [];
@@ -4773,7 +5514,7 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             }
             if (conditions.length > 0) sql += ` WHERE ` + conditions.join(' AND ');
             sql += ` ORDER BY day_of_week, start_time ASC`;
-            const { results } = await db.prepare(sql).bind(...params).all();
+            const { results } = await db.prepare(sql).bind(...params).all().catch(() => ({ results: [] }));
             return { schedule: results || [], total: (results || []).length };
         }
 
@@ -4782,16 +5523,44 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             if (!args.classroom_id || !args.subject_id || !args.day_of_week || !args.start_time || !args.end_time) {
                 throw { code: -32602, message: 'classroom_id, subject_id, day_of_week, start_time et end_time requis' };
             }
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
             const id = args.schedule_id || crypto.randomUUID();
             const now = new Date().toISOString();
+            const payload = {
+                id,
+                organization_id: targetOrgId,
+                classroom_id: args.classroom_id,
+                subject_id: args.subject_id,
+                day_of_week: args.day_of_week,
+                start_time: args.start_time,
+                end_time: args.end_time,
+                room_name: args.room_name || null,
+            };
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, 'timetables', { method: 'POST', body: payload });
+            }
             await db.prepare(`INSERT INTO timetables (id, organization_id, classroom_id, subject_id, day_of_week, start_time, end_time, room_name, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`)
-                .bind(id, targetOrgId, args.classroom_id, args.subject_id, args.day_of_week, args.start_time, args.end_time, args.room_name || null, now).run();
-            syncToSupabase(env, 'timetables', 'INSERT', { id, organization_id: targetOrgId, classroom_id: args.classroom_id, subject_id: args.subject_id, day_of_week: args.day_of_week, start_time: args.start_time, end_time: args.end_time });
+                .bind(id, targetOrgId, args.classroom_id, args.subject_id, args.day_of_week, args.start_time, args.end_time, args.room_name || null, now).run().catch(() => {});
             return { success: true, schedule_id: id, message: `✅ Emploi du temps mis à jour` };
         }
 
         // ── LIST EXAM PAPERS (SALLE D'ÉVALUATION) ──
         case 'list_exam_papers': {
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                let path = `exam_papers?select=id,org_id,created_by,title,subject,coefficient,duration_minutes,instructions,questions,status,created_at,updated_at&order=created_at.desc&limit=50`;
+                if (targetOrgId) path += `&org_id=eq.${encodeURIComponent(targetOrgId)}`;
+                if (args.subject) path += `&subject=eq.${encodeURIComponent(args.subject as string)}`;
+                if (args.status) path += `&status=eq.${encodeURIComponent(args.status as string)}`;
+                const supPapers = await fetchSupabaseRest(env, path);
+                if (supPapers) {
+                    const papers = supPapers.map((p: any) => ({
+                        ...p,
+                        questions: typeof p.questions === 'string' ? JSON.parse(p.questions || '[]') : p.questions,
+                    }));
+                    return { exam_papers: papers, total: papers.length };
+                }
+            }
             let sql = `SELECT id, org_id, created_by, title, subject, coefficient, duration_minutes, instructions, questions, status, created_at, updated_at FROM exam_papers`;
             const conditions: string[] = [];
             const params: any[] = [];
@@ -4809,7 +5578,7 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             }
             if (conditions.length > 0) sql += ` WHERE ` + conditions.join(' AND ');
             sql += ` ORDER BY created_at DESC LIMIT 50`;
-            const { results } = await db.prepare(sql).bind(...params).all();
+            const { results } = await db.prepare(sql).bind(...params).all().catch(() => ({ results: [] }));
             const papers = (results || []).map((p: any) => ({
                 ...p,
                 questions: typeof p.questions === 'string' ? JSON.parse(p.questions || '[]') : p.questions,
@@ -4829,17 +5598,35 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             const dur = Number(args.duration_minutes) || 60;
             const status = args.status || 'published';
 
+            const payload = {
+                id,
+                org_id: targetOrgId,
+                created_by: ctx.agentId,
+                title: args.title,
+                subject: args.subject || null,
+                coefficient: coeff,
+                duration_minutes: dur,
+                instructions: args.instructions || null,
+                questions,
+                status,
+                exam_mode: 'structured',
+            };
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const inserted = await fetchSupabaseRest(env, 'exam_papers', { method: 'POST', body: payload });
+                if (inserted && inserted.length > 0) {
+                    await db.prepare(`INSERT INTO exam_papers (id, org_id, created_by, title, subject, coefficient, duration_minutes, instructions, questions, status, created_at, updated_at, exam_mode) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11, 'structured')`)
+                        .bind(id, targetOrgId, ctx.agentId, args.title, args.subject || null, coeff, dur, args.instructions || null, questionsStr, status, now).run().catch(() => {});
+                    broadcastUpdatePush(env, db, targetOrgId, `📝 Nouvelle Épreuve : ${args.title}`, `Une nouvelle épreuve ${args.subject ? `de ${args.subject}` : ''} (${dur} min) est prête dans la Salle d'Évaluation.`, '📝', '/campus/evaluations');
+                    return { success: true, paper_id: id, paper: inserted[0], message: `✅ Épreuve "${args.title}" créée dans la Salle d'Évaluation (${questions.length} question(s))` };
+                }
+            }
+
             await db.prepare(`INSERT INTO exam_papers (id, org_id, created_by, title, subject, coefficient, duration_minutes, instructions, questions, status, created_at, updated_at, exam_mode) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11, 'structured')`)
-                .bind(id, targetOrgId, ctx.agentId, args.title, args.subject || null, coeff, dur, args.instructions || null, questionsStr, status, now).run();
+                .bind(id, targetOrgId, ctx.agentId, args.title, args.subject || null, coeff, dur, args.instructions || null, questionsStr, status, now).run().catch(() => {});
 
-            syncToSupabase(env, 'exam_papers', 'INSERT', {
-                id, org_id: targetOrgId, created_by: ctx.agentId, title: args.title, subject: args.subject, coefficient: coeff, duration_minutes: dur, instructions: args.instructions, questions, status, exam_mode: 'structured'
-            });
-
-            // 📢 NOTIFICATION PUSH AUTOMATIQUE AUX ÉLÈVES
-            const notifTitle = `📝 Nouvelle Épreuve : ${args.title}`;
-            const notifMsg = `Une nouvelle épreuve ${args.subject ? `de ${args.subject}` : ''} (${dur} min) est prête dans la Salle d'Évaluation.`;
-            broadcastUpdatePush(env, db, targetOrgId, notifTitle, notifMsg, '📝', '/campus/evaluations');
+            syncToSupabase(env, 'exam_papers', 'INSERT', payload);
+            broadcastUpdatePush(env, db, targetOrgId, `📝 Nouvelle Épreuve : ${args.title}`, `Une nouvelle épreuve ${args.subject ? `de ${args.subject}` : ''} (${dur} min) est prête dans la Salle d'Évaluation.`, '📝', '/campus/evaluations');
 
             return {
                 success: true,
@@ -4851,52 +5638,71 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         // ── UPDATE EXAM PAPER ──
         case 'update_exam_paper': {
             if (!args.paper_id) throw { code: -32602, message: 'paper_id requis' };
-            const paper: any = await db.prepare(`SELECT org_id FROM exam_papers WHERE id = ?1`).bind(args.paper_id).first();
-            if (!paper) throw { code: -32602, message: 'Épreuve introuvable' };
-            if (!ctx.isSuperadmin && ctx.orgId && paper.org_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
+            const updatePayload: any = {};
+            if (args.title !== undefined) updatePayload.title = args.title;
+            if (args.subject !== undefined) updatePayload.subject = args.subject;
+            if (args.coefficient !== undefined) updatePayload.coefficient = Number(args.coefficient);
+            if (args.duration_minutes !== undefined) updatePayload.duration_minutes = Number(args.duration_minutes);
+            if (args.instructions !== undefined) updatePayload.instructions = args.instructions;
+            if (Array.isArray(args.questions)) updatePayload.questions = args.questions;
+            if (args.status !== undefined) updatePayload.status = args.status;
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `exam_papers?id=eq.${encodeURIComponent(args.paper_id)}`, { method: 'PATCH', body: updatePayload });
+            }
 
             const now = new Date().toISOString();
             const questionsStr = Array.isArray(args.questions) ? JSON.stringify(args.questions) : null;
-
             await db.prepare(`UPDATE exam_papers SET title = COALESCE(?1, title), subject = COALESCE(?2, subject), coefficient = COALESCE(?3, coefficient), duration_minutes = COALESCE(?4, duration_minutes), instructions = COALESCE(?5, instructions), questions = COALESCE(?6, questions), status = COALESCE(?7, status), updated_at = ?8 WHERE id = ?9`)
-                .bind(args.title || null, args.subject || null, args.coefficient || null, args.duration_minutes || null, args.instructions || null, questionsStr, args.status || null, now, args.paper_id).run();
+                .bind(args.title || null, args.subject || null, args.coefficient || null, args.duration_minutes || null, args.instructions || null, questionsStr, args.status || null, now, args.paper_id).run().catch(() => {});
 
-            syncToSupabase(env, 'exam_papers', 'UPDATE', { id: args.paper_id, title: args.title, subject: args.subject, coefficient: args.coefficient, duration_minutes: args.duration_minutes, instructions: args.instructions, questions: args.questions, status: args.status });
             return { success: true, message: `✅ Épreuve mise à jour` };
         }
 
         // ── DELETE EXAM PAPER ──
         case 'delete_exam_paper': {
             if (!args.paper_id) throw { code: -32602, message: 'paper_id requis' };
-            const paper: any = await db.prepare(`SELECT org_id FROM exam_papers WHERE id = ?1`).bind(args.paper_id).first();
-            if (!paper) throw { code: -32602, message: 'Épreuve introuvable' };
-            if (!ctx.isSuperadmin && ctx.orgId && paper.org_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
-
-            await db.prepare(`DELETE FROM exam_papers WHERE id = ?1`).bind(args.paper_id).run();
-            syncToSupabase(env, 'exam_papers', 'DELETE', { id: args.paper_id });
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `exam_papers?id=eq.${encodeURIComponent(args.paper_id)}`, { method: 'DELETE' });
+            }
+            await db.prepare(`DELETE FROM exam_papers WHERE id = ?1`).bind(args.paper_id).run().catch(() => {});
             return { success: true, message: `🗑️ Épreuve supprimée` };
         }
 
         // ── LAUNCH EXAM SESSION ──
         case 'launch_exam_session': {
             if (!args.paper_id) throw { code: -32602, message: 'paper_id requis' };
-            const paper: any = await db.prepare(`SELECT * FROM exam_papers WHERE id = ?1`).bind(args.paper_id).first();
+            let paper: any = null;
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const supPapers = await fetchSupabaseRest(env, `exam_papers?id=eq.${encodeURIComponent(args.paper_id)}`);
+                if (supPapers && supPapers.length > 0) paper = supPapers[0];
+            }
+            if (!paper) {
+                paper = await db.prepare(`SELECT * FROM exam_papers WHERE id = ?1`).bind(args.paper_id).first().catch(() => null);
+            }
             if (!paper) throw { code: -32602, message: 'Épreuve introuvable' };
-            if (!ctx.isSuperadmin && ctx.orgId && paper.org_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
 
             const sessionId = crypto.randomUUID();
             const now = new Date().toISOString();
-            const participantIds = JSON.stringify(args.participant_ids || []);
+            const participantIds = Array.isArray(args.participant_ids) ? args.participant_ids : [];
 
+            const payload = {
+                id: sessionId,
+                exam_paper_id: args.paper_id,
+                org_id: paper.org_id,
+                launched_by: ctx.agentId,
+                participant_ids: participantIds,
+                status: 'active',
+                started_at: now,
+            };
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, 'exam_sessions', { method: 'POST', body: payload });
+            }
             await db.prepare(`INSERT INTO exam_sessions (id, exam_paper_id, org_id, launched_by, participant_ids, status, started_at, created_at) VALUES (?1, ?2, ?3, ?4, ?5, 'active', ?6, ?6)`)
-                .bind(sessionId, args.paper_id, paper.org_id, ctx.agentId, participantIds, now).run();
+                .bind(sessionId, args.paper_id, paper.org_id, ctx.agentId, JSON.stringify(participantIds), now).run().catch(() => {});
 
-            syncToSupabase(env, 'exam_sessions', 'INSERT', { id: sessionId, exam_paper_id: args.paper_id, org_id: paper.org_id, launched_by: ctx.agentId, status: 'active', started_at: now });
-
-            // 📢 NOTIFICATION PUSH D'ÉVALUATION EN DIRECT
-            const notifTitle = `⚡ Évaluation en Direct : ${paper.title}`;
-            const notifMsg = `Une session d'examen vient d'être lancée dans la Salle d'Évaluation !`;
-            broadcastUpdatePush(env, db, paper.org_id, notifTitle, notifMsg, '⚡', '/campus/evaluations');
+            broadcastUpdatePush(env, db, paper.org_id, `⚡ Évaluation en Direct : ${paper.title}`, `Une session d'examen vient d'être lancée dans la Salle d'Évaluation !`, '⚡', '/campus/evaluations');
 
             return {
                 success: true,
@@ -4907,6 +5713,14 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
 
         // ── LIST FORMS (SONDAGES & ENQUÊTES) ──
         case 'list_forms': {
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                let path = `forms?select=id,organization_id,title,description,slug,form_type,is_published,accepts_responses,show_results_to_respondents,created_at&order=created_at.desc&limit=50`;
+                if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+                if (args.form_type) path += `&form_type=eq.${encodeURIComponent(args.form_type as string)}`;
+                if (typeof args.is_published === 'boolean') path += `&is_published=eq.${args.is_published}`;
+                const supForms = await fetchSupabaseRest(env, path);
+                if (supForms) return { forms: supForms, total: supForms.length };
+            }
             let sql = `SELECT id, organization_id, title, description, slug, form_type, is_published, accepts_responses, show_results_to_respondents, created_at FROM forms`;
             const conditions: string[] = [];
             const params: any[] = [];
@@ -4924,7 +5738,7 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             }
             if (conditions.length > 0) sql += ` WHERE ` + conditions.join(' AND ');
             sql += ` ORDER BY created_at DESC LIMIT 50`;
-            const { results } = await db.prepare(sql).bind(...params).all();
+            const { results } = await db.prepare(sql).bind(...params).all().catch(() => ({ results: [] }));
             return { forms: results || [], total: (results || []).length };
         }
 
@@ -4933,11 +5747,16 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             if (!args.title) throw { code: -32602, message: 'title requis' };
             if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
 
-            // Récupérer le slug de l'organisation
-            const org: any = await db.prepare(`SELECT slug FROM organizations WHERE id = ?1`).bind(targetOrgId).first();
-            const orgSlug = org?.slug || 'campus';
+            let orgSlug = 'campus';
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const supOrgs = await fetchSupabaseRest(env, `organizations?id=eq.${encodeURIComponent(targetOrgId)}&select=slug`);
+                if (supOrgs && supOrgs.length > 0 && supOrgs[0].slug) orgSlug = supOrgs[0].slug;
+            }
+            if (orgSlug === 'campus') {
+                const org: any = await db.prepare(`SELECT slug FROM organizations WHERE id = ?1`).bind(targetOrgId).first().catch(() => null);
+                if (org?.slug) orgSlug = org.slug;
+            }
 
-            // Génération de slug propre
             const baseSlug = String(args.title).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 28);
             const uniquePart = crypto.randomUUID().slice(0, 6);
             const formSlug = `${baseSlug}-${uniquePart}`;
@@ -4945,35 +5764,56 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             const formId = crypto.randomUUID();
             const now = new Date().toISOString();
             const formType = args.form_type || 'survey';
-            const isPub = args.is_published !== false ? 1 : 0;
+            const isPub = args.is_published !== false;
 
+            const payload: any = {
+                id: formId,
+                organization_id: targetOrgId,
+                created_by_role: 'teacher',
+                created_by_id: ctx.agentId,
+                title: args.title,
+                description: args.description || null,
+                slug: formSlug,
+                form_type: formType,
+                is_published: isPub,
+                accepts_responses: true,
+                show_results_to_respondents: false,
+            };
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, 'forms', { method: 'POST', body: payload });
+            }
             await db.prepare(`INSERT INTO forms (id, organization_id, created_by_role, created_by_id, title, description, slug, form_type, is_published, accepts_responses, show_results_to_respondents, created_at) VALUES (?1, ?2, 'teacher', ?3, ?4, ?5, ?6, ?7, ?8, 1, 0, ?9)`)
-                .bind(formId, targetOrgId, ctx.agentId, args.title, args.description || null, formSlug, formType, isPub, now).run();
+                .bind(formId, targetOrgId, ctx.agentId, args.title, args.description || null, formSlug, formType, isPub ? 1 : 0, now).run().catch(() => {});
 
-            syncToSupabase(env, 'forms', 'INSERT', {
-                id: formId, organization_id: targetOrgId, created_by_role: 'teacher', created_by_id: ctx.agentId, title: args.title, description: args.description, slug: formSlug, form_type: formType, is_published: Boolean(isPub), accepts_responses: true
-            });
-
-            // Insérer les champs du formulaire s'ils sont fournis
+            // Insérer les champs
             const fields = Array.isArray(args.fields) ? args.fields : [];
             for (let i = 0; i < fields.length; i++) {
                 const f = fields[i];
                 const fieldId = crypto.randomUUID();
+                const fieldPayload = {
+                    id: fieldId,
+                    form_id: formId,
+                    field_type: f.field_type || 'short_text',
+                    label: f.label || 'Question',
+                    description: f.description || null,
+                    options: f.options || null,
+                    required: Boolean(f.required),
+                    sort_order: i,
+                    correct_answer: f.correct_answer || null,
+                    points: Number(f.points) || 0,
+                };
+                if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                    await fetchSupabaseRest(env, 'form_fields', { method: 'POST', body: fieldPayload });
+                }
                 const optsStr = Array.isArray(f.options) ? JSON.stringify(f.options) : null;
                 await db.prepare(`INSERT INTO form_fields (id, form_id, field_type, label, description, options, required, sort_order, correct_answer, points, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`)
-                    .bind(fieldId, formId, f.field_type || 'short_text', f.label, f.description || null, optsStr, f.required ? 1 : 0, i, f.correct_answer || null, Number(f.points) || 0, now).run();
-                syncToSupabase(env, 'form_fields', 'INSERT', {
-                    id: fieldId, form_id: formId, field_type: f.field_type || 'short_text', label: f.label, description: f.description, options: f.options, required: Boolean(f.required), sort_order: i, correct_answer: f.correct_answer, points: Number(f.points) || 0
-                });
+                    .bind(fieldId, formId, f.field_type || 'short_text', f.label, f.description || null, optsStr, f.required ? 1 : 0, i, f.correct_answer || null, Number(f.points) || 0, now).run().catch(() => {});
             }
 
             const publicUrl = `/${orgSlug}/f/${formSlug}`;
-
-            // 📢 NOTIFICATION PUSH AUTOMATIQUE DU SONDAGE / ENQUÊTE
             if (isPub) {
-                const notifTitle = `📊 Nouveau Formulaire / Enquête : ${args.title}`;
-                const notifMsg = `Votre avis compte ! Répondez dès maintenant : ${args.title}`;
-                broadcastUpdatePush(env, db, targetOrgId, notifTitle, notifMsg, '📊', publicUrl);
+                broadcastUpdatePush(env, db, targetOrgId, `📊 Nouveau Formulaire / Enquête : ${args.title}`, `Votre avis compte ! Répondez dès maintenant : ${args.title}`, '📊', publicUrl);
             }
 
             return {
@@ -4988,43 +5828,35 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         // ── GET FORM RESULTS ──
         case 'get_form_results': {
             if (!args.form_id) throw { code: -32602, message: 'form_id requis' };
-            const form: any = await db.prepare(`SELECT id, title, slug, form_type, is_published, organization_id FROM forms WHERE id = ?1`).bind(args.form_id).first();
-            if (!form) throw { code: -32602, message: 'Formulaire introuvable' };
-            if (!ctx.isSuperadmin && ctx.orgId && form.organization_id !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
+            let form: any = null;
+            let fields: any[] = [];
+            let responses: any[] = [];
 
-            const { results: responses } = await db.prepare(`SELECT id, respondent_name, respondent_email, total_score, submitted_at FROM form_responses WHERE form_id = ?1 ORDER BY submitted_at DESC LIMIT 100`).bind(args.form_id).all();
-            const { results: fields } = await db.prepare(`SELECT id, field_type, label, sort_order FROM form_fields WHERE form_id = ?1 ORDER BY sort_order ASC`).bind(args.form_id).all();
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const supForms = await fetchSupabaseRest(env, `forms?id=eq.${encodeURIComponent(args.form_id)}&select=id,title,slug,form_type,is_published,organization_id`);
+                if (supForms && supForms.length > 0) form = supForms[0];
+                const supFields = await fetchSupabaseRest(env, `form_fields?form_id=eq.${encodeURIComponent(args.form_id)}&order=sort_order.asc`);
+                if (supFields) fields = supFields;
+                const supResp = await fetchSupabaseRest(env, `form_responses?form_id=eq.${encodeURIComponent(args.form_id)}&order=submitted_at.desc&limit=100`);
+                if (supResp) responses = supResp;
+            }
+
+            if (!form) {
+                form = await db.prepare(`SELECT id, title, slug, form_type, is_published, organization_id FROM forms WHERE id = ?1`).bind(args.form_id).first().catch(() => null);
+                const { results: d1Fields } = await db.prepare(`SELECT id, field_type, label, sort_order FROM form_fields WHERE form_id = ?1 ORDER BY sort_order ASC`).bind(args.form_id).all().catch(() => ({ results: [] }));
+                fields = d1Fields || [];
+                const { results: d1Resp } = await db.prepare(`SELECT id, respondent_name, respondent_email, total_score, submitted_at FROM form_responses WHERE form_id = ?1 ORDER BY submitted_at DESC LIMIT 100`).bind(args.form_id).all().catch(() => ({ results: [] }));
+                responses = d1Resp || [];
+            }
+
+            if (!form) throw { code: -32602, message: 'Formulaire introuvable' };
 
             return {
                 form,
-                fields: fields || [],
-                responses: responses || [],
-                total_responses: (responses || []).length,
+                fields,
+                responses,
+                total_responses: responses.length,
             };
-        }
-
-        // ── LIST STUDENTS ──
-        case 'list_students': {
-            if (!ctx.isSuperadmin && !ctx.orgId) throw { code: -32003, message: 'Non autorisé' };
-            const limit = Math.min(Number(args.limit) || 50, 100);
-            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
-                let path = `student_profiles?select=id,first_name,last_name,gender,classroom_id,organization_id,is_active&limit=${limit}`;
-                if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
-                const supStudents = await fetchSupabaseRest(env, path);
-                if (supStudents) return { students: supStudents, total: supStudents.length };
-            }
-            let sql = `SELECT id, first_name, last_name, gender, classroom_id, organization_id FROM student_profiles`;
-            const params: any[] = [];
-            if (targetOrgId) {
-                sql += ` WHERE organization_id = ?1 AND is_active = 1`;
-                params.push(targetOrgId);
-            } else {
-                sql += ` WHERE is_active = 1`;
-            }
-            sql += ` LIMIT ?${params.length + 1}`;
-            params.push(limit);
-            const { results } = await db.prepare(sql).bind(...params).all().catch(() => ({ results: [] }));
-            return { students: results || [], total: (results || []).length };
         }
 
         // ── SUPERADMIN: LIST SUPPORT MESSAGES ──

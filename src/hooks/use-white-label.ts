@@ -113,7 +113,7 @@ export function useWhiteLabel(orgSlug: string) {
         return `${origin}/${orgSlug}${subPath.startsWith('/') ? subPath : '/' + subPath}`;
     };
 
-    /** Whether to show "Powered by CampusFlow" footer */
+    /** Whether to show "Powered by IziTeach" footer */
     const showPlatformBranding = !branding.isWhiteLabel;
 
     return {

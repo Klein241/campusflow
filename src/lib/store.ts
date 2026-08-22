@@ -419,7 +419,7 @@ export const useAppStore = create<AppState>()(
             appSettings: {},
         }),
         {
-            name: 'campusflow-storage',
+            name: 'iziteach-storage',
             partialize: (state) => ({
                 theme: state.theme,
             }),

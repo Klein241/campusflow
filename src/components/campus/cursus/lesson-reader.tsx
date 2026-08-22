@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     X, ZoomIn, ZoomOut,
@@ -41,6 +41,8 @@ interface LessonReaderProps {
         id: string;
         title: string;
         content: string | null;
+        content_original?: string | null;
+        language?: string | null;
         chapter_title?: string;
         subject_title?: string;
     };
@@ -49,6 +51,34 @@ interface LessonReaderProps {
     /** Si true, ouvre le panneau Notes directement à l'ouverture */
     initialShowNotes?: boolean;
 }
+
+const LANGUAGE_META: Record<string, { name: string; flag: string }> = {
+    fr:  { name: 'Français', flag: '🇫🇷' },
+    en:  { name: 'English', flag: '🇬🇧' },
+    ar:  { name: 'العربية', flag: '🇸🇦' },
+    es:  { name: 'Español', flag: '🇪🇸' },
+    pt:  { name: 'Português', flag: '🇵🇹' },
+    sw:  { name: 'Kiswahili', flag: '🌍' },
+    ha:  { name: 'Hausa', flag: '🌍' },
+    yo:  { name: 'Yorùbá', flag: '🌍' },
+    ig:  { name: 'Igbo', flag: '🌍' },
+    lin: { name: 'Lingála', flag: '🌍' },
+    ful: { name: 'Fulfulde', flag: '🌍' },
+    bam: { name: 'Bamanankan', flag: '🌍' },
+    kin: { name: 'Kinyarwanda', flag: '🌍' },
+    mlg: { name: 'Malagasy', flag: '🌍' },
+    dyu: { name: 'Dioula', flag: '🌍' },
+    bci: { name: 'Baoulé', flag: '🌍' },
+    dje: { name: 'Zarma', flag: '🌍' },
+    ewo: { name: 'Ewondo', flag: '🌍' },
+    dua: { name: 'Duala', flag: '🌍' },
+    fan: { name: 'Fang', flag: '🌍' },
+    am:  { name: 'አማርኛ', flag: '🌍' },
+    zu:  { name: 'isiZulu', flag: '🌍' },
+    wo:  { name: 'Wolof', flag: '🌍' },
+    tw:  { name: 'Twi', flag: '🌍' },
+    so:  { name: 'Soomaali', flag: '🌍' },
+};
 
 // Palette de couleurs pour surlignage
 const HIGHLIGHT_COLORS = [
@@ -344,7 +374,25 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
     const [copied, setCopied] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
 
-    const blocks = parseBlocks(lesson.content);
+    // ── MULTILINGUISME & BILINGUISME SYNCHRONE (STYLE TELEGRAM) ──
+    const hasOriginal = Boolean(
+        lesson.content_original &&
+        lesson.content_original.trim() &&
+        lesson.content_original.trim() !== lesson.content?.trim()
+    );
+    const langCode = (lesson.language || 'fr').toLowerCase().trim();
+    const langMeta = LANGUAGE_META[langCode] || { name: langCode.toUpperCase(), flag: '🌍' };
+
+    // Mode d'affichage des langues : 'bilingual' | 'primary' | 'secondary'
+    const [viewLangMode, setViewLangMode] = useState<'bilingual' | 'primary' | 'secondary'>(
+        hasOriginal ? 'bilingual' : 'primary'
+    );
+
+    const primaryBlocks = useMemo(() => parseBlocks(lesson.content), [lesson.content]);
+    const refBlocks = useMemo(() => hasOriginal ? parseBlocks(lesson.content_original) : [], [hasOriginal, lesson.content_original]);
+
+    // Blocs actifs selon le mode
+    const activeBlocks = viewLangMode === 'secondary' && refBlocks.length > 0 ? refBlocks : primaryBlocks;
 
     // ── Load notes ────────────────────────────────────────
     const loadNotes = useCallback(async () => {
@@ -550,6 +598,52 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
                         <h2 className="text-sm font-bold text-white truncate">{lesson.title}</h2>
                     </div>
 
+                    {/* Multilingual / Bilingual Synchrone Switcher */}
+                    {hasOriginal && (
+                        <div className="flex items-center bg-white/[0.04] p-0.5 rounded-xl border border-white/[0.08] text-[10px]">
+                            <button
+                                onClick={() => setViewLangMode('bilingual')}
+                                className={cn(
+                                    "flex items-center gap-1 px-2.5 py-1 rounded-lg font-semibold transition-all",
+                                    viewLangMode === 'bilingual'
+                                        ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
+                                        : "text-slate-400 hover:text-white"
+                                )}
+                                title="Mode Bilingue Synchrone : affiche la langue locale et la version française sous chaque paragraphe"
+                            >
+                                <span>🌍</span>
+                                <span className="hidden sm:inline">Bilingue Synchrone</span>
+                                <span className="sm:hidden">2 Langues</span>
+                            </button>
+                            <button
+                                onClick={() => setViewLangMode('primary')}
+                                className={cn(
+                                    "flex items-center gap-1 px-2.5 py-1 rounded-lg font-semibold transition-all",
+                                    viewLangMode === 'primary'
+                                        ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30"
+                                        : "text-slate-400 hover:text-white"
+                                )}
+                                title={`Afficher uniquement en ${langMeta.name}`}
+                            >
+                                <span>{langMeta.flag}</span>
+                                <span className="hidden sm:inline">{langMeta.name}</span>
+                            </button>
+                            <button
+                                onClick={() => setViewLangMode('secondary')}
+                                className={cn(
+                                    "flex items-center gap-1 px-2.5 py-1 rounded-lg font-semibold transition-all",
+                                    viewLangMode === 'secondary'
+                                        ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                                        : "text-slate-400 hover:text-white"
+                                )}
+                                title="Afficher uniquement en Français (Référence)"
+                            >
+                                <span>🇫🇷</span>
+                                <span className="hidden sm:inline">Français</span>
+                            </button>
+                        </div>
+                    )}
+
                     {/* Zoom controls */}
                     <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06]">
                         <button onClick={zoomOut} className="p-1 hover:text-white text-slate-400 transition-colors" disabled={zoom <= 60}>
@@ -650,6 +744,26 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
                             onMouseUp={handleMouseUp}
                             onTouchEnd={handleMouseUp}
                         >
+                            {/* Bannière mode bilingue synchrone */}
+                            {hasOriginal && viewLangMode === 'bilingual' && (
+                                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-violet-600/15 via-purple-600/10 to-indigo-600/15 border border-violet-500/25 mb-6">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 rounded-xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center text-lg shrink-0">
+                                            {langMeta.flag}
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-white flex items-center gap-2">
+                                                <span>Affichage Bilingue Synchrone</span>
+                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                                                    {langMeta.name} ⇄ Français
+                                                </span>
+                                            </p>
+                                            <p className="text-[11px] text-slate-400 mt-0.5">Le texte principal est en {langMeta.name} avec la traduction française de référence sous chaque paragraphe.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* ── Text selection popup (FIX: onMouseDown préventif) ── */}
                             <AnimatePresence>
                                 {selection && (
@@ -726,14 +840,14 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
                             </AnimatePresence>
 
                             {/* Lesson content blocks */}
-                            {blocks.length === 0 ? (
+                            {activeBlocks.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center py-20 text-center">
                                     <BookOpen className="w-12 h-12 text-slate-600 mb-3" />
                                     <p className="text-slate-500 text-sm">Cette leçon n'a pas encore de contenu</p>
                                 </div>
                             ) : (
-                                <div className="space-y-5">
-                                    {blocks.map((block, i) => {
+                                <div className="space-y-6">
+                                    {activeBlocks.map((block, i) => {
                                         if (block.type === 'text') {
                                             if (!block.value?.trim()) return null;
                                             // Detect code fences
@@ -760,12 +874,33 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
                                                         );
                                                     }
                                                 });
+
+                                            // Référence synchrone en mode bilingue
+                                            const matchingRefBlock = hasOriginal && viewLangMode === 'bilingual' && refBlocks[i]?.type === 'text' && refBlocks[i]?.value?.trim()
+                                                ? refBlocks[i].value.trim()
+                                                : null;
+
                                             return (
-                                                <div
-                                                    key={i}
-                                                    className="text-slate-200 leading-[1.9] tracking-wide whitespace-pre-line"
-                                                    dangerouslySetInnerHTML={{ __html: html }}
-                                                />
+                                                <div key={i} className="space-y-2">
+                                                    {/* Texte principal */}
+                                                    <div
+                                                        className="text-slate-100 font-normal leading-[1.9] tracking-wide whitespace-pre-line text-[15px]"
+                                                        dangerouslySetInnerHTML={{ __html: html }}
+                                                    />
+
+                                                    {/* Texte secondaire synchrone (style Telegram / DeepL) */}
+                                                    {matchingRefBlock && (
+                                                        <div className="p-3 rounded-xl bg-violet-500/[0.06] border border-violet-500/20 text-slate-300 text-xs">
+                                                            <div className="flex items-center gap-1.5 text-[9px] font-bold text-violet-400 uppercase tracking-widest mb-1">
+                                                                <span>🇫🇷</span>
+                                                                <span>Référence Française Synchrone</span>
+                                                            </div>
+                                                            <div className="leading-relaxed italic whitespace-pre-line text-slate-300/90">
+                                                                {matchingRefBlock}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             );
                                         }
                                         if (block.type === 'image') {

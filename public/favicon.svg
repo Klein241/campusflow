@@ -1,30 +1,44 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
   <defs>
-    <radialGradient id="bg" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#0a2a3a"/>
-      <stop offset="100%" stop-color="#060f1a"/>
+    <!-- Fond globe dégradé bleu marine → sarcelle (fidèle au logo IziTeach) -->
+    <radialGradient id="globe" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#1a6b8a"/>
+      <stop offset="60%" stop-color="#0d3a5c"/>
+      <stop offset="100%" stop-color="#071e2e"/>
     </radialGradient>
-    <linearGradient id="ring" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#00d4d4" stop-opacity="0.95"/>
-      <stop offset="100%" stop-color="#3b9eff" stop-opacity="0.6"/>
+    <!-- Dégradé pour le T (sarcelle) -->
+    <linearGradient id="teal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1fc8c8"/>
+      <stop offset="100%" stop-color="#0ca8a8"/>
     </linearGradient>
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="1.8" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
   </defs>
-  <!-- Fond sombre circulaire -->
-  <circle cx="50" cy="50" r="48" fill="url(#bg)"/>
-  <!-- Anneau cyan -->
-  <circle cx="50" cy="50" r="46" fill="none" stroke="url(#ring)" stroke-width="2.5"/>
+
+  <!-- Cercle globe principal -->
+  <circle cx="50" cy="52" r="46" fill="url(#globe)"/>
+
+  <!-- Arc inférieur blanc (vague du logo) -->
+  <path d="M 10 70 Q 50 90 90 70" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.85"/>
+
   <!-- Lettre i (blanche) -->
-  <text x="27" y="70" font-family="Arial Black, Helvetica Neue, Arial, sans-serif"
-        font-weight="900" font-size="50" fill="white" filter="url(#glow)"
-        letter-spacing="-2">i</text>
-  <!-- Lettre T (cyan vif) -->
-  <text x="47" y="70" font-family="Arial Black, Helvetica Neue, Arial, sans-serif"
-        font-weight="900" font-size="50" fill="#00d4d4" filter="url(#glow)"
-        letter-spacing="-2">T</text>
-  <!-- Point déco -->
-  <circle cx="50" cy="82" r="2.5" fill="#00d4d4" opacity="0.65"/>
+  <text x="22" y="72"
+        font-family="Arial Black, Helvetica Neue, Arial, sans-serif"
+        font-weight="900" font-size="48" fill="white"
+        letter-spacing="-1">i</text>
+
+  <!-- Triangle play (sarcelle) intégré dans le i -->
+  <polygon points="33,46 40,52 33,58" fill="url(#teal)" opacity="0.95"/>
+
+  <!-- Lettre T (sarcelle) -->
+  <text x="40" y="72"
+        font-family="Arial Black, Helvetica Neue, Arial, sans-serif"
+        font-weight="900" font-size="48" fill="url(#teal)"
+        letter-spacing="-1">T</text>
+
+  <!-- Pixels dispersés en haut à droite (signature digitale) -->
+  <rect x="72" y="8"  width="7" height="7" fill="#1fc8c8" rx="1"/>
+  <rect x="82" y="5"  width="5" height="5" fill="#0ca8a8" rx="1" opacity="0.9"/>
+  <rect x="76" y="17" width="4" height="4" fill="#1fc8c8" rx="1" opacity="0.7"/>
+  <rect x="86" y="14" width="4" height="4" fill="#1fc8c8" rx="1" opacity="0.8"/>
+  <rect x="81" y="22" width="3" height="3" fill="#0ca8a8" rx="1" opacity="0.6"/>
+  <rect x="88" y="22" width="3" height="3" fill="#1fc8c8" rx="1" opacity="0.5"/>
 </svg>

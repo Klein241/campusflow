@@ -1,11 +1,12 @@
 // ─────────────────────────────────────────────────────────────
 // CampusFlow — Session Manager (src/lib/session.ts)
-// Remplace l'accès direct à localStorage('campusflow_session')
+// Remplace l’accès direct à localStorage('iziteach_session')
 // ─────────────────────────────────────────────────────────────
 
 import { supabase } from '@/lib/supabase';
 
-const SESSION_KEY = 'campusflow_session';
+const SESSION_KEY = 'iziteach_session';
+const SESSION_KEY_LEGACY = 'campusflow_session'; // migration douce
 
 // ── Interface session ──────────────────────────────────────
 export interface CampusSession {
@@ -39,7 +40,9 @@ export const SessionManager = {
     get(): CampusSession | null {
         if (typeof window === 'undefined') return null;
         try {
-            const raw = localStorage.getItem(SESSION_KEY);
+            // Migration douce : lit la nouvelle clé, sinon fallback legacy
+            const raw = localStorage.getItem(SESSION_KEY)
+                || localStorage.getItem(SESSION_KEY_LEGACY);
             if (!raw) return null;
             const session: CampusSession = JSON.parse(raw);
 
@@ -50,6 +53,11 @@ export const SessionManager = {
             if (new Date(session.expires_at).getTime() < Date.now()) {
                 this.clear();
                 return null;
+            }
+            // Si lu depuis la clé legacy, migrer vers la nouvelle clé
+            if (!localStorage.getItem(SESSION_KEY) && localStorage.getItem(SESSION_KEY_LEGACY)) {
+                localStorage.setItem(SESSION_KEY, raw);
+                localStorage.removeItem(SESSION_KEY_LEGACY);
             }
             return session;
         } catch {

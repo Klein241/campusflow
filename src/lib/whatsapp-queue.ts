@@ -78,7 +78,7 @@ export async function queueGradeNotification(
         `📘 *Matière* : ${subjectName}\n` +
         `📝 *Évaluation* : ${evalTitle}\n` +
         `${emoji} *Note obtenue* : *${formattedScore}* (${pct}%)\n\n` +
-        `Retrouvez le détail complet sur votre espace CampusFlow.`;
+        `Retrouvez le détail complet sur votre espace IziTeach.`;
 
     return enqueueWhatsAppMessage(orgId, phone, studentName, 'grade', msg);
 }

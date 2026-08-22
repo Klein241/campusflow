@@ -88,15 +88,19 @@ const RISK_COLORS = {
 const RISK_LABELS = { low: 'Faible', medium: 'Moyen', high: 'Élevé' };
 
 const TOOL_ICONS: Record<string, string> = {
-    'create_lesson':    '📖',
-    'create_chapter':   '📂',
-    'create_subject':   '📚',
-    'create_exercise':  '✏️',
-    'list_students':    '👥',
-    'list_subjects':    '📋',
-    'list_chapters':    '📋',
-    'get_grades':       '📊',
-    'bulk_create':      '⚡',
+    'create_lesson':            '📖',
+    'create_chapter':           '📂',
+    'create_subject':           '📚',
+    'create_exercise':          '✏️',
+    'list_students':            '👥',
+    'list_subjects':            '📋',
+    'list_chapters':            '📋',
+    'get_grades':               '📊',
+    'bulk_create':              '⚡',
+    'list_supported_languages': '🌍',
+    'translate_content':        '🌐',
+    'create_exam_paper':        '📝',
+    'launch_exam_session':      '🎯',
 };
 
 const STATUS_CONFIG = {
@@ -108,19 +112,23 @@ const STATUS_CONFIG = {
 
 // ── Helpers lisibilité journal ────────────────────────────────────
 const TOOL_LABELS: Record<string, string> = {
-    create_lesson:   'Création de leçon',
-    create_chapter:  'Création de chapitre',
-    create_subject:  'Création de matière',
-    create_exercise: 'Création d\'exercice',
-    list_students:   'Consultation des étudiants',
-    list_subjects:   'Consultation des matières',
-    list_chapters:   'Consultation des chapitres',
-    list_lessons:    'Consultation des leçons',
-    list_classes:    'Consultation des classes',
-    get_org_info:    'Informations organisation',
-    get_grades:      'Consultation des notes',
-    bulk_create:     'Création en masse',
-    ping:            'Test de connexion',
+    create_lesson:            'Création de leçon',
+    create_chapter:           'Création de chapitre',
+    create_subject:           'Création de matière',
+    create_exercise:          'Création d\'exercice',
+    list_students:            'Consultation des étudiants',
+    list_subjects:            'Consultation des matières',
+    list_chapters:            'Consultation des chapitres',
+    list_lessons:             'Consultation des leçons',
+    list_classes:             'Consultation des classes',
+    get_org_info:             'Informations organisation',
+    get_grades:               'Consultation des notes',
+    bulk_create:              'Création en masse',
+    list_supported_languages: 'Catalogue des langues',
+    translate_content:        'Traduction de contenu',
+    create_exam_paper:        'Création d\'examen',
+    launch_exam_session:      'Lancement d\'examen',
+    ping:                     'Test de connexion',
 };
 
 function extractInputInfo(toolName: string, inputSummary: string | null): string {
@@ -176,6 +184,7 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
     // Create form state
     const [newKeyName, setNewKeyName]         = useState('');
     const [newKeyDesc, setNewKeyDesc]         = useState('');
+    const [newKeyLanguage, setNewKeyLanguage] = useState('fr');
     const [newKeyPerms, setNewKeyPerms]       = useState<string[]>([]);
     const [newKeyRate, setNewKeyRate]         = useState(10);
     const [newKeyBulk, setNewKeyBulk]         = useState(5);
@@ -253,6 +262,13 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
             });
 
             if (error) throw error;
+
+            // Sauvegarder la langue par défaut si disponible
+            if (data?.id && newKeyLanguage) {
+                try {
+                    await supabase.from('ai_agent_keys').update({ default_language: newKeyLanguage }).eq('id', data.id);
+                } catch {}
+            }
 
             setCreatedKey(data.full_key);
             toast.success('Clé agent créée — copiez-la maintenant !');
@@ -502,6 +518,48 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
                                         placeholder="Ex: Crée automatiquement les leçons du cursus de mathématiques"
                                         className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
                                     />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-semibold text-slate-400 mb-1.5 block flex items-center gap-1.5">
+                                        <span>🌍</span>
+                                        Langue principale de l'agent IA
+                                    </label>
+                                    <select
+                                        value={newKeyLanguage}
+                                        onChange={e => setNewKeyLanguage(e.target.value)}
+                                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                                    >
+                                        <optgroup label="Langues Internationales" className="bg-slate-900 font-semibold text-indigo-400">
+                                            <option value="fr" className="bg-slate-900 text-white">Français (Standard)</option>
+                                            <option value="en" className="bg-slate-900 text-white">Anglais (English)</option>
+                                            <option value="ar" className="bg-slate-900 text-white">Arabe (العربية)</option>
+                                            <option value="es" className="bg-slate-900 text-white">Espagnol (Español)</option>
+                                            <option value="pt" className="bg-slate-900 text-white">Portugais (Português)</option>
+                                        </optgroup>
+                                        <optgroup label="Langues Locales Africaines (Natif & IA M2M100)" className="bg-slate-900 font-semibold text-emerald-400">
+                                            <option value="sw" className="bg-slate-900 text-white">🌍 Swahili (Kiswahili — Kenya, Tanzanie, RDC, Ouganda)</option>
+                                            <option value="ha" className="bg-slate-900 text-white">🌍 Haoussa (Hausa — Nigeria, Niger, Cameroun)</option>
+                                            <option value="yo" className="bg-slate-900 text-white">🌍 Yoruba (Yorùbá — Nigeria, Bénin, Togo)</option>
+                                            <option value="ig" className="bg-slate-900 text-white">🌍 Igbo (Igbo — Nigeria)</option>
+                                            <option value="lin" className="bg-slate-900 text-white">🌍 Lingala (Lingála — RDC, Congo)</option>
+                                            <option value="ful" className="bg-slate-900 text-white">🌍 Fulfulde / Peul (Cameroun, Guinée, Mali, Sénégal)</option>
+                                            <option value="bam" className="bg-slate-900 text-white">🌍 Bambara (Mali)</option>
+                                            <option value="kin" className="bg-slate-900 text-white">🌍 Kinyarwanda (Rwanda)</option>
+                                            <option value="mlg" className="bg-slate-900 text-white">🌍 Malgache (Madagascar)</option>
+                                            <option value="dyu" className="bg-slate-900 text-white">🌍 Dioula (Burkina Faso, Côte d'Ivoire)</option>
+                                            <option value="bci" className="bg-slate-900 text-white">🌍 Baoulé (Côte d'Ivoire)</option>
+                                            <option value="ewo" className="bg-slate-900 text-white">🌍 Ewondo (Cameroun)</option>
+                                            <option value="dua" className="bg-slate-900 text-white">🌍 Duala (Cameroun)</option>
+                                            <option value="fan" className="bg-slate-900 text-white">🌍 Beti-Fang (Cameroun, Gabon, Guinée Éq.)</option>
+                                            <option value="am" className="bg-slate-900 text-white">🌍 Amharique (Éthiopie)</option>
+                                            <option value="zu" className="bg-slate-900 text-white">🌍 Zoulou (isiZulu — Afrique du Sud)</option>
+                                            <option value="wo" className="bg-slate-900 text-white">🌍 Wolof (Sénégal)</option>
+                                            <option value="tw" className="bg-slate-900 text-white">🌍 Twi / Akan (Ghana)</option>
+                                            <option value="so" className="bg-slate-900 text-white">🌍 Somali (Somalie, Djibouti)</option>
+                                            <option value="dje" className="bg-slate-900 text-white">🌍 Zarma (Niger)</option>
+                                        </optgroup>
+                                    </select>
+                                    <p className="text-xs text-slate-500 mt-1">Les leçons et contenus créés par cet agent adopteront cette langue par défaut.</p>
                                 </div>
                             </div>
 

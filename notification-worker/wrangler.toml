@@ -65,3 +65,7 @@ bucket_name = "campusflow-actifs"
 binding = "CAMPUSFLOW_DB"
 database_name = "campusflow-db"
 database_id = "18ca6cd1-0f43-41f1-a3a3-4dffd5998e58"
+
+# ── Cloudflare AI (M2M100 Meta — Traduction langues africaines) ────
+[ai]
+binding = "AI"
