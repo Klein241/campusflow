@@ -77,21 +77,24 @@ export function DameSkyTrustPage() {
                 <section>
                     <SectionTitle icon={Server} title="Où vont vos données ?" subtitle="Un schéma vaut mieux que mille promesses" />
                     <div className="bg-white/[0.03] border border-white/8 rounded-3xl p-8 font-mono text-xs md:text-sm overflow-x-auto">
-                        <pre className="text-slate-300 whitespace-pre leading-relaxed">{Navigateur de l'élève
+                        <pre className="text-slate-300 whitespace-pre leading-relaxed">{`Navigateur de l'élève (École A)
        │  HTTPS TLS 1.3 (chiffré)
-       │  Payload : prénom + école + page courante
-       │  ❌ PAS de mot de passe  ❌ PAS d'email
+       │  Payload : prénom + école ("lycee-excellence") + leçon ouverte
+       │  ❌ PAS de mot de passe  ❌ PAS d'email personnel
        ▼
-☁️  CLOUDFLARE WORKERS AI  ←  VOTRE COMPTE CLOUDFLARE ISOLÉ
-   ├── LLaMA 3.1 8B Instruct (open source, inférence pure)
-   │   → AUCUN entraînement sur vos données
-   └── Supabase  ←  VOTRE INSTANCE PostgreSQL
-       → Seules VOS données d'école y sont stockées
+☁️  PLATEFORME IZITEACH (Cloudflare Workers AI + Supabase)
+   ├── Cloisonnement Multi-Tenant :
+   │   → L'École A et l'École B sont dans des silos 100% étanches (RLS)
+   │
+   ├── Modèle LLaMA 3.1 8B Instruct (Inférence locale privée)
+   │   → ❌ AUCUN entraînement sur les données des élèves
+   │   → ❌ AUCUNE revente de données à des tiers
+   │
+   └── Sessions éphémères : historique détruit après 30 min d'inactivité
 
-🚫  OpenAI  : JAMAIS contacté
-🚫  Google  : JAMAIS contacté
-🚫  Meta    : Reçoit ZÉRO donnée de vos utilisateurs
-🚫  Publicité : Aucune régie connectée}</pre>
+🚫  OpenAI (ChatGPT) : JAMAIS contacté
+🚫  Google AI        : JAMAIS contacté
+🚫  Régies de pub    : Zéro traceur, zéro profilage commercial`}</pre>
                     </div>
                 </section>
 
@@ -149,9 +152,13 @@ export function DameSkyTrustPage() {
                         <div className="bg-gradient-to-r from-amber-950/50 to-transparent border border-amber-700/30 rounded-2xl p-7">
                             <div className="flex items-center gap-3 mb-4">
                                 <span className="text-2xl">🏛️</span>
-                                <h3 className="font-bold text-amber-300 text-lg">Directeurs & Directrices</h3>
+                                <h3 className="font-bold text-amber-300 text-lg">Directeurs & Directrices d'Établissements</h3>
                             </div>
-                            <p className="text-slate-300 leading-relaxed">Dame SKY fonctionne dans <strong className="text-white">votre propre infrastructure</strong> — votre Supabase, votre Cloudflare. C'est l'équivalent d'une professeure d'excellence qui connaît votre école sur le bout des doigts mais ne sort jamais de vos murs. Vous définissez sa pédagogie, consultez son journal en temps réel, pouvez la désactiver en un clic.</p>
+                            <p className="text-slate-300 leading-relaxed">
+                                Dame SKY est fournie nativement par la plateforme <strong className="text-white">IziTeach</strong> sur une infrastructure souveraine et chiffrée.
+                                Votre école constitue un <strong className="text-white">silo étanche et hermétique</strong> : vos cours, notes, examens et effectifs ne sont jamais mélangés avec ceux d'autres établissements, ni envoyés à des tiers comme OpenAI ou Google.
+                                Vous bénéficiez d'une directrice académique d'élite sans avoir à gérer de serveurs complexes, avec un contrôle continu sur les règles appliquées à vos élèves et vos professeurs.
+                            </p>
                         </div>
                         <div className="bg-gradient-to-r from-emerald-950/50 to-transparent border border-emerald-700/30 rounded-2xl p-7">
                             <div className="flex items-center gap-3 mb-4">
