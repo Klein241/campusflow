@@ -357,73 +357,123 @@ export async function translateTextWithAi(
     }
 
     if (env.AI && typeof env.AI.run === 'function') {
-        // 1️⃣ Moteur Principal : Meta LLaMA 3.1 8B Instruct (Haute fidélité multilingue, sans boucle)
+        const langName = langInfo.name_fr;
+        const nativeName = langInfo.name_native || rawTarget;
+        const promptInstruction = `Translate the following educational course text accurately from ${sourceLangCode.toUpperCase()} into ${langName} (${nativeName}).
+Strict rules:
+1. Output ONLY the translated text in fluent ${nativeName} (${langName}).
+2. Do not repeat words or hallucinate.
+3. Keep code and markdown formatting intact.
+
+Text:
+${text.slice(0, 3000)}`;
+
+        // 1️⃣ Essai Meta LLaMA 3.1 8B Instruct (avec prompt direct et messages)
         try {
-            const systemPrompt = `You are a professional educational polyglot translator specializing in African and international languages.
-Translate educational course materials faithfully, idiomatically and naturally into ${langInfo.name_fr} (${langInfo.name_native || rawTarget}).
-
-RULES:
-1. Translate accurately into fluent ${langInfo.name_native || langInfo.name_fr}.
-2. DO NOT hallucinate, repeat phrases or enter infinite loops.
-3. Keep code blocks (Python, JavaScript, SQL, HTML), formulas, and technical keywords intact.
-4. Preserve all Markdown elements (#, ##, bullet points, bold text, blockquotes).
-5. Output ONLY the translated Markdown content. Never add conversational filler, intros, or outros.`;
-
-            const userPrompt = `Translate the following text from ${sourceLangCode.toUpperCase()} into ${langInfo.name_fr} (${langInfo.name_native || rawTarget}):\n\n${text.slice(0, 3500)}`;
-
             const aiRes: any = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: userPrompt },
-                ],
-                temperature: 0.1,
+                prompt: promptInstruction,
                 max_tokens: 2048,
-            }).catch(() => null);
-
-            const resultText = aiRes?.response?.trim() || aiRes?.translated_text?.trim() || '';
-            if (resultText && resultText.length > 10 && !hasRepetitiveLoop(resultText)) {
+            });
+            const out = aiRes?.response?.trim() || aiRes?.translated_text?.trim() || '';
+            if (out && out.length > 10 && !hasRepetitiveLoop(out)) {
                 return {
-                    translated_text: resultText,
-                    method: 'cloudflare_llama3_instruct',
+                    translated_text: out,
+                    method: 'cloudflare_llama3_1',
                     language_info: langInfo,
-                    note: `Traduit avec haute fidélité en ${langInfo.name_fr} (${langInfo.name_native}) via Meta LLaMA 3.1 Instruct.`,
+                    note: `Traduit avec succès en ${langName} (${nativeName}) via Meta LLaMA 3.1.`,
                 };
             }
         } catch (e: any) {
-            console.error('[IziTeach LLaMA AI] Erreur LLaMA 3.1:', e?.message || e);
+            console.warn('[Translate LLaMA 3.1]', e?.message || e);
         }
 
-        // 2️⃣ Moteur Secondaire : Mistral 7B Instruct
+        // 2️⃣ Essai Meta LLaMA 3 8B Instruct
         try {
-            const aiRes: any = await env.AI.run('@cf/mistral/mistral-7b-instruct-v0.2', {
-                messages: [
-                    { role: 'system', content: `Translate this educational lesson to ${langInfo.name_fr} (${langInfo.name_native}). Return ONLY the translated markdown, no preamble.` },
-                    { role: 'user', content: text.slice(0, 3000) }
-                ],
-                temperature: 0.1,
+            const aiRes: any = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+                prompt: promptInstruction,
                 max_tokens: 2048,
-            }).catch(() => null);
-
-            const resultText = aiRes?.response?.trim() || '';
-            if (resultText && resultText.length > 10 && !hasRepetitiveLoop(resultText)) {
+            });
+            const out = aiRes?.response?.trim() || '';
+            if (out && out.length > 10 && !hasRepetitiveLoop(out)) {
                 return {
-                    translated_text: resultText,
-                    method: 'cloudflare_mistral_instruct',
+                    translated_text: out,
+                    method: 'cloudflare_llama3',
                     language_info: langInfo,
-                    note: `Traduit en ${langInfo.name_fr} via Mistral Instruct.`,
+                    note: `Traduit en ${langName} via Meta LLaMA 3.`,
                 };
             }
         } catch (e: any) {
-            console.error('[IziTeach Mistral AI] Erreur Mistral:', e?.message || e);
+            console.warn('[Translate LLaMA 3]', e?.message || e);
+        }
+
+        // 3️⃣ Essai Qwen 1.5 7B Chat
+        try {
+            const aiRes: any = await env.AI.run('@cf/qwen/qwen1.5-7b-chat', {
+                prompt: promptInstruction,
+                max_tokens: 2048,
+            });
+            const out = aiRes?.response?.trim() || '';
+            if (out && out.length > 10 && !hasRepetitiveLoop(out)) {
+                return {
+                    translated_text: out,
+                    method: 'cloudflare_qwen',
+                    language_info: langInfo,
+                    note: `Traduit en ${langName} via Qwen.`,
+                };
+            }
+        } catch (e: any) {
+            console.warn('[Translate Qwen]', e?.message || e);
+        }
+
+        // 4️⃣ Essai M2M100 sécurisé paragraphe par paragraphe (évite les boucles de répétition)
+        try {
+            const m2mTarget = langInfo.m2m_code || rawTarget;
+            const m2mSource = IZITEACH_SUPPORTED_LANGUAGES[sourceLangCode]?.m2m_code || sourceLangCode;
+            const paragraphs = text.split('\n\n');
+            const translated: string[] = [];
+
+            for (const p of paragraphs) {
+                const trimmed = p.trim();
+                if (!trimmed) {
+                    translated.push('');
+                    continue;
+                }
+                if (trimmed.startsWith('#') || trimmed.startsWith('```') || trimmed.length < 5) {
+                    translated.push(p);
+                    continue;
+                }
+                const res: any = await env.AI.run('@cf/meta/m2m100-1.2b', {
+                    text: trimmed.slice(0, 600),
+                    source_lang: m2mSource,
+                    target_lang: m2mTarget,
+                });
+                const outP = res?.translated_text?.trim() || '';
+                if (outP && !hasRepetitiveLoop(outP)) {
+                    translated.push(outP);
+                } else {
+                    translated.push(p);
+                }
+            }
+
+            const fullText = translated.join('\n\n');
+            if (fullText && fullText.length > 10 && fullText !== text) {
+                return {
+                    translated_text: fullText,
+                    method: 'cloudflare_m2m100_segmented',
+                    language_info: langInfo,
+                    note: `Traduit en ${langName} (${nativeName}) via M2M100 segmenté.`,
+                };
+            }
+        } catch (e: any) {
+            console.warn('[Translate M2M100 segmenté]', e?.message || e);
         }
     }
 
-    // 3️⃣ Fallback propre si l'IA Cloudflare ne répond pas
     return {
         translated_text: text,
         method: 'original_preserved',
         language_info: langInfo,
-        note: `Contenu conservé fidèlement en ${sourceLangCode}. Vous pouvez également injecter une traduction manuelle contrôlée via custom_translated_text.`
+        note: `Traduction automatique indisponible pour ${langInfo.name_fr}. Vous pouvez injecter une traduction manuelle contrôlée via custom_translated_text.`
     };
 }
 
