@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Sparkles, ArrowLeft, Save, Eye, Smartphone, Monitor, Tablet,
@@ -8,7 +9,8 @@ import {
     Layers, Palette, UploadCloud, RefreshCw, CheckCircle2, Loader2,
     ExternalLink, ZoomIn, ZoomOut, Maximize2, Wand2, Trash2, X,
     ChevronRight, Globe, Mail, MapPin, Award, Star, ShieldCheck,
-    Check, Phone, CheckSquare
+    Check, Phone, CheckSquare, MousePointerClick, Image as ImageIcon,
+    AlignLeft, AlignCenter, AlignRight, LayoutGrid, Info, Plus, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,6 +45,25 @@ export interface TemplateCustomConfig {
     trainer_quote?: string;
     trainer_photo_url?: string;
     trainer_photo_secondary_url?: string;
+    hero_banner_url?: string;
+    hero_image_layout?: 'right' | 'left' | 'center' | 'split';
+
+    // 🔘 Boutons CTA & Actions
+    primary_cta_text?: string;
+    primary_cta_url?: string;
+    primary_cta_position?: 'left' | 'center' | 'right';
+    secondary_cta_text?: string;
+    secondary_cta_url?: string;
+    cta_style?: 'gradient' | 'pill' | 'solid' | 'glass';
+    show_cta_buttons?: boolean;
+    show_secondary_cta?: boolean;
+
+    // 🖼️ Galerie & Visuels
+    show_gallery_section?: boolean;
+    gallery_layout?: 'grid' | 'masonry' | 'carousel';
+    gallery_title?: string;
+    gallery_subtitle?: string;
+    gallery_images?: string[];
 
     // 🏆 Produit Phare / Livre / Masterclass Signature
     flagship_title?: string;
@@ -107,6 +128,7 @@ export interface TemplateCustomConfig {
     show_podcast_section?: boolean;
     show_services_grid?: boolean;
     show_social_links?: boolean;
+    truncate_long_descriptions?: boolean;
 }
 
 interface TemplateCustomizerStudioProps {
@@ -132,21 +154,26 @@ export function TemplateCustomizerStudio({
     teacherCount = 12,
     studentCount = 280
 }: TemplateCustomizerStudioProps) {
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
     const rawConfig = org.template_config || {};
 
     const [selectedLayoutId, setSelectedLayoutId] = useState<string>(currentTemplateId || org.landing_layout || 'product_mastery');
     const [viewportMode, setViewportMode] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
     const [zoomLevel, setZoomLevel] = useState<number>(100);
     const [activeSidebarTab, setActiveSidebarTab] = useState<
-        'profile' | 'flagship' | 'media' | 'stats' | 'testimonials' | 'toggles' | 'navigation'
+        'profile' | 'buttons' | 'media_gallery' | 'flagship' | 'media' | 'stats' | 'testimonials' | 'toggles' | 'navigation'
     >('profile');
 
     const [saving, setSaving] = useState(false);
     const [uploadingField, setUploadingField] = useState<string | null>(null);
 
-    // Initialisation du formulaire complet
+    // Initialisation du formulaire complet avec nouveaux champs CTA et Médias
     const [form, setForm] = useState<TemplateCustomConfig>({
-        // Profil
+        // Profil & Hero
         trainer_name: rawConfig.trainer_name || org.name || '',
         trainer_title: rawConfig.trainer_title || org.motto || 'Product Designer & Mentor Senior',
         trainer_subtitle: rawConfig.trainer_subtitle || org.hero_subtitle || 'Des produits numériques remarquables conçus avec intention et précision.',
@@ -154,6 +181,25 @@ export function TemplateCustomizerStudio({
         trainer_quote: rawConfig.trainer_quote || '"Chaque pixel, chaque interaction — tout raconte une histoire."',
         trainer_photo_url: rawConfig.trainer_photo_url || org.hero_image_url || '',
         trainer_photo_secondary_url: rawConfig.trainer_photo_secondary_url || '',
+        hero_banner_url: rawConfig.hero_banner_url || org.hero_image_url || '',
+        hero_image_layout: rawConfig.hero_image_layout || 'right',
+
+        // 🔘 Boutons CTA & Action
+        primary_cta_text: rawConfig.primary_cta_text || 'S\'inscrire / Commencer',
+        primary_cta_url: rawConfig.primary_cta_url || '#inscription',
+        primary_cta_position: rawConfig.primary_cta_position || 'left',
+        secondary_cta_text: rawConfig.secondary_cta_text || 'Découvrir le Programme',
+        secondary_cta_url: rawConfig.secondary_cta_url || '#programmes',
+        cta_style: rawConfig.cta_style || 'gradient',
+        show_cta_buttons: rawConfig.show_cta_buttons !== false,
+        show_secondary_cta: rawConfig.show_secondary_cta !== false,
+
+        // 🖼️ Galerie & Visuels
+        show_gallery_section: rawConfig.show_gallery_section !== false,
+        gallery_layout: rawConfig.gallery_layout || 'grid',
+        gallery_title: rawConfig.gallery_title || 'Nos Réalisations & Événements',
+        gallery_subtitle: rawConfig.gallery_subtitle || 'Découvrez en images la vie de notre communauté et nos ateliers.',
+        gallery_images: Array.isArray(rawConfig.gallery_images) ? rawConfig.gallery_images : (org.gallery_images || []),
 
         // Flagship / Livre
         flagship_title: rawConfig.flagship_title || 'Et si vous pouviez obtenir exactement ce que vous voulez ?',
@@ -218,6 +264,7 @@ export function TemplateCustomizerStudio({
         show_podcast_section: rawConfig.show_podcast_section !== false,
         show_services_grid: rawConfig.show_services_grid !== false,
         show_social_links: rawConfig.show_social_links !== false,
+        truncate_long_descriptions: rawConfig.truncate_long_descriptions !== false,
     });
 
     // Live Org synthétique pour réactivité instantanée dans le Canvas
@@ -234,7 +281,7 @@ export function TemplateCustomizerStudio({
 
     const handleFileUpload = async (
         e: React.ChangeEvent<HTMLInputElement>,
-        fieldName: 'trainer_photo_url' | 'trainer_photo_secondary_url' | 'flagship_image_url'
+        fieldName: 'trainer_photo_url' | 'trainer_photo_secondary_url' | 'flagship_image_url' | 'hero_banner_url'
     ) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -251,6 +298,38 @@ export function TemplateCustomizerStudio({
         }
     };
 
+    // Gestion de la galerie multiple
+    const handleGalleryImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+
+        setUploadingField('gallery_images');
+        try {
+            const newUrls: string[] = [];
+            for (const file of files) {
+                const res = await uploadToR2(file, `templates/${org.id}/gallery`, file.name);
+                newUrls.push(res.url);
+            }
+            setForm(prev => ({
+                ...prev,
+                gallery_images: [...(prev.gallery_images || []), ...newUrls]
+            }));
+            toast.success(`✨ ${newUrls.length} image(s) ajoutée(s) à la galerie !`);
+        } catch (err: any) {
+            toast.error('Erreur upload galerie : ' + err.message);
+        } finally {
+            setUploadingField(null);
+        }
+    };
+
+    const handleRemoveGalleryImage = (idxToRemove: number) => {
+        setForm(prev => ({
+            ...prev,
+            gallery_images: (prev.gallery_images || []).filter((_, i) => i !== idxToRemove)
+        }));
+        toast.info('Image retirée de la galerie');
+    };
+
     const handleSaveAndPublish = async () => {
         setSaving(true);
         try {
@@ -260,6 +339,7 @@ export function TemplateCustomizerStudio({
                 .update({
                     template_config: form,
                     landing_layout: selectedLayoutId,
+                    gallery_images: form.gallery_images || org.gallery_images,
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', org.id);
@@ -279,7 +359,8 @@ export function TemplateCustomizerStudio({
             const updatedOrg = {
                 ...org,
                 template_config: form,
-                landing_layout: selectedLayoutId
+                landing_layout: selectedLayoutId,
+                gallery_images: form.gallery_images || org.gallery_images,
             };
 
             onSaveSuccess(updatedOrg);
@@ -304,6 +385,9 @@ export function TemplateCustomizerStudio({
                 rating_score_value: '5.0★ (98% Satisfaction)',
                 available_text: 'DISPONIBLE POUR FORMATIONS & PROJETS',
                 turning_ideas_text: 'Transformer chaque concept en produit iconique ♡',
+                primary_cta_text: 'Découvrir le Portfolio',
+                secondary_cta_text: 'Prendre Rendez-vous',
+                hero_image_layout: 'right',
             }));
             setSelectedLayoutId('product_mastery');
         } else if (type === 'coach') {
@@ -316,6 +400,9 @@ export function TemplateCustomizerStudio({
                 flagship_title: 'Get What You Want — Le Bestseller',
                 book_cta: 'Commandez le bestseller aujourd\'hui !',
                 podcast_title: 'Le Podcast Influenceur & Impact',
+                primary_cta_text: 'Travailler Avec Moi',
+                secondary_cta_text: 'Écouter le Podcast',
+                hero_image_layout: 'left',
             }));
             setSelectedLayoutId('coach_pastelle');
         } else if (type === 'tech') {
@@ -328,6 +415,9 @@ export function TemplateCustomizerStudio({
                 review_count: '280+',
                 years_experience_value: '15+',
                 awards_count: '49+',
+                primary_cta_text: 'Rejoindre le Cursus',
+                secondary_cta_text: 'Voir les Projets',
+                hero_image_layout: 'right',
             }));
             setSelectedLayoutId('tech_mentor');
         } else if (type === 'corporate') {
@@ -344,6 +434,9 @@ export function TemplateCustomizerStudio({
                 stat3_label: 'Heures de Formation',
                 stat4_value: '150M+',
                 stat4_label: 'En Revenus Générés',
+                primary_cta_text: 'Commencer un Projet',
+                secondary_cta_text: 'Nos Études de Cas',
+                hero_image_layout: 'center',
             }));
             setSelectedLayoutId('nexis_studio');
         }
@@ -359,7 +452,7 @@ export function TemplateCustomizerStudio({
             filieres,
             teacherCount,
             studentCount,
-            gallery: org.gallery_images || [],
+            gallery: form.gallery_images || org.gallery_images || [],
             bc: org.brand_color || '#14b8a6',
             onOpenInscription: () => toast.info('Aperçu interactif : ce bouton ouvrira le formulaire d\'inscription sur le site public.'),
         };
@@ -391,6 +484,8 @@ export function TemplateCustomizerStudio({
 
     const sidebarTabs = [
         { id: 'profile', label: 'Identité & Hero', icon: User },
+        { id: 'buttons', label: 'Boutons CTA & Action', icon: MousePointerClick },
+        { id: 'media_gallery', label: 'Galerie & Visuels', icon: ImageIcon },
         { id: 'flagship', label: 'Offre Phare / Livre', icon: BookOpen },
         { id: 'media', label: 'Médias & Presse', icon: Headphones },
         { id: 'stats', label: 'Chiffres & Stats', icon: BarChart3 },
@@ -399,8 +494,8 @@ export function TemplateCustomizerStudio({
         { id: 'navigation', label: 'Menu & Contact', icon: Globe },
     ];
 
-    return (
-        <div className="fixed inset-0 z-[100] bg-[#08090E] text-white flex flex-col font-sans antialiased overflow-hidden select-none">
+    const studioContent = (
+        <div className="fixed inset-0 z-[99999] bg-[#08090E] text-white flex flex-col font-sans antialiased overflow-hidden select-none">
 
             {/* ═══════════════════════════════════════════════════════════════
                TOP STUDIO TOOLBAR
@@ -752,10 +847,343 @@ export function TemplateCustomizerStudio({
                                         </div>
                                     </div>
                                 </div>
+                                {/* Disposition de l'Image & Bannière Hero */}
+                                <div className="pt-3 border-t border-white/10 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <label className="font-bold text-slate-200 block">
+                                            Disposition de l'Image Hero
+                                        </label>
+                                        <span className="text-[10px] text-amber-400 font-medium">Position visuelle</span>
+                                    </div>
+                                    <div className="grid grid-cols-4 gap-1.5 bg-white/5 p-1 rounded-xl border border-white/10">
+                                        {[
+                                            { id: 'right', label: 'Droite', desc: 'Défaut' },
+                                            { id: 'left', label: 'Gauche', desc: 'Inversé' },
+                                            { id: 'center', label: 'Centré', desc: 'Focus' },
+                                            { id: 'split', label: 'Split', desc: '50/50' }
+                                        ].map(pos => (
+                                            <button
+                                                key={pos.id}
+                                                type="button"
+                                                onClick={() => setForm({ ...form, hero_image_layout: pos.id as any })}
+                                                className={`py-2 px-1 rounded-lg text-center transition flex flex-col items-center gap-0.5 ${
+                                                    (form.hero_image_layout || 'right') === pos.id
+                                                        ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                                                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                                }`}
+                                            >
+                                                <span className="text-[11px] font-bold">{pos.label}</span>
+                                                <span className="text-[8px] opacity-75">{pos.desc}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* 📐 GUIDE OFFICIEL DES DIMENSIONS D'IMAGES & BANNIÈRES */}
+                                <div className="p-3.5 rounded-2xl bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent border border-amber-500/25 space-y-2">
+                                    <div className="flex items-center gap-2 text-amber-400 font-bold text-[11px]">
+                                        <Info className="w-4 h-4 shrink-0" />
+                                        <span>Guide des Dimensions Idéales d'Affichage</span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-300 leading-relaxed">
+                                        Pour un rendu ultra net sans déformation sur tous les écrans (Desktop 4K & Mobile) :
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-2 text-[10px] pt-1">
+                                        <div className="p-2 rounded-xl bg-black/40 border border-white/10">
+                                            <p className="font-bold text-amber-300">🖼️ Bannière Paysage</p>
+                                            <p className="font-mono text-white text-[11px] font-black mt-0.5">1920 × 1080 px</p>
+                                            <p className="text-slate-400 text-[9px]">Ratio 16:9 • Hero & Fond</p>
+                                        </div>
+                                        <div className="p-2 rounded-xl bg-black/40 border border-white/10">
+                                            <p className="font-bold text-amber-300">👤 Portrait Formateur</p>
+                                            <p className="font-mono text-white text-[11px] font-black mt-0.5">800 × 1000 px</p>
+                                            <p className="text-slate-400 text-[9px]">Ratio 4:5 • Vladi / Julie</p>
+                                        </div>
+                                        <div className="p-2 rounded-xl bg-black/40 border border-white/10">
+                                            <p className="font-bold text-amber-300">📦 Produit / Livre</p>
+                                            <p className="font-mono text-white text-[11px] font-black mt-0.5">800 × 800 px</p>
+                                            <p className="text-slate-400 text-[9px]">Ratio 1:1 • Mockup 3D</p>
+                                        </div>
+                                        <div className="p-2 rounded-xl bg-black/40 border border-white/10">
+                                            <p className="font-bold text-amber-300">🎨 Galerie Ateliers</p>
+                                            <p className="font-mono text-white text-[11px] font-black mt-0.5">1200 × 800 px</p>
+                                            <p className="text-slate-400 text-[9px]">Ratio 3:2 • HD Clarté</p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
-                        {/* ═══ TAB 2 : OFFRE PHARE & LIVRE ═══ */}
+                        {/* ═══ TAB 2 : BOUTONS CTA & ACTIONS ═══ */}
+                        {activeSidebarTab === 'buttons' && (
+                            <div className="space-y-4">
+                                <div>
+                                    <h3 className="text-sm font-black text-white flex items-center gap-2">
+                                        <MousePointerClick className="w-4 h-4 text-amber-400" />
+                                        Boutons d'Action & Call-to-Action (CTA)
+                                    </h3>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                        Positionnez, créez et personnalisez les boutons d'inscription, contact ou portfolio.
+                                    </p>
+                                </div>
+
+                                {/* Alignement des Boutons */}
+                                <div className="space-y-2">
+                                    <label className="font-bold text-slate-200 block">
+                                        Positionnement des Boutons
+                                    </label>
+                                    <div className="grid grid-cols-3 gap-2 bg-white/5 p-1 rounded-xl border border-white/10">
+                                        {[
+                                            { id: 'left', label: 'Gauche', icon: AlignLeft },
+                                            { id: 'center', label: 'Centré', icon: AlignCenter },
+                                            { id: 'right', label: 'Droite', icon: AlignRight },
+                                        ].map(align => {
+                                            const Icon = align.icon;
+                                            const isSelected = (form.primary_cta_position || 'left') === align.id;
+                                            return (
+                                                <button
+                                                    key={align.id}
+                                                    type="button"
+                                                    onClick={() => setForm({ ...form, primary_cta_position: align.id as any })}
+                                                    className={`py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                                                        isSelected
+                                                            ? 'bg-amber-500 text-slate-950 font-black shadow-md'
+                                                            : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                                    }`}
+                                                >
+                                                    <Icon className="w-3.5 h-3.5" />
+                                                    <span>{align.label}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Style Visuel des Boutons */}
+                                <div className="space-y-2">
+                                    <label className="font-bold text-slate-200 block">
+                                        Style Graphique des Boutons
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {[
+                                            { id: 'gradient', label: '🔥 Gradient Lumineux', desc: 'Orange & Ambre Vibrant' },
+                                            { id: 'pill', label: '💊 Pilule Arrondie', desc: 'Design Moderne Épuré' },
+                                            { id: 'solid', label: '⬛ Solide Minimaliste', desc: 'Noir & Blanc Précis' },
+                                            { id: 'glass', label: '✨ Glassmorphism', desc: 'Verre Flouté & Reflet' },
+                                        ].map(st => (
+                                            <button
+                                                key={st.id}
+                                                type="button"
+                                                onClick={() => setForm({ ...form, cta_style: st.id as any })}
+                                                className={`p-2.5 rounded-xl border text-left transition ${
+                                                    (form.cta_style || 'gradient') === st.id
+                                                        ? 'border-amber-400 bg-amber-500/15 text-white'
+                                                        : 'border-white/10 bg-white/[0.03] text-slate-400 hover:border-white/20'
+                                                }`}
+                                            >
+                                                <p className="font-bold text-xs text-white">{st.label}</p>
+                                                <p className="text-[9px] text-slate-400 mt-0.5">{st.desc}</p>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Bouton Principal CTA 1 */}
+                                <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
+                                            <span className="w-2 h-2 rounded-full bg-amber-400" />
+                                            Bouton Principal (Action Majeure)
+                                        </span>
+                                        <input
+                                            type="checkbox"
+                                            checked={form.show_cta_buttons !== false}
+                                            onChange={e => setForm({ ...form, show_cta_buttons: e.target.checked })}
+                                            className="w-4 h-4 rounded accent-amber-500 cursor-pointer"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] text-slate-400 block mb-1">Texte du Bouton Principal</label>
+                                        <Input
+                                            value={form.primary_cta_text || ''}
+                                            onChange={e => setForm({ ...form, primary_cta_text: e.target.value })}
+                                            placeholder="Ex: S'inscrire / Commencer la formation, Travailler Avec Moi..."
+                                            className="bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] text-slate-400 block mb-1">Action ou Lien de Destination</label>
+                                        <Input
+                                            value={form.primary_cta_url || ''}
+                                            onChange={e => setForm({ ...form, primary_cta_url: e.target.value })}
+                                            placeholder="Ex: #inscription, https://wa.me/237..., /campus/cursus"
+                                            className="bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs"
+                                        />
+                                        <p className="text-[9px] text-slate-500 mt-1">Laissez #inscription pour ouvrir le formulaire officiel d'inscription du campus.</p>
+                                    </div>
+                                </div>
+
+                                {/* Bouton Secondaire CTA 2 */}
+                                <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
+                                            <span className="w-2 h-2 rounded-full bg-slate-400" />
+                                            Bouton Secondaire (Découverte / Portfolio)
+                                        </span>
+                                        <input
+                                            type="checkbox"
+                                            checked={form.show_secondary_cta !== false}
+                                            onChange={e => setForm({ ...form, show_secondary_cta: e.target.checked })}
+                                            className="w-4 h-4 rounded accent-amber-500 cursor-pointer"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] text-slate-400 block mb-1">Texte du Bouton Secondaire</label>
+                                        <Input
+                                            value={form.secondary_cta_text || ''}
+                                            onChange={e => setForm({ ...form, secondary_cta_text: e.target.value })}
+                                            placeholder="Ex: Découvrir le Portfolio, Voir les Formations..."
+                                            className="bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] text-slate-400 block mb-1">Lien de Destination</label>
+                                        <Input
+                                            value={form.secondary_cta_url || ''}
+                                            onChange={e => setForm({ ...form, secondary_cta_url: e.target.value })}
+                                            placeholder="Ex: #programmes, /login, #temoignages"
+                                            className="bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ═══ TAB 3 : GALERIE & VISUELS ═══ */}
+                        {activeSidebarTab === 'media_gallery' && (
+                            <div className="space-y-4">
+                                <div>
+                                    <h3 className="text-sm font-black text-white flex items-center gap-2">
+                                        <ImageIcon className="w-4 h-4 text-amber-400" />
+                                        Galerie d'Images & Ateliers
+                                    </h3>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                        Ajoutez, ordonnez ou supprimez les photos affichées sur votre portail public.
+                                    </p>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <label className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/10 cursor-pointer">
+                                        <span className="font-bold text-slate-200 text-xs">Afficher la Section Galerie</span>
+                                        <input
+                                            type="checkbox"
+                                            checked={form.show_gallery_section !== false}
+                                            onChange={e => setForm({ ...form, show_gallery_section: e.target.checked })}
+                                            className="w-4 h-4 rounded accent-amber-500 cursor-pointer"
+                                        />
+                                    </label>
+
+                                    <div>
+                                        <label className="font-bold text-slate-200 block mb-1">Titre de la Galerie</label>
+                                        <Input
+                                            value={form.gallery_title || ''}
+                                            onChange={e => setForm({ ...form, gallery_title: e.target.value })}
+                                            placeholder="Ex: Nos Réalisations, Ateliers & Événements"
+                                            className="bg-white/5 border-white/10 text-white rounded-xl h-10"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="font-bold text-slate-200 block mb-1">Sous-titre / Description de Galerie</label>
+                                        <Input
+                                            value={form.gallery_subtitle || ''}
+                                            onChange={e => setForm({ ...form, gallery_subtitle: e.target.value })}
+                                            placeholder="Ex: Découvrez en images la vie de notre communauté..."
+                                            className="bg-white/5 border-white/10 text-white rounded-xl h-10"
+                                        />
+                                    </div>
+
+                                    {/* Sélecteur de Layout Galerie */}
+                                    <div>
+                                        <label className="font-bold text-slate-200 block mb-1.5">Disposition de la Galerie</label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {[
+                                                { id: 'grid', label: 'Grille 3x3' },
+                                                { id: 'masonry', label: 'Bento Box' },
+                                                { id: 'carousel', label: 'Carrousel' }
+                                            ].map(lay => (
+                                                <button
+                                                    key={lay.id}
+                                                    type="button"
+                                                    onClick={() => setForm({ ...form, gallery_layout: lay.id as any })}
+                                                    className={`py-2 rounded-xl text-xs font-bold transition border ${
+                                                        (form.gallery_layout || 'grid') === lay.id
+                                                            ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-md'
+                                                            : 'bg-white/5 border-white/10 text-slate-300 hover:border-white/20'
+                                                    }`}
+                                                >
+                                                    {lay.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Upload Multiple d'Images */}
+                                    <div className="pt-2">
+                                        <label className="flex items-center justify-center gap-2 w-full p-4 rounded-2xl border-2 border-dashed border-white/15 hover:border-amber-500/50 bg-white/[0.02] hover:bg-amber-500/5 text-slate-300 hover:text-white font-bold cursor-pointer transition text-xs">
+                                            <UploadCloud className="w-5 h-5 text-amber-400" />
+                                            <span>Ajouter des photos à la galerie (Sélection multiple)</span>
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                multiple
+                                                className="hidden"
+                                                onChange={handleGalleryImageUpload}
+                                            />
+                                        </label>
+                                        {uploadingField === 'gallery_images' && (
+                                            <div className="flex items-center justify-center gap-2 p-2 mt-2 rounded-xl bg-amber-500/10 text-amber-300 text-xs font-bold animate-pulse">
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                Téléversement des photos vers Cloudflare R2...
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Liste des images de galerie avec suppression */}
+                                    <div className="space-y-2 pt-2">
+                                        <div className="flex items-center justify-between text-xs text-slate-400 font-bold">
+                                            <span>Photos dans la galerie ({(form.gallery_images || []).length})</span>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {(form.gallery_images || []).map((imgUrl, i) => (
+                                                <div key={i} className="group relative aspect-video rounded-xl overflow-hidden bg-black/40 border border-white/10">
+                                                    <img src={imgUrl} alt={`Galerie ${i}`} className="w-full h-full object-cover" />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveGalleryImage(i)}
+                                                        className="absolute top-1 right-1 p-1 rounded-lg bg-red-600 text-white opacity-0 group-hover:opacity-100 transition shadow-lg"
+                                                        title="Supprimer cette photo"
+                                                    >
+                                                        <Trash2 className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            {(form.gallery_images || []).length === 0 && (
+                                                <div className="col-span-3 py-6 text-center text-slate-500 text-xs">
+                                                    Aucune image dans la galerie. Cliquez ci-dessus pour en ajouter !
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ═══ TAB 4 : OFFRE PHARE & LIVRE ═══ */}
                         {activeSidebarTab === 'flagship' && (
                             <div className="space-y-4">
                                 <div>
@@ -1125,6 +1553,7 @@ export function TemplateCustomizerStudio({
                                         { key: 'show_podcast_section', label: 'Section Podcast & Masterclass' },
                                         { key: 'show_services_grid', label: 'Grille de Services & Travaux' },
                                         { key: 'show_social_links', label: 'Boutons Réseaux Sociaux' },
+                                        { key: 'truncate_long_descriptions', label: 'Réduire les longues descriptions (Bouton "Lire plus / Voir moins")' },
                                     ].map(item => {
                                         const isChecked = (form as any)[item.key] !== false;
                                         return (
@@ -1315,4 +1744,7 @@ export function TemplateCustomizerStudio({
             </div>
         </div>
     );
+
+    if (!mounted) return null;
+    return typeof document !== 'undefined' ? createPortal(studioContent, document.body) : studioContent;
 }
