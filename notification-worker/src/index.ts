@@ -42,6 +42,7 @@ import { handleEmailSend, handleEmailStatus, handleInscription } from './service
 import { handleR2Upload, handleR2Delete, handleR2List, handleR2Serve } from './services/r2';
 import { handleMcpGateway } from './mcp/gateway';
 import { syncToSupabase } from './mcp/tools';
+import { handleSkyAgentChat, handleSkyAgentClearSession } from './services/sky-agent';
 import { handleCron, handleAgentWebhook } from './cron';
 
 export * from './types';
@@ -58,6 +59,7 @@ export * from './mcp/gateway';
 export * from './routes/notifications';
 export * from './routes/domains';
 export * from './cron';
+export * from './services/sky-agent';
 
 export default {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -111,6 +113,10 @@ export default {
             if (pathname === '/mcp-gateway' || pathname === '/api/mcp' || pathname === '/api/mcp-gateway' || pathname === '/mcp' || pathname === '/sse') {
                 return handleMcpGateway(request, env);
             }
+
+            // ── Sky Agent — Assistant IA contextuel (admin / prof / student) ──
+            if (pathname === '/api/sky-agent/chat' && method === 'POST') return handleSkyAgentChat(request, env);
+            if (pathname === '/api/sky-agent/session' && method === 'DELETE') return handleSkyAgentClearSession(request, env);
 
             // ── Agent IA Webhook Trigger (Option A - Temps Réel < 1s) ──
             if ((pathname === '/api/agent/webhook' || pathname === '/agent-webhook' || pathname === '/api/agent-events') && method === 'POST') {

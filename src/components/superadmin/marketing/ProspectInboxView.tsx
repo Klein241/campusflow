@@ -44,7 +44,7 @@ const DEFAULT_INBOX_MESSAGES: ProspectMessage[] = [
         message_text: 'Nous souhaiterions tester la Salle d\'Évaluation interactive pour nos 800 étudiants. Quels sont vos tarifs annuels pour l\'enseignement supérieur ?',
         received_at: new Date(Date.now() - 86400000 * 1).toISOString(),
         status: 'unread',
-        suggested_reply: 'Bonjour Mme Aminata Traoré,\n\nMerci pour votre intérêt ! Pour 800 étudiants, notre formule Campus Pro Universitaire inclut la Salle d\'Évaluation illimitée, le support Sky Agent IA et la formation complète de votre équipe pour un tarif dégressif très avantageux.\n\nJe vous propose de vous envoyer notre plaquette tarifaire personnalisée dès aujourd\'hui. Quel créneau vous conviendrait le mieux pour un rapide échange ?\n\nBien cordialement,\nL\'équipe IziTeach Pro',
+        suggested_reply: 'Bonjour Mme Aminata Traoré,\n\nMerci pour votre intérêt ! Pour 800 étudiants, notre formule Campus Pro Universitaire inclut la Salle d\'Évaluation illimitée, le mentorat d\'excellence Dame SKY et la formation complète de votre équipe pour un tarif dégressif très avantageux.\n\nJe vous propose de vous envoyer notre plaquette tarifaire personnalisée dès aujourd\'hui. Quel créneau vous conviendrait le mieux pour un rapide échange ?\n\nBien cordialement,\nL\'équipe IziTeach Pro',
     }
 ];
 

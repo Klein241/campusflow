@@ -3,7 +3,8 @@
 import { useEffect, useState, useRef, Component, type ReactNode, type ErrorInfo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useOrgSlug } from '@/hooks/use-org-slug';
-import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus, Building2, FileText, Receipt, PhoneCall, ClipboardCheck, Eye, Award, Volume2, Play, Pause, Maximize2, FileDown, Lock, KeyRound, Coins, Sparkles, Ban, CheckCircle, LogOut, AlertCircle, Send, Mail, Bot } from 'lucide-react';
+import { GraduationCap, Plus, Trash2, ArrowRight, ArrowLeft, BookOpen, Users, Settings, Calendar, CreditCard, Home, School, CheckCircle2, Loader2, Link2, Bell, ShieldCheck, UserPlus, ClipboardList, Globe, BookMarked, ShoppingBag, MessageSquare, BarChart3, Search, Edit, Save, X, Download, Filter, Palette, ExternalLink, Copy, RefreshCw, Upload, LayoutDashboard, Printer, Pencil, ImagePlus, Building2, FileText, Receipt, PhoneCall, ClipboardCheck, Eye, Award, Volume2, Play, Pause, Maximize2, FileDown, Lock, KeyRound, Coins, Sparkles, Ban, CheckCircle, LogOut, AlertCircle, Send, Mail, Bot, Crown } from 'lucide-react';
+import { SkyAgentBubble } from '@/components/sky-agent/SkyAgentBubble';
 import { ExamRoomView } from '@/components/campus/exam-room/exam-room-view';
 import { BULLETIN_TEMPLATES, generateBulletinPDF, type BulletinData } from '@/lib/bulletin-pdf';
 import { RECEIPT_TEMPLATES, generateReceiptPDF, generateReceiptNumber, type ReceiptData } from '@/lib/receipt-pdf';
@@ -119,7 +120,7 @@ const SIDES = [
     { id: 'actus' as Tab, icon: Bell, label: 'Actus' },
     { id: 'exam_room' as Tab, icon: ClipboardCheck, label: '🏛️ Salle d\'Évaluation' },
     { id: 'settings' as Tab, icon: Palette, label: 'Paramètres' },
-    { id: 'ai_agents' as Tab, icon: Bot, label: '🤖 Sky Agent' },
+    { id: 'ai_agents' as Tab, icon: Crown, label: '👑 Dame SKY' },
 ];
 const COLLEGE = ['6ème', '5ème', '4ème', '3ème'], LYCEE = ['Seconde', 'Première', 'Terminale'], SECS = ['A', 'B', 'C'];
 const DEFS: Record<string, string[]> = { college: ['Mathématiques', 'Français', 'Anglais', 'SVT', 'Physique-Chimie', 'Histoire-Géo', 'Informatique', 'EPS'], lycee: ['Mathématiques', 'Français', 'Anglais', 'Physique', 'Chimie', 'SVT', 'Philosophie', 'Histoire-Géo', 'Informatique', 'EPS'], universite: ['Module 1', 'Module 2', 'Module 3', 'Projet tutoré', 'Stage'], centre_formation: ['Cours théorique', 'Travaux pratiques', 'Stage professionnel', 'Projet fin de formation'], institut: ['Cours fondamental', 'Spécialisation', 'Travaux pratiques', 'Stage'] };
@@ -2614,6 +2615,24 @@ ${bodyHtml}
                 orgLogo={org?.logo_url || ''}
                 senderName={org?.name || 'Administration'}
                 senderRole="admin"
+            />
+
+            {/* Floating Dame SKY Mentor Bubble for Admin */}
+            <SkyAgentBubble
+                role="admin"
+                bottomOffset="bottom-6"
+                context={{
+                    org_name: org?.name,
+                    org_id: org?.id,
+                    org_slug: orgSlug,
+                    user_name: session?.first_name ? `${session.first_name} ${session.last_name || ''}`.trim() : 'Direction Générale',
+                    stats: {
+                        'Total Étudiants': students.length,
+                        'Total Enseignants': teachers.length,
+                        'Total Classes': cls.length,
+                        'Paiements Enregistrés': pays.length,
+                    }
+                }}
             />
 
         </div>

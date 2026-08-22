@@ -29,6 +29,7 @@ import { OfficialAnnouncements } from '@/components/campus/official-announcement
 import { UserFeedbackModal, FeedbackTab } from '@/components/campus/user-feedback-modal';
 import { EmailModal } from '@/components/campus/email-modal';
 import { Edit, Bug, Lightbulb, School as SchoolIcon, Smartphone } from 'lucide-react';
+import { SkyAgentBubble } from '@/components/sky-agent/SkyAgentBubble';
 
 // ═══════════════════════════════════════════════════════
 // CAMPUSFLOW — DASHBOARD PROFESSEUR (holographic-ring design)
@@ -1366,6 +1367,23 @@ export default function TeacherDashboard() {
                 senderId={teacher?.id}
                 senderName={`${teacher?.first_name || ''} ${teacher?.last_name || ''}`.trim() || 'Professeur'}
                 senderRole="teacher"
+            />
+
+            {/* Floating Dame SKY Mentor for Teachers */}
+            <SkyAgentBubble
+                role="prof"
+                bottomOffset="bottom-[88px]"
+                context={{
+                    org_name: org?.name,
+                    org_id: org?.id,
+                    org_slug: orgSlug,
+                    user_name: `${teacher?.first_name || ''} ${teacher?.last_name || ''}`.trim() || 'Professeur',
+                    user_id: teacher?.id,
+                    stats: {
+                        'Matière enseignée': teacher?.speciality || 'Enseignement',
+                        'Total Étudiants': students?.length || 0,
+                    }
+                }}
             />
 
             <BottomNav activeTab={tab} onTabChange={setTab} />

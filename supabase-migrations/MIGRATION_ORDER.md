@@ -52,6 +52,12 @@ school app/
 | 25 | `026_lesson_reader_push.sql` | Lecteur leçon + push |
 | 26 | `027_fix_notifications_worker_columns.sql` | Colonnes worker |
 | 27 | `028_final_notifications_fix.sql` | ✅ Notifications finales, push_tokens, push_subscriptions, notification_preferences |
+| ... | ... | ... |
+| 60 | `060_african_languages_support.sql` | Support 20+ langues africaines et multilinguisme |
+| 61 | `061_landing_customization_and_gallery_enhancements.sql` | Templates landing page & galerie |
+| 62 | `062_forms_system_and_rls.sql` | Sondages et formulaires publics |
+| 63 | `063_dame_sky_config_and_moderation.sql` | Configuration globale, tempérament & alertes sécurité / anti-fraude de Dame SKY |
+| 64 | `064_dame_sky_projects_skills_quiz.sql` | Projets/dossiers thématiques, historique, Skills IA SuperAdmin & Quiz révision Sky Points |
 
 ### Phase 2 — Fichiers thématiques (`supabase-migrations/`, non numérotés)
 

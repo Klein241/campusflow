@@ -20,7 +20,7 @@ import {
     Activity, Clock, AlertTriangle, CheckCircle, XCircle,
     ChevronRight, ChevronDown, RefreshCw, Loader2, Info,
     Zap, Lock, BookOpen, Users, BarChart3, Calendar, ListChecks,
-    Ban, ArrowRight, Terminal,
+    Ban, ArrowRight, Terminal, Crown, Sparkles
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────
@@ -358,12 +358,15 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-violet-500/20 flex items-center justify-center">
-                        <Bot className="w-5 h-5 text-violet-400" />
+                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-rose-600 flex items-center justify-center shadow-lg">
+                        <Crown className="w-5 h-5 text-amber-100" />
                     </div>
                     <div>
-                        <h2 className="text-lg font-bold text-white">Sky Agent</h2>
-                        <p className="text-xs text-slate-400">Gérez les accès des Sky Agents à votre école</p>
+                        <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                            <span>Dame SKY</span>
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30">Console API</span>
+                        </h2>
+                        <p className="text-xs text-slate-400">Gérez les clés d'accès et les autorisations de votre école</p>
                     </div>
                 </div>
                 <button

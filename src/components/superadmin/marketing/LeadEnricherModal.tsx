@@ -26,7 +26,7 @@ export function LeadEnricherModal({ lead, onClose, onStatusUpdated }: LeadEnrich
 
     const cleanPhone = (lead.phone || '').replace(/[^0-9]/g, '');
     const whatsappMessage = encodeURIComponent(
-        `Bonjour ${lead.contact_name},\n\nJ'espère que vous allez bien. Je vous contacte de la part d'IziTeach au sujet de ${lead.organization_name} à ${lead.city}.\n\nNous accompagnons les directeurs d'écoles dans la numérisation complète de leurs cours, présences QR code et examens en ligne avec notre assistant IA Sky Agent.\n\nSeriez-vous disponible pour un échange rapide de 10 minutes ou une démo gratuite ?\n\nBien cordialement,\nL'équipe IziTeach Pro`
+        `Bonjour ${lead.contact_name},\n\nJ'espère que vous allez bien. Je vous contacte de la part d'IziTeach au sujet de ${lead.organization_name} à ${lead.city}.\n\nNous accompagnons les directeurs d'écoles dans la numérisation complète de leurs cours, présences QR code, examens anti-triche et notre mentore académique Dame SKY.\n\nSeriez-vous disponible pour un échange rapide de 10 minutes ou une démo gratuite ?\n\nBien cordialement,\nL'équipe IziTeach Pro`
     );
 
     const whatsappUrl = `https://wa.me/${cleanPhone}?text=${whatsappMessage}`;

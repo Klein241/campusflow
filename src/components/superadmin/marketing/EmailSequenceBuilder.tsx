@@ -28,7 +28,7 @@ const DEFAULT_SEQUENCE_STEPS: SequenceStep[] = [
         title: 'Étape 1 : Prise de Contact Initiale',
         subject: 'Modernisation de la gestion académique de {{ecole}} 🎓',
         condition: 'always',
-        body_snippet: 'Présentation de la plateforme IziTeach School Suite, bulletins en 1 clic et Sky Agent IA.',
+        body_snippet: 'Présentation de la plateforme IziTeach School Suite, bulletins en 1 clic et Dame SKY.',
         is_active: true,
     },
     {
@@ -44,7 +44,7 @@ const DEFAULT_SEQUENCE_STEPS: SequenceStep[] = [
         id: 'step_3',
         day_offset: 7,
         title: 'Étape 3 : Démonstration Vidéo Interactive',
-        subject: 'Comment l\'IA Sky Agent aide vos professeurs et élèves (Démo 2 min)',
+        subject: 'Comment Dame SKY aide vos professeurs et élèves (Démo 2 min)',
         condition: 'if_opened_not_clicked',
         body_snippet: 'Lien vers la visite guidée vidéo de la Salle d\'Évaluation interactive et anti-triche.',
         is_active: true,

@@ -23,6 +23,7 @@ import { SuperadminOrgCards } from '@/components/superadmin/superadmin-org-cards
 import { SuperadminNotificationBell } from '@/components/superadmin/SuperadminNotificationBell';
 import { IziTeachLogo } from '@/components/brand/iziteach-logo';
 import { SkyAgentSuperadminManager } from '@/components/superadmin/SkyAgentSuperadminManager';
+import { DameSkySuperadminManager } from '@/components/superadmin/DameSkySuperadminManager';
 import { MarketingHub } from '@/components/superadmin/marketing/MarketingHub';
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -88,7 +89,7 @@ const SIDEBAR: { id: Tab; label: string; icon: any; emoji?: string }[] = [
     { id: 'email',          label: 'Email Providers',  icon: Mail,            emoji: '📧' },
     { id: 'domains',        label: 'Domaines',         icon: Globe,           emoji: '🌐' },
     { id: 'announcements',  label: 'Annonces',         icon: Megaphone,       emoji: '📢' },
-    { id: 'sky_agent',      label: 'Sky Agent',        icon: Bot,             emoji: '🤖' },
+    { id: 'sky_agent',      label: 'Dame SKY',         icon: Crown,           emoji: '👑' },
     { id: 'compte',         label: 'Mon Compte',        icon: Lock,            emoji: '🔑' },
 ];
 
@@ -2426,11 +2427,18 @@ export default function SuperAdminPage() {
                         )}
 
                         {/* ══════════════════════════════════════════
-                            SKY AGENT SUPERADMIN
+                            DAME SKY SUPERADMIN CENTER
                         ══════════════════════════════════════════ */}
                         {tab === 'sky_agent' && (
-                            <motion.div key="sky_agent" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-                                <SkyAgentSuperadminManager />
+                            <motion.div key="sky_agent" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-10">
+                                <DameSkySuperadminManager />
+                                <div className="pt-6 border-t border-white/10">
+                                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                                        <Crown className="w-5 h-5 text-amber-400" />
+                                        Clés d'Accès d'Agents IA & Outils Autonomes de la Plateforme
+                                    </h3>
+                                    <SkyAgentSuperadminManager />
+                                </div>
                             </motion.div>
                         )}
 

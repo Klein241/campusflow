@@ -46,7 +46,7 @@ export function CampaignManagerView({ preselectedLeads, onCampaignCreated }: Cam
         <ul style="margin: 8px 0 0 0; padding-left: 20px; font-size: 13px; color: #475569; line-height: 1.6;">
             <li>Bulletins et relevés de notes en 1 clic</li>
             <li>Salle d'évaluation anti-triche & Examens interactifs</li>
-            <li>Sky Agent IA dédié pour le soutien scolaire des élèves</li>
+            <li>Dame SKY : Mentore académique d'élite pour les professeurs et élèves</li>
             <li>Suivi des présences et SMS/Push directs aux parents</li>
         </ul>
     </div>

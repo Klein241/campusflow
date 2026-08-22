@@ -114,7 +114,7 @@ const DEFAULT_CAMPAIGNS: MarketingCampaign[] = [
                 <ul style="color: #334155; font-size: 14px; line-height: 1.7;">
                     <li>✨ Emploi du temps & Présences automatisées avec QR / Code PIN</li>
                     <li>📝 Salle d'évaluation numérique anti-triche & Examens interactifs</li>
-                    <li>🤖 Sky Agent IA : Assistant pédagogique et de révision pour chaque élève</li>
+                    <li>👑 Dame SKY : Mentorat d'excellence et soutien scolaire pour chaque élève</li>
                     <li>📲 Notifications Push & SMS directes pour les parents</li>
                 </ul>
                 <div style="text-align: center; margin: 28px 0;">
@@ -378,7 +378,7 @@ export const marketingService = {
             title: `Campagne ${payload.product || 'IziTeach'} - ${payload.format}`,
             format: payload.format,
             headline: formatHeadlines[payload.format] || 'Boostez la performance de votre école',
-            body_copy: `Offrez à vos professeurs, élèves et parents une expérience scolaire ultra-connectée : notes en direct, présences par QR code, salle d'examen anti-triche et Sky Agent IA pour le soutien scolaire personnalisé.`,
+            body_copy: `Offrez à vos professeurs, élèves et parents une expérience scolaire d'élite : notes en direct, présences par QR code, salle d'examen anti-triche et Dame SKY pour le mentorat scolaire personnalisé.`,
             cta_text: 'Découvrir la Démo Live',
             reference_image_url: payload.reference_image_url,
             image_url: payload.reference_image_url || 'https://images.unsplash.com/photo-1509062522246-3755977927d7?w=1200&q=80',

@@ -42,7 +42,7 @@ const DEFAULT_SCHEDULED_EVENTS: ScheduledEvent[] = [
         id: 'ev_3',
         date: new Date(Date.now() + 86400000 * 5).toISOString().slice(0, 10),
         time: '15:00',
-        title: 'Webinaire Démo Live : Salle d\'Évaluation & Sky Agent',
+        title: 'Webinaire Démo Live : Salle d\'Évaluation & Dame SKY',
         type: 'webinar_demo',
         target_count: 120,
         status: 'scheduled',

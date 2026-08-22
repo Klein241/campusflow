@@ -56,9 +56,9 @@ function FormFieldRenderer({
                         type="button"
                         onClick={() => onAskSky(field)}
                         className="opacity-80 hover:opacity-100 flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 hover:bg-indigo-500/20 transition flex-shrink-0"
-                        title="Demander de l'aide à Sky Agent pour cette question"
+                        title="Demander conseil à Dame SKY pour cette question"
                     >
-                        <span>🤖 Sky Agent</span>
+                        <span>👑 Dame SKY</span>
                     </button>
                 )}
             </div>
@@ -213,11 +213,11 @@ export default function PublicFormPage() {
     const [quizScore, setQuizScore] = useState<number | null>(null);
     const [maxScore, setMaxScore] = useState(0);
 
-    // ── Sky Agent State ──
+    // ── Dame SKY State ──
     const [isSkyOpen, setIsSkyOpen] = useState(false);
     const [skyPrompt, setSkyPrompt] = useState('');
     const [skyMessages, setSkyMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([
-        { role: 'assistant', text: '👋 Bonjour ! Je suis Sky Agent. Je suis là pour vous aider à comprendre ce formulaire, expliquer des notions ou vous guider.' }
+        { role: 'assistant', text: '👋 Bonjour ! Je suis Dame SKY. Je suis à votre disposition pour vous orienter méthodologiquement sur ce formulaire avec rigueur.' }
     ]);
     const [skyLoading, setSkyLoading] = useState(false);
 
@@ -308,12 +308,12 @@ export default function PublicFormPage() {
     const generateSkyFormAdvice = (query: string, context: string): string => {
         const q = query.toLowerCase();
         if (q.includes('expliquer') || q.includes('question')) {
-            return `💡 **Conseil Sky Agent** :\nPrenez le temps d'analyser les mots-clés de cette question. Réfléchissez au contexte et éliminez d'abord les propositions qui vous semblent incompatibles ou hors sujet.`;
+            return `💡 **Conseil de Dame SKY** :\nPrenez le temps d'analyser les mots-clés de cette question. Réfléchissez au contexte et éliminez d'abord les propositions qui vous semblent incompatibles ou hors sujet.`;
         }
         if (q.includes('sondage') || q.includes('avis')) {
-            return `📊 **Guide pour le sondage** :\nIl n'y a pas de mauvaise réponse ! Exprimez votre avis sincère et détaillé pour aider votre établissement à s'améliorer.`;
+            return `💡 **Conseil de Dame SKY** :\nPrenez le temps d'analyser les mots-clés de cette question. Réfléchissez au contexte et éliminez d'abord les propositions qui vous semblent incompatibles ou hors sujet.`;
         }
-        return `🤖 **Sky Agent** :\nJe vous accompagne dans cette évaluation. Pour réussir, structurez bien votre réflexion et vérifiez vos réponses avant de valider définitivement le formulaire !`;
+        return `👑 **Dame SKY** :\nJe vous accompagne dans cette évaluation. Pour réussir, structurez bien votre réflexion et vérifiez vos réponses avant de valider définitivement le formulaire !`;
     };
 
     const validate = () => {
@@ -573,12 +573,12 @@ export default function PublicFormPage() {
                             {/* Header */}
                             <div className="flex items-center justify-between pb-3 border-b border-white/10">
                                 <div className="flex items-center gap-2">
-                                    <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-xs">
-                                        🤖
+                                    <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500 to-rose-600 flex items-center justify-center text-xs shadow-md">
+                                        👑
                                     </div>
                                     <div>
-                                        <p className="text-xs font-bold text-white">Sky Agent</p>
-                                        <p className="text-[10px] text-emerald-400">Assistant Pédagogique</p>
+                                        <p className="text-xs font-bold text-white">Dame SKY</p>
+                                        <p className="text-[10px] text-amber-300">Mentorat Académique</p>
                                     </div>
                                 </div>
                                 <button
@@ -602,9 +602,9 @@ export default function PublicFormPage() {
                                     </div>
                                 ))}
                                 {skyLoading && (
-                                    <div className="p-2 rounded-xl bg-indigo-950/50 border border-indigo-500/20 text-slate-400 flex items-center gap-2">
-                                        <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
-                                        Sky Agent réfléchit...
+                                    <div className="p-2 rounded-xl bg-amber-950/50 border border-amber-500/20 text-slate-300 flex items-center gap-2">
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                                        Dame SKY réfléchit...
                                     </div>
                                 )}
                             </div>
@@ -616,8 +616,8 @@ export default function PublicFormPage() {
                                     value={skyPrompt}
                                     onChange={e => setSkyPrompt(e.target.value)}
                                     onKeyDown={e => e.key === 'Enter' && sendSkyMessage()}
-                                    placeholder="Posez une question à Sky Agent..."
-                                    className="flex-1 bg-white/5 border border-white/10 text-white text-xs rounded-xl px-3 py-2 outline-none focus:border-indigo-500 transition placeholder:text-slate-500"
+                                    placeholder="Posez une question à Dame SKY..."
+                                    className="flex-1 bg-white/5 border border-white/10 text-white text-xs rounded-xl px-3 py-2 outline-none focus:border-amber-400 transition placeholder:text-slate-500"
                                 />
                                 <button
                                     onClick={() => sendSkyMessage()}
@@ -633,10 +633,10 @@ export default function PublicFormPage() {
 
                 <button
                     onClick={() => setIsSkyOpen(prev => !prev)}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs shadow-xl shadow-indigo-600/30 transition transform hover:scale-105"
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-600 hover:from-amber-600 hover:to-indigo-700 text-white font-bold text-xs shadow-xl shadow-amber-600/30 transition transform hover:scale-105"
                 >
-                    <span className="text-base">🤖</span>
-                    <span>{isSkyOpen ? 'Fermer Sky Agent' : 'Aide Sky Agent'}</span>
+                    <span className="text-base">👑</span>
+                    <span>{isSkyOpen ? 'Fermer Dame SKY' : 'Consulter Dame SKY'}</span>
                 </button>
             </div>
         </main>

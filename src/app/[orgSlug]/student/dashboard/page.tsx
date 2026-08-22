@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ReviewSection } from '@/components/shared/ReviewSection';
 import { BugReportButton } from '@/components/shared/BugReportButton';
+import { SkyAgentBubble } from '@/components/sky-agent/SkyAgentBubble';
 
 // ═══════════════════════════════════════════════════════
 // CAMPUSFLOW — DASHBOARD ÉTUDIANT (holographic-ring design)
@@ -862,6 +863,26 @@ export default function StudentDashboard() {
                     />
                 </div>
             )}
+            {/* Floating Dame SKY Mentor for Students */}
+            {tab !== 'exam_room' && student && (
+                <SkyAgentBubble
+                    role="student"
+                    bottomOffset="bottom-[88px]"
+                    context={{
+                        org_name: student?.organizations?.name || 'Établissement',
+                        org_id: student?.organization_id,
+                        org_slug: orgSlug,
+                        user_name: `${student?.first_name || ''} ${student?.last_name || ''}`.trim() || 'Étudiant',
+                        user_id: student?.id,
+                        stats: {
+                            'Classe': student?.classrooms?.name || 'Étudiant',
+                            'Matricule': student?.matricule || 'N/A',
+                            'Sky Points': student?.sky_points || 0,
+                        }
+                    }}
+                />
+            )}
+
             <BottomNav activeTab={tab} onTabChange={setTab} />
         </main>
     );
