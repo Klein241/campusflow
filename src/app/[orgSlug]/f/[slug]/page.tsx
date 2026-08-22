@@ -183,12 +183,25 @@ function FormFieldRenderer({
     );
 }
 
+// Helper: extract the real slug from the browser URL in static SPA export mode
+function getFormSlugFromUrl(fallbackSlug?: string): string {
+    if (typeof window === 'undefined') return fallbackSlug || '';
+    const segments = window.location.pathname.split('/').filter(Boolean);
+    const fIndex = segments.indexOf('f');
+    if (fIndex !== -1 && segments[fIndex + 1] && segments[fIndex + 1] !== '_') {
+        return decodeURIComponent(segments[fIndex + 1]);
+    }
+    return (fallbackSlug && fallbackSlug !== '_') ? fallbackSlug : '';
+}
+
 // ════════════════════════════════════════════════
 // PUBLIC FORM PAGE
 // ════════════════════════════════════════════════
 export default function PublicFormPage() {
     const orgSlug = useOrgSlug();
-    const { slug } = useParams<{ slug: string }>();
+    const params = useParams<{ slug?: string; orgSlug?: string }>();
+    const paramSlug = params?.slug;
+
     const [form, setForm] = useState<(CampusForm & { form_fields: FormField[] }) | null>(null);
     const [org, setOrg] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -209,22 +222,54 @@ export default function PublicFormPage() {
     const [skyLoading, setSkyLoading] = useState(false);
 
     useEffect(() => {
-        (async () => {
-            const [formData, { data: orgData }] = await Promise.all([
-                formsService.getFormBySlug(slug),
-                supabase.from('organizations').select('*').eq('slug', orgSlug).single(),
-            ]);
-            setForm(formData);
-            setOrg(orgData);
-            setLoading(false);
+        const targetSlug = getFormSlugFromUrl(paramSlug);
+        if (!targetSlug) {
+            // URL might not be available yet during hydration
+            const timeout = setTimeout(() => {
+                const retrySlug = getFormSlugFromUrl(paramSlug);
+                if (!retrySlug) setLoading(false);
+            }, 1000);
+            return () => clearTimeout(timeout);
+        }
 
-            if (formData?.form_type === 'quiz') {
-                const total = (formData.form_fields || [])
-                    .reduce((sum: number, f: FormField) => sum + (f.points || 0), 0);
-                setMaxScore(total);
+        let isMounted = true;
+        (async () => {
+            setLoading(true);
+            try {
+                const formData = await formsService.getFormBySlug(targetSlug);
+                if (!isMounted) return;
+                setForm(formData);
+
+                if (formData?.organization_id) {
+                    const { data: orgData } = await supabase
+                        .from('organizations')
+                        .select('*')
+                        .eq('id', formData.organization_id)
+                        .maybeSingle();
+                    if (isMounted && orgData) setOrg(orgData);
+                } else if (orgSlug && orgSlug !== '_') {
+                    const { data: orgData } = await supabase
+                        .from('organizations')
+                        .select('*')
+                        .eq('slug', orgSlug)
+                        .maybeSingle();
+                    if (isMounted && orgData) setOrg(orgData);
+                }
+
+                if (formData?.form_type === 'quiz') {
+                    const total = (formData.form_fields || [])
+                        .reduce((sum: number, f: FormField) => sum + (f.points || 0), 0);
+                    if (isMounted) setMaxScore(total);
+                }
+            } catch (err) {
+                console.error('[PublicFormPage] load error:', err);
+            } finally {
+                if (isMounted) setLoading(false);
             }
         })();
-    }, [slug, orgSlug]);
+
+        return () => { isMounted = false; };
+    }, [paramSlug, orgSlug]);
 
     const setAnswer = (fieldId: string, value: any) => {
         setAnswers(prev => ({ ...prev, [fieldId]: value }));

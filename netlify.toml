@@ -82,7 +82,22 @@
   status = 200
 
 [[redirects]]
+  from = "/:orgSlug/f/:slug"
+  to = "/_/f/_/index.html"
+  status = 200
+
+[[redirects]]
   from = "/:orgSlug/f/:slug/*"
+  to = "/_/f/_/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/f/:slug"
+  to = "/_/f/_/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/f/:slug/*"
   to = "/_/f/_/index.html"
   status = 200
 

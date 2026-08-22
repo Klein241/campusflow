@@ -157,18 +157,55 @@ export const formsService = {
 
     // ── Get a form by slug (public) ────────────
     async getFormBySlug(slug: string): Promise<(CampusForm & { form_fields: FormField[] }) | null> {
-        const { data, error } = await supabase
-            .from('forms')
-            .select('*, form_fields(*)')
-            .eq('slug', slug)
-            .single();
-        if (error) { console.error('[forms] getFormBySlug:', error); return null; }
-        if (data?.form_fields) {
-            data.form_fields = data.form_fields.sort(
-                (a: FormField, b: FormField) => a.sort_order - b.sort_order
-            );
+        if (!slug || slug === '_' || slug.trim() === '') return null;
+        const cleanSlug = slug.trim();
+
+        try {
+            const { data, error } = await supabase
+                .from('forms')
+                .select('*, form_fields(*)')
+                .eq('slug', cleanSlug)
+                .maybeSingle();
+
+            if (!error && data) {
+                if (data.form_fields) {
+                    data.form_fields = data.form_fields.sort(
+                        (a: FormField, b: FormField) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
+                    );
+                }
+                return data;
+            }
+
+            if (error) {
+                console.warn('[forms] Joined getFormBySlug failed, trying 2-step fallback:', error.message);
+            }
+
+            // Fallback: 2-step query
+            const { data: formData, error: formErr } = await supabase
+                .from('forms')
+                .select('*')
+                .eq('slug', cleanSlug)
+                .maybeSingle();
+
+            if (formErr || !formData) {
+                if (formErr) console.error('[forms] getFormBySlug fallback error:', formErr);
+                return null;
+            }
+
+            const { data: fieldsData } = await supabase
+                .from('form_fields')
+                .select('*')
+                .eq('form_id', formData.id)
+                .order('sort_order', { ascending: true });
+
+            return {
+                ...formData,
+                form_fields: fieldsData || [],
+            };
+        } catch (err) {
+            console.error('[forms] getFormBySlug unexpected error:', err);
+            return null;
         }
-        return data;
     },
 
     // ── Save / replace all fields for a form ──

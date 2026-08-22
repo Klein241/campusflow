@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { formsService, CampusForm, FormField, FieldType, FormType, FormResponse } from '@/lib/forms-service';
+import { isCustomDomain } from '@/lib/custom-domain';
 import { toast } from 'sonner';
 
 // ════════════════════════════════════════════════
@@ -697,12 +698,18 @@ export function FormsView({ orgId, orgSlug, userId, userRole, userName }: FormsV
         else toast.error('Erreur lors de la suppression');
     };
 
+    const getFormUrl = (slug: string) => {
+        const isCustom = typeof window !== 'undefined' && isCustomDomain();
+        const path = isCustom ? `/f/${slug}` : `/${orgSlug}/f/${slug}`;
+        return typeof window !== 'undefined' ? `${window.location.origin}${path}` : path;
+    };
+
     const copyLink = async (form: CampusForm) => {
         if (!form.is_published && form.id) {
             await formsService.updateForm(form.id, { is_published: true, accepts_responses: true });
             setMyForms(prev => prev.map(f => f.id === form.id ? { ...f, is_published: true, accepts_responses: true } : f));
         }
-        const url = `${window.location.origin}/${orgSlug}/f/${form.slug}`;
+        const url = getFormUrl(form.slug);
         navigator.clipboard.writeText(url);
         toast.success('🔗 Lien copié et formulaire actif !');
     };
@@ -712,7 +719,9 @@ export function FormsView({ orgId, orgSlug, userId, userRole, userName }: FormsV
             await formsService.updateForm(form.id, { is_published: true, accepts_responses: true });
             setMyForms(prev => prev.map(f => f.id === form.id ? { ...f, is_published: true, accepts_responses: true } : f));
         }
-        window.open(`/${orgSlug}/f/${form.slug}`, '_blank');
+        const isCustom = typeof window !== 'undefined' && isCustomDomain();
+        const path = isCustom ? `/f/${form.slug}` : `/${orgSlug}/f/${form.slug}`;
+        window.open(path, '_blank');
     };
 
     if (loading) {
