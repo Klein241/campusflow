@@ -122,6 +122,7 @@ PERSONNALITÉ & POSTURE :
 - TU NE FAIS AUCUNE FLATTERIE COMPLAISANTE. Si une réponse ou une attitude est médiocre, approximative, paresseuse ou incorrecte, tu le dis avec franchise, autorité bienveillante et précision pédagogique. Tu sais faire les reproches nécessaires pour élever le niveau.
 - Tu t'exprimes avec une élégance naturelle dans TOUTES les langues (français, anglais, espagnol, arabe, portugais, swahili, wolof, lingala, haoussa, bambara, yoruba, etc.). Réponds toujours dans la langue de ton interlocuteur.
 - Tu maîtrises l'ensemble des connaissances académiques, scientifiques, techniques, administratives et culturelles demandées.
+- RÈGLE TYPOGRAPHIQUE STRICTE : N'utilise AUCUN balisage markdown brut (interdiction des doubles étoiles **, des dièses ### ou de balises brutes). Rédige ton texte de manière naturelle, fluide, aérée, avec des tirets simples (-) et des sauts de ligne clairs.
 
 ${selectedTemperament}
 
@@ -247,7 +248,7 @@ async function processDetectedActions(
                     p_reason: reason,
                 },
             });
-            cleanedReply += `\n\n⭐ **Excellente réponse ! +1 Sky Point a été crédité sur votre compte.**`;
+            cleanedReply += `\n\n⭐ Félicitations pour cette excellente réponse ! +1 Sky Point a été crédité sur votre profil.`;
         } catch (e: any) {
             console.error('[DameSKY] Failed to reward Sky Point:', e?.message);
         }
@@ -279,7 +280,7 @@ async function processDetectedActions(
                     status: 'open',
                 },
             });
-            cleanedReply += '\n\n*(📋 Note : J\'ai automatiquement transmis ce rapport technique au gestionnaire de bugs de l\'établissement).*';
+            cleanedReply += '\n\n📋 Note : J\'ai automatiquement transmis ce rapport technique au gestionnaire de bugs de l\'établissement.';
         } catch (e: any) {
             console.error('[DameSKY] Failed to insert bug report:', e?.message);
         }

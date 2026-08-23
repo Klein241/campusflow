@@ -30,6 +30,7 @@ import { TemplateTechMentor } from '@/components/campus/landing-templates/templa
 import { TemplateProductMastery } from '@/components/campus/landing-templates/template-product-mastery';
 import { TemplateNexisStudio } from '@/components/campus/landing-templates/template-nexis-studio';
 import { SchoolReviewsSection } from '@/components/campus/school-reviews';
+import { SkyAgentBubble } from '@/components/sky-agent/SkyAgentBubble';
 
 // ═══════════════════════════════════════════════════════════════════════
 // TYPES
@@ -1614,6 +1615,9 @@ export default function SchoolLandingPage() {
                     </div>
                 </div>
             </footer>
+
+            {/* Bulle Dame SKY */}
+            <SkyAgentBubble role="student" context={{ org_name: org.name, org_slug: org.slug, org_id: org.id }} bottomOffset="bottom-6 md:bottom-8" />
         </div>
     );
 }

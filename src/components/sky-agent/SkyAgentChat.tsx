@@ -180,6 +180,97 @@ function AttachmentItem({ att }: { att: SkyAttachment }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  Rendu Typographique Élégant (Sans Marquage Markdown Brut)
+// ─────────────────────────────────────────────────────────────────────────────
+function renderInlineText(text: string): React.ReactNode {
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    const regex = /(\*\*|__)(.*?)\1|`([^`]+)`/g;
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            parts.push(text.slice(lastIndex, match.index));
+        }
+
+        if (match[2]) {
+            parts.push(
+                <strong key={match.index} className="font-semibold text-amber-200">
+                    {match[2]}
+                </strong>
+            );
+        } else if (match[3]) {
+            parts.push(
+                <code key={match.index} className="px-1.5 py-0.5 rounded bg-black/40 text-amber-300 font-mono text-xs border border-white/10">
+                    {match[3]}
+                </code>
+            );
+        }
+
+        lastIndex = regex.lastIndex;
+    }
+
+    if (lastIndex < text.length) {
+        parts.push(text.slice(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : text;
+}
+
+function renderCleanMessageText(rawText: string) {
+    if (!rawText) return null;
+    const lines = rawText.split('\n');
+
+    return (
+        <div className="space-y-1 text-sm leading-relaxed">
+            {lines.map((line, idx) => {
+                const trimmed = line.trim();
+                if (!trimmed) return <div key={idx} className="h-1" />;
+
+                // Titres (#, ##, ###)
+                const headingMatch = trimmed.match(/^#{1,4}\s+(.+)$/);
+                if (headingMatch) {
+                    return (
+                        <div key={idx} className="font-bold text-amber-300 text-sm mt-2 mb-1 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                            {renderInlineText(headingMatch[1])}
+                        </div>
+                    );
+                }
+
+                // Puces (- ou *)
+                const bulletMatch = trimmed.match(/^[-*•]\s+(.+)$/);
+                if (bulletMatch) {
+                    return (
+                        <div key={idx} className="flex items-start gap-2 pl-1 my-0.5">
+                            <span className="text-amber-400 font-bold leading-tight select-none">•</span>
+                            <div className="flex-1">{renderInlineText(bulletMatch[1])}</div>
+                        </div>
+                    );
+                }
+
+                // Listes numérotées (1., 2., etc.)
+                const numMatch = trimmed.match(/^(\d+)[\.\)]\s+(.+)$/);
+                if (numMatch) {
+                    return (
+                        <div key={idx} className="flex items-start gap-2 pl-1 my-0.5">
+                            <span className="text-amber-300 font-semibold text-xs min-w-4">{numMatch[1]}.</span>
+                            <div className="flex-1">{renderInlineText(numMatch[2])}</div>
+                        </div>
+                    );
+                }
+
+                return (
+                    <p key={idx} className="my-0.5">
+                        {renderInlineText(line)}
+                    </p>
+                );
+            })}
+        </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  Bulle de message Dame SKY
 // ─────────────────────────────────────────────────────────────────────────────
 function MessageBubble({
@@ -237,12 +328,12 @@ function MessageBubble({
 
             {/* Bulle */}
             <div className={cn(
-                'max-w-[85%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap shadow-lg relative',
+                'max-w-[85%] px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-lg relative',
                 isUser
                     ? 'bg-gradient-to-r from-violet-600/40 to-indigo-600/40 border border-violet-500/40 text-violet-50 rounded-br-xs'
                     : 'bg-[#151928]/95 border border-white/10 text-slate-100 rounded-bl-xs'
             )}>
-                {msg.content}
+                {renderCleanMessageText(msg.content)}
 
                 {/* Pièces jointes */}
                 {msg.attachments && msg.attachments.length > 0 && (

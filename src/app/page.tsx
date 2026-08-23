@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { PlatformReviewsSection } from '@/components/platform-reviews';
 import { supabase } from '@/lib/supabase';
 import { IziTeachLogo } from '@/components/brand/iziteach-logo';
+import { SkyAgentBubble } from '@/components/sky-agent/SkyAgentBubble';
 
 // ═══════════════════════════════════════════════
 // CAMPUSFLOW — MAIN LANDING PAGE
@@ -501,6 +502,9 @@ export default function LandingPage() {
           <p>© 2026 SYGMA-TECH. Tous droits réservés.</p>
         </div>
       </footer>
+
+      {/* Bulle Flottante Dame SKY */}
+      <SkyAgentBubble role="student" bottomOffset="bottom-6 md:bottom-8" />
     </div>
   );
 }
