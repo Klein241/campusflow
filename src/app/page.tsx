@@ -502,9 +502,6 @@ export default function LandingPage() {
           <p>© 2026 SYGMA-TECH. Tous droits réservés.</p>
         </div>
       </footer>
-
-      {/* Bulle Flottante Dame SKY */}
-      <SkyAgentBubble role="student" bottomOffset="bottom-6 md:bottom-8" />
     </div>
   );
 }

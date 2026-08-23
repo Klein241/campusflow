@@ -564,7 +564,7 @@ export function SkyAgentChat({
         }
     }, [isOpen]);
 
-    // Lecture à voix haute
+    // Lecture à voix haute avec Voix Naturelle HD / IA Moderne
     const handleSpeak = (text: string) => {
         if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
             toast.error('La synthèse vocale n\'est pas supportée par votre navigateur');
@@ -581,8 +581,30 @@ export function SkyAgentChat({
         const cleanText = text.replace(/[*#_`~[\]]/g, ' ').replace(/\(https?:\/\/[^\)]+\)/g, '');
         const utterance = new SpeechSynthesisUtterance(cleanText);
         utterance.lang = 'fr-FR';
-        utterance.rate = 1.0;
-        utterance.pitch = 1.05;
+        utterance.rate = 0.98;
+        utterance.pitch = 1.02;
+
+        // Sélection intelligente de la meilleure voix naturelle/neurale disponible
+        const voices = window.speechSynthesis.getVoices();
+        const bestVoice = voices.find(v =>
+            (v.lang.startsWith('fr') || v.lang.includes('FR')) && (
+                v.name.includes('Natural') ||
+                v.name.includes('Neural') ||
+                v.name.includes('Google') ||
+                v.name.includes('Denise') ||
+                v.name.includes('Henri') ||
+                v.name.includes('Thomas') ||
+                v.name.includes('Audrey') ||
+                v.name.includes('Amelie') ||
+                v.name.includes('Siri') ||
+                v.name.includes('Premium') ||
+                v.name.includes('Enhanced')
+            )
+        ) || voices.find(v => v.lang.startsWith('fr')) || voices.find(v => v.lang.startsWith('en')) || voices[0];
+
+        if (bestVoice) {
+            utterance.voice = bestVoice;
+        }
 
         utterance.onstart = () => setIsSpeaking(true);
         utterance.onend = () => setIsSpeaking(false);
@@ -597,12 +619,15 @@ export function SkyAgentChat({
 
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            toast.error('La reconnaissance vocale n\'est pas disponible sur ce navigateur');
+            toast.info('💡 La dictée vocale instantanée est optimisée sur Google Chrome ou Edge. Vous pouvez taper votre message directement.');
+            inputRef.current?.focus();
             return;
         }
 
         if (isListening) {
-            recognitionRef.current?.stop();
+            try {
+                recognitionRef.current?.stop();
+            } catch {}
             setIsListening(false);
             return;
         }
@@ -619,21 +644,25 @@ export function SkyAgentChat({
             };
 
             recognition.onresult = (event: any) => {
-                const transcript = event.results[0][0].transcript;
+                const transcript = event.results[0]?.[0]?.transcript;
                 if (transcript) {
                     setInput(prev => prev ? `${prev} ${transcript}` : transcript);
-                    toast.success('Voix transcrite !');
+                    toast.success('Voix transcrite avec succès !');
                 }
             };
 
-            recognition.onerror = () => setIsListening(false);
+            recognition.onerror = (e: any) => {
+                setIsListening(false);
+                if (e?.error !== 'no-speech') {
+                    console.warn('[DameSKY] Speech recognition notice:', e?.error);
+                }
+            };
             recognition.onend = () => setIsListening(false);
 
             recognitionRef.current = recognition;
             recognition.start();
         } catch {
             setIsListening(false);
-            toast.error('Erreur lors du démarrage du micro');
         }
     };
 

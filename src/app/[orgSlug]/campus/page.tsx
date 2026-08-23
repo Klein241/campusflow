@@ -24,6 +24,7 @@ import { ExamRoomView } from '@/components/campus/exam-room/exam-room-view';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { orgPath } from '@/lib/custom-domain';
 import { IziTeachLogo } from '@/components/brand/iziteach-logo';
+import { SkyAgentBubble } from '@/components/sky-agent/SkyAgentBubble';
 
 // ═══════════════════════════════════════════════════════
 // CAMPUS PAGE
@@ -846,6 +847,23 @@ export default function CampusPage() {
                         </button>
                     </div>
                 </div>
+            )}
+
+            {/* Bulle Flottante Dame SKY dans la Communauté */}
+            {org && (
+                <SkyAgentBubble
+                    role={session?.role === 'teacher' ? 'prof' : 'student'}
+                    context={{
+                        org_slug: orgSlug,
+                        org_name: org.name,
+                        user_name: session ? `${session.first_name} ${session.last_name || ''}`.trim() : undefined,
+                        user_id: session?.profile_id,
+                        stats: {
+                            'Sky Points': skyPoints,
+                        }
+                    }}
+                    bottomOffset="bottom-24 md:bottom-8"
+                />
             )}
         </main>
     );

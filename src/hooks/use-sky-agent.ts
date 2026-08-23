@@ -30,7 +30,10 @@ export interface SkyAgentContext {
     stats?: Record<string, string | number>;
 }
 
-const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || '';
+const WORKER_URL =
+    process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL ||
+    process.env.NEXT_PUBLIC_WORKER_URL ||
+    'https://campusflow-worker.kleintaptue1.workers.dev';
 
 function generateSessionId(): string {
     return `damesky_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;

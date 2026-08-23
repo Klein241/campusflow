@@ -205,21 +205,34 @@ async function clearSession(env: Env, sessionId: string): Promise<void> {
 // ────────────────────────────────────────────────────────────────
 
 async function callLlama(env: Env, messages: { role: string; content: string }[]): Promise<string> {
-    try {
-        const result = await env.AI.run('@cf/meta/llama-3.1-8b-instruct' as any, {
-            messages,
-            max_tokens: 1200,
-            temperature: 0.65,
-            stream: false,
-        }) as any;
+    const models = [
+        '@cf/meta/llama-3.1-8b-instruct',
+        '@cf/meta/llama-3-8b-instruct',
+        '@cf/meta/llama-3.2-3b-instruct',
+        '@cf/mistral/mistral-7b-instruct-v0.1',
+        '@cf/qwen/qwen1.5-7b-chat-awq',
+    ];
 
-        const text: string = result?.response || result?.result?.response || '';
-        if (!text) throw new Error('Empty response from LLaMA');
-        return text.trim();
-    } catch (err: any) {
-        console.error('[DameSKY] LLaMA error:', err?.message);
-        throw err;
+    let lastError: any = null;
+    for (const model of models) {
+        try {
+            const result = await env.AI.run(model as any, {
+                messages,
+                max_tokens: 1200,
+                temperature: 0.65,
+            }) as any;
+
+            const text: string = result?.response || result?.result?.response || '';
+            if (text && text.trim().length > 0) {
+                return text.trim();
+            }
+        } catch (err: any) {
+            console.error(`[DameSKY] Failed with model ${model}:`, err?.message);
+            lastError = err;
+        }
     }
+
+    throw lastError || new Error('All AI models failed to generate response');
 }
 
 // ────────────────────────────────────────────────────────────────
