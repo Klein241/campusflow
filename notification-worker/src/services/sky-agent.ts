@@ -349,16 +349,19 @@ async function callExternalAgent(
 }
 
 // ────────────────────────────────────────────────────────────────
-//  Appel LLaMA 3.1 via Cloudflare Workers AI (fallback)
+//  Appel Moteur IA Gratuit de Pointe via Cloudflare Workers AI
+//  (Modèles 70B / 32B : LLaMA 3.3 70B, DeepSeek R1, Qwen 2.5 72B)
 // ────────────────────────────────────────────────────────────────
 
 async function callLlama(env: Env, messages: { role: string; content: string }[]): Promise<string> {
+    // Liste priorisée des modèles les plus avancés disponibles gratuitement sur Workers AI
     const models = [
-        '@cf/meta/llama-3.1-8b-instruct',
-        '@cf/meta/llama-3-8b-instruct',
-        '@cf/meta/llama-3.2-3b-instruct',
-        '@cf/mistral/mistral-7b-instruct-v0.1',
-        '@cf/qwen/qwen1.5-7b-chat-awq',
+        '@cf/meta/llama-3.3-70b-instruct-fp8-fast',      // LLaMA 3.3 70B — Qualité GPT-4o, français parfait, 0 faute
+        '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b',  // DeepSeek R1 32B — Raisonnement académique et rigueur
+        '@cf/qwen/qwen2.5-72b-instruct',                // Qwen 2.5 72B — #1 mondial open-weight multilingue
+        '@cf/meta/llama-3.1-70b-instruct',              // LLaMA 3.1 70B — Modèle lourd de référence
+        '@cf/mistral/mistral-7b-instruct-v0.2',          // Mistral 7B v0.2 — Excellent en langue française
+        '@cf/meta/llama-3.1-8b-instruct',               // LLaMA 3.1 8B — Fallback ultime de rapidité
     ];
 
     let lastError: any = null;
@@ -366,7 +369,7 @@ async function callLlama(env: Env, messages: { role: string; content: string }[]
         try {
             const result = await env.AI.run(model as any, {
                 messages,
-                max_tokens: 1200,
+                max_tokens: 1500,
                 temperature: 0.65,
             }) as any;
 
@@ -375,12 +378,12 @@ async function callLlama(env: Env, messages: { role: string; content: string }[]
                 return text.trim();
             }
         } catch (err: any) {
-            console.error(`[DameSKY] Failed with model ${model}:`, err?.message);
+            console.warn(`[DameSKY] Model ${model} unavailable, trying next tier:`, err?.message);
             lastError = err;
         }
     }
 
-    throw lastError || new Error('All AI models failed to generate response');
+    throw lastError || new Error('All high-tier AI models failed to generate response');
 }
 
 // ────────────────────────────────────────────────────────────────

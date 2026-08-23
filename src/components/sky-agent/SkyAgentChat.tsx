@@ -560,7 +560,25 @@ export function SkyAgentChat({
         }
     }, [isOpen, view]);
 
-    // Nettoyage de la voix
+    // Préchargement des Voix Naturelles HD
+    const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+        const updateVoices = () => {
+            const v = window.speechSynthesis.getVoices();
+            if (v && v.length > 0) setAvailableVoices(v);
+        };
+        updateVoices();
+        window.speechSynthesis.onvoiceschanged = updateVoices;
+        return () => {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.onvoiceschanged = null;
+            }
+        };
+    }, []);
+
+    // Nettoyage de la voix à la fermeture
     useEffect(() => {
         if (!isOpen && typeof window !== 'undefined' && 'speechSynthesis' in window) {
             window.speechSynthesis.cancel();
@@ -568,7 +586,7 @@ export function SkyAgentChat({
         }
     }, [isOpen]);
 
-    // Lecture à voix haute avec Voix Naturelle HD / IA Moderne
+    // Lecture à voix haute avec Voix Naturelle HD / IA Réaliste
     const handleSpeak = (text: string) => {
         if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
             toast.error('La synthèse vocale n\'est pas supportée par votre navigateur');
@@ -582,32 +600,46 @@ export function SkyAgentChat({
         }
 
         window.speechSynthesis.cancel();
-        const cleanText = text.replace(/[*#_`~[\]]/g, ' ').replace(/\(https?:\/\/[^\)]+\)/g, '');
+
+        // Nettoyage poussé pour une élocution fluide et humaine
+        const cleanText = text
+            .replace(/[*#_`~[\]]/g, ' ')
+            .replace(/\(https?:\/\/[^\)]+\)/g, '')
+            .replace(/https?:\/\/\S+/g, '')
+            .replace(/[\u{1F300}-\u{1F9FF}]/gu, '') // suppression des émojis pour éviter la diction robotique
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        if (!cleanText) return;
+
         const utterance = new SpeechSynthesisUtterance(cleanText);
         utterance.lang = 'fr-FR';
-        utterance.rate = 0.98;
-        utterance.pitch = 1.02;
+        utterance.rate = 0.94; // Débit posé, digne et naturel
+        utterance.pitch = 1.0;
 
-        // Sélection intelligente de la meilleure voix naturelle/neurale disponible
-        const voices = window.speechSynthesis.getVoices();
-        const bestVoice = voices.find(v =>
+        const voices = availableVoices.length > 0 ? availableVoices : window.speechSynthesis.getVoices();
+
+        // 1. Voix Neurales Haute Définition prioritaires (Microsoft Natural, Google Neural, Siri)
+        const naturalVoice = voices.find(v =>
             (v.lang.startsWith('fr') || v.lang.includes('FR')) && (
-                v.name.includes('Natural') ||
-                v.name.includes('Neural') ||
-                v.name.includes('Google') ||
-                v.name.includes('Denise') ||
-                v.name.includes('Henri') ||
-                v.name.includes('Thomas') ||
-                v.name.includes('Audrey') ||
-                v.name.includes('Amelie') ||
-                v.name.includes('Siri') ||
-                v.name.includes('Premium') ||
-                v.name.includes('Enhanced')
+                v.name.toLowerCase().includes('natural') ||
+                v.name.toLowerCase().includes('neural') ||
+                v.name.toLowerCase().includes('denise') ||
+                v.name.toLowerCase().includes('henri') ||
+                v.name.toLowerCase().includes('vivienne') ||
+                v.name.toLowerCase().includes('google français') ||
+                v.name.toLowerCase().includes('siri') ||
+                v.name.toLowerCase().includes('audrey') ||
+                v.name.toLowerCase().includes('thomas') ||
+                v.name.toLowerCase().includes('amelie')
             )
-        ) || voices.find(v => v.lang.startsWith('fr')) || voices.find(v => v.lang.startsWith('en')) || voices[0];
+        );
 
-        if (bestVoice) {
-            utterance.voice = bestVoice;
+        // 2. N'importe quelle voix française
+        const frVoice = naturalVoice || voices.find(v => v.lang.startsWith('fr') || v.lang.includes('FR'));
+
+        if (frVoice) {
+            utterance.voice = frVoice;
         }
 
         utterance.onstart = () => setIsSpeaking(true);

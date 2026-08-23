@@ -417,13 +417,57 @@ export function SkyAgentSuperadminManager() {
             {subTab === 'keys' && (
                 <div className="space-y-4">
                     {!showCreateForm && !createdKey && (
-                        <button
-                            onClick={() => setShowCreateForm(true)}
-                            className="w-full py-4 border-2 border-dashed border-violet-500/30 hover:border-violet-400/60 rounded-2xl flex items-center justify-center gap-2 text-violet-300 hover:text-violet-200 hover:bg-violet-500/5 transition font-semibold text-sm"
-                        >
-                            <Plus className="w-5 h-5" />
-                            Générer une nouvelle clé Master Sky Agent (Superadmin)
-                        </button>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {/* Option 1 : Claude / MANUS Chat Bulle */}
+                            <button
+                                onClick={() => {
+                                    setNewKeyPerms(['chat:dame_sky']);
+                                    setNewKeyName('Dame SKY — Agent Chat Claude / MANUS');
+                                    setNewKeyDesc('Délégation du chat Dame SKY vers Claude (Anthropic) / MANUS avec accès aux cours');
+                                    setExtProvider('anthropic');
+                                    setExtModel('claude-opus-4-5');
+                                    setExtApiUrl('https://api.anthropic.com/v1/messages');
+                                    setShowCreateForm(true);
+                                }}
+                                className="p-4 bg-gradient-to-br from-indigo-900/40 via-purple-900/30 to-slate-900/60 border-2 border-indigo-500/40 hover:border-indigo-400 rounded-2xl flex items-center gap-3.5 text-left transition group shadow-lg shadow-indigo-500/10"
+                            >
+                                <div className="w-12 h-12 rounded-xl bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-indigo-300 group-hover:scale-105 transition-transform shrink-0">
+                                    <Bot className="w-6 h-6" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <p className="font-bold text-white text-sm">🤖 Connecter Claude / MANUS à Dame SKY</p>
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                            Recommandé
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        Remplace LLaMA par Claude ou MANUS dans la bulle de chat. Zéro faute, support des cours publics & sécurité.
+                                    </p>
+                                </div>
+                            </button>
+
+                            {/* Option 2 : Clé Master Standard */}
+                            <button
+                                onClick={() => {
+                                    setNewKeyPerms(['superadmin:all']);
+                                    setNewKeyName('MANUS Superadmin Master');
+                                    setNewKeyDesc('Accès global aux outils SuperAdmin (support, points, annonces, marketing)');
+                                    setShowCreateForm(true);
+                                }}
+                                className="p-4 bg-white/5 border-2 border-dashed border-violet-500/30 hover:border-violet-400/60 rounded-2xl flex items-center gap-3.5 text-left text-slate-300 hover:text-white transition group"
+                            >
+                                <div className="w-12 h-12 rounded-xl bg-violet-500/15 border border-violet-500/30 flex items-center justify-center text-violet-400 group-hover:scale-105 transition-transform shrink-0">
+                                    <Key className="w-6 h-6" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-white text-sm">🌟 Clé Master Système (Superadmin)</p>
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        Pour scripts, MCP local ou agents gérant le support, les Sky Points et les bugs de la plateforme.
+                                    </p>
+                                </div>
+                            </button>
+                        </div>
                     )}
 
                     {/* Clé créée avec succès */}
@@ -464,10 +508,46 @@ export function SkyAgentSuperadminManager() {
                     {/* Formulaire de création */}
                     {showCreateForm && !createdKey && (
                         <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
-                            <h3 className="text-base font-bold text-white flex items-center gap-2">
-                                <Sparkles className="w-5 h-5 text-violet-400" />
-                                Configurer un Sky Agent Superadmin
-                            </h3>
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                                    <Sparkles className="w-5 h-5 text-violet-400" />
+                                    {isChatAgentMode ? 'Connecter Claude / MANUS à Dame SKY' : 'Configurer un Sky Agent Superadmin'}
+                                </h3>
+                                <div className="flex gap-1.5 p-1 bg-black/40 rounded-xl border border-white/10">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setNewKeyPerms(['chat:dame_sky']);
+                                            if (!newKeyName || newKeyName.includes('Superadmin')) {
+                                                setNewKeyName('Dame SKY — Agent Chat Claude / MANUS');
+                                            }
+                                        }}
+                                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                                            isChatAgentMode
+                                                ? 'bg-indigo-600 text-white shadow'
+                                                : 'text-slate-400 hover:text-white'
+                                        }`}
+                                    >
+                                        🤖 Mode Chat Dame SKY
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setNewKeyPerms(['superadmin:all']);
+                                            if (newKeyName.includes('Dame SKY')) {
+                                                setNewKeyName('MANUS Superadmin Master');
+                                            }
+                                        }}
+                                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                                            !isChatAgentMode
+                                                ? 'bg-violet-600 text-white shadow'
+                                                : 'text-slate-400 hover:text-white'
+                                        }`}
+                                    >
+                                        🌟 Mode Outils Système
+                                    </button>
+                                </div>
+                            </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>

@@ -31,6 +31,7 @@ import { TemplateProductMastery } from '@/components/campus/landing-templates/te
 import { TemplateNexisStudio } from '@/components/campus/landing-templates/template-nexis-studio';
 import { SchoolReviewsSection } from '@/components/campus/school-reviews';
 import { SkyAgentBubble } from '@/components/sky-agent/SkyAgentBubble';
+import { SchoolJsonLd } from '@/components/seo/SchoolJsonLd';
 
 // ═══════════════════════════════════════════════════════════════════════
 // TYPES
@@ -336,6 +337,8 @@ export default function SchoolLandingPage() {
 
     return (
         <div className="min-h-screen bg-[#08090E] text-white overflow-x-hidden">
+            {/* ── SEO Schema.org & OpenGraph Dynamique ─────────────── */}
+            <SchoolJsonLd org={org} />
 
             {/* ── Publicités & Annonces officielles ────────────────── */}
             <div className="fixed bottom-4 left-4 right-4 z-50 max-w-sm mx-auto md:max-w-md">

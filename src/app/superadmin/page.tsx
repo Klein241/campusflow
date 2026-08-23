@@ -1010,7 +1010,7 @@ export default function SuperAdminPage() {
                             <motion.div key="overview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
                                 {/* KPI Grid */}
                                 {stats ? (
-                                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3.5">
                                         <KpiCard label="Organisations" value={stats.total_orgs}    icon={Building2}  gradient="from-violet-500 to-purple-600"   sub={stats.new_orgs_week > 0 ? `+${stats.new_orgs_week} cette semaine` : undefined} />
                                         <KpiCard label="Étudiants"     value={stats.total_students} icon={School}     gradient="from-teal-500 to-emerald-600" />
                                         <KpiCard label="Professeurs"   value={stats.total_teachers} icon={UserCheck}  gradient="from-indigo-500 to-blue-600" />
@@ -1019,7 +1019,7 @@ export default function SuperAdminPage() {
                                         <KpiCard label="Nouveaux (7j)" value={stats.new_orgs_week}  icon={TrendingUp} gradient="from-rose-500 to-pink-600" />
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3.5">
                                         {Array.from({length: 6}).map((_, i) => (
                                             <div key={i} className="h-28 rounded-2xl bg-white/[0.03] border border-white/5 animate-pulse" />
                                         ))}

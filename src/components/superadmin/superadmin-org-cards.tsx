@@ -596,8 +596,8 @@ export function SuperadminOrgCards({
 
             {/* ═══ GRILLE DE CARTES D'ÉTABLISSEMENTS ═══ */}
             {loading ? (
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {Array.from({ length: 6 }).map((_, i) => (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 min-[2000px]:grid-cols-5 gap-4 md:gap-5">
+                    {Array.from({ length: 8 }).map((_, i) => (
                         <div key={i} className="h-72 rounded-3xl bg-white/[0.02] border border-white/5 animate-pulse" />
                     ))}
                 </div>
@@ -608,7 +608,7 @@ export function SuperadminOrgCards({
                     <p className="text-xs text-slate-400 max-w-sm mx-auto">Modifiez votre recherche ou réinitialisez les filtres.</p>
                 </div>
             ) : (
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 min-[2000px]:grid-cols-5 gap-4 md:gap-5">
                     {filteredOrgs.map(org => {
                         const traffic = getTrafficBadge(org);
                         const bc = org.brand_color || '#8b5cf6';
