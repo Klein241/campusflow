@@ -1,13 +1,19 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
  * DAME SKY — Directrice Académique & Mentore Suprême d'IziTeach / CampusFlow
- * Propulsé par Meta LLaMA 3.1 8B Instruct (Cloudflare Workers AI)
  * ═══════════════════════════════════════════════════════════════════════════════
- * 
+ *
+ * 🤖 MOTEUR IA :
+ *   - Agent externe configuré par le Superadmin : Claude (Anthropic), MANUS,
+ *     GPT-4o ou tout provider OpenAI-compatible → clé et URL stockées côté serveur.
+ *   - Fallback automatique sur LLaMA 3.1 (Cloudflare Workers AI) si aucun agent
+ *     externe n'est configuré pour l'organisation.
+ *
  * 🔒 CONFIDENTIALITÉ & SÉCURITÉ :
- *   - Modèle exécuté sur votre compte Cloudflare isolé (pas d'entraînement sur vos données)
- *   - Sessions éphémères en KV (TTL 30 min)
- *   - Intégration Gateway MCP : cours réels, barèmes, anti-fraude, bug reporting & Sky Points
+ *   - L'agent externe ne reçoit que les messages et les cours publics.
+ *   - Zéro exposition des données sensibles (emails, IDs Supabase, paiements).
+ *   - Sessions éphémères en KV (TTL 30 min).
+ *   - Clé API externe chiffrée, jamais exposée au navigateur client.
  */
 
 import { Env } from '../types';
@@ -201,7 +207,149 @@ async function clearSession(env: Env, sessionId: string): Promise<void> {
 }
 
 // ────────────────────────────────────────────────────────────────
-//  Appel LLaMA 3.1 via Cloudflare Workers AI
+//  Configuration Agent Externe (Claude / OpenAI / MANUS)
+// ────────────────────────────────────────────────────────────────
+
+interface ExternalAgentConfig {
+    key_id: string;
+    external_api_url: string;
+    external_api_key_enc: string;
+    external_model: string;
+    external_provider: string;
+    chat_access_courses: boolean;
+}
+
+interface PublicCourse {
+    course_id: string;
+    title: string;
+    description: string;
+    subject: string;
+    level: string;
+    chapters: Array<{ title: string; order: number }>;
+}
+
+/** Charge la config agent externe depuis Supabase (via RPC SECURITY DEFINER) */
+async function loadChatAgentConfig(
+    env: Env,
+    orgId: string | undefined
+): Promise<ExternalAgentConfig | null> {
+    if (!orgId) return null;
+    try {
+        const sb = new SupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+        const rows: any = await sb.query('rpc/get_active_chat_agent', {
+            method: 'POST',
+            body: { p_org_id: orgId },
+        });
+        if (Array.isArray(rows) && rows.length > 0) {
+            const r = rows[0];
+            if (r.external_api_url && r.external_api_key_enc) return r as ExternalAgentConfig;
+        }
+        return null;
+    } catch (e: any) {
+        console.warn('[DameSKY] loadChatAgentConfig error:', e?.message);
+        return null;
+    }
+}
+
+/** Charge les cours publics d'une org pour enrichir le contexte de l'agent */
+async function loadPublicCourses(
+    env: Env,
+    orgId: string
+): Promise<PublicCourse[]> {
+    try {
+        const sb = new SupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+        const rows: any = await sb.query('rpc/get_public_courses_for_agent', {
+            method: 'POST',
+            body: { p_org_id: orgId, p_limit: 15 },
+        });
+        return Array.isArray(rows) ? rows : [];
+    } catch {
+        return [];
+    }
+}
+
+/** Formate les cours publics en bloc textuel pour le system prompt */
+function formatCoursesBlock(courses: PublicCourse[]): string {
+    if (!courses.length) return '';
+    const list = courses.map(c => {
+        const chaps = Array.isArray(c.chapters)
+            ? c.chapters.map((ch: any) => `  • ${ch.title}`).join('\n')
+            : '';
+        return `📚 ${c.title}${c.subject ? ` [${c.subject}]` : ''}${c.level ? ` — ${c.level}` : ''}\n${c.description ? `   ${c.description.slice(0, 120)}` : ''}${chaps ? `\n${chaps}` : ''}`;
+    }).join('\n\n');
+    return `\n\nCOURS PUBLIÉS DE L'ÉTABLISSEMENT (tu peux en parler aux utilisateurs) :\n${list}`;
+}
+
+// ────────────────────────────────────────────────────────────────
+//  Appel Agent Externe : Anthropic (Claude) ou OpenAI-compatible
+// ────────────────────────────────────────────────────────────────
+
+async function callExternalAgent(
+    config: ExternalAgentConfig,
+    messages: { role: string; content: string }[]
+): Promise<string> {
+    const provider = config.external_provider?.toLowerCase() || 'openai';
+    const model = config.external_model || (provider === 'anthropic' ? 'claude-opus-4-5' : 'gpt-4o');
+
+    // ── Anthropic Claude ──
+    if (provider === 'anthropic') {
+        const systemMsg = messages.find(m => m.role === 'system');
+        const userMessages = messages.filter(m => m.role !== 'system');
+
+        const res = await fetch(config.external_api_url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': config.external_api_key_enc,
+                'anthropic-version': '2023-06-01',
+            },
+            body: JSON.stringify({
+                model,
+                max_tokens: 1500,
+                system: systemMsg?.content || '',
+                messages: userMessages.map(m => ({ role: m.role, content: m.content })),
+            }),
+        });
+
+        if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(`Anthropic API error ${res.status}: ${errText.slice(0, 200)}`);
+        }
+
+        const data = await res.json() as any;
+        const text: string = data?.content?.[0]?.text || data?.content?.[0]?.value || '';
+        if (!text.trim()) throw new Error('Empty response from Anthropic');
+        return text.trim();
+    }
+
+    // ── OpenAI-compatible (OpenAI, MANUS, Groq, Mistral AI, etc.) ──
+    const res = await fetch(config.external_api_url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.external_api_key_enc}`,
+        },
+        body: JSON.stringify({
+            model,
+            max_tokens: 1500,
+            temperature: 0.7,
+            messages: messages.map(m => ({ role: m.role, content: m.content })),
+        }),
+    });
+
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`OpenAI-compatible API error ${res.status}: ${errText.slice(0, 200)}`);
+    }
+
+    const data = await res.json() as any;
+    const text: string = data?.choices?.[0]?.message?.content || '';
+    if (!text.trim()) throw new Error('Empty response from OpenAI-compatible provider');
+    return text.trim();
+}
+
+// ────────────────────────────────────────────────────────────────
+//  Appel LLaMA 3.1 via Cloudflare Workers AI (fallback)
 // ────────────────────────────────────────────────────────────────
 
 async function callLlama(env: Env, messages: { role: string; content: string }[]): Promise<string> {
@@ -396,7 +544,7 @@ export async function handleSkyAgentChat(request: Request, env: Env): Promise<Re
 
     try {
         const sb = new SupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
-        
+
         // Config globale
         const configData: any = await sb.query('dame_sky_config', { limit: 1 });
         if (configData && Array.isArray(configData) && configData[0]) {
@@ -417,7 +565,6 @@ export async function handleSkyAgentChat(request: Request, env: Env): Promise<Re
             filters: `is_active=eq.true&or=(target_role.eq.${role},target_role.eq.all)`,
             limit: 5,
         });
-
         if (Array.isArray(skillsData) && skillsData.length > 0) {
             skillsContent = skillsData.map((s: any) => `### Skill: ${s.title} (${s.category})\n${s.content}`).join('\n\n');
         }
@@ -425,44 +572,84 @@ export async function handleSkyAgentChat(request: Request, env: Env): Promise<Re
         // Fallback gracieux si Supabase est momentanément inaccessible
     }
 
-    // ── 3. Construire le prompt système enrichi pour Dame SKY ──
+    // ── 3. Vérifier si un agent externe est configuré pour cette organisation ──
+    const externalConfig = await loadChatAgentConfig(env, context?.org_id);
+
+    // ── 4. Charger les cours publics si autorisé ──
+    let coursesBlock = '';
+    if (externalConfig?.chat_access_courses && context?.org_id) {
+        const courses = await loadPublicCourses(env, context.org_id);
+        coursesBlock = formatCoursesBlock(courses);
+    }
+
+    // ── 5. Construire le prompt système enrichi pour Dame SKY ──
     const systemPrompt = buildSystemPrompt(
         role as SkyAgentRole,
         context,
         effectiveTemperament,
         effectiveInstructions,
-        skillsContent
+        skillsContent + coursesBlock
     );
 
-    // ── 4. Formater le message utilisateur avec les pièces jointes éventuelles ──
+    // ── 6. Formater le message utilisateur avec les pièces jointes éventuelles ──
     let userPromptText = message?.trim() || '';
     if (attachments && attachments.length > 0) {
         const attachDesc = attachments.map(a => `- [Fichier joint] ${a.name} (${a.type}${a.size ? `, ${(a.size / 1024).toFixed(1)} KB` : ''}) : ${a.url}`).join('\n');
         userPromptText += `\n\n[Pièces jointes fournies par l'utilisateur] :\n${attachDesc}`;
     }
 
-    const messages = [
+    const chatMessages = [
         { role: 'system', content: systemPrompt },
         ...history.map(h => ({ role: h.role, content: h.content })),
         { role: 'user', content: userPromptText.slice(0, 3000) },
     ];
 
-    // ── 5. Appel LLaMA 3.1 ──
+    // ── 7. Appel IA : Agent externe (Claude / MANUS) ou LLaMA (fallback) ──
     let assistantReply: string;
-    try {
-        assistantReply = await callLlama(env, messages);
-    } catch {
-        return json({
-            success: false,
-            reply: "Je rencontre une brève interruption de communication avec le réseau central. Veuillez me reformuler votre demande dans un instant. ✨",
-            session_id,
-        }, 503);
+    let usedExternalAgent = false;
+    let agentName = 'Dame SKY';
+
+    if (externalConfig) {
+        // Tentative avec l'agent externe configuré
+        try {
+            assistantReply = await callExternalAgent(externalConfig, chatMessages);
+            usedExternalAgent = true;
+            // Nom affiché selon le modèle
+            const model = externalConfig.external_model || '';
+            if (model.includes('claude')) agentName = 'Dame SKY — Claude';
+            else if (model.includes('gpt')) agentName = 'Dame SKY — GPT';
+            else if (model.includes('manus')) agentName = 'Dame SKY — MANUS';
+            else agentName = 'Dame SKY — IA';
+        } catch (extErr: any) {
+            console.error('[DameSKY] External agent failed, falling back to LLaMA:', extErr?.message);
+            // Fallback LLaMA
+            try {
+                assistantReply = await callLlama(env, chatMessages);
+            } catch {
+                return json({
+                    success: false,
+                    reply: "Je rencontre une brève interruption de communication. Veuillez me reformuler votre demande dans un instant. ✨",
+                    session_id,
+                }, 503);
+            }
+        }
+    } else {
+        // Pas d'agent externe : utiliser LLaMA directement
+        try {
+            assistantReply = await callLlama(env, chatMessages);
+        } catch {
+            return json({
+                success: false,
+                reply: "Je rencontre une brève interruption de communication avec le réseau central. Veuillez me reformuler votre demande dans un instant. ✨",
+                session_id,
+            }, 503);
+        }
     }
 
-    // ── 6. Analyse des balises d'action (Sky Points, Bugs, Fraudes, Sécurité) & Nettoyage ──
+    // ── 8. Analyse des balises d'action (Sky Points, Bugs, Fraudes, Sécurité) & Nettoyage ──
     assistantReply = await processDetectedActions(env, assistantReply, body);
 
-    // ── 7. Mettre à jour l'historique éphémère (sans PII persistante) ──
+    // ── 9. Mettre à jour l'historique éphémère (sans PII persistante) ──
     const newHistory: SkyMessage[] = [
         ...history,
         { role: 'user', content: userPromptText.slice(0, 3000), attachments },
@@ -474,8 +661,12 @@ export async function handleSkyAgentChat(request: Request, env: Env): Promise<Re
         success: true,
         reply: assistantReply,
         session_id,
-        persona: 'Dame SKY',
-        privacy_note: 'Conversation protégée et éphémère (30 min). Données non partagées avec des tiers.',
+        persona: agentName,
+        external_agent_active: usedExternalAgent,
+        agent_provider: usedExternalAgent ? (externalConfig?.external_provider || 'external') : 'cloudflare-llama',
+        privacy_note: usedExternalAgent
+            ? '⚠️ Ce chat est géré par un assistant IA externe. Ne partagez aucune information personnelle sensible (mots de passe, données bancaires).'
+            : 'Conversation protégée et éphémère (30 min). Données non partagées avec des tiers.',
     });
 }
 

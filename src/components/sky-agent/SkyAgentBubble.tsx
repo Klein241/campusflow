@@ -39,6 +39,7 @@ const roleTheme: Record<SkyAgentRole, { gradient: string; glow: string; badge: s
 export function SkyAgentBubble({ role, context, bottomOffset = 'bottom-6 md:bottom-8' }: SkyAgentBubbleProps) {
     const {
         messages, isLoading, isOpen,
+        externalAgentActive, persona,
         sendMessage, clearSession, toggleChat, closeChat,
     } = useSkyAgent(role, context);
 
@@ -56,6 +57,8 @@ export function SkyAgentBubble({ role, context, bottomOffset = 'bottom-6 md:bott
                 onClose={closeChat}
                 messages={messages}
                 isLoading={isLoading}
+                externalAgentActive={externalAgentActive}
+                persona={persona}
                 sendMessage={sendMessage}
                 clearSession={clearSession}
             />

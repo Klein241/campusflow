@@ -44,6 +44,8 @@ export function useSkyAgent(role: SkyAgentRole, context?: SkyAgentContext) {
     const [isLoading, setIsLoading] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [externalAgentActive, setExternalAgentActive] = useState(false);
+    const [persona, setPersona] = useState('Dame SKY');
     const sessionIdRef = useRef<string>(generateSessionId());
 
     const sendMessage = useCallback(async (userText: string, attachments?: SkyAttachment[]) => {
@@ -90,6 +92,14 @@ export function useSkyAgent(role: SkyAgentRole, context?: SkyAgentContext) {
                 timestamp: new Date(),
             };
             setMessages(prev => [...prev, assistantMsg]);
+
+            // Mettre à jour le statut de l'agent externe si la réponse l'indique
+            if (data.external_agent_active !== undefined) {
+                setExternalAgentActive(data.external_agent_active);
+            }
+            if (data.persona) {
+                setPersona(data.persona);
+            }
         } catch (err: any) {
             setError(err.message || 'Une erreur est survenue');
             const errMsg: SkyMessage = {
@@ -114,6 +124,8 @@ export function useSkyAgent(role: SkyAgentRole, context?: SkyAgentContext) {
         } catch { /* silent */ }
         setMessages([]);
         setError(null);
+        setExternalAgentActive(false);
+        setPersona('Dame SKY');
         sessionIdRef.current = generateSessionId();
     }, []);
 
@@ -126,6 +138,8 @@ export function useSkyAgent(role: SkyAgentRole, context?: SkyAgentContext) {
         isLoading,
         isOpen,
         error,
+        externalAgentActive,
+        persona,
         sendMessage,
         clearSession,
         openChat,

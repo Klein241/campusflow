@@ -423,6 +423,8 @@ interface SkyAgentChatProps {
     onClose: () => void;
     messages: SkyMessage[];
     isLoading: boolean;
+    externalAgentActive?: boolean;
+    persona?: string;
     sendMessage: (text: string, attachments?: SkyAttachment[]) => Promise<void>;
     clearSession: () => Promise<void>;
 }
@@ -434,6 +436,8 @@ export function SkyAgentChat({
     onClose,
     messages,
     isLoading,
+    externalAgentActive = false,
+    persona,
     sendMessage,
     clearSession,
 }: SkyAgentChatProps) {
@@ -927,6 +931,24 @@ export function SkyAgentChat({
                                         })}
                                     </div>
                                 )}
+
+                                {/* Bannière de Confidentialité */}
+                                <div className="flex-shrink-0 bg-black/50 border-b border-white/5 px-3 py-1.5 flex items-center justify-between gap-2 text-[10px]">
+                                    <div className="flex items-center gap-1.5 text-slate-300">
+                                        <Shield className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                        <span>
+                                            {externalAgentActive
+                                                ? 'Assistant IA externe connecté. Ne partagez pas de données sensibles (mots de passe, bancaire).'
+                                                : 'Session confidentielle et sécurisée. Ne partagez pas de mots de passe.'}
+                                        </span>
+                                    </div>
+                                    {externalAgentActive && (
+                                        <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded shrink-0">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                            Live AI
+                                        </span>
+                                    )}
+                                </div>
 
                                 {/* Zone de Messages */}
                                 <div className="flex-1 overflow-y-auto p-4 space-y-3.5 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">

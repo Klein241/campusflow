@@ -29,6 +29,27 @@ const WORKER_MCP_TOOLS = [
         inputSchema: { type: 'object', properties: { chapter_id: { type: 'string' } }, required: ['chapter_id'] },
     },
     {
+        name: 'get_lesson',
+        description: 'Obtenir le contenu textuel complet, le résumé et les notions d\'une leçon publiée dans l\'école pour expliquer aux élèves dans le chat',
+        permission: 'read:curriculum',
+        inputSchema: { type: 'object', properties: { lesson_id: { type: 'string' } }, required: ['lesson_id'] },
+    },
+    {
+        name: 'search_published_lessons',
+        description: 'Rechercher des leçons et chapitres publiés par mot-clé ou matière pour répondre précisément aux questions des élèves et professeurs dans le chat',
+        permission: 'read:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                query: { type: 'string', description: 'Mot-clé ou thème du cours recherché (ex: Dérivées, Guerre Froide, Photosynthèse)' },
+                subject_id: { type: 'string', description: 'ID de la matière (optionnel)' },
+                class_id: { type: 'string', description: 'ID de la classe (optionnel)' },
+                limit: { type: 'number', description: 'Nombre de leçons retournées (défaut: 10)' },
+            },
+            required: ['query'],
+        },
+    },
+    {
         name: 'list_exercises',
         description: 'Lister les exercices d\'une leçon ou d\'un chapitre',
         permission: 'read:curriculum',
@@ -778,6 +799,12 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
             if (t.name === 'list_supported_languages' || t.name === 'get_org_info' || t.name === 'list_classes') return true;
             // Traduction : accessible si translate:content OU write:curriculum
             if (t.name === 'translate_content' && (permissions.includes('translate:content') || permissions.includes('write:curriculum'))) return true;
+            // Délégation Chat Dame SKY (Claude / MANUS) : accès aux cours publiés et au chat
+            if (permissions.includes('chat:dame_sky')) {
+                if (['list_subjects', 'list_chapters', 'list_lessons', 'get_lesson', 'search_published_lessons', 'list_exercises', 'list_chat_messages', 'send_chat_message', 'list_forms', 'list_supported_languages', 'get_org_info', 'list_classes'].includes(t.name)) {
+                    return true;
+                }
+            }
             // Étudiants admin : accessible si admin:students OU read:students / write:students
             if (['list_students'].includes(t.name) && (permissions.includes('read:students') || permissions.includes('admin:students'))) return true;
             if (['create_student', 'update_student', 'delete_student', 'create_teacher', 'list_teachers'].includes(t.name) && (permissions.includes('admin:students') || permissions.includes('write:students'))) return true;
@@ -802,6 +829,8 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
         let isAllowed = isSuperadmin;
         if (!isAllowed) {
             if (toolName === 'list_supported_languages' || toolName === 'get_org_info' || toolName === 'list_classes') {
+                isAllowed = true;
+            } else if (permissions.includes('chat:dame_sky') && ['list_subjects', 'list_chapters', 'list_lessons', 'get_lesson', 'search_published_lessons', 'list_exercises', 'list_chat_messages', 'send_chat_message', 'list_forms'].includes(toolName)) {
                 isAllowed = true;
             } else if (toolName === 'translate_content') {
                 isAllowed = permissions.includes('translate:content') || permissions.includes('write:curriculum') || permissions.includes('write:exercises');

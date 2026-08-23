@@ -78,6 +78,7 @@ const SUPERADMIN_PERMISSIONS = [
     { id: 'superadmin:orgs', label: '🏫 Audit & Relance Écoles', desc: 'Détecter les orgs inactives et les relancer', risk: 'medium' },
     { id: 'superadmin:emails', label: '📧 Envoi d\'Emails', desc: 'Envoi d\'emails système ou de notifications', risk: 'medium' },
     { id: 'superadmin:marketing', label: '🚀 Marketing & Croissance IA', desc: 'Scraping web, campagnes email ciblées, tracking ouverture, studio publicitaire & CRM prospects', risk: 'high' },
+    { id: 'chat:dame_sky', label: '🤖 Délégation Chat Dame SKY (Claude / MANUS)', desc: 'Prendre en charge les discussions de la bulle Dame SKY pour toutes les écoles. Zéro accès aux données sensibles.', risk: 'low' },
 ];
 
 const TOOL_LABELS: Record<string, { label: string; icon: string }> = {
@@ -145,6 +146,17 @@ export function SkyAgentSuperadminManager() {
     const [createdKey, setCreatedKey] = useState<string | null>(null);
     const [keyCopied, setKeyCopied] = useState(false);
 
+    // Config agent externe (Dame SKY Chat)
+    const [extApiUrl, setExtApiUrl] = useState('https://api.anthropic.com/v1/messages');
+    const [extApiKey, setExtApiKey] = useState('');
+    const [extModel, setExtModel] = useState('claude-opus-4-5');
+    const [extProvider, setExtProvider] = useState<'anthropic' | 'openai' | 'custom'>('anthropic');
+    const [extChatCourses, setExtChatCourses] = useState(true);
+    const [extKeyVisible, setExtKeyVisible] = useState(false);
+
+    // Indique si la permission chat:dame_sky est sélectionnée
+    const isChatAgentMode = newKeyPerms.includes('chat:dame_sky');
+
     // Load data
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -190,6 +202,10 @@ export function SkyAgentSuperadminManager() {
             toast.error('Donnez un nom au Sky Agent');
             return;
         }
+        if (isChatAgentMode && (!extApiUrl.trim() || !extApiKey.trim())) {
+            toast.error('Renseignez l\'URL et la clé API de l\'agent externe.');
+            return;
+        }
         setCreating(true);
         try {
             const { data, error } = await supabase.rpc('create_superadmin_sky_agent_key', {
@@ -202,8 +218,22 @@ export function SkyAgentSuperadminManager() {
 
             if (error) throw error;
 
+            // Si mode agent chat externe : sauvegarder la config dans la clé générée
+            if (isChatAgentMode && data?.key_id) {
+                await supabase
+                    .from('ai_agent_keys')
+                    .update({
+                        external_api_url: extApiUrl.trim(),
+                        external_api_key_enc: extApiKey.trim(),
+                        external_model: extModel.trim(),
+                        external_provider: extProvider,
+                        chat_access_courses: extChatCourses,
+                    })
+                    .eq('id', data.key_id);
+            }
+
             setCreatedKey(data.full_key);
-            toast.success('Clé Superadmin Sky Agent générée !');
+            toast.success(isChatAgentMode ? '🤖 Clé Agent Chat Dame SKY générée !' : 'Clé Superadmin Sky Agent générée !');
             loadData();
         } catch (e: any) {
             toast.error(e.message || 'Erreur lors de la création de la clé');
@@ -492,6 +522,116 @@ export function SkyAgentSuperadminManager() {
                                 </div>
                             </div>
 
+                            {/* ── Panneau configuration agent externe Dame SKY ── */}
+                            {isChatAgentMode && (
+                                <div className="bg-indigo-500/8 border border-indigo-500/30 rounded-2xl p-4 space-y-4">
+                                    <div className="flex items-center gap-2 text-indigo-300 font-bold text-sm">
+                                        <MessageSquare className="w-4 h-4" />
+                                        Configuration de l'Agent Chat Dame SKY
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 -mt-2">
+                                        Cet agent prendra en charge la bulle de chat Dame SKY pour toutes les écoles (ou une école ciblée). Il ne voit que les messages et les cours publiés. Zéro accès aux données sensibles.
+                                    </p>
+
+                                    {/* Sélecteur Provider */}
+                                    <div>
+                                        <label className="text-xs font-semibold text-slate-400 mb-1.5 block">Provider IA</label>
+                                        <div className="flex gap-2 flex-wrap">
+                                            {([
+                                                { id: 'anthropic', label: '🟣 Claude (Anthropic)', url: 'https://api.anthropic.com/v1/messages', model: 'claude-opus-4-5' },
+                                                { id: 'openai',    label: '🟢 OpenAI / MANUS',     url: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o' },
+                                                { id: 'custom',    label: '⚙️ API Personnalisée',   url: '', model: '' },
+                                            ] as const).map(p => (
+                                                <button
+                                                    key={p.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setExtProvider(p.id);
+                                                        if (p.url) setExtApiUrl(p.url);
+                                                        if (p.model) setExtModel(p.model);
+                                                    }}
+                                                    className={`px-3 py-2 rounded-xl text-xs font-semibold transition border ${
+                                                        extProvider === p.id
+                                                            ? 'bg-indigo-600 border-indigo-500 text-white'
+                                                            : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
+                                                    }`}
+                                                >
+                                                    {p.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {/* URL de l'API */}
+                                        <div>
+                                            <label className="text-xs font-semibold text-slate-400 mb-1 block">URL de l'API</label>
+                                            <input
+                                                value={extApiUrl}
+                                                onChange={e => setExtApiUrl(e.target.value)}
+                                                placeholder="https://api.anthropic.com/v1/messages"
+                                                className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
+                                            />
+                                        </div>
+
+                                        {/* Modèle */}
+                                        <div>
+                                            <label className="text-xs font-semibold text-slate-400 mb-1 block">Modèle</label>
+                                            <input
+                                                value={extModel}
+                                                onChange={e => setExtModel(e.target.value)}
+                                                placeholder="claude-opus-4-5, gpt-4o..."
+                                                className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Clé API secrète */}
+                                    <div>
+                                        <label className="text-xs font-semibold text-slate-400 mb-1 block">Clé API Secrète</label>
+                                        <div className="relative">
+                                            <input
+                                                type={extKeyVisible ? 'text' : 'password'}
+                                                value={extApiKey}
+                                                onChange={e => setExtApiKey(e.target.value)}
+                                                placeholder="sk-ant-... / sk-... / votre clé"
+                                                className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 pr-10 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setExtKeyVisible(v => !v)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                                            >
+                                                {extKeyVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                            </button>
+                                        </div>
+                                        <p className="text-[10px] text-slate-500 mt-1">🔒 Stockée chiffrée côté serveur. Jamais exposée au navigateur.</p>
+                                    </div>
+
+                                    {/* Accès aux cours publics */}
+                                    <label className="flex items-center gap-3 p-3 bg-white/3 border border-white/8 rounded-xl cursor-pointer hover:bg-white/5 transition">
+                                        <input
+                                            type="checkbox"
+                                            checked={extChatCourses}
+                                            onChange={e => setExtChatCourses(e.target.checked)}
+                                            className="accent-indigo-500 w-4 h-4"
+                                        />
+                                        <div>
+                                            <p className="text-xs font-bold text-white">📚 Accès aux cours publiés</p>
+                                            <p className="text-[10px] text-slate-400 mt-0.5">L'agent peut lire les titres, matières et chapitres des cours publiés de l'école pour enrichir ses réponses.</p>
+                                        </div>
+                                    </label>
+
+                                    {/* Avertissement confidentialité */}
+                                    <div className="flex items-start gap-2 bg-amber-500/8 border border-amber-500/20 rounded-xl p-3">
+                                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                                        <p className="text-[11px] text-amber-300">
+                                            Une bannière «&#8239;Ne partagez pas vos données sensibles&#8239;» sera automatiquement affichée aux utilisateurs dans la bulle de chat.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="flex gap-2 justify-end pt-2">
                                 <button
                                     onClick={() => setShowCreateForm(false)}
@@ -502,10 +642,14 @@ export function SkyAgentSuperadminManager() {
                                 <button
                                     onClick={handleCreateKey}
                                     disabled={creating}
-                                    className="px-5 py-2 rounded-xl text-xs font-semibold text-white bg-violet-600 hover:bg-violet-500 transition flex items-center gap-1.5 shadow-lg shadow-violet-600/20 disabled:opacity-50"
+                                    className={`px-5 py-2 rounded-xl text-xs font-semibold text-white transition flex items-center gap-1.5 shadow-lg disabled:opacity-50 ${
+                                        isChatAgentMode
+                                            ? 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/20'
+                                            : 'bg-violet-600 hover:bg-violet-500 shadow-violet-600/20'
+                                    }`}
                                 >
                                     {creating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
-                                    Générer la clé Master
+                                    {isChatAgentMode ? 'Générer la clé Agent Chat' : 'Générer la clé Master'}
                                 </button>
                             </div>
                         </div>
