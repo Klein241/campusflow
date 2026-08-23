@@ -25,6 +25,7 @@ import { IziTeachLogo } from '@/components/brand/iziteach-logo';
 import { SkyAgentSuperadminManager } from '@/components/superadmin/SkyAgentSuperadminManager';
 import { DameSkySuperadminManager } from '@/components/superadmin/DameSkySuperadminManager';
 import { MarketingHub } from '@/components/superadmin/marketing/MarketingHub';
+import { SkyAgentBubble } from '@/components/sky-agent/SkyAgentBubble';
 
 // ═══════════════════════════════════════════════════════════════════════
 // IZITEACH — SUPERADMIN PANEL
@@ -2497,6 +2498,23 @@ export default function SuperAdminPage() {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Bulle Dame SKY Flottante pour le SuperAdmin */}
+            <SkyAgentBubble
+                role="admin"
+                bottomOffset="bottom-6 md:bottom-8"
+                context={{
+                    org_name: 'IziTeach SuperAdmin Console',
+                    user_name: 'Super Administrateur Plateforme',
+                    current_page: '/superadmin',
+                    stats: {
+                        'Total Organisations': stats?.total_orgs || 0,
+                        'Total Utilisateurs': stats?.total_users || 0,
+                        'Total Étudiants': stats?.total_students || 0,
+                        'Total Enseignants': stats?.total_teachers || 0,
+                    }
+                }}
+            />
         </div>
     );
 }
