@@ -296,6 +296,33 @@ const WORKER_MCP_TOOLS = [
         inputSchema: { type: 'object', properties: {} },
     },
     {
+        name: 'list_chat_messages',
+        description: 'Lire les messages récents d\'une conversation ou salle de discussion dans l\'application (DM, groupe ou support)',
+        permission: 'read:students',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                conversation_id: { type: 'string', description: 'ID de la conversation ou salon de chat' },
+                limit: { type: 'number', description: 'Nombre max de messages récents (défaut: 20)' },
+            },
+            required: ['conversation_id'],
+        },
+    },
+    {
+        name: 'send_chat_message',
+        description: 'Envoyer une réponse ou un message directement dans un salon de discussion ou chat de l\'application (l\'utilisateur dans l\'app reçoit la réponse en temps réel)',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                conversation_id: { type: 'string', description: 'ID de la conversation ou salon de chat cible' },
+                content: { type: 'string', description: 'Texte du message ou de la réponse IA' },
+                sender_name: { type: 'string', description: 'Nom affiché (ex: MANUS IA, Assistant Pédagogique)' },
+            },
+            required: ['conversation_id', 'content'],
+        },
+    },
+    {
         name: 'list_classes',
         description: 'Lister les classes de l\'organisation',
         permission: 'read:curriculum',

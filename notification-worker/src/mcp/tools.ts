@@ -1067,6 +1067,66 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             };
         }
 
+        // ── LIST CHAT MESSAGES (POUR LIRE LE CHAT DANS L'APP) ──
+        case 'list_chat_messages': {
+            if (!args.conversation_id) throw { code: -32602, message: 'conversation_id requis' };
+            const limit = Math.min(Number(args.limit) || 20, 50);
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const msgs = await fetchSupabaseRest(
+                    env,
+                    `chat_messages?conversation_id=eq.${encodeURIComponent(args.conversation_id as string)}&select=id,conversation_id,sender_id,content,msg_type,created_at&order=created_at.desc&limit=${limit}`
+                );
+                if (msgs) {
+                    return {
+                        conversation_id: args.conversation_id,
+                        total: msgs.length,
+                        messages: msgs.reverse(),
+                    };
+                }
+            }
+
+            return {
+                conversation_id: args.conversation_id,
+                total: 0,
+                messages: [],
+            };
+        }
+
+        // ── SEND CHAT MESSAGE (POUR QUE MANUS/CLAUDE RÉPONDE EN DIRECT DANS L'APP) ──
+        case 'send_chat_message': {
+            if (!args.conversation_id || !args.content) {
+                throw { code: -32602, message: 'conversation_id et content requis' };
+            }
+
+            const msgId = crypto.randomUUID();
+            const now = new Date().toISOString();
+            const senderName = args.sender_name || (ctx.isSuperadmin ? 'MANUS IA (Superadmin)' : 'Assistant Sky Agent');
+
+            const payload = {
+                id: msgId,
+                conversation_id: args.conversation_id,
+                sender_id: ctx.agentId || '00000000-0000-0000-0000-000000000000',
+                content: String(args.content).trim(),
+                msg_type: 'text',
+                created_at: now,
+            };
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, 'chat_messages', { method: 'POST', body: payload });
+            }
+
+            return {
+                success: true,
+                message_id: msgId,
+                conversation_id: args.conversation_id,
+                sender: senderName,
+                sent_at: now,
+                content: payload.content,
+                message: `💬 Message envoyé avec succès dans la conversation (visible en direct par les utilisateurs de l'app)`,
+            };
+        }
+
         // ── LIST GRADES ──
         case 'list_grades': {
             if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {

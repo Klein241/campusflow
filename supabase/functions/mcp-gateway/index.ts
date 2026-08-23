@@ -2284,6 +2284,59 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             };
         }
 
+        // ── CHAT: LIST CHAT MESSAGES ──
+        case 'list_chat_messages': {
+            if (!args.conversation_id) throw { code: -32602, message: 'conversation_id requis' };
+            const limit = Math.min(Number(args.limit) || 20, 50);
+            const { data: msgs, error: mErr } = await supabase
+                .from('chat_messages')
+                .select('id, conversation_id, sender_id, content, msg_type, created_at')
+                .eq('conversation_id', args.conversation_id)
+                .order('created_at', { ascending: false })
+                .limit(limit);
+
+            if (mErr) throw { code: -32002, message: mErr.message };
+
+            return {
+                conversation_id: args.conversation_id,
+                total: (msgs || []).length,
+                messages: (msgs || []).reverse(),
+            };
+        }
+
+        // ── CHAT: SEND CHAT MESSAGE ──
+        case 'send_chat_message': {
+            if (!args.conversation_id || !args.content) throw { code: -32602, message: 'conversation_id et content requis' };
+            const msgId = crypto.randomUUID();
+            const now = new Date().toISOString();
+            const senderName = args.sender_name || (agent.isSuperadmin ? 'MANUS IA (Superadmin)' : 'Assistant Sky Agent');
+
+            const { data: sent, error: sErr } = await supabase
+                .from('chat_messages')
+                .insert({
+                    id: msgId,
+                    conversation_id: args.conversation_id,
+                    sender_id: agent.agentId || '00000000-0000-0000-0000-000000000000',
+                    content: String(args.content).trim(),
+                    msg_type: 'text',
+                    created_at: now,
+                })
+                .select()
+                .single();
+
+            if (sErr) throw { code: -32002, message: sErr.message };
+
+            return {
+                success: true,
+                message_id: msgId,
+                conversation_id: args.conversation_id,
+                sender: senderName,
+                sent_at: now,
+                content: sent.content,
+                message: `💬 Message posté avec succès dans le chat de l'application (visible en temps réel)`,
+            };
+        }
+
         default:
             throw { code: -32601, message: `Outil "${toolName}" non implémenté` };
     }
