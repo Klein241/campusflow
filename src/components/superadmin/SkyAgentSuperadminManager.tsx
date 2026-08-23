@@ -214,17 +214,67 @@ export function SkyAgentSuperadminManager() {
 
     const handleRevokeKey = async (keyId: string, keyName: string) => {
         if (!confirm(`Révoquer l'accès pour "${keyName}" ? Cette action est irréversible.`)) return;
-        try {
-            const { error } = await supabase
-                .from('ai_agent_keys')
-                .update({ is_active: false, updated_at: new Date().toISOString() })
-                .eq('id', keyId);
+        
+        // Optimistic UI update
+        setAgentKeys(prev => prev.map(k => k.id === keyId ? { ...k, is_active: false } : k));
+        setStats(prev => prev ? { ...prev, active_keys: Math.max(0, prev.active_keys - 1) } : null);
 
-            if (error) throw error;
+        try {
+            // 1. Essayer RPC dédiée Superadmin
+            const { data: saRes, error: saErr } = await supabase.rpc('revoke_superadmin_sky_agent_key', {
+                p_key_id: keyId,
+            });
+
+            if (saErr) {
+                // 2. Fallback RPC standard
+                const { error: stdErr } = await supabase.rpc('revoke_ai_agent_key', {
+                    p_key_id: keyId,
+                });
+
+                if (stdErr) {
+                    // 3. Fallback direct update
+                    const { error: directErr } = await supabase
+                        .from('ai_agent_keys')
+                        .update({ is_active: false, updated_at: new Date().toISOString() })
+                        .eq('id', keyId);
+
+                    if (directErr) throw directErr;
+                }
+            }
+
             toast.success(`Accès révoqué pour "${keyName}"`);
             loadData();
         } catch (e: any) {
             toast.error(e.message || 'Erreur lors de la révocation');
+            loadData(); // rollback state
+        }
+    };
+
+    const handleDeleteKey = async (keyId: string, keyName: string) => {
+        if (!confirm(`Supprimer définitivement la clé "${keyName}" et ses historiques ?`)) return;
+
+        // Optimistic update
+        setAgentKeys(prev => prev.filter(k => k.id !== keyId));
+        setStats(prev => prev ? { ...prev, total_keys: Math.max(0, prev.total_keys - 1) } : null);
+
+        try {
+            const { error: delErr } = await supabase.rpc('delete_superadmin_sky_agent_key', {
+                p_key_id: keyId,
+            });
+
+            if (delErr) {
+                const { error: directDelErr } = await supabase
+                    .from('ai_agent_keys')
+                    .delete()
+                    .eq('id', keyId);
+                if (directDelErr) throw directDelErr;
+            }
+
+            toast.success(`Clé "${keyName}" supprimée définitivement`);
+            loadData();
+        } catch (e: any) {
+            toast.error(e.message || 'Erreur lors de la suppression');
+            loadData();
         }
     };
 
@@ -491,15 +541,27 @@ export function SkyAgentSuperadminManager() {
                                             <span>Dernier usage : {k.last_used_at ? new Date(k.last_used_at).toLocaleDateString('fr-FR') : 'Jamais'}</span>
                                         </div>
                                     </div>
-                                    {k.is_active && (
-                                        <button
-                                            onClick={() => handleRevokeKey(k.id, k.name)}
-                                            className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-semibold transition flex items-center gap-1"
-                                        >
-                                            <Ban className="w-3.5 h-3.5" />
-                                            Révoquer
-                                        </button>
-                                    )}
+                                    <div className="flex items-center gap-2">
+                                        {k.is_active ? (
+                                            <button
+                                                onClick={() => handleRevokeKey(k.id, k.name)}
+                                                className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-semibold transition flex items-center gap-1"
+                                                title="Désactiver immédiatement cette clé"
+                                            >
+                                                <Ban className="w-3.5 h-3.5" />
+                                                Révoquer
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={() => handleDeleteKey(k.id, k.name)}
+                                                className="px-3 py-1.5 bg-slate-800 hover:bg-rose-950/40 text-slate-400 hover:text-rose-300 border border-white/5 hover:border-rose-500/30 rounded-xl text-xs font-semibold transition flex items-center gap-1"
+                                                title="Supprimer définitivement cette clé révoquée"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                                Supprimer
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             ))
                         )}

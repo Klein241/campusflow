@@ -20,8 +20,8 @@ interface LeadScraperViewProps {
 
 export function LeadScraperView({ onLeadAdded, onLaunchCampaignWithLeads }: LeadScraperViewProps) {
     const [targetType, setTargetType] = useState<DeepResearchQuery['target_type']>('ecoles_privees');
-    const [country, setCountry] = useState('Cameroun');
-    const [city, setCity] = useState('Douala');
+    const [country, setCountry] = useState('Gabon');
+    const [city, setCity] = useState('Libreville');
     const [keywords, setKeywords] = useState('Directeur, Proviseur, Formation Bilingue');
     const [sources, setSources] = useState<('google' | 'linkedin' | 'facebook' | 'yellow_pages')[]>(['google', 'linkedin', 'yellow_pages']);
     const [isResearching, setIsResearching] = useState(false);

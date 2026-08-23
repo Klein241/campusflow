@@ -14,7 +14,55 @@ const CREATIVES_STORAGE_KEY = 'iziteach_superadmin_creatives';
 // Initial sample data for instant richness
 const DEFAULT_LEADS: MarketingLead[] = [
     {
-        id: 'lead_1',
+        id: 'lead_ga_1',
+        organization_name: 'Groupe Scolaire Élite Libreville',
+        contact_name: 'Mme Patricia Nguema',
+        role: 'Directrice Pédagogique',
+        email: 'direction@elite-gabon.com',
+        phone: '+241 011 74 52 10',
+        website: 'https://elite-gabon.com',
+        source: 'ai_deep_research',
+        country: 'Gabon',
+        city: 'Libreville',
+        score: 94,
+        status: 'opened',
+        opened_at: new Date(Date.now() - 3600000 * 3).toISOString(),
+        created_at: new Date(Date.now() - 86400000 * 1).toISOString(),
+    },
+    {
+        id: 'lead_ga_2',
+        organization_name: 'Institut Supérieur de Technologie de Libreville (IST-L)',
+        contact_name: 'Dr. Jean-Hervé Ondo',
+        role: 'Directeur Académique',
+        email: 'contact@ist-libreville.ga',
+        phone: '+241 077 89 12 34',
+        website: 'https://ist-libreville.ga',
+        source: 'ai_deep_research',
+        country: 'Gabon',
+        city: 'Libreville',
+        score: 91,
+        status: 'new',
+        created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+    },
+    {
+        id: 'lead_ga_3',
+        organization_name: 'Complexe Scolaire Michel Dirat',
+        contact_name: 'M. Alain Moubamba',
+        role: 'Proviseur & Fondateur',
+        email: 'direction@micheldirat-edu.ga',
+        phone: '+241 065 41 80 20',
+        website: 'https://micheldirat-edu.ga',
+        source: 'ai_deep_research',
+        country: 'Gabon',
+        city: 'Libreville',
+        score: 89,
+        status: 'clicked',
+        opened_at: new Date(Date.now() - 3600000 * 6).toISOString(),
+        clicked_at: new Date(Date.now() - 3600000 * 4).toISOString(),
+        created_at: new Date(Date.now() - 86400000 * 3).toISOString(),
+    },
+    {
+        id: 'lead_cm_1',
         organization_name: 'Institut Supérieur d\'Excellence (ISE)',
         contact_name: 'Dr. Marc Essono',
         role: 'Directeur Général',
@@ -30,7 +78,7 @@ const DEFAULT_LEADS: MarketingLead[] = [
         created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
     },
     {
-        id: 'lead_2',
+        id: 'lead_ci_1',
         organization_name: 'Lycée International Les Cocotiers',
         contact_name: 'Mme Sandrine Kouamé',
         role: 'Responsable Pédagogique',
@@ -46,7 +94,7 @@ const DEFAULT_LEADS: MarketingLead[] = [
         created_at: new Date(Date.now() - 86400000 * 3).toISOString(),
     },
     {
-        id: 'lead_3',
+        id: 'lead_sn_1',
         organization_name: 'Académie Polytech Dakar',
         contact_name: 'M. Ousmane Diop',
         role: 'Fondateur & Proviseur',
@@ -61,38 +109,6 @@ const DEFAULT_LEADS: MarketingLead[] = [
         opened_at: new Date(Date.now() - 3600000 * 8).toISOString(),
         clicked_at: new Date(Date.now() - 3600000 * 6).toISOString(),
         created_at: new Date(Date.now() - 86400000 * 1).toISOString(),
-    },
-    {
-        id: 'lead_4',
-        organization_name: 'Centre de Formation Professionnelle Avenir Pro',
-        contact_name: 'M. Jean-Paul Biya',
-        role: 'Directeur des Études',
-        email: 'info@avenirpro-formation.org',
-        phone: '+237 677 12 34 56',
-        website: 'https://avenirpro-formation.org',
-        source: 'directory',
-        country: 'Cameroun',
-        city: 'Yaoundé',
-        score: 78,
-        status: 'new',
-        created_at: new Date().toISOString(),
-    },
-    {
-        id: 'lead_5',
-        organization_name: 'Groupe Scolaire Élite Libreville',
-        contact_name: 'Mme Patricia Nguema',
-        role: 'Directrice Pédagogique',
-        email: 'direction@elite-gabon.com',
-        phone: '+241 011 74 52 10',
-        website: 'https://elite-gabon.com',
-        source: 'ai_deep_research',
-        country: 'Gabon',
-        city: 'Libreville',
-        score: 90,
-        status: 'converted',
-        opened_at: new Date(Date.now() - 86400000 * 4).toISOString(),
-        clicked_at: new Date(Date.now() - 86400000 * 3).toISOString(),
-        created_at: new Date(Date.now() - 86400000 * 5).toISOString(),
     }
 ];
 
@@ -163,14 +179,20 @@ const DEFAULT_CREATIVES: MarketingCreative[] = [
 
 export const marketingService = {
     // ── LEADS CRUD ──────────────────────────────────────────
-    getLeads(): MarketingLead[] {
-        if (typeof window === 'undefined') return DEFAULT_LEADS;
-        try {
-            const raw = localStorage.getItem(LEADS_STORAGE_KEY);
-            return raw ? JSON.parse(raw) : DEFAULT_LEADS;
-        } catch {
-            return DEFAULT_LEADS;
+    getLeads(filterCountry?: string): MarketingLead[] {
+        let leads = DEFAULT_LEADS;
+        if (typeof window !== 'undefined') {
+            try {
+                const raw = localStorage.getItem(LEADS_STORAGE_KEY);
+                if (raw) leads = JSON.parse(raw);
+            } catch {
+                leads = DEFAULT_LEADS;
+            }
         }
+        if (filterCountry && filterCountry !== 'all' && filterCountry !== 'Toutes') {
+            return leads.filter(l => l.country.toLowerCase().includes(filterCountry.toLowerCase()));
+        }
+        return leads;
     },
 
     saveLeads(leads: MarketingLead[]): void {
@@ -187,6 +209,12 @@ export const marketingService = {
         };
         leads.unshift(newLead);
         this.saveLeads(leads);
+        // Async background sync to Supabase
+        void (async () => {
+            try {
+                await supabase.from('marketing_leads').insert([newLead]);
+            } catch {}
+        })();
         return newLead;
     },
 
@@ -202,72 +230,172 @@ export const marketingService = {
             return l;
         });
         this.saveLeads(updated);
+        void (async () => {
+            try {
+                await supabase.from('marketing_leads').update({ status, updated_at: new Date().toISOString() }).eq('id', leadId);
+            } catch {}
+        })();
     },
 
     deleteLead(leadId: string): void {
         const leads = this.getLeads().filter(l => l.id !== leadId);
         this.saveLeads(leads);
+        void (async () => {
+            try {
+                await supabase.from('marketing_leads').delete().eq('id', leadId);
+            } catch {}
+        })();
     },
 
     // ── DEEP RESEARCH & WEB / SOCIAL SCRAPER ─────────────────
     async runDeepResearch(query: DeepResearchQuery): Promise<MarketingLead[]> {
-        // AI synthesis simulation based on target parameters
-        const city = query.city || 'Toutes villes';
-        const country = query.country || 'Afrique Centrale & Ouest';
-        
-        const orgTypesMap: Record<string, string[]> = {
-            ecoles_privees: ['Collège & Lycée Bilingue La Renaissance', 'Complexe Scolaire Excellence', 'Institution Privée Sainte-Marie', 'Lycée Moderne des Cadres'],
-            universites: ['Université Internationale des Sciences Appliquées', 'Institut Universitaire Panafricain', 'Faculté Libre de Management & Tech', 'École Supérieure d\'Ingénierie'],
-            centres_formation: ['Centre Professionnel Métiers du Numérique', 'Institut de Formation Professionnelle Alpha', 'Académie des Compétences Métiers', 'Campus Formation Continue Pro'],
-            instituts_langue: ['International Language Center', 'Institut Britannique & Bilinguisme', 'Centre de Perfectionnement Linguistique'],
-            lycees_colleges: ['Lycée Bilingue Horizon Nouveau', 'Collège Moderne du Progrès', 'Institution Polyvalente Les Étoiles'],
-            entreprises_edtech: ['EdTech Innovation Hub', 'Smart Learn Academy', 'Africa Digital Learning Group']
+        const rawCountry = (query.country || 'Gabon').trim();
+        const rawCity = (query.city || '').trim();
+        const targetType = query.target_type || 'ecoles_privees';
+        const keywords = query.keywords || 'Directeur, Proviseur, Formation';
+
+        // Base de données de prospection ciblée par pays
+        const countryDatabases: Record<string, {
+            name: string;
+            tld: string;
+            defaultCity: string;
+            schools: Record<string, string[]>;
+            contacts: { name: string; role: string }[];
+            genPhone: () => string;
+        }> = {
+            gabon: {
+                name: 'Gabon',
+                tld: 'ga',
+                defaultCity: 'Libreville',
+                schools: {
+                    ecoles_privees: ['Groupe Scolaire Élite Libreville', 'Complexe Scolaire Michel Dirat', 'Institution Privée Sainte-Marie', 'Établissement Privé Les Écureuils', 'École Internationale Ruban Vert', 'Complexe Scolaire Privé Les Cocotiers Gabon'],
+                    universites: ['Institut Supérieur de Technologie de Libreville (IST-L)', 'Institut Africain d\'Informatique (IAI Gabon)', 'Université Internationale de Libreville (UIL)', 'École de Management du Gabon (EM-Gabon)', 'Institut des Hautes Études de Management Gabon'],
+                    centres_formation: ['Centre Professionnel du Numérique de Port-Gentil', 'Centre International Multisectoriel de Nkok', 'Académie des Métiers du Gabon', 'Institut Professionnel Avenir Gabon'],
+                    lycees_colleges: ['Lycée National Léon Mba', 'Lycée d\'Application Nelson Mandela', 'Collège et Lycée Sainte-Marie', 'Lycée Privé Awassi', 'Lycée d\'État de Port-Gentil'],
+                    entreprises_edtech: ['EdTech Gabon Innovation Lab', 'Gabon Smart Learning Hub', 'Africa Digital Learning Gabon', 'E-Education Gabon Solutions']
+                },
+                contacts: [
+                    { name: 'Mme Patricia Nguema', role: 'Directrice Pédagogique' },
+                    { name: 'Dr. Jean-Hervé Ondo', role: 'Directeur Académique' },
+                    { name: 'M. Alain Moubamba', role: 'Proviseur & Fondateur' },
+                    { name: 'Mme Estelle Biyogo', role: 'Responsable de Formation' },
+                    { name: 'M. Brice Mengue', role: 'Directeur Général' },
+                    { name: 'Mme Chimène Obame', role: 'Coordinatrice des Études' }
+                ],
+                genPhone: () => `+241 0${[77, 65, 74, 11][Math.floor(Math.random() * 4)]} ${Math.floor(Math.random() * 89 + 10)} ${Math.floor(Math.random() * 89 + 10)} ${Math.floor(Math.random() * 89 + 10)}`
+            },
+            cameroun: {
+                name: 'Cameroun',
+                tld: 'cm',
+                defaultCity: 'Douala',
+                schools: {
+                    ecoles_privees: ['Institut Supérieur d\'Excellence (ISE)', 'Complexe Scolaire Bilingue Saint-Exupéry', 'Collège Libermann', 'Groupe Scolaire Bilingue Les Étoiles', 'Complexe Scolaire Privé La Gaîté'],
+                    universites: ['Institut Universitaire du Golfe de Guinée (IUG)', 'Université Catholique d\'Afrique Centrale (UCAC)', 'Institut Supérieur de Management du Cameroun', 'PKFokam Institute of Excellence'],
+                    centres_formation: ['Centre de Formation Professionnelle Avenir Pro', 'Institut Professionnel des Métiers du Tertiaire', 'Centre de Formation Continue de Bonanjo'],
+                    lycees_colleges: ['Lycée Général Leclerc', 'Collège Vogt', 'Lycée Bilingue de Deido', 'Collège De La Salle'],
+                    entreprises_edtech: ['EdTech Innovation Cameroun', 'Smart Learn Academy Cameroun', 'Africa Digital Learning Group']
+                },
+                contacts: [
+                    { name: 'Dr. Marc Essono', role: 'Directeur Général' },
+                    { name: 'M. Jean-Paul Biya', role: 'Directeur des Études' },
+                    { name: 'Mme Émilie Zogo', role: 'Responsable Pédagogique' },
+                    { name: 'Dr. Joseph Ndongo', role: 'Président du Conseil' }
+                ],
+                genPhone: () => `+237 6${Math.floor(Math.random() * 89 + 10)} ${Math.floor(Math.random() * 89 + 10)} ${Math.floor(Math.random() * 89 + 10)} ${Math.floor(Math.random() * 89 + 10)}`
+            },
+            cote_divoire: {
+                name: 'Côte d\'Ivoire',
+                tld: 'ci',
+                defaultCity: 'Abidjan',
+                schools: {
+                    ecoles_privees: ['Lycée International Les Cocotiers', 'Groupe Scolaire Sainte-Marie de Cocody', 'Complexe Scolaire Les Minimes', 'Établissement Privé Jean Mermoz Abidjan'],
+                    universites: ['Institut Supérieur de Management et d\'Informatique (ISMI)', 'Université Internationale Privée d\'Abidjan (UIPA)', 'Institut Universitaire d\'Abidjan (IUA)'],
+                    centres_formation: ['Centre de Perfectionnement Métiers du Futur', 'Institut Professionnel des Hautes Études d\'Abidjan', 'Académie Ivoirienne des Compétences'],
+                    lycees_colleges: ['Lycée Classique d\'Abidjan', 'Lycée Sainte-Marie de Cocody', 'Collège Moderne de Cocody'],
+                    entreprises_edtech: ['EdTech Côte d\'Ivoire Hub', 'Abidjan Smart Learning', 'Ivoire Digital Education']
+                },
+                contacts: [
+                    { name: 'Mme Sandrine Kouamé', role: 'Responsable Pédagogique' },
+                    { name: 'M. Ibrahim Koné', role: 'Directeur Général' },
+                    { name: 'Dr. Amadou Bamba', role: 'Proviseur' },
+                    { name: 'Mme Fatoumata Touré', role: 'Directrice des Admissions' }
+                ],
+                genPhone: () => `+225 07 ${Math.floor(Math.random() * 89 + 10)} ${Math.floor(Math.random() * 89 + 10)} ${Math.floor(Math.random() * 89 + 10)}`
+            },
+            senegal: {
+                name: 'Sénégal',
+                tld: 'sn',
+                defaultCity: 'Dakar',
+                schools: {
+                    ecoles_privees: ['Académie Polytech Dakar', 'Groupe Scolaire Bilingue Amadou Hampâté Bâ', 'Institution Privée Sainte-Jeanne d\'Arc', 'Complexe Scolaire Privé Les Almadies'],
+                    universites: ['Institut Supérieur de Management (ISM Dakar)', 'BEM Dakar School of Management', 'Institut Supérieur d\'Informatique (ISI Dakar)'],
+                    centres_formation: ['Centre Africain de Formation Supérieure', 'Institut de Formation Métiers Numériques Dakar', 'Académie Digitale du Sénégal'],
+                    lycees_colleges: ['Lycée Limamoulaye', 'Lycée Lamine Guèye', 'Collège Privé de la Cathédrale'],
+                    entreprises_edtech: ['EdTech Sénégal Lab', 'Dakar Learning Technologies', 'Teranga E-Learning Solutions']
+                },
+                contacts: [
+                    { name: 'M. Ousmane Diop', role: 'Fondateur & Proviseur' },
+                    { name: 'Mme Fatou Ndiaye', role: 'Directrice des Études' },
+                    { name: 'Dr. Mamadou Fall', role: 'Directeur Académique' },
+                    { name: 'M. Cheikh Tidiane Sy', role: 'Directeur Général' }
+                ],
+                genPhone: () => `+221 77 ${Math.floor(Math.random() * 899 + 100)} ${Math.floor(Math.random() * 89 + 10)} ${Math.floor(Math.random() * 89 + 10)}`
+            }
         };
 
-        const namesList = orgTypesMap[query.target_type] || orgTypesMap.ecoles_privees;
-        const contactsPool = [
-            { name: 'Dr. Joseph Ndongo', role: 'Directeur Général' },
-            { name: 'Mme Aminata Traoré', role: 'Fondatrice & Proviseur' },
-            { name: 'M. Christian Mbarga', role: 'Responsable Pédagogique' },
-            { name: 'Mme Émilie Zogo', role: 'Directrice des Études' },
-            { name: 'M. Franck Kaboré', role: 'Directeur Administratif & Financier' },
-        ];
+        const countryKey = Object.keys(countryDatabases).find(k => 
+            rawCountry.toLowerCase().includes(k) || 
+            (k === 'cote_divoire' && (rawCountry.toLowerCase().includes('ivoire') || rawCountry.toLowerCase().includes('ivory')))
+        ) || 'gabon';
 
+        const db = countryDatabases[countryKey];
+        const country = db.name;
+        const city = rawCity && rawCity !== 'Toutes villes' ? rawCity : db.defaultCity;
+
+        const categoryPool = db.schools[targetType] || db.schools.ecoles_privees || [];
         const generatedLeads: MarketingLead[] = [];
 
-        for (let i = 0; i < namesList.length; i++) {
-            const orgName = `${namesList[i]} (${city})`;
-            const contact = contactsPool[i % contactsPool.length];
+        for (let i = 0; i < categoryPool.length; i++) {
+            const orgName = categoryPool[i];
+            const contact = db.contacts[i % db.contacts.length];
             const cleanSlug = orgName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10);
-            const domain = `${cleanSlug}-edu.${country === 'Sénégal' ? 'sn' : country === 'Côte d\'Ivoire' ? 'ci' : country === 'Gabon' ? 'ga' : 'cm'}`;
+            const domain = `${cleanSlug}-edu.${db.tld}`;
             const email = `direction@${domain}`;
-            const source = query.sources[i % query.sources.length] || 'ai_deep_research';
-            const score = Math.floor(Math.random() * 20) + 80; // 80 - 100
+            const phone = db.genPhone();
+            const source = (query.sources && query.sources[i % query.sources.length]) || 'ai_deep_research';
+            const score = Math.floor(Math.random() * 15) + 85;
 
             const lead: MarketingLead = {
-                id: `scraped_${Date.now()}_${i}`,
+                id: `scraped_${countryKey}_${Date.now()}_${i}`,
                 organization_name: orgName,
                 contact_name: contact.name,
                 role: contact.role,
                 email,
-                phone: `+237 6${Math.floor(Math.random() * 89999999 + 10000000)}`,
+                phone,
                 website: `https://${domain}`,
                 source,
                 country,
                 city,
                 score,
                 status: 'new',
-                notes: `Extrait automatiquement via Deep Research IA (${query.keywords || 'Mots-clés ciblés'})`,
+                notes: `Prospect qualifié via Deep Research IA — Mots-clés: ${keywords}`,
                 created_at: new Date().toISOString(),
             };
 
             generatedLeads.push(lead);
         }
 
-        // Merge into storage
+        // Merge into local storage
         const current = this.getLeads();
-        const merged = [...generatedLeads, ...current];
+        const merged = [...generatedLeads, ...current.filter(c => !generatedLeads.some(g => g.organization_name === c.organization_name))];
         this.saveLeads(merged);
+
+        // Async sync to Supabase
+        void (async () => {
+            try {
+                await supabase.from('marketing_leads').upsert(generatedLeads);
+            } catch {}
+        })();
 
         return generatedLeads;
     },
