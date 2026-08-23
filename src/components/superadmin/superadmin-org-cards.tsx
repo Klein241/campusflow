@@ -32,6 +32,7 @@ export interface OrgCardItem {
     student_count: number;
     teacher_count: number;
     logo_url: string | null;
+    owner_id?: string;
     sky_points?: number;
     phone?: string;
     email?: string;
@@ -479,7 +480,29 @@ export function SuperadminOrgCards({
             } else {
                 toast.success(`⭐ Solde de ${pointsModalOrg.name} mis à jour : ${new Intl.NumberFormat('fr-FR').format(newBal)} pts`);
 
-                // Insert transaction record for audit
+                // 1. Sync points to owner profile (teacher_profiles) if available
+                if (pointsModalOrg.owner_id) {
+                    try {
+                        await supabase
+                            .from('teacher_profiles')
+                            .update({ sky_points: newBal })
+                            .eq('id', pointsModalOrg.owner_id);
+                    } catch {}
+                }
+
+                // 2. Sync localStorage cache for instant local reflection
+                if (typeof window !== 'undefined') {
+                    try {
+                        localStorage.setItem(`campusflow_admin_points_${pointsModalOrg.id}`, newBal.toString());
+                        localStorage.setItem(`campusflow_admin_points_${pointsModalOrg.slug}`, newBal.toString());
+                        window.dispatchEvent(new CustomEvent('sky_points_updated', {
+                            detail: { newBalance: newBal, orgId: pointsModalOrg.id }
+                        }));
+                        window.dispatchEvent(new Event('storage'));
+                    } catch {}
+                }
+
+                // 3. Insert transaction record for audit
                 try {
                     await supabase.from('sky_points_transactions').insert({
                         target_type: 'organization',

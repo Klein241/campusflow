@@ -112,9 +112,9 @@ export function TemplateSegmentedHub({
                     {/* Nav Links */}
                     <div className="hidden md:flex items-center gap-7 text-xs font-bold text-slate-300 tracking-wider">
                         <button onClick={onOpenInscription} className="hover:text-amber-300 transition-colors">Admissions</button>
-                        <a href="#programs" className="hover:text-amber-300 transition-colors">Formations</a>
-                        <a href="#about" onClick={() => setOpenAccordion('research')} className="hover:text-amber-300 transition-colors">Infrastructures</a>
-                        <a href="#campus" onClick={() => setOpenAccordion('faculty')} className="hover:text-amber-300 transition-colors">Campus</a>
+                        <button onClick={() => { document.getElementById('programs')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-amber-300 transition-colors">Formations</button>
+                        <button onClick={() => { setOpenAccordion('research'); document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-amber-300 transition-colors">Infrastructures</button>
+                        <button onClick={() => { setOpenAccordion('faculty'); document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-amber-300 transition-colors">Campus</button>
                     </div>
 
                     {/* Contact & Espace élève CTA */}

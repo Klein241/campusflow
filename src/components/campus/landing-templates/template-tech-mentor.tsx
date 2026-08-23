@@ -1,8 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { ArrowRight, ChevronRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+    ArrowRight, ChevronRight, Menu, X, Mail,
+    Phone, MapPin, MessageSquare, Send, ExternalLink,
+    Sparkles, Award, Star, CheckCircle2
+} from 'lucide-react';
 import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-modal';
@@ -21,25 +25,29 @@ interface TemplateProps {
 
 /* ═══════════════════════════════════════════════════════════════════
    MODÈLE "JENNA ORTEGA" — Dark Cyber Néon & Tech Trainer
-   Référence exacte :
    - Fond bleu marine très sombre (#0A0F1E), accent bleu néon (#00B4D8)
-   - NavBar horizontale avec pill "JENNA ORTEGA" en label + liens + CTA
-   - Hero : Texte "HAY! JE SUIS JENNA / FORMATEUR TECH" gauche,
-     photo de face avec sphères 3D déco à droite
+   - Sticky NavBar avec scroll interactif fluide vers chaque section
+   - Hero : "HAY! JE SUIS [NOM] / [TITRE]", portrait sculpté avec sphères 3D
    - Bandeau logos partenaires défilant
-   - Section "À PROPOS" : photo gauche (portrait 3/4), texte + stats droite
-   - Section "MON TRAVAIL" : Grille 3 projets avec image + arrow button
-   - Section "SERVICES" : Grille de services titre + photo couverture
+   - Section "À PROPOS" : stats & bio
+   - Section "MON TRAVAIL" : Grille projets récents
+   - Section "SERVICES" : Formations et accompagnements
+   - Section "CONTACT" : Hub de contact instantané & WhatsApp
 ═══════════════════════════════════════════════════════════════════ */
 export function TemplateTechMentor({
     org, orgSlug, classrooms, filieres, teacherCount, studentCount, gallery, bc, onOpenInscription
 }: TemplateProps) {
     const cfg: TemplateCustomConfig = org.template_config || {};
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [activeSection, setActiveSection] = useState('hero');
+    const [formMsg, setFormMsg] = useState('');
+    const [formName, setFormName] = useState('');
+    const [formEmail, setFormEmail] = useState('');
 
     const trainerName     = cfg.trainer_name    || org.name       || 'Jenna Ortega';
     const trainerTitle1   = cfg.trainer_title   || org.motto      || 'FORMATRICE TECH';
     const trainerSubtitle = cfg.trainer_subtitle || org.hero_subtitle || 'Experte en développement web, design UI/UX et accompagnement digital pour les professionnels de demain.';
-    const aboutTitle      = cfg.about_title     || 'JE SUIS DISPONIBLE POUR UN PROJET UI/UX DESIGN';
+    const aboutTitle      = cfg.about_title     || 'JE SUIS DISPONIBLE POUR UN PROJET UI/UX DESIGN & FORMATIONS';
     const aboutText       = cfg.trainer_bio     || org.about_text || 'Chaque projet est une opportunité unique de créer une expérience exceptionnelle. Mon approche combine expertise technique et sensibilité créative pour des résultats qui dépassent les attentes.';
     const pressLogos      = (cfg.press_logos_text || 'logoipsum, LOGOIPSUM, logoipsum, LOGO IPSUM, logoipsum').split(',').map(s => s.trim());
     const reviewCount     = cfg.review_count     || '280+';
@@ -50,6 +58,25 @@ export function TemplateTechMentor({
     const aboutImage      = cfg.trainer_photo_secondary_url || (gallery?.[1]) || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=700&auto=format&fit=crop&q=80';
 
     const navLinks = ['Accueil', 'À Propos', 'Projets', 'Services', 'Contact'];
+
+    // Smooth Scroll Helper
+    const scrollToSection = (linkName: string) => {
+        setMobileMenuOpen(false);
+        const l = linkName.toLowerCase();
+        let targetId = 'hero';
+        if (l.includes('propos') || l.includes('about')) targetId = 'about';
+        else if (l.includes('projet') || l.includes('travail') || l.includes('port')) targetId = 'projets';
+        else if (l.includes('service') || l.includes('formation')) targetId = 'services';
+        else if (l.includes('contact')) targetId = 'contact';
+
+        setActiveSection(targetId);
+        const el = document.getElementById(targetId);
+        if (el) {
+            const yOffset = -70;
+            const y = el.getBoundingClientRect().top + window.pageYOffset + yOffset;
+            window.scrollTo({ top: y, behavior: 'smooth' });
+        }
+    };
 
     const projects = filieres?.length > 0
         ? filieres.slice(0, 3).map((f: any, i) => ({
@@ -84,6 +111,9 @@ export function TemplateTechMentor({
     const BG     = '#0A0F1E';    // bleu marine très sombre
     const CARD   = '#0F1628';    // card légèrement plus clair
 
+    const cleanPhone = (org.phone || '').replace(/[^0-9]/g, '');
+    const whatsappLink = cleanPhone ? `https://wa.me/${cleanPhone}` : null;
+
     return (
         <div className="min-h-screen text-white font-sans antialiased overflow-x-hidden" style={{ background: BG }}>
 
@@ -91,7 +121,10 @@ export function TemplateTechMentor({
             <header className="sticky top-0 z-50 border-b border-white/5" style={{ background: BG + 'E6', backdropFilter: 'blur(12px)' }}>
                 <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
                     {/* Logo */}
-                    <div className="flex items-center gap-2">
+                    <div
+                        onClick={() => scrollToSection('hero')}
+                        className="flex items-center gap-2 cursor-pointer"
+                    >
                         {org.logo_url
                             ? <img src={org.logo_url} alt={trainerName} className="h-8 w-auto object-contain" />
                             : (
@@ -99,7 +132,7 @@ export function TemplateTechMentor({
                                     <div className="w-8 h-8 rounded border flex items-center justify-center text-xs font-black" style={{ borderColor: ACCENT, color: ACCENT }}>
                                         {trainerName.slice(0, 1)}
                                     </div>
-                                    <span className="font-black text-xs tracking-widest text-white uppercase">
+                                    <span className="font-black text-xs tracking-widest text-white uppercase truncate max-w-[180px] sm:max-w-none">
                                         {trainerName}
                                     </span>
                                 </div>
@@ -107,28 +140,88 @@ export function TemplateTechMentor({
                         }
                     </div>
 
-                    {/* Nav */}
+                    {/* Nav Desktop */}
                     <nav className="hidden md:flex items-center gap-8">
-                        {navLinks.map((lnk, i) => (
-                            <span key={i} className="text-xs font-medium cursor-pointer transition-colors"
-                                style={{ color: i === 0 ? ACCENT : '#9CA3AF' }}>
-                                {lnk}
-                            </span>
-                        ))}
+                        {navLinks.map((lnk, i) => {
+                            const isLnkActive = (
+                                (lnk === 'Accueil' && activeSection === 'hero') ||
+                                (lnk === 'À Propos' && activeSection === 'about') ||
+                                (lnk === 'Projets' && activeSection === 'projets') ||
+                                (lnk === 'Services' && activeSection === 'services') ||
+                                (lnk === 'Contact' && activeSection === 'contact')
+                            );
+                            return (
+                                <button
+                                    key={i}
+                                    onClick={() => scrollToSection(lnk)}
+                                    className="text-xs font-medium cursor-pointer transition-colors hover:text-white"
+                                    style={{ color: isLnkActive ? ACCENT : '#9CA3AF' }}
+                                >
+                                    {lnk}
+                                </button>
+                            );
+                        })}
                     </nav>
 
-                    <button
-                        onClick={onOpenInscription}
-                        className="text-xs font-black rounded-full px-5 h-9 transition-all"
-                        style={{ background: ACCENT, color: '#000' }}
-                    >
-                        Prendre Contact →
-                    </button>
+                    {/* Right actions */}
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={onOpenInscription || (() => scrollToSection('contact'))}
+                            className="hidden sm:inline-flex items-center text-xs font-black rounded-full px-5 h-9 transition-all hover:opacity-90 hover:scale-105 active:scale-95"
+                            style={{ background: ACCENT, color: '#000' }}
+                        >
+                            Prendre Contact →
+                        </button>
+
+                        {/* Hamburger button */}
+                        <button
+                            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                            className="md:hidden w-9 h-9 rounded-xl border border-white/10 flex items-center justify-center text-white"
+                        >
+                            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                        </button>
+                    </div>
                 </div>
+
+                {/* Mobile Drawer */}
+                <AnimatePresence>
+                    {mobileMenuOpen && (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="md:hidden border-b border-white/10 bg-[#0A0F1E]/95 backdrop-blur-xl px-6 py-4 space-y-3"
+                        >
+                            {navLinks.map((lnk, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => scrollToSection(lnk)}
+                                    className="block w-full text-left py-2 text-sm font-semibold text-gray-300 hover:text-cyan-400"
+                                >
+                                    {lnk}
+                                </button>
+                            ))}
+                            <div className="pt-2 border-t border-white/10 flex flex-col gap-2">
+                                <button
+                                    onClick={() => { setMobileMenuOpen(false); onOpenInscription?.(); }}
+                                    className="w-full text-center py-2.5 rounded-xl font-bold text-xs"
+                                    style={{ background: ACCENT, color: '#000' }}
+                                >
+                                    Prendre Contact →
+                                </button>
+                                <Link href={orgPath(orgSlug, 'login')}>
+                                    <button className="w-full text-center py-2.5 rounded-xl font-bold text-xs bg-white/5 border border-white/10 text-white">
+                                        Espace Élève
+                                    </button>
+                                </Link>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </header>
 
             {/* ══ HERO ══ */}
-            <section className="max-w-7xl mx-auto px-6 pt-16 pb-20">
+            <section id="hero" className="max-w-7xl mx-auto px-6 pt-16 pb-20">
                 <div className="grid lg:grid-cols-2 gap-12 items-center">
 
                     {/* Texte gauche */}
@@ -137,7 +230,7 @@ export function TemplateTechMentor({
                             <p className="text-xs font-bold tracking-widest uppercase" style={{ color: ACCENT }}>
                                 {trainerName}
                             </p>
-                            <h1 className="text-5xl sm:text-7xl font-black leading-[1.0] tracking-tighter">
+                            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black leading-[1.0] tracking-tighter">
                                 HAY! JE SUIS<br />
                                 <span style={{ color: ACCENT }}>{trainerName.split(' ')[0].toUpperCase()}</span><br />
                                 <span className="text-white">{trainerTitle1} |</span>
@@ -146,36 +239,40 @@ export function TemplateTechMentor({
 
                         <p className="text-sm text-gray-400 leading-relaxed max-w-md">{trainerSubtitle}</p>
 
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-4 flex-wrap">
                             <button
-                                onClick={onOpenInscription}
-                                className="inline-flex items-center gap-2 font-black text-xs rounded-full px-7 h-12 transition-all shadow-lg"
+                                onClick={onOpenInscription || (() => scrollToSection('contact'))}
+                                className="inline-flex items-center gap-2 font-black text-xs rounded-full px-7 h-12 transition-all shadow-lg hover:scale-105"
                                 style={{ background: ACCENT, color: '#000', boxShadow: `0 8px 30px ${ACCENT}30` }}
                             >
                                 PRENDRE CONTACT →
                             </button>
-                            {/* Social Icons */}
-                            {['f', 'in', '📷'].map((icon, i) => (
-                                <button key={i} className="w-9 h-9 rounded-full border flex items-center justify-center text-xs transition-colors hover:border-blue-400"
-                                    style={{ borderColor: '#ffffff20' }}>
-                                    <span className="text-gray-400">{icon}</span>
-                                </button>
-                            ))}
+                            {whatsappLink && (
+                                <a
+                                    href={whatsappLink}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-2 text-xs font-bold px-5 h-12 rounded-full border border-emerald-500/40 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all"
+                                >
+                                    <MessageSquare className="w-4 h-4" />
+                                    WhatsApp
+                                </a>
+                            )}
                         </div>
                     </div>
 
                     {/* Portrait + sphères 3D */}
                     <div className="relative flex justify-center lg:justify-end">
                         {/* Sphères décoratives */}
-                        <div className="absolute top-4 left-4 w-12 h-12 rounded-full blur-sm opacity-60"
+                        <div className="absolute top-4 left-4 w-12 h-12 rounded-full blur-sm opacity-60 pointer-events-none"
                             style={{ background: `radial-gradient(circle, ${ACCENT}, #1a1a4e)` }} />
-                        <div className="absolute bottom-8 right-8 w-8 h-8 rounded-full blur-sm opacity-40"
+                        <div className="absolute bottom-8 right-8 w-8 h-8 rounded-full blur-sm opacity-40 pointer-events-none"
                             style={{ background: `radial-gradient(circle, ${ACCENT}, transparent)` }} />
-                        <div className="absolute top-1/2 right-0 w-16 h-16 rounded-full blur-md opacity-30"
+                        <div className="absolute top-1/2 right-0 w-16 h-16 rounded-full blur-md opacity-30 pointer-events-none"
                             style={{ background: ACCENT }} />
 
                         {/* Photo */}
-                        <div className="relative w-80 h-96 rounded-3xl overflow-hidden shadow-2xl"
+                        <div className="relative w-72 sm:w-80 h-96 rounded-3xl overflow-hidden shadow-2xl"
                             style={{ border: `1px solid ${ACCENT}30` }}>
                             <img
                                 src={heroImage}
@@ -190,7 +287,7 @@ export function TemplateTechMentor({
 
             {/* ══ BANDEAU LOGOS PARTENAIRES ══ */}
             <div className="border-y py-5 overflow-hidden" style={{ borderColor: '#ffffff10', background: CARD }}>
-                <div className="flex items-center gap-16 whitespace-nowrap animate-none px-8 flex-wrap justify-center">
+                <div className="flex items-center gap-16 whitespace-nowrap px-8 flex-wrap justify-center">
                     {[...pressLogos, ...pressLogos].map((logo, i) => (
                         <span key={i} className="text-xs font-bold tracking-widest text-gray-500 uppercase shrink-0">
                             {logo}
@@ -200,7 +297,7 @@ export function TemplateTechMentor({
             </div>
 
             {/* ══ À PROPOS ══ */}
-            <section className="py-20" style={{ background: CARD }}>
+            <section id="about" className="py-20" style={{ background: CARD }}>
                 <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center">
                     {/* Portrait */}
                     <div className="relative hidden lg:flex justify-center">
@@ -212,7 +309,7 @@ export function TemplateTechMentor({
                             />
                         </div>
                         {/* Demi-cercle déco */}
-                        <div className="absolute -right-6 top-1/2 -translate-y-1/2 w-24 h-24 rounded-full border-4 opacity-30"
+                        <div className="absolute -right-6 top-1/2 -translate-y-1/2 w-24 h-24 rounded-full border-4 opacity-30 pointer-events-none"
                             style={{ borderColor: ACCENT }} />
                     </div>
 
@@ -232,9 +329,9 @@ export function TemplateTechMentor({
                         {/* Stats */}
                         <div className="grid grid-cols-3 gap-4">
                             {[
-                                { val: reviewCount, label: 'Avis Google' },
+                                { val: reviewCount, label: 'Avis Reçus' },
                                 { val: yearsExp,    label: "Ans d'Expérience" },
-                                { val: awardsCount, label: 'Prix Gagnés' },
+                                { val: awardsCount, label: 'Projets Menés' },
                             ].map((stat, i) => (
                                 <div key={i} className="text-center p-4 rounded-2xl" style={{ background: BG }}>
                                     <p className="text-2xl font-black" style={{ color: ACCENT }}>{stat.val}</p>
@@ -244,8 +341,8 @@ export function TemplateTechMentor({
                         </div>
 
                         <button
-                            onClick={onOpenInscription}
-                            className="inline-flex items-center gap-2 font-black text-xs rounded-full px-7 h-11 transition-all"
+                            onClick={onOpenInscription || (() => scrollToSection('contact'))}
+                            className="inline-flex items-center gap-2 font-black text-xs rounded-full px-7 h-11 transition-all hover:scale-105"
                             style={{ background: ACCENT, color: '#000' }}
                         >
                             PRENDRE CONTACT →
@@ -255,7 +352,7 @@ export function TemplateTechMentor({
             </section>
 
             {/* ══ MON TRAVAIL (Projets) ══ */}
-            <section className="py-20" style={{ background: BG }}>
+            <section id="projets" className="py-20" style={{ background: BG }}>
                 <div className="max-w-7xl mx-auto px-6">
                     <div className="mb-10">
                         <p className="text-xs font-bold tracking-widest uppercase mb-2" style={{ color: ACCENT }}>
@@ -269,15 +366,17 @@ export function TemplateTechMentor({
                             <motion.div
                                 key={proj.id}
                                 initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
                                 transition={{ delay: idx * 0.1 }}
-                                className="rounded-2xl overflow-hidden"
+                                className="rounded-2xl overflow-hidden group cursor-pointer"
                                 style={{ background: CARD, border: '1px solid #ffffff08' }}
+                                onClick={onOpenInscription}
                             >
                                 <div className="aspect-video relative overflow-hidden"
                                     style={{ background: idx === 0 ? '#1a0f3e' : idx === 1 ? '#0f1e2e' : '#1e1a0f' }}>
                                     {proj.image
-                                        ? <img src={proj.image} alt={proj.nom} className="w-full h-full object-cover opacity-70" />
+                                        ? <img src={proj.image} alt={proj.nom} className="w-full h-full object-cover opacity-70 group-hover:scale-105 transition-transform duration-500" />
                                         : (
                                             <div className="w-full h-full flex items-center justify-center text-5xl opacity-20">
                                                 {idx === 0 ? '💜' : idx === 1 ? '💰' : '📊'}
@@ -285,31 +384,25 @@ export function TemplateTechMentor({
                                         )
                                     }
                                     <button
-                                        onClick={onOpenInscription}
-                                        className="absolute bottom-3 right-3 w-10 h-10 rounded-full flex items-center justify-center text-black font-black text-xs shadow-xl"
+                                        onClick={(e) => { e.stopPropagation(); onOpenInscription?.(); }}
+                                        className="absolute bottom-3 right-3 w-10 h-10 rounded-full flex items-center justify-center text-black font-black text-xs shadow-xl transition-transform group-hover:scale-110"
                                         style={{ background: ACCENT }}
                                     >
                                         →
                                     </button>
                                 </div>
                                 <div className="p-5">
-                                    <h3 className="font-black text-sm text-white">{proj.nom}</h3>
+                                    <h3 className="font-black text-sm text-white group-hover:text-cyan-300 transition-colors">{proj.nom}</h3>
                                     <p className="text-xs text-gray-500 mt-1">{proj.cat}</p>
                                 </div>
                             </motion.div>
                         ))}
                     </div>
-
-                    {/* Dots */}
-                    <div className="flex justify-center gap-2 mt-8">
-                        <div className="w-8 h-2 rounded-full" style={{ background: ACCENT }} />
-                        <div className="w-2 h-2 rounded-full bg-gray-700" />
-                    </div>
                 </div>
             </section>
 
             {/* ══ SERVICES ══ */}
-            <section className="py-20" style={{ background: CARD }}>
+            <section id="services" className="py-20" style={{ background: CARD }}>
                 <div className="max-w-7xl mx-auto px-6">
                     <div className="mb-10">
                         <p className="text-xs font-bold tracking-widest uppercase mb-2" style={{ color: ACCENT }}>SERVICES</p>
@@ -328,7 +421,7 @@ export function TemplateTechMentor({
                                 <div className="aspect-video overflow-hidden relative"
                                     style={{ background: ['#1a0a2e', '#0a1e1a', '#1e1a0a', '#0a0f1e'][i % 4] }}>
                                     {svc.image
-                                        ? <img src={svc.image} alt={svc.nom} className="w-full h-full object-cover opacity-60" />
+                                        ? <img src={svc.image} alt={svc.nom} className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-500" />
                                         : <div className="w-full h-full flex items-center justify-center text-4xl opacity-20">
                                             {['🖥', '📊', '⚙️', '🧑‍🏫'][i % 4]}
                                           </div>
@@ -336,10 +429,91 @@ export function TemplateTechMentor({
                                 </div>
                                 <div className="p-4">
                                     <p className="text-xs text-gray-500 mb-1">{svc.cat}</p>
-                                    <h3 className="font-black text-sm text-white group-hover:text-blue-300 transition-colors">{svc.nom}</h3>
+                                    <h3 className="font-black text-sm text-white group-hover:text-cyan-300 transition-colors">{svc.nom}</h3>
                                 </div>
                             </div>
                         ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* ══ CONTACT / INITIATION ══ */}
+            <section id="contact" className="py-20" style={{ background: BG }}>
+                <div className="max-w-7xl mx-auto px-6">
+                    <div className="p-8 sm:p-12 rounded-3xl border border-white/10" style={{ background: CARD }}>
+                        <div className="grid lg:grid-cols-2 gap-10 items-center">
+                            <div className="space-y-5">
+                                <span className="text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full" style={{ background: `${ACCENT}20`, color: ACCENT }}>
+                                    Contact & Candidature
+                                </span>
+                                <h2 className="text-3xl sm:text-4xl font-black">
+                                    Prêt à propulser vos <span style={{ color: ACCENT }}>compétences</span> ?
+                                </h2>
+                                <p className="text-sm text-gray-400 leading-relaxed max-w-md">
+                                    Prenez contact directement pour vous inscrire à une formation ou réserver un créneau de mentorat d'excellence.
+                                </p>
+
+                                <div className="space-y-3 pt-2">
+                                    {org.email && (
+                                        <div className="flex items-center gap-3 text-sm text-gray-300">
+                                            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 border border-white/10">
+                                                <Mail className="w-4 h-4 text-cyan-400" />
+                                            </div>
+                                            <span>{org.email}</span>
+                                        </div>
+                                    )}
+                                    {org.phone && (
+                                        <div className="flex items-center gap-3 text-sm text-gray-300">
+                                            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 border border-white/10">
+                                                <Phone className="w-4 h-4 text-cyan-400" />
+                                            </div>
+                                            <span>{org.phone}</span>
+                                        </div>
+                                    )}
+                                    {org.city && (
+                                        <div className="flex items-center gap-3 text-sm text-gray-300">
+                                            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 border border-white/10">
+                                                <MapPin className="w-4 h-4 text-cyan-400" />
+                                            </div>
+                                            <span>{org.city}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="bg-[#0A0F1E] p-6 sm:p-8 rounded-2xl border border-white/10 space-y-4">
+                                <h3 className="font-black text-base text-white">Envoyer une demande rapide</h3>
+                                <input
+                                    type="text"
+                                    placeholder="Votre nom complet"
+                                    value={formName}
+                                    onChange={e => setFormName(e.target.value)}
+                                    className="w-full px-4 h-11 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-cyan-400"
+                                />
+                                <input
+                                    type="email"
+                                    placeholder="Votre adresse email"
+                                    value={formEmail}
+                                    onChange={e => setFormEmail(e.target.value)}
+                                    className="w-full px-4 h-11 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-cyan-400"
+                                />
+                                <textarea
+                                    placeholder="Votre message ou objectif de formation..."
+                                    rows={3}
+                                    value={formMsg}
+                                    onChange={e => setFormMsg(e.target.value)}
+                                    className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-cyan-400 resize-none"
+                                />
+                                <button
+                                    onClick={onOpenInscription}
+                                    className="w-full h-11 rounded-xl font-black text-xs flex items-center justify-center gap-2 transition-all hover:opacity-90"
+                                    style={{ background: ACCENT, color: '#000' }}
+                                >
+                                    <Send className="w-4 h-4" />
+                                    Soumettre ma Candidature
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>

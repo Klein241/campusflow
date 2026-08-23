@@ -771,6 +771,75 @@ function AdminPageContent() {
         };
     }, [orgSlug]);
 
+    // ── SUPABASE REALTIME & EVENT LISTENER : Synchronisation Instantanée des Sky Points ──
+    useEffect(() => {
+        if (!org?.id) return;
+
+        // 1. Écouter les modifications Supabase directes (ex: ajout de points par le Superadmin)
+        const orgChannel = supabase.channel(`realtime_org_points_${org.id}`)
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'organizations',
+                filter: `id=eq.${org.id}`
+            }, (payload) => {
+                const updatedOrg = payload.new as any;
+                if (updatedOrg && typeof updatedOrg.sky_points === 'number') {
+                    setAdminSkyPoints(updatedOrg.sky_points);
+                    setOrg((prev: any) => ({ ...prev, sky_points: updatedOrg.sky_points }));
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem(`campusflow_admin_points_${org.id}`, updatedOrg.sky_points.toString());
+                    }
+                    toast.success(`⭐ Solde actualisé : ${new Intl.NumberFormat('fr-FR').format(updatedOrg.sky_points)} Sky Points !`, { icon: '✨' });
+                }
+            })
+            .subscribe();
+
+        // 2. Événement local custom 'sky_points_updated' ou 'storage'
+        const handleLocalSync = (e: any) => {
+            const newBal = e.detail?.newBalance;
+            if (typeof newBal === 'number') {
+                setAdminSkyPoints(newBal);
+                setOrg((prev: any) => ({ ...prev, sky_points: newBal }));
+            } else if (typeof window !== 'undefined') {
+                const saved = localStorage.getItem(`campusflow_admin_points_${org.id}`);
+                if (saved) {
+                    const parsed = parseInt(saved, 10);
+                    if (!isNaN(parsed)) setAdminSkyPoints(parsed);
+                }
+            }
+        };
+
+        // 3. Rafraîchissement automatique lorsque l'admin revient sur l'onglet
+        const handleWindowFocus = async () => {
+            try {
+                const { data: refreshed } = await supabase
+                    .from('organizations')
+                    .select('sky_points')
+                    .eq('id', org.id)
+                    .single();
+                if (refreshed && typeof refreshed.sky_points === 'number') {
+                    setAdminSkyPoints(refreshed.sky_points);
+                    setOrg((prev: any) => ({ ...prev, sky_points: refreshed.sky_points }));
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem(`campusflow_admin_points_${org.id}`, refreshed.sky_points.toString());
+                    }
+                }
+            } catch {}
+        };
+
+        window.addEventListener('sky_points_updated', handleLocalSync);
+        window.addEventListener('storage', handleLocalSync);
+        window.addEventListener('focus', handleWindowFocus);
+
+        return () => {
+            supabase.removeChannel(orgChannel);
+            window.removeEventListener('sky_points_updated', handleLocalSync);
+            window.removeEventListener('storage', handleLocalSync);
+            window.removeEventListener('focus', handleWindowFocus);
+        };
+    }, [org?.id]);
+
     // ── SUPABASE REALTIME : Écoute des réponses des étudiants aux demandes d'info ──
     useEffect(() => {
         if (!org?.id) return;

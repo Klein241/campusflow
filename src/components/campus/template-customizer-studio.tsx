@@ -112,6 +112,7 @@ export interface TemplateCustomConfig {
 
     // 🎨 Textes décoratifs & Navigation
     available_text?: string;
+    availability_badge?: string;
     turning_ideas_text?: string;
     nav_links_text?: string;
     contact_email?: string;
