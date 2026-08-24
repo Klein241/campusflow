@@ -1,6 +1,8 @@
 import { MetadataRoute } from 'next';
 import { supabase } from '@/lib/supabase';
 
+export const dynamic = 'force-static';
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://iziteach.com';
     const now = new Date();
