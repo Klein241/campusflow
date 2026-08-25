@@ -1,11 +1,14 @@
-// src/app/api/inscription/route.ts
-// Route API server-side — bypasse le RLS grâce au client service_role
-// POST /api/inscription
+import type { Config, Context } from '@netlify/functions';
+import { supabaseAdmin } from '../../src/lib/supabase-admin';
 
-import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase-admin';
+export default async (req: Request, _context: Context) => {
+    if (req.method !== 'POST') {
+        return new Response(JSON.stringify({ error: 'Méthode non autorisée' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' },
+        });
+    }
 
-export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
 
@@ -24,12 +27,11 @@ export async function POST(req: NextRequest) {
             filiere_id,
         } = body;
 
-        // Validation minimale côté serveur
         if (!organization_id || !first_name || !last_name || !phone || !access_code || !pin_code) {
-            return NextResponse.json(
-                { error: 'Champs obligatoires manquants' },
-                { status: 400 }
-            );
+            return new Response(JSON.stringify({ error: 'Champs obligatoires manquants' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' },
+            });
         }
 
         // Vérification doublon étudiant
@@ -42,10 +44,12 @@ export async function POST(req: NextRequest) {
             .limit(1);
 
         if (existingStudent && existingStudent.length > 0) {
-            return NextResponse.json(
-                { error: `Un profil étudiant avec le nom "${first_name.trim()} ${last_name.trim()}" existe déjà dans cet établissement.` },
-                { status: 409 }
-            );
+            return new Response(JSON.stringify({
+                error: `Un profil étudiant avec le nom "${first_name.trim()} ${last_name.trim()}" existe déjà dans cet établissement.`
+            }), {
+                status: 409,
+                headers: { 'Content-Type': 'application/json' },
+            });
         }
 
         const payload: Record<string, unknown> = {
@@ -69,12 +73,14 @@ export async function POST(req: NextRequest) {
             .insert(payload);
 
         if (error) {
-            console.error('[inscription API]', error);
-            return NextResponse.json({ error: error.message }, { status: 500 });
+            console.error('[netlify/inscription]', error);
+            return new Response(JSON.stringify({ error: error.message }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' },
+            });
         }
 
-        // ── Créer immédiatement le student_profile pour accès instantané ──
-        // L'étudiant peut se connecter dès la fin de l'inscription avec son code.
+        // Créer immédiatement le student_profile
         const { error: profileErr } = await supabaseAdmin
             .from('student_profiles')
             .insert({
@@ -90,20 +96,30 @@ export async function POST(req: NextRequest) {
                 filiere_id:      filiere_id   || null,
                 access_code:     access_code,
                 pin_code:        pin_code,
-                sky_points:      100,   // Points de bienvenue
+                sky_points:      100,
                 is_active:       true,
-                pin_set:         true,  // PIN configuré lors de l'inscription
+                pin_set:         true,
             });
 
         if (profileErr) {
-            // Log mais ne bloque pas — la demande est quand même enregistrée
-            console.warn('[inscription API] student_profile creation failed:', profileErr.message);
+            console.warn('[netlify/inscription] student_profile creation warning:', profileErr.message);
         }
 
-        return NextResponse.json({ success: true });
+        return new Response(JSON.stringify({ success: true }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+        });
 
-    } catch (err: any) {
-        console.error('[inscription API] Unexpected error:', err);
-        return NextResponse.json({ error: err.message || 'Erreur serveur' }, { status: 500 });
+    } catch (err: unknown) {
+        console.error('[netlify/inscription] Erreur:', err);
+        const message = err instanceof Error ? err.message : 'Erreur serveur';
+        return new Response(JSON.stringify({ error: message }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+        });
     }
-}
+};
+
+export const config: Config = {
+    path: '/api/inscription',
+};
