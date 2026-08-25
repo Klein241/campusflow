@@ -74,7 +74,7 @@ export async function initiatePayment(
     opts: InitiatePaymentOptions
 ): Promise<InitiatePaymentResult> {
     const supabase = getAdminSupabase();
-    const appUrl   = process.env.NEXT_PUBLIC_APP_URL ?? 'https://campusflow.app';
+    const appUrl   = process.env.NEXT_PUBLIC_APP_URL ?? 'https://iziteach.com';
 
     const invoiceId  = generateInvoiceId(opts.organizationSlug, opts.paymentType);
     const returnUrl  = opts.returnUrl ??
@@ -307,9 +307,9 @@ async function triggerMassPayout(opts: TriggerMassPayoutOptions): Promise<string
                 name:      opts.payoutName,
                 amount:    Math.round(opts.netAmount),
                 reference: opts.invoiceRef,
-                note:      `CampusFlow - Reversement ${opts.paymentType} - ${opts.invoiceRef}`,
+                note:      `IziTeach - Reversement ${opts.paymentType} - ${opts.invoiceRef}`,
             }],
-            description: `Reversement automatique CampusFlow — ${opts.paymentType}`,
+            description: `Reversement automatique IziTeach — ${opts.paymentType}`,
             idempotency_key: `PAYOUT-${opts.transactionId}`,
         });
 

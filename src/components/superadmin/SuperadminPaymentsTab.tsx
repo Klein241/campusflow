@@ -215,7 +215,7 @@ export function SuperadminPaymentsTab() {
 
                 <div className="p-5 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 space-y-2 shadow-lg shadow-emerald-500/5">
                     <div className="flex items-center justify-between text-xs text-emerald-300">
-                        <span>Commissions CampusFlow</span>
+                        <span>Commissions IziTeach</span>
                         <DollarSign className="w-4 h-4 text-emerald-400" />
                     </div>
                     <p className="text-2xl font-black text-emerald-400 font-mono">
@@ -258,7 +258,7 @@ export function SuperadminPaymentsTab() {
                 <div className="flex items-center justify-between">
                     <div>
                         <h3 className="font-bold text-base text-white flex items-center gap-2">
-                            ⚙️ Configuration des Taux de Commission CampusFlow
+                            ⚙️ Configuration des Taux de Commission IziTeach
                         </h3>
                         <p className="text-xs text-slate-400 mt-0.5">
                             Définissez la commission prélevée sur chaque paiement avant reversement automatique à l'école.

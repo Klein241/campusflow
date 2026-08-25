@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "eslint",
     "cf:build": "next build",
-    "cf:deploy": "next build && npx wrangler pages deploy out/ --project-name campusflow",
+    "cf:deploy": "next build && npx wrangler pages deploy out/ --project-name iziteach",
     "cf:preview": "next build && npx wrangler pages dev out/"
   },
   "dependencies": {
