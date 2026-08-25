@@ -40,8 +40,14 @@ export function SkyAgentBubble({ role, context, bottomOffset = 'bottom-6 md:bott
     const {
         messages, isLoading, isOpen,
         externalAgentActive, persona,
+        isChatActive, isRoleAllowed,
         sendMessage, clearSession, toggleChat, closeChat,
     } = useSkyAgent(role, context);
+
+    // Si Dame SKY est désactivée dans le SuperAdmin ou non autorisée pour ce rôle, ne pas afficher la bulle
+    if (!isChatActive || !isRoleAllowed) {
+        return null;
+    }
 
     const theme = roleTheme[role] || roleTheme.student;
     const hasNewMessage = !isOpen && messages.length > 0 &&

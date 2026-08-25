@@ -101,6 +101,13 @@ const TOOL_ICONS: Record<string, string> = {
     'translate_content':        '🌐',
     'create_exam_paper':        '📝',
     'launch_exam_session':      '🎯',
+    'publish_library_item':     '📚',
+    'compile_curriculum_to_book':'📕',
+    'list_library_items':       '📖',
+    'list_schedule':            '🗓️',
+    'create_schedule_slot':     '⏰',
+    'update_schedule_slot':     '✏️',
+    'bulk_create_schedule':     '⚡',
 };
 
 const STATUS_CONFIG = {
@@ -128,6 +135,16 @@ const TOOL_LABELS: Record<string, string> = {
     translate_content:        'Traduction de contenu',
     create_exam_paper:        'Création d\'examen',
     launch_exam_session:      'Lancement d\'examen',
+    publish_library_item:     'Publication dans la bibliothèque',
+    compile_curriculum_to_book:'Compilation de cours en livre',
+    list_library_items:       'Consultation bibliothèque',
+    delete_library_item:      'Suppression livre/document',
+    list_schedule:            'Consultation emploi du temps',
+    create_schedule_slot:     'Création créneau horaire',
+    update_schedule:          'Mise à jour emploi du temps',
+    update_schedule_slot:     'Modification créneau horaire',
+    delete_schedule_slot:     'Suppression créneau horaire',
+    bulk_create_schedule:     'Création emploi du temps en masse',
     ping:                     'Test de connexion',
 };
 

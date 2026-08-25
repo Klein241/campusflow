@@ -2033,6 +2033,190 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             };
         }
 
+        // ── LIST SCHEDULE ──
+        case 'list_schedule': {
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                let path = `timetable_slots?select=*,classrooms(name),subjects(name)&order=start_time.asc`;
+                if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+                if (args.classroom_id || args.class_id) path += `&classroom_id=eq.${encodeURIComponent((args.classroom_id || args.class_id) as string)}`;
+                if (args.subject_id) path += `&subject_id=eq.${encodeURIComponent(args.subject_id as string)}`;
+                const supData = await fetchSupabaseRest(env, path);
+                if (supData) return { schedule: supData, total: supData.length };
+            }
+            return { schedule: [], total: 0 };
+        }
+
+        // ── CREATE / UPDATE SCHEDULE ──
+        case 'create_schedule_slot':
+        case 'update_schedule':
+        case 'update_schedule_slot': {
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+            const slotId = (args.slot_id as string) || crypto.randomUUID();
+            const classId = (args.classroom_id || args.class_id) as string;
+            const payload: Record<string, any> = {
+                organization_id: targetOrgId,
+                updated_at: new Date().toISOString(),
+            };
+            if (classId) payload.classroom_id = classId;
+            if (args.subject_id) payload.subject_id = args.subject_id;
+            if (args.day_of_week !== undefined) payload.day_of_week = Number(args.day_of_week) || 1;
+            if (args.start_time) payload.start_time = String(args.start_time).trim();
+            if (args.end_time) payload.end_time = String(args.end_time).trim();
+            if (args.room !== undefined || args.room_name !== undefined) payload.room = args.room || args.room_name || null;
+            if (args.teacher_id !== undefined) payload.teacher_id = args.teacher_id || null;
+
+            if (args.slot_id) {
+                syncToSupabase(env, 'timetable_slots', 'UPDATE', { id: slotId, ...payload });
+                return { success: true, slot_id: slotId, message: `✅ Créneau d'emploi du temps modifié` };
+            } else {
+                payload.id = slotId;
+                payload.created_at = new Date().toISOString();
+                syncToSupabase(env, 'timetable_slots', 'INSERT', payload);
+                return { success: true, slot: payload, message: `✅ Créneau créé` };
+            }
+        }
+
+        // ── DELETE SCHEDULE SLOT ──
+        case 'delete_schedule_slot': {
+            if (!args.slot_id) throw { code: -32602, message: 'slot_id requis' };
+            syncToSupabase(env, 'timetable_slots', 'DELETE', { id: args.slot_id });
+            return { success: true, message: `🗑️ Créneau supprimé` };
+        }
+
+        // ── BULK CREATE SCHEDULE ──
+        case 'bulk_create_schedule': {
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+            const slots = Array.isArray(args.slots) ? args.slots : [];
+            for (const s of slots) {
+                const sId = crypto.randomUUID();
+                const p = {
+                    id: sId,
+                    organization_id: targetOrgId,
+                    classroom_id: s.classroom_id || s.class_id || args.classroom_id,
+                    subject_id: s.subject_id,
+                    day_of_week: Number(s.day_of_week) || 1,
+                    start_time: String(s.start_time).trim(),
+                    end_time: String(s.end_time).trim(),
+                    room: s.room || null,
+                    teacher_id: s.teacher_id || null,
+                    created_at: new Date().toISOString(),
+                };
+                syncToSupabase(env, 'timetable_slots', 'INSERT', p);
+            }
+            return { success: true, count: slots.length, message: `⚡ ${slots.length} créneaux ajoutés à l'emploi du temps` };
+        }
+
+        // ── PUBLISH LIBRARY ITEM ──
+        case 'publish_library_item':
+        case 'create_library_book': {
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+            if (!args.title) throw { code: -32602, message: 'title requis' };
+            const itemId = crypto.randomUUID();
+            const contentText = args.content ? String(args.content).trim() : null;
+            let fileUrl = (args.file_url as string) || (contentText ? `data:text/markdown;charset=utf-8,${encodeURIComponent(contentText)}` : null);
+
+            const payload = {
+                id: itemId,
+                organization_id: targetOrgId,
+                title: String(args.title).trim(),
+                description: args.description ? String(args.description).trim() : null,
+                category: args.category || 'cours',
+                file_type: args.file_type || 'doc',
+                file_url: fileUrl,
+                file_size: Number(args.file_size) || (contentText ? contentText.length : 0),
+                subject_id: args.subject_id || null,
+                classroom_id: args.classroom_id || null,
+                uploaded_by: ctx.agentId || null,
+                is_public: args.is_public !== false,
+                download_count: 0,
+                created_at: new Date().toISOString(),
+            };
+            syncToSupabase(env, 'library_items', 'INSERT', payload);
+            return { success: true, item: payload, message: `📚 Livre/Document "${args.title}" publié dans la Bibliothèque` };
+        }
+
+        // ── COMPILE CURRICULUM TO BOOK ──
+        case 'compile_curriculum_to_book': {
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+            if (!args.subject_id) throw { code: -32602, message: 'subject_id requis' };
+
+            // Charger la matière et ses chapitres
+            let subName = 'Matière';
+            let chapters: any[] = [];
+            let lessons: any[] = [];
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const subData = await fetchSupabaseRest(env, `subjects?id=eq.${encodeURIComponent(args.subject_id as string)}&select=id,name,description,classroom_id`);
+                if (subData && subData.length > 0) subName = subData[0].name;
+
+                const chData = await fetchSupabaseRest(env, `chapters?subject_id=eq.${encodeURIComponent(args.subject_id as string)}&select=id,title,description,position&order=position.asc`);
+                if (chData) chapters = chData;
+
+                const lesData = await fetchSupabaseRest(env, `lessons?select=id,chapter_id,title,content,position,estimated_minutes&order=position.asc`);
+                if (lesData) lessons = lesData;
+            }
+
+            const bookTitle = args.title ? String(args.title).trim() : `Livre Complet : ${subName}`;
+            let md = `# 📖 ${bookTitle}\n\n`;
+            md += `> Cours complet et structuré de **${subName}**\n\n---\n\n`;
+
+            chapters.forEach((ch, ci) => {
+                md += `## 📂 Chapitre ${ci + 1} : ${ch.title}\n\n`;
+                const chLes = lessons.filter(l => l.chapter_id === ch.id);
+                chLes.forEach((les, li) => {
+                    md += `### 📄 Leçon ${ci + 1}.${li + 1} : ${les.title}\n\n${les.content || ''}\n\n---\n\n`;
+                });
+            });
+
+            const itemId = crypto.randomUUID();
+            const payload = {
+                id: itemId,
+                organization_id: targetOrgId,
+                title: bookTitle,
+                description: args.description || `Livre numérique compilé comprenant ${chapters.length} chapitres et ${lessons.length} leçons de ${subName}.`,
+                category: args.category || 'cours',
+                file_type: 'doc',
+                file_url: `data:text/markdown;charset=utf-8,${encodeURIComponent(md)}`,
+                file_size: md.length,
+                subject_id: args.subject_id,
+                is_public: args.is_public !== false,
+                download_count: 0,
+                created_at: new Date().toISOString(),
+            };
+            syncToSupabase(env, 'library_items', 'INSERT', payload);
+
+            return {
+                success: true,
+                book: {
+                    title: bookTitle,
+                    chapters_count: chapters.length,
+                    lessons_count: lessons.length,
+                    size_bytes: md.length,
+                    library_item_id: itemId,
+                },
+                message: `📚 Livre "${bookTitle}" compilé et publié dans la Bibliothèque !`,
+            };
+        }
+
+        // ── LIST LIBRARY ITEMS ──
+        case 'list_library_items': {
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                let path = `library_items?select=id,title,description,category,file_type,file_size,subject_id,classroom_id,download_count,is_public,created_at&order=created_at.desc&limit=50`;
+                if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+                if (args.category && args.category !== 'all') path += `&category=eq.${encodeURIComponent(args.category as string)}`;
+                const items = await fetchSupabaseRest(env, path);
+                if (items) return { items, total: items.length };
+            }
+            return { items: [], total: 0 };
+        }
+
+        // ── DELETE LIBRARY ITEM ──
+        case 'delete_library_item': {
+            if (!args.item_id) throw { code: -32602, message: 'item_id requis' };
+            syncToSupabase(env, 'library_items', 'DELETE', { id: args.item_id });
+            return { success: true, message: `🗑️ Document supprimé de la Bibliothèque` };
+        }
+
         default:
             throw { code: -32601, message: `Outil "${toolName}" non implémenté` };
     }

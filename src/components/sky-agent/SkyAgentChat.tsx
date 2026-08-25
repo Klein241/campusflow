@@ -9,8 +9,9 @@ import {
     Volume2, VolumeX, Mic, MicOff, Copy, Check, Share2, BookOpen,
     Sliders, Zap, ChevronRight, FileCheck, Brain, Target,
     Folder, FolderPlus, MessageSquare, Plus, Search, Calendar,
-    ArrowLeft, MoreVertical, Star, Compass, BookMarked
+    ArrowLeft, MoreVertical, Star, Compass, BookMarked, Maximize2
 } from 'lucide-react';
+import Link from 'next/link';
 import { useSkyAgent, type SkyAgentRole, type SkyAgentContext, type SkyMessage, type SkyAttachment } from '@/hooks/use-sky-agent';
 import { uploadToR2 } from '@/lib/r2';
 import { compressImage } from '@/lib/compress';
@@ -838,6 +839,15 @@ export function SkyAgentChat({
                                 >
                                     <Trash2 className="w-4 h-4" />
                                 </button>
+                                {context?.org_slug && (
+                                    <Link
+                                        href={`/${context.org_slug}/agent`}
+                                        title="Ouvrir Dame SKY en Plein Écran (Studio IA)"
+                                        className="p-2 rounded-xl hover:bg-white/20 transition-colors text-white/80 hover:text-white"
+                                    >
+                                        <Maximize2 className="w-4 h-4" />
+                                    </Link>
+                                )}
                                 <button
                                     onClick={onClose}
                                     title="Fermer"

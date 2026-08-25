@@ -98,6 +98,14 @@ const TOOL_LABELS: Record<string, { label: string; icon: string }> = {
     marketing_generate_ad_creative: { label: 'Génération Publicité & Remix Image IA', icon: '🎨' },
     marketing_list_leads:        { label: 'CRM Prospects & Détection d\'Ouverture', icon: '👁️' },
     marketing_get_stats:         { label: 'KPIs Marketing & Taux de Conversion', icon: '📈' },
+    // ── Bibliothèque & Emploi du temps ──
+    publish_library_item:        { label: 'Publication dans la bibliothèque', icon: '📚' },
+    compile_curriculum_to_book:  { label: 'Compilation de cours en livre complet', icon: '📕' },
+    list_library_items:          { label: 'Consultation bibliothèque', icon: '📖' },
+    list_schedule:               { label: 'Consultation emploi du temps', icon: '🗓️' },
+    create_schedule_slot:        { label: 'Création créneau horaire', icon: '⏰' },
+    update_schedule_slot:        { label: 'Modification créneau horaire', icon: '✏️' },
+    bulk_create_schedule:        { label: 'Création emploi du temps en masse', icon: '⚡' },
 };
 
 function formatInput(toolName: string, inputSummary: string | null): string {

@@ -123,53 +123,32 @@ async function handleAgentAutonomousHeartbeat(env: Env): Promise<void> {
     }
 }
 
+import { processAutonomousEvent } from './services/autonomous-agent';
+
 // ── Webhook Automatique pour Agents IA (Option A - Temps Réel < 1s) ────────
 async function handleAgentWebhook(request: Request, env: Env): Promise<Response> {
     try {
         const payload: any = await request.json();
         const eventType = payload.type || payload.event || payload.table || 'custom_event';
         const record = payload.record || payload.new || payload.data || payload;
-        const now = new Date().toISOString();
 
-        console.log(`[AgentWebhook] Reçu événement : ${eventType}`, JSON.stringify(record).slice(0, 200));
+        console.log(`[AgentWebhook] ⚡ Événement reçu : ${eventType}`, JSON.stringify(record).slice(0, 200));
 
-        let actionSummary = `Événement ${eventType} traité`;
-
-        if (eventType === 'sky_point_requests' || eventType === 'INSERT:sky_point_requests') {
-            actionSummary = `Nouvelle demande de points/support reçue (ID: ${record.id})`;
-        } else if (eventType === 'bug_reports' || eventType === 'INSERT:bug_reports') {
-            actionSummary = `Nouveau rapport de bug reçu : "${record.title || record.description || 'Bug'}"`;
-        } else if (eventType === 'ai_pending_actions' || eventType === 'INSERT:ai_pending_actions') {
-            actionSummary = `Nouvelle action IA en attente d'approbation (Outil: ${record.tool_name})`;
-        }
-
-        // Logger l'événement dans ai_agent_logs
-        if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
-            await fetchSupabaseRest(env, 'ai_agent_logs', {
-                method: 'POST',
-                body: {
-                    tool_name: `webhook:${eventType}`,
-                    input_summary: JSON.stringify(record).slice(0, 500),
-                    output_summary: actionSummary,
-                    status: 'success',
-                    duration_ms: 15,
-                    executed_at: now,
-                }
-            });
-        }
+        // Déclencher le moteur d'IA autonome
+        const result = await processAutonomousEvent(payload, env);
 
         return json({
             success: true,
-            status: 'received_and_logged',
+            status: 'autonomous_executed',
             event: eventType,
-            message: `⚡ Webhook Agent IA déclenché : ${actionSummary}`,
-            timestamp: now,
+            decision: result,
+            timestamp: new Date().toISOString(),
         });
     } catch (e: any) {
-        return json({ error: e.message || 'Erreur traitement webhook' }, 500);
+        console.error('[AgentWebhook] Erreur traitement autonomie:', e);
+        return json({ error: e.message || 'Erreur traitement webhook autonome' }, 500);
     }
 }
-
 
 export {
     handleCron,

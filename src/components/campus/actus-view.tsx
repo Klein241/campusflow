@@ -1262,7 +1262,7 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole, onSkyUpd
                                                     viewerDetails.map((v: any, idx: number) => (
                                                         <div key={v.id || idx} className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                                                             {v.photo_url ? (
-                                                                <img src={v.photo_url} className="w-8 h-8 rounded-full object-cover shrink-0" />
+                                                                <img src={v.photo_url} className="w-8 h-8 rounded-full object-cover shrink-0" alt="" />
                                                             ) : (
                                                                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-teal-500 flex items-center justify-center text-xs font-bold text-white shrink-0">
                                                                     {(v.name || '?').slice(0, 2).toUpperCase()}
@@ -1282,173 +1282,178 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole, onSkyUpd
                                 )}
                             </AnimatePresence>
 
-                            </div>{/* /9:16 container */}
-                        </motion.div>
-                    );
-                })()}
+                    </div>{/* /9:16 container */}
+                </motion.div>
+            );
+        })()}
 
-            </AnimatePresence>
+    </AnimatePresence>
 
 
-            {/* ═══ NEW STORY MODAL ═══ */}
-            <AnimatePresence>
-                {showNewStory && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
-                        onClick={() => setShowNewStory(false)}>
-                        <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }}
-                            className="bg-[#1a1d27] rounded-2xl border border-white/10 max-w-md w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto"
-                            onClick={e => e.stopPropagation()}>
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-bold text-amber-300">✨ Nouvelle Story</h3>
-                                <button onClick={() => setShowNewStory(false)}><X className="w-4 h-4 text-slate-400" /></button>
-                            </div>
-                            
-                            {userRole === 'student' && (
-                                <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-2">
-                                    <div className="w-6 h-6 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
-                                        <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
-                                    </div>
-                                    <p className="text-xs text-amber-200/80">Coût de publication : <strong className="text-amber-400">1 Sky Point</strong></p>
-                                </div>
-                            )}
-
-                            {/* Image & Text */}
-                            {storyImagePreview ? (
-                                <div className="space-y-3">
-                                    <div className="relative rounded-xl overflow-hidden bg-black/40 flex items-center justify-center">
-                                        <img src={storyImagePreview} alt="" className="w-full max-h-48 object-contain" />
-                                        <button onClick={() => { setStoryImage(null); setStoryImagePreview(''); }}
-                                            className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-red-500 transition-colors">
-                                            <X className="w-4 h-4 text-white" />
-                                        </button>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] text-slate-400 mb-1">Légende (optionnelle)</label>
-                                        <Input value={caption} onChange={e => setCaption(e.target.value)} 
-                                            placeholder="Ajouter une légende..." 
-                                            className="bg-white/5 border-white/10 text-white h-10" 
-                                        />
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    <textarea value={storyText} onChange={e => setStoryText(e.target.value)}
-                                        placeholder="Que voulez-vous raconter ?" rows={3}
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-500 resize-none focus:outline-none focus:border-amber-500/30" 
-                                    />
-                                    <div className="relative">
-                                        <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10"></div></div>
-                                        <div className="relative flex justify-center text-[10px]"><span className="px-2 bg-[#1a1d27] text-slate-500">OU</span></div>
-                                    </div>
-                                    <label className="block w-full py-6 rounded-xl border-2 border-dashed border-white/10 text-center cursor-pointer hover:border-amber-500/30 hover:bg-white/[0.02] transition-colors">
-                                        <ImageIcon className="w-8 h-8 mx-auto text-slate-600 mb-2" />
-                                        <span className="text-xs text-slate-500">Ajouter une image</span>
-                                        <input type="file" accept="image/*" className="hidden" onChange={e => {
-                                            const f = e.target.files?.[0];
-                                            if (f) { setStoryImage(f); setStoryImagePreview(URL.createObjectURL(f)); }
-                                        }} />
-                                    </label>
-                                </div>
-                            )}
-
-                            {/* Visibility */}
-                            <div>
-                                <p className="text-[10px] text-slate-400 mb-2">👁️ Visibilité</p>
-                                <div className="flex gap-2">
-                                    {[
-                                        { v: 'public' as const, icon: Globe, label: 'Public' },
-                                        { v: 'friends' as const, icon: Users, label: 'Amis' },
-                                        { v: 'selected' as const, icon: UserCheck, label: 'Sélection' },
-                                    ].map(opt => (
-                                        <button key={opt.v} onClick={() => setStoryVisibility(opt.v)}
-                                            className={cn("flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all border",
-                                                storyVisibility === opt.v ? "bg-amber-500/20 border-amber-500/30 text-amber-300" : "bg-white/5 border-white/10 text-slate-400 hover:border-white/20")}>
-                                            <opt.icon className="w-3.5 h-3.5" />{opt.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                            
-                            {/* Selected contacts */}
-                            {storyVisibility === 'selected' && (
-                                <div className="space-y-2 bg-black/20 p-3 rounded-xl border border-white/5">
-                                    <Input value={contactSearch} onChange={e => setContactSearch(e.target.value)}
-                                        placeholder="Rechercher..." className="bg-white/5 border-white/10 text-white h-8 rounded-lg text-xs" />
-                                    <div className="max-h-32 overflow-y-auto space-y-1 scrollbar-hide">
-                                        {filteredContacts.map(c => (
-                                            <button key={c.id} onClick={() => setSelectedContacts(prev =>
-                                                prev.includes(c.id) ? prev.filter(x => x !== c.id) : [...prev, c.id]
-                                            )}
-                                                className={cn("w-full flex items-center gap-2 p-2 rounded-lg text-xs transition-all",
-                                                    selectedContacts.includes(c.id) ? "bg-amber-500/10 border border-amber-500/20" : "bg-white/[0.02] border border-white/5 hover:bg-white/[0.04]")}>
-                                                <div className={cn("w-3 h-3 rounded-full flex items-center justify-center", selectedContacts.includes(c.id) ? "bg-amber-500" : "bg-slate-700")}>
-                                                    {selectedContacts.includes(c.id) && <div className="w-1.5 h-1.5 bg-[#1a1d27] rounded-full" />}
-                                                </div>
-                                                <span className="text-slate-300">{c.first_name} {c.last_name}</span>
-                                                <span className="text-[9px] text-slate-500 ml-auto">{c.role}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <p className="text-[9px] text-slate-500 text-right">{selectedContacts.length} personne(s) sélectionnée(s)</p>
-                                </div>
-                            )}
-
-                            <Button onClick={() => publishStory(false)} disabled={publishingStory || (!storyText.trim() && !storyImage)}
-                                className="w-full h-11 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-xl shadow-lg shadow-amber-600/20">
-                                {publishingStory ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
-                                Publier la story
-                            </Button>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            {/* ═══ POSTS SECTION ═══ */}
-            <div className="pt-4 border-t border-white/5">
-                <div className="flex items-center justify-between mb-4">
-                    <div>
-                        <h2 className="text-lg font-black bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent">
-                            📢 Actualités
-                        </h2>
-                        <p className="text-[10px] text-slate-500">{posts.length} publication(s)</p>
+    {/* ═══ NEW STORY MODAL ═══ */}
+    <AnimatePresence>
+        {showNewStory && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 pb-28 sm:pb-4"
+                onClick={() => setShowNewStory(false)}>
+                <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }}
+                    className="bg-[#1a1d27] rounded-2xl border border-white/10 max-w-md w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+                    onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-amber-300">✨ Nouvelle Story</h3>
+                        <button onClick={() => setShowNewStory(false)}><X className="w-4 h-4 text-slate-400" /></button>
                     </div>
-                    <Button size="sm" onClick={() => setShowNewPost(true)}
-                        className="bg-gradient-to-r from-amber-600 to-orange-600 text-xs rounded-xl shadow-lg shadow-amber-600/20">
-                        <Plus className="w-3.5 h-3.5 mr-1" /> Publier
-                    </Button>
-                </div>
-                
-                <div className="flex gap-2 mb-3">
-                    <button onClick={() => setActivePostTab('general')} className={cn("px-3 py-1.5 rounded-full text-xs font-medium transition-all", activePostTab === 'general' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-white/5 text-slate-400 hover:bg-white/10 border border-white/5')}>📝 Fil général</button>
-                    {(userRole === 'admin' || posts.some(p => p.category === 'admin_actus')) && (
-                        <button onClick={() => setActivePostTab('officiel')} className={cn("px-3 py-1.5 rounded-full text-xs font-medium transition-all", activePostTab === 'officiel' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-white/5 text-slate-400 hover:bg-white/10 border border-white/5')}>📣 Annonces officelles</button>
+                    
+                    {userRole === 'student' && (
+                        <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+                                <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
+                            </div>
+                            <p className="text-xs text-amber-200/80">Coût de publication : <strong className="text-amber-400">1 Sky Point</strong></p>
+                        </div>
                     )}
-                </div>
 
-                {/* New Post — Bottom Sheet Modal (mobile-safe) */}
-                <AnimatePresence>
-                    {showNewPost && (
-                        <>
-                            {/* Backdrop */}
-                            <motion.div
-                                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                                className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm"
-                                onClick={() => setShowNewPost(false)}
+                    {/* Image & Text */}
+                    {storyImagePreview ? (
+                        <div className="space-y-3">
+                            <div className="relative rounded-xl overflow-hidden bg-black/40 flex items-center justify-center">
+                                <img src={storyImagePreview} alt="" className="w-full max-h-48 object-contain" />
+                                <button onClick={() => { setStoryImage(null); setStoryImagePreview(''); }}
+                                    className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-red-500 transition-colors">
+                                    <X className="w-4 h-4 text-white" />
+                                </button>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] text-slate-400 mb-1">Légende (optionnelle)</label>
+                                <Input value={caption} onChange={e => setCaption(e.target.value)} 
+                                    placeholder="Ajouter une légende..." 
+                                    className="bg-white/5 border-white/10 text-white h-10" 
+                                />
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            <textarea value={storyText} onChange={e => setStoryText(e.target.value)}
+                                placeholder="Que voulez-vous raconter ?" rows={3}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-500 resize-none focus:outline-none focus:border-amber-500/30" 
                             />
-                            {/* Sheet */}
-                            <motion.div
-                                initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-                                transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-                                className="fixed left-0 right-0 bottom-0 z-[90] rounded-t-3xl bg-[#0f1117] border-t border-amber-500/20 shadow-2xl"
-                                style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 5.5rem)' }}
-                            >
-                                {/* Handle */}
-                                <div className="flex justify-center pt-3 pb-1">
-                                    <div className="w-10 h-1 rounded-full bg-white/20" />
-                                </div>
+                            <div className="relative">
+                                <label className="flex items-center justify-center gap-2 w-full py-3 bg-white/5 hover:bg-white/10 border border-dashed border-white/10 hover:border-amber-500/30 rounded-xl cursor-pointer transition">
+                                    <ImageIcon className="w-4 h-4 text-slate-400" />
+                                    <span className="text-xs text-slate-400">Ajouter une image (optionnel)</span>
+                                    <input type="file" accept="image/*" className="hidden" onChange={handleStoryImageSelect} />
+                                </label>
+                            </div>
+                        </div>
+                    )}
 
-                                <div className="px-4 pt-2 pb-4 space-y-3">
+                    {storyImagePreview && (
+                        <div className="relative">
+                            <label className="flex items-center justify-center gap-2 w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl cursor-pointer transition">
+                                <ImageIcon className="w-3.5 h-3.5 text-slate-400" />
+                                <span className="text-xs text-slate-400">Changer l&apos;image</span>
+                                <input type="file" accept="image/*" className="hidden" onChange={handleStoryImageSelect} />
+                            </label>
+                        </div>
+                    )}
+
+                    {/* Visibility */}
+                    <div>
+                        <p className="text-[10px] text-slate-400 mb-2">👁️ Visibilité</p>
+                        <div className="flex gap-2">
+                            {[
+                                { v: 'public' as const, icon: Globe, label: 'Public' },
+                                { v: 'friends' as const, icon: Users, label: 'Amis' },
+                                { v: 'selected' as const, icon: UserCheck, label: 'Sélection' },
+                            ].map(opt => (
+                                <button key={opt.v} onClick={() => setStoryVisibility(opt.v)}
+                                    className={cn("flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all border",
+                                        storyVisibility === opt.v ? "bg-amber-500/20 border-amber-500/30 text-amber-300" : "bg-white/5 border-white/10 text-slate-400 hover:border-white/20")}>
+                                    <opt.icon className="w-3.5 h-3.5" />{opt.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    {/* Selected contacts */}
+                    {storyVisibility === 'selected' && (
+                        <div className="space-y-2 bg-black/20 p-3 rounded-xl border border-white/5">
+                            <Input value={contactSearch} onChange={e => setContactSearch(e.target.value)}
+                                placeholder="Rechercher..." className="bg-white/5 border-white/10 text-white h-8 rounded-lg text-xs" />
+                            <div className="max-h-32 overflow-y-auto space-y-1 scrollbar-hide">
+                                {filteredContacts.map(c => (
+                                    <button key={c.id} onClick={() => setSelectedContacts(prev =>
+                                        prev.includes(c.id) ? prev.filter(x => x !== c.id) : [...prev, c.id]
+                                    )}
+                                        className={cn("w-full flex items-center gap-2 p-2 rounded-lg text-xs transition-all",
+                                            selectedContacts.includes(c.id) ? "bg-amber-500/10 border border-amber-500/20" : "bg-white/[0.02] border border-white/5 hover:bg-white/[0.04]")}>
+                                        <div className={cn("w-3 h-3 rounded-full flex items-center justify-center", selectedContacts.includes(c.id) ? "bg-amber-500" : "bg-slate-700")}>
+                                            {selectedContacts.includes(c.id) && <div className="w-1.5 h-1.5 bg-[#1a1d27] rounded-full" />}
+                                        </div>
+                                        <span className="text-slate-300">{c.first_name} {c.last_name}</span>
+                                        <span className="text-[9px] text-slate-500 ml-auto">{c.role}</span>
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-[9px] text-slate-500 text-right">{selectedContacts.length} personne(s) sélectionnée(s)</p>
+                        </div>
+                    )}
+
+                    <Button onClick={() => publishStory(false)} disabled={publishingStory || (!storyText.trim() && !storyImage)}
+                        className="w-full h-11 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-xl shadow-lg shadow-amber-600/20">
+                        {publishingStory ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+                        Publier la story
+                    </Button>
+                </motion.div>
+            </motion.div>
+        )}
+    </AnimatePresence>
+
+    {/* ═══ POSTS SECTION ═══ */}
+    <div className="pt-4 border-t border-white/5 pb-32">
+        <div className="flex items-center justify-between mb-4">
+            <div>
+                <h2 className="text-lg font-black bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent">
+                    📢 Actualités
+                </h2>
+                <p className="text-[10px] text-slate-500">{posts.length} publication(s)</p>
+            </div>
+            <Button size="sm" onClick={() => setShowNewPost(true)}
+                className="bg-gradient-to-r from-amber-600 to-orange-600 text-xs rounded-xl shadow-lg shadow-amber-600/20">
+                <Plus className="w-3.5 h-3.5 mr-1" /> Publier
+            </Button>
+        </div>
+        
+        <div className="flex gap-2 mb-3">
+            <button onClick={() => setActivePostTab('general')} className={cn("px-3 py-1.5 rounded-full text-xs font-medium transition-all", activePostTab === 'general' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-white/5 text-slate-400 hover:bg-white/10 border border-white/5')}>📝 Fil général</button>
+            {(userRole === 'admin' || posts.some(p => p.category === 'admin_actus')) && (
+                <button onClick={() => setActivePostTab('officiel')} className={cn("px-3 py-1.5 rounded-full text-xs font-medium transition-all", activePostTab === 'officiel' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-white/5 text-slate-400 hover:bg-white/10 border border-white/5')}>📣 Annonces officielles</button>
+            )}
+        </div>
+
+        {/* New Post — Bottom Sheet Modal (mobile-safe) */}
+        <AnimatePresence>
+            {showNewPost && (
+                <>
+                    {/* Backdrop */}
+                    <motion.div
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[140] bg-black/70 backdrop-blur-sm"
+                        onClick={() => setShowNewPost(false)}
+                    />
+                    {/* Sheet */}
+                    <motion.div
+                        initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+                        transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+                        className="fixed left-0 right-0 bottom-0 z-[150] rounded-t-3xl bg-[#0f1117] border-t border-amber-500/20 shadow-2xl"
+                        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 6.5rem)' }}
+                    >
+                        {/* Handle */}
+                        <div className="flex justify-center pt-3 pb-1">
+                            <div className="w-10 h-1 rounded-full bg-white/20" />
+                        </div>
+
+                        <div className="px-4 pt-2 pb-4 space-y-3">
                                     <div className="flex items-center justify-between">
                                         <h3 className="text-sm font-bold text-amber-300">
                                             {activePostTab === 'officiel' && userRole === 'admin' ? "📣 Annonce officielle" : "📢 Nouvelle publication"}
@@ -1691,10 +1696,10 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole, onSkyUpd
             <AnimatePresence>
                 {editingPost && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[70] bg-black/70 flex items-end sm:items-center justify-center p-4"
+                        className="fixed inset-0 z-[150] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 pb-28 sm:pb-4"
                         onClick={() => setEditingPost(null)}>
                         <motion.div initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}
-                            className="bg-[#0f1117] border border-indigo-500/20 rounded-2xl w-full max-w-lg p-5 shadow-2xl"
+                            className="bg-[#0f1117] border border-indigo-500/30 rounded-2xl w-full max-w-lg p-5 shadow-2xl relative z-10"
                             onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="font-bold text-white flex items-center gap-2">
@@ -1715,7 +1720,7 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole, onSkyUpd
                                     Annuler
                                 </button>
                                 <button onClick={saveEditPost} disabled={savingEdit || !editContent.trim()}
-                                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50 hover:from-indigo-500 hover:to-violet-500 transition-all">
+                                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50 hover:from-indigo-500 hover:to-violet-500 transition-all shadow-lg shadow-indigo-600/30">
                                     {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Edit2 className="w-4 h-4" /> Enregistrer</>}
                                 </button>
                             </div>

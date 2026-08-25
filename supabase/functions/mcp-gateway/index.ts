@@ -76,6 +76,23 @@ function mcpSuccess(id: McpRequest['id'], result: unknown): McpResponse {
     return { jsonrpc: '2.0', result, id };
 }
 
+function normalizeDayOfWeek(day: unknown): number {
+    if (typeof day === 'number') {
+        return Math.min(Math.max(1, Math.round(day)), 7);
+    }
+    const str = String(day || '').trim().toLowerCase();
+    const map: Record<string, number> = {
+        '1': 1, 'lundi': 1, 'mon': 1, 'monday': 1,
+        '2': 2, 'mardi': 2, 'tue': 2, 'tuesday': 2,
+        '3': 3, 'mercredi': 3, 'wed': 3, 'wednesday': 3,
+        '4': 4, 'jeudi': 4, 'thu': 4, 'thursday': 4,
+        '5': 5, 'vendredi': 5, 'fri': 5, 'friday': 5,
+        '6': 6, 'samedi': 6, 'sat': 6, 'saturday': 6,
+        '7': 7, 'dimanche': 7, 'sun': 7, 'sunday': 7, '0': 7,
+    };
+    return map[str] || 1;
+}
+
 // ── Définition des outils MCP ──────────────────────────────────────────────
 const MCP_TOOLS = [
     {
@@ -404,14 +421,35 @@ const MCP_TOOLS = [
     },
     {
         name: 'list_schedule',
-        description: 'Consulter l\'emploi du temps d\'une classe',
+        description: 'Consulter l\'emploi du temps d\'une classe ou d\'un professeur',
         permission: 'read:schedule',
         inputSchema: {
             type: 'object',
             properties: {
-                class_id: { type: 'string' },
-                day_of_week: { type: 'string' },
+                classroom_id: { type: 'string', description: 'UUID de la classe' },
+                class_id: { type: 'string', description: 'UUID de la classe (alias)' },
+                day_of_week: { type: 'string', description: 'Jour de la semaine (1-7 ou nom du jour)' },
+                subject_id: { type: 'string', description: 'UUID de la matière' },
             },
+        },
+    },
+    {
+        name: 'create_schedule_slot',
+        description: 'Créer un nouveau créneau dans l\'emploi du temps d\'une classe',
+        permission: 'write:schedule',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                classroom_id: { type: 'string', description: 'UUID de la classe' },
+                class_id: { type: 'string', description: 'UUID de la classe (alias)' },
+                subject_id: { type: 'string', description: 'UUID de la matière' },
+                day_of_week: { type: 'string', description: 'Jour de la semaine (1-7 ou "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")' },
+                start_time: { type: 'string', description: 'Heure de début (ex: "08:00")' },
+                end_time: { type: 'string', description: 'Heure de fin (ex: "10:00")' },
+                room: { type: 'string', description: 'Salle de cours (optionnel, ex: "Salle A1")' },
+                teacher_id: { type: 'string', description: 'UUID du professeur (optionnel)' },
+            },
+            required: ['subject_id', 'day_of_week', 'start_time', 'end_time'],
         },
     },
     {
@@ -421,13 +459,142 @@ const MCP_TOOLS = [
         inputSchema: {
             type: 'object',
             properties: {
-                classroom_id: { type: 'string' },
-                subject_id: { type: 'string' },
-                day_of_week: { type: 'string' },
-                start_time: { type: 'string' },
-                end_time: { type: 'string' },
+                slot_id: { type: 'string', description: 'UUID du créneau si modification' },
+                classroom_id: { type: 'string', description: 'UUID de la classe' },
+                subject_id: { type: 'string', description: 'UUID de la matière' },
+                day_of_week: { type: 'string', description: 'Jour de la semaine (1-7 ou nom)' },
+                start_time: { type: 'string', description: 'Heure de début' },
+                end_time: { type: 'string', description: 'Heure de fin' },
+                room: { type: 'string', description: 'Salle de cours' },
+                teacher_id: { type: 'string', description: 'UUID du professeur' },
             },
-            required: ['classroom_id', 'subject_id', 'day_of_week', 'start_time', 'end_time'],
+            required: ['subject_id', 'day_of_week', 'start_time', 'end_time'],
+        },
+    },
+    {
+        name: 'update_schedule_slot',
+        description: 'Modifier un créneau existant de l\'emploi du temps',
+        permission: 'write:schedule',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                slot_id: { type: 'string', description: 'UUID du créneau (timetable_slots)' },
+                classroom_id: { type: 'string', description: 'Nouvelle classe' },
+                subject_id: { type: 'string', description: 'Nouvelle matière' },
+                day_of_week: { type: 'string', description: 'Nouveau jour (1-7 ou nom du jour)' },
+                start_time: { type: 'string', description: 'Nouvelle heure de début (ex: "08:00")' },
+                end_time: { type: 'string', description: 'Nouvelle heure de fin (ex: "10:00")' },
+                room: { type: 'string', description: 'Nouvelle salle' },
+                teacher_id: { type: 'string', description: 'Nouveau professeur' },
+            },
+            required: ['slot_id'],
+        },
+    },
+    {
+        name: 'delete_schedule_slot',
+        description: 'Supprimer un créneau de l\'emploi du temps',
+        permission: 'write:schedule',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                slot_id: { type: 'string', description: 'UUID du créneau à supprimer' },
+            },
+            required: ['slot_id'],
+        },
+    },
+    {
+        name: 'bulk_create_schedule',
+        description: 'Créer en masse plusieurs créneaux d\'emploi du temps pour une classe en un seul appel',
+        permission: 'write:schedule',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                classroom_id: { type: 'string', description: 'UUID de la classe' },
+                slots: {
+                    type: 'array',
+                    description: 'Liste des créneaux : [{ classroom_id, subject_id, day_of_week, start_time, end_time, room, teacher_id }]',
+                },
+            },
+            required: ['slots'],
+        },
+    },
+
+    // ── BIBLIOTHÈQUE NUMÉRIQUE & LIVRES ──────────────────────────────
+    {
+        name: 'publish_library_item',
+        description: 'Publier un livre, cours, document ou ressource pédagogique dans la Bibliothèque Numérique de l\'établissement',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                title: { type: 'string', description: 'Titre du livre ou document' },
+                description: { type: 'string', description: 'Description du contenu' },
+                category: {
+                    type: 'string',
+                    enum: ['cours', 'exercice', 'corrige', 'annale', 'guide', 'memoire', 'support', 'general'],
+                    description: 'Catégorie dans la bibliothèque (défaut: "cours")',
+                },
+                content: { type: 'string', description: 'Contenu Markdown complet du livre' },
+                file_url: { type: 'string', description: 'URL du document hébergé (optionnel)' },
+                file_type: {
+                    type: 'string',
+                    enum: ['doc', 'pdf', 'text', 'video', 'audio', 'image', 'link', 'other'],
+                    description: 'Type de fichier (défaut: "doc")',
+                },
+                subject_id: { type: 'string', description: 'UUID de la matière associée (optionnel)' },
+                classroom_id: { type: 'string', description: 'UUID de la classe ciblée (optionnel)' },
+                is_public: { type: 'boolean', description: 'Rendre le livre accessible à tous (défaut: true)' },
+            },
+            required: ['title'],
+        },
+    },
+    {
+        name: 'compile_curriculum_to_book',
+        description: 'Compiler tous les chapitres, leçons et exercices d\'une matière en un livre complet structuré et le publier automatiquement dans la Bibliothèque Numérique de l\'école',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                subject_id: { type: 'string', description: 'UUID de la matière à compiler en livre' },
+                title: { type: 'string', description: 'Titre personnalisé du livre (défaut: "Livre Complet de [Matière]")' },
+                description: { type: 'string', description: 'Description et préface du livre compilé' },
+                include_exercises: { type: 'boolean', description: 'Inclure les exercices et quiz d\'auto-évaluation (défaut: true)' },
+                category: {
+                    type: 'string',
+                    enum: ['cours', 'guide', 'annale', 'general'],
+                    description: 'Catégorie dans la bibliothèque (défaut: "cours")',
+                },
+                publish_to_library: { type: 'boolean', description: 'Publier directement dans library_items (défaut: true)' },
+                is_public: { type: 'boolean', description: 'Rendre le livre public dans la bibliothèque (défaut: true)' },
+            },
+            required: ['subject_id'],
+        },
+    },
+    {
+        name: 'list_library_items',
+        description: 'Consulter et rechercher les livres et documents dans la Bibliothèque Numérique de l\'établissement',
+        permission: 'read:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                category: { type: 'string', description: 'Filtrer par catégorie' },
+                subject_id: { type: 'string', description: 'Filtrer par matière' },
+                classroom_id: { type: 'string', description: 'Filtrer par classe' },
+                search: { type: 'string', description: 'Terme de recherche' },
+                limit: { type: 'number', description: 'Nombre max de résultats (défaut: 50)' },
+            },
+        },
+    },
+    {
+        name: 'delete_library_item',
+        description: 'Supprimer un livre ou document de la Bibliothèque Numérique',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                item_id: { type: 'string', description: 'UUID du document/livre à supprimer' },
+            },
+            required: ['item_id'],
         },
     },
 
@@ -1469,93 +1636,423 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
                                             duration_minutes: exData.duration_minutes || 10,
                                             max_score: exData.max_score || 20,
                                             created_by_ai: true,
-                                            ai_agent_name: agent.agentName,
-                                        });
-                                    if (!exErr) summary.exercises++;
-                                }
-                            }
-                        }
-                    }
-                }
+                                            ai_agent_name: agent.agen        // ── CREATE SCHEDULE SLOT ─────────────────────────────────────────────
+        case 'create_schedule_slot': {
+            const targetOrgId = agent.isSuperadmin ? ((args.org_id as string) || agent.orgId) : agent.orgId;
+            if (!targetOrgId) throw { code: -32602, message: 'organization_id requis' };
+            const classId = (args.classroom_id || args.class_id) as string;
+            if (!classId || !args.subject_id || !args.day_of_week || !args.start_time || !args.end_time) {
+                throw { code: -32602, message: '"classroom_id", "subject_id", "day_of_week", "start_time" et "end_time" sont requis' };
             }
+            const dayNum = normalizeDayOfWeek(args.day_of_week);
 
+            const { data, error } = await supabase
+                .from('timetable_slots')
+                .insert({
+                    organization_id: targetOrgId,
+                    classroom_id: classId,
+                    subject_id: args.subject_id as string,
+                    day_of_week: dayNum,
+                    start_time: String(args.start_time).trim(),
+                    end_time: String(args.end_time).trim(),
+                    room: args.room ? String(args.room).trim() : null,
+                    teacher_id: args.teacher_id ? String(args.teacher_id).trim() : null,
+                })
+                .select('*, classrooms:classroom_id(name), subjects:subject_id(name)')
+                .single();
+            if (error) throw { code: -32002, message: error.message };
+
+            const dayNames = ['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
             return {
                 success: true,
-                subject_id: subjectId,
-                summary,
-                message: `⚡ Création en masse terminée : ${summary.chapters} chapitre(s), ${summary.lessons} leçon(s), ${summary.exercises} exercice(s)`,
+                slot: data,
+                message: `✅ Créneau créé : ${dayNames[dayNum] || `Jour ${dayNum}`} de ${args.start_time} à ${args.end_time}${args.room ? ` (${args.room})` : ''}`,
             };
         }
 
-        // ── LIST GRADES ──────────────────────────────────────────────────────
-        case 'list_grades': {
-            const targetOrgId = (args.org_id as string) || agent.orgId;
-            let query = supabase.from('grades').select('*').limit(50);
-            if (targetOrgId) query = query.eq('organization_id', targetOrgId);
-            if (args.student_id) query = query.eq('student_id', args.student_id as string);
-            const { data, error } = await query;
-            if (error) throw { code: -32002, message: error.message };
-            return { grades: data || [], total: (data || []).length };
-        }
-
-        // ── CREATE GRADE ─────────────────────────────────────────────────────
-        case 'create_grade': {
-            const targetOrgId = (args.org_id as string) || agent.orgId;
-            const { data, error } = await supabase
-                .from('grades')
-                .insert({
-                    organization_id: targetOrgId,
-                    student_id: args.student_id,
-                    score: Number(args.score),
-                    max_score: Number(args.max_score || 20),
-                    title: args.evaluation_title || 'Évaluation',
-                    type: args.period || 'Trimestre 1',
-                })
-                .select()
-                .single();
-            if (error) throw { code: -32002, message: error.message };
-            return { success: true, grade: data, message: `✅ Note enregistrée` };
-        }
-
-        // ── LIST ATTENDANCE ──────────────────────────────────────────────────
-        case 'list_attendance': {
-            const targetOrgId = (args.org_id as string) || agent.orgId;
-            let query = supabase.from('attendances').select('*').limit(50);
-            if (targetOrgId) query = query.eq('organization_id', targetOrgId);
-            if (args.date) query = query.eq('date', args.date as string);
-            const { data, error } = await query;
-            if (error) throw { code: -32002, message: error.message };
-            return { attendances: data || [], total: (data || []).length };
-        }
-
-        // ── LIST SCHEDULE ────────────────────────────────────────────────────
-        case 'list_schedule': {
-            const targetOrgId = (args.org_id as string) || agent.orgId;
-            let query = supabase.from('timetables').select('*');
-            if (targetOrgId) query = query.eq('organization_id', targetOrgId);
-            if (args.class_id) query = query.eq('classroom_id', args.class_id as string);
-            const { data, error } = await query;
-            if (error) throw { code: -32002, message: error.message };
-            return { schedule: data || [], total: (data || []).length };
-        }
-
-        // ── UPDATE SCHEDULE ──────────────────────────────────────────────────
+        // ── UPDATE SCHEDULE (ALIASED TO CREATE / UPDATE) ──────────────────────
         case 'update_schedule': {
-            const targetOrgId = (args.org_id as string) || agent.orgId;
+            const targetOrgId = agent.isSuperadmin ? ((args.org_id as string) || agent.orgId) : agent.orgId;
+            if (args.slot_id) {
+                const dayNum = args.day_of_week ? normalizeDayOfWeek(args.day_of_week) : undefined;
+                const updatePayload: Record<string, any> = {};
+                if (args.classroom_id || args.class_id) updatePayload.classroom_id = args.classroom_id || args.class_id;
+                if (args.subject_id) updatePayload.subject_id = args.subject_id;
+                if (dayNum !== undefined) updatePayload.day_of_week = dayNum;
+                if (args.start_time) updatePayload.start_time = String(args.start_time).trim();
+                if (args.end_time) updatePayload.end_time = String(args.end_time).trim();
+                if (args.room !== undefined) updatePayload.room = args.room ? String(args.room).trim() : null;
+                if (args.teacher_id !== undefined) updatePayload.teacher_id = args.teacher_id || null;
+
+                const { data, error } = await supabase
+                    .from('timetable_slots')
+                    .update(updatePayload)
+                    .eq('id', args.slot_id as string)
+                    .select('*, classrooms:classroom_id(name), subjects:subject_id(name)')
+                    .single();
+                if (error) throw { code: -32002, message: error.message };
+                return { success: true, slot: data, message: `✅ Créneau d'emploi du temps modifié` };
+            }
+
+            // Si pas de slot_id -> insérer
+            const classId = (args.classroom_id || args.class_id) as string;
+            const dayNum = normalizeDayOfWeek(args.day_of_week);
             const { data, error } = await supabase
-                .from('timetables')
+                .from('timetable_slots')
                 .insert({
                     organization_id: targetOrgId,
-                    classroom_id: args.classroom_id,
+                    classroom_id: classId,
                     subject_id: args.subject_id,
-                    day_of_week: args.day_of_week,
-                    start_time: args.start_time,
-                    end_time: args.end_time,
+                    day_of_week: dayNum,
+                    start_time: String(args.start_time).trim(),
+                    end_time: String(args.end_time).trim(),
+                    room: args.room ? String(args.room).trim() : null,
+                    teacher_id: args.teacher_id || null,
                 })
                 .select()
                 .single();
             if (error) throw { code: -32002, message: error.message };
             return { success: true, schedule: data, message: `✅ Emploi du temps mis à jour` };
+        }
+
+        // ── UPDATE SCHEDULE SLOT ──────────────────────────────────────────────
+        case 'update_schedule_slot': {
+            if (!args.slot_id) throw { code: -32602, message: 'slot_id requis' };
+            const updatePayload: Record<string, any> = {};
+            if (args.classroom_id || args.class_id) updatePayload.classroom_id = args.classroom_id || args.class_id;
+            if (args.subject_id) updatePayload.subject_id = args.subject_id;
+            if (args.day_of_week !== undefined) updatePayload.day_of_week = normalizeDayOfWeek(args.day_of_week);
+            if (args.start_time) updatePayload.start_time = String(args.start_time).trim();
+            if (args.end_time) updatePayload.end_time = String(args.end_time).trim();
+            if (args.room !== undefined) updatePayload.room = args.room ? String(args.room).trim() : null;
+            if (args.teacher_id !== undefined) updatePayload.teacher_id = args.teacher_id || null;
+
+            const { data, error } = await supabase
+                .from('timetable_slots')
+                .update(updatePayload)
+                .eq('id', args.slot_id as string)
+                .select('*, classrooms:classroom_id(name), subjects:subject_id(name)')
+                .single();
+            if (error) throw { code: -32002, message: error.message };
+            return { success: true, slot: data, message: `✅ Créneau d'emploi du temps mis à jour` };
+        }
+
+        // ── DELETE SCHEDULE SLOT ──────────────────────────────────────────────
+        case 'delete_schedule_slot': {
+            if (!args.slot_id) throw { code: -32602, message: 'slot_id requis' };
+            const { error } = await supabase.from('timetable_slots').delete().eq('id', args.slot_id as string);
+            if (error) throw { code: -32002, message: error.message };
+            return { success: true, message: `🗑️ Créneau d'emploi du temps supprimé` };
+        }
+
+        // ── BULK CREATE SCHEDULE ──────────────────────────────────────────────
+        case 'bulk_create_schedule': {
+            const targetOrgId = agent.isSuperadmin ? ((args.org_id as string) || agent.orgId) : agent.orgId;
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+            const defaultClassId = (args.classroom_id || args.class_id) as string;
+            const rawSlots = Array.isArray(args.slots) ? args.slots : [];
+            if (rawSlots.length === 0) throw { code: -32602, message: 'Le tableau "slots" ne peut pas être vide' };
+
+            const toInsert = rawSlots.map((s: any) => ({
+                organization_id: targetOrgId,
+                classroom_id: s.classroom_id || s.class_id || defaultClassId,
+                subject_id: s.subject_id,
+                day_of_week: normalizeDayOfWeek(s.day_of_week),
+                start_time: String(s.start_time).trim(),
+                end_time: String(s.end_time).trim(),
+                room: s.room ? String(s.room).trim() : null,
+                teacher_id: s.teacher_id || null,
+            })).filter((s: any) => s.classroom_id && s.subject_id);
+
+            const { data, error } = await supabase.from('timetable_slots').insert(toInsert).select();
+            if (error) throw { code: -32002, message: error.message };
+            return {
+                success: true,
+                created_count: (data || []).length,
+                slots: data || [],
+                message: `⚡ Emploi du temps créé avec succès (${(data || []).length} créneau(x) configuré(s))`,
+            };
+        }
+
+        // ── PUBLISH LIBRARY ITEM ──────────────────────────────────────────────
+        case 'publish_library_item':
+        case 'create_library_book': {
+            const targetOrgId = agent.isSuperadmin ? ((args.org_id as string) || agent.orgId) : agent.orgId;
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+            if (!args.title) throw { code: -32602, message: 'title requis' };
+
+            const category = (args.category as string) || 'cours';
+            const fileType = (args.file_type as string) || 'doc';
+            const contentText = args.content ? String(args.content).trim() : null;
+            let fileUrl = (args.file_url as string) || null;
+            let fileSize = Number(args.file_size) || (contentText ? contentText.length : 0);
+
+            // Si du contenu textuel est fourni sans URL de fichier, créer un Data URI UTF-8 ou stocker tel quel
+            if (contentText && !fileUrl) {
+                fileUrl = `data:text/markdown;charset=utf-8,${encodeURIComponent(contentText)}`;
+            }
+
+            const { data, error } = await supabase
+                .from('library_items')
+                .insert({
+                    organization_id: targetOrgId,
+                    title: String(args.title).trim(),
+                    description: args.description ? String(args.description).trim() : null,
+                    category,
+                    file_type: fileType,
+                    file_url: fileUrl,
+                    file_size: fileSize,
+                    subject_id: args.subject_id || null,
+                    classroom_id: args.classroom_id || null,
+                    uploaded_by: agent.id || null,
+                    is_public: args.is_public !== false,
+                    download_count: 0,
+                })
+                .select('*, subjects:subject_id(name), classrooms:classroom_id(name)')
+                .single();
+
+            if (error) throw { code: -32002, message: error.message };
+
+            return {
+                success: true,
+                item: data,
+                message: `📚 Document/Livre "${args.title}" publié avec succès dans la Bibliothèque Numérique (Catégorie: ${category})`,
+            };
+        }
+
+        // ── COMPILE CURRICULUM TO BOOK ────────────────────────────────────────
+        case 'compile_curriculum_to_book': {
+            const targetOrgId = agent.isSuperadmin ? ((args.org_id as string) || agent.orgId) : agent.orgId;
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+            if (!args.subject_id) throw { code: -32602, message: 'subject_id requis' };
+
+            // 1. Charger la matière
+            const { data: subject, error: subErr } = await supabase
+                .from('subjects')
+                .select('id, name, description, code, classroom_id, classrooms(name)')
+                .eq('id', args.subject_id as string)
+                .single();
+            if (subErr || !subject) throw { code: -32003, message: 'Matière introuvable' };
+
+            // 2. Charger l'organisation
+            const { data: org } = await supabase
+                .from('organizations')
+                .select('id, name, slug')
+                .eq('id', targetOrgId)
+                .single();
+            const orgName = org?.name || 'Établissement';
+
+            // 3. Charger tous les chapitres ordonnés
+            const { data: chapters, error: chErr } = await supabase
+                .from('chapters')
+                .select('id, title, description, position, created_at')
+                .eq('subject_id', args.subject_id as string)
+                .order('position', { ascending: true })
+                .order('created_at', { ascending: true });
+            if (chErr) throw { code: -32002, message: chErr.message };
+
+            const chapterList = chapters || [];
+            if (chapterList.length === 0) {
+                throw { code: -32002, message: `Aucun chapitre trouvé dans la matière "${subject.name}". Ajoutez des chapitres et leçons avant de compiler le livre.` };
+            }
+
+            // 4. Charger toutes les leçons
+            const chapterIds = chapterList.map(c => c.id);
+            const { data: lessons, error: lesErr } = await supabase
+                .from('lessons')
+                .select('id, chapter_id, title, content, position, estimated_minutes, created_at')
+                .in('chapter_id', chapterIds)
+                .order('position', { ascending: true })
+                .order('created_at', { ascending: true });
+            if (lesErr) throw { code: -32002, message: lesErr.message };
+
+            const lessonList = lessons || [];
+
+            // 5. Charger les exercices si demandés
+            let exerciseList: any[] = [];
+            if (args.include_exercises !== false) {
+                const { data: exercises } = await supabase
+                    .from('exercises')
+                    .select('id, chapter_id, lesson_id, title, type, questions, max_score, duration_minutes')
+                    .in('chapter_id', chapterIds);
+                exerciseList = exercises || [];
+            }
+
+            // 6. Compiler le livre complet en Markdown structuré
+            const bookTitle = args.title ? String(args.title).trim() : `Manuel Complet : ${subject.name}`;
+            const className = (subject.classrooms as any)?.name || '';
+            const bookDesc = args.description
+                ? String(args.description).trim()
+                : `Ouvrage pédagogique officiel compilé comprenant l'ensemble des ${chapterList.length} chapitres, ${lessonList.length} leçons et ${exerciseList.length} exercices de ${subject.name}.`;
+
+            let markdown = `# 📖 ${bookTitle}\n\n`;
+            markdown += `> **Établissement :** ${orgName}\n`;
+            if (className) markdown += `> **Classe / Niveau :** ${className}\n`;
+            markdown += `> **Matière :** ${subject.name} (${subject.code || 'DOC'})\n`;
+            markdown += `> **Date de compilation :** ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}\n`;
+            markdown += `> **Compilé par :** ${agent.agentName} (Sky Agent IA)\n\n`;
+            markdown += `---\n\n`;
+
+            // Préface / Introduction
+            markdown += `## 📌 Introduction & Objectifs Pédagogiques\n\n`;
+            markdown += `${bookDesc}\n\n`;
+            markdown += `---\n\n`;
+
+            // Table des matières
+            markdown += `## 📑 Table des Matières\n\n`;
+            chapterList.forEach((ch, ci) => {
+                markdown += `### Chapitre ${ci + 1} : ${ch.title}\n`;
+                const chLessons = lessonList.filter(l => l.chapter_id === ch.id);
+                if (chLessons.length === 0) {
+                    markdown += `*Aucune leçon rédigée pour le moment*\n`;
+                } else {
+                    chLessons.forEach((les, li) => {
+                        markdown += `- **${ci + 1}.${li + 1}** ${les.title} ${les.estimated_minutes ? `*(${les.estimated_minutes} min)*` : ''}\n`;
+                    });
+                }
+                markdown += `\n`;
+            });
+            markdown += `---\n\n`;
+
+            // Contenu intégral des chapitres et leçons
+            chapterList.forEach((ch, ci) => {
+                markdown += `# 📂 Chapitre ${ci + 1} : ${ch.title}\n\n`;
+                if (ch.description) {
+                    markdown += `*${ch.description}*\n\n`;
+                }
+
+                const chLessons = lessonList.filter(l => l.chapter_id === ch.id);
+                chLessons.forEach((les, li) => {
+                    markdown += `## 📄 Leçon ${ci + 1}.${li + 1} : ${les.title}\n\n`;
+                    if (les.estimated_minutes) {
+                        markdown += `⏱️ *Temps de lecture recommandé : ${les.estimated_minutes} minutes*\n\n`;
+                    }
+                    markdown += `${les.content || '*Contenu en cours de rédaction.*'}\n\n`;
+
+                    // Exercices de la leçon
+                    const lesExercises = exerciseList.filter(e => e.lesson_id === les.id);
+                    if (lesExercises.length > 0) {
+                        markdown += `### ✏️ Exercices d'application (Leçon ${ci + 1}.${li + 1})\n\n`;
+                        lesExercises.forEach((ex, ei) => {
+                            markdown += `#### Exercice ${ei + 1} : ${ex.title} *(Barème : ${ex.max_score || 20} pts)*\n`;
+                            const questions = Array.isArray(ex.questions) ? ex.questions : [];
+                            questions.forEach((q: any, qi: number) => {
+                                markdown += `**Question ${qi + 1} :** ${q.question || q.title || 'Question'}\n`;
+                                const opts = q.options || q.choices || [];
+                                if (opts.length > 0) {
+                                    opts.forEach((opt: string, oi: number) => {
+                                        const letter = String.fromCharCode(65 + oi);
+                                        markdown += `- [ ] **${letter})** ${opt}\n`;
+                                    });
+                                }
+                                if (q.correct_answer || q.answer) {
+                                    markdown += `> 💡 *Réponse attendue :* ${q.correct_answer || q.answer}\n`;
+                                }
+                                if (q.explanation) {
+                                    markdown += `> ℹ️ *Explication :* ${q.explanation}\n`;
+                                }
+                                markdown += `\n`;
+                            });
+                        });
+                    }
+                    markdown += `---\n\n`;
+                });
+
+                // Exercices globaux du chapitre
+                const chExercises = exerciseList.filter(e => e.chapter_id === ch.id && !e.lesson_id);
+                if (chExercises.length > 0) {
+                    markdown += `## 🎯 Évaluation & Bilan du Chapitre ${ci + 1}\n\n`;
+                    chExercises.forEach((ex, ei) => {
+                        markdown += `### Exercice Bilan ${ei + 1} : ${ex.title}\n`;
+                        const questions = Array.isArray(ex.questions) ? ex.questions : [];
+                        questions.forEach((q: any, qi: number) => {
+                            markdown += `**${qi + 1}.** ${q.question || q.title}\n`;
+                        });
+                        markdown += `\n`;
+                    });
+                    markdown += `---\n\n`;
+                }
+            });
+
+            // Conclusion du livre
+            markdown += `## 🏁 Conclusion du Cours\n\n`;
+            markdown += `Félicitations pour l'étude de l'ensemble de ce programme de **${subject.name}**. N'hésitez pas à poser vos questions à vos professeurs ou à **Dame SKY** pour des approfondissements.\n\n`;
+            markdown += `*Édité automatiquement sur la plateforme IziTeach par ${agent.agentName}.*\n`;
+
+            const wordCount = markdown.split(/\s+/).filter(Boolean).length;
+            const fileUrl = `data:text/markdown;charset=utf-8,${encodeURIComponent(markdown)}`;
+
+            let publishedItem: any = null;
+            if (args.publish_to_library !== false) {
+                const category = (args.category as string) || 'cours';
+                const { data: item, error: pubErr } = await supabase
+                    .from('library_items')
+                    .insert({
+                        organization_id: targetOrgId,
+                        title: bookTitle,
+                        description: bookDesc,
+                        category,
+                        file_type: 'doc',
+                        file_url: fileUrl,
+                        file_size: markdown.length,
+                        subject_id: subject.id,
+                        classroom_id: subject.classroom_id || null,
+                        uploaded_by: agent.id || null,
+                        is_public: args.is_public !== false,
+                        download_count: 0,
+                    })
+                    .select('*, subjects:subject_id(name), classrooms:classroom_id(name)')
+                    .single();
+
+                if (pubErr) throw { code: -32002, message: `Livre compilé mais erreur lors de la publication dans library_items : ${pubErr.message}` };
+                publishedItem = item;
+            }
+
+            return {
+                success: true,
+                book: {
+                    title: bookTitle,
+                    subject_name: subject.name,
+                    chapters_count: chapterList.length,
+                    lessons_count: lessonList.length,
+                    exercises_count: exerciseList.length,
+                    word_count: wordCount,
+                    size_bytes: markdown.length,
+                    library_item_id: publishedItem?.id || null,
+                },
+                markdown_excerpt: markdown.slice(0, 1500) + '\n\n[... Livre complet compilé]',
+                published_library_item: publishedItem,
+                message: `📚 Livre "${bookTitle}" compilé avec succès (${chapterList.length} chapitres, ${lessonList.length} leçons, ${exerciseList.length} exercices, ~${wordCount} mots) et publié dans la Bibliothèque Numérique !`,
+            };
+        }
+
+        // ── LIST LIBRARY ITEMS ────────────────────────────────────────────────
+        case 'list_library_items': {
+            const targetOrgId = (args.org_id as string) || agent.orgId;
+            const limit = Math.min(Number(args.limit) || 50, 100);
+            let query = supabase
+                .from('library_items')
+                .select('id, title, description, category, file_type, file_size, subject_id, classroom_id, download_count, is_public, created_at, subjects:subject_id(name), classrooms:classroom_id(name)')
+                .order('created_at', { ascending: false })
+                .limit(limit);
+
+            if (targetOrgId) query = query.eq('organization_id', targetOrgId);
+            if (args.category && args.category !== 'all') query = query.eq('category', args.category as string);
+            if (args.subject_id) query = query.eq('subject_id', args.subject_id as string);
+            if (args.classroom_id) query = query.eq('classroom_id', args.classroom_id as string);
+            if (args.search) query = query.ilike('title', `%${String(args.search).trim()}%`);
+
+            const { data, error } = await query;
+            if (error) throw { code: -32002, message: error.message };
+            return { items: data || [], total: (data || []).length };
+        }
+
+        // ── DELETE LIBRARY ITEM ───────────────────────────────────────────────
+        case 'delete_library_item': {
+            if (!args.item_id) throw { code: -32602, message: 'item_id requis' };
+            const { error } = await supabase.from('library_items').delete().eq('id', args.item_id as string);
+            if (error) throw { code: -32002, message: error.message };
+            return { success: true, message: `🗑️ Document/Livre supprimé de la Bibliothèque Numérique` };
         }
 
         // ── LIST EXAM PAPERS ──────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 
 export type SkyAgentRole = 'admin' | 'prof' | 'student';
 
@@ -15,6 +16,7 @@ export interface SkyMessage {
     id: string;
     role: 'user' | 'assistant';
     content: string;
+    thinking?: string;
     attachments?: SkyAttachment[];
     timestamp: Date;
 }
@@ -46,7 +48,55 @@ export function useSkyAgent(role: SkyAgentRole, context?: SkyAgentContext) {
     const [error, setError] = useState<string | null>(null);
     const [externalAgentActive, setExternalAgentActive] = useState(false);
     const [persona, setPersona] = useState('Dame SKY');
+    const [isChatActive, setIsChatActive] = useState(true);
+    const [allowedRoles, setAllowedRoles] = useState<string[]>(['admin', 'prof', 'student']);
     const sessionIdRef = useRef<string>(generateSessionId());
+
+    // Charger la configuration globale Dame SKY (activation/désactivation SuperAdmin)
+    useEffect(() => {
+        let isMounted = true;
+
+        async function fetchConfig() {
+            try {
+                const { data } = await supabase
+                    .from('dame_sky_config')
+                    .select('is_active, allowed_roles')
+                    .limit(1)
+                    .maybeSingle();
+
+                if (data && isMounted) {
+                    if (typeof data.is_active === 'boolean') {
+                        setIsChatActive(data.is_active);
+                    }
+                    if (Array.isArray(data.allowed_roles) && data.allowed_roles.length > 0) {
+                        setAllowedRoles(data.allowed_roles);
+                    }
+                }
+            } catch (e) {
+                console.warn('[useSkyAgent] Error fetching dame_sky_config:', e);
+            }
+        }
+
+        fetchConfig();
+
+        // Écouter les changements en temps réel
+        const channel = supabase
+            .channel('dame_sky_config_changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'dame_sky_config' }, (payload: any) => {
+                if (payload.new && typeof payload.new.is_active === 'boolean') {
+                    setIsChatActive(payload.new.is_active);
+                }
+                if (payload.new && Array.isArray(payload.new.allowed_roles)) {
+                    setAllowedRoles(payload.new.allowed_roles);
+                }
+            })
+            .subscribe();
+
+        return () => {
+            isMounted = false;
+            supabase.removeChannel(channel);
+        };
+    }, []);
 
     const sendMessage = useCallback(async (userText: string, attachments?: SkyAttachment[]) => {
         if ((!userText.trim() && (!attachments || attachments.length === 0)) || isLoading) return;
@@ -85,10 +135,23 @@ export function useSkyAgent(role: SkyAgentRole, context?: SkyAgentContext) {
                 throw new Error(data.error || 'Erreur de connexion avec Dame SKY');
             }
 
+            let replyContent = data.reply || '';
+            let thinkingContent = data.thinking || undefined;
+
+            // Extraire les balises <think>...</think> si le modèle renvoie du raisonnement DeepSeek/Claude
+            if (typeof replyContent === 'string' && replyContent.includes('<think>') && replyContent.includes('</think>')) {
+                const match = replyContent.match(/<think>([\s\S]*?)<\/think>/);
+                if (match) {
+                    thinkingContent = match[1].trim();
+                    replyContent = replyContent.replace(/<think>[\s\S]*?<\/think>/, '').trim();
+                }
+            }
+
             const assistantMsg: SkyMessage = {
                 id: `a_${Date.now()}`,
                 role: 'assistant',
-                content: data.reply,
+                content: replyContent,
+                thinking: thinkingContent,
                 timestamp: new Date(),
             };
             setMessages(prev => [...prev, assistantMsg]);
@@ -133,6 +196,8 @@ export function useSkyAgent(role: SkyAgentRole, context?: SkyAgentContext) {
     const closeChat = useCallback(() => setIsOpen(false), []);
     const toggleChat = useCallback(() => setIsOpen(p => !p), []);
 
+    const isRoleAllowed = allowedRoles.length === 0 || allowedRoles.includes(role);
+
     return {
         messages,
         isLoading,
@@ -140,6 +205,8 @@ export function useSkyAgent(role: SkyAgentRole, context?: SkyAgentContext) {
         error,
         externalAgentActive,
         persona,
+        isChatActive,
+        isRoleAllowed,
         sendMessage,
         clearSession,
         openChat,

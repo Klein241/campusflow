@@ -159,6 +159,37 @@ export function DameSkySuperadminManager() {
         loadData();
     }, [loadData]);
 
+    // Basculer instantanément l'état actif/inactif de la bulle Dame SKY
+    const handleToggleMasterActive = async (newActive: boolean) => {
+        setConfig(prev => ({ ...prev, is_active: newActive }));
+        try {
+            const { data: existing } = await supabase
+                .from('dame_sky_config')
+                .select('id')
+                .limit(1)
+                .maybeSingle();
+
+            if (existing?.id) {
+                await supabase
+                    .from('dame_sky_config')
+                    .update({ is_active: newActive, updated_at: new Date().toISOString() })
+                    .eq('id', existing.id);
+            } else {
+                await supabase
+                    .from('dame_sky_config')
+                    .insert([{ ...config, is_active: newActive }]);
+            }
+
+            if (newActive) {
+                toast.success('🟢 Bulle Dame SKY activée sur toute la plateforme !');
+            } else {
+                toast.info('🔴 Bulle Dame SKY désactivée (masquée pour tous les utilisateurs).');
+            }
+        } catch (e: any) {
+            toast.error('Erreur lors du changement d\'état de Dame SKY : ' + (e?.message || ''));
+        }
+    };
+
     // Sauvegarder la configuration globale
     const handleSaveConfig = async () => {
         setSaving(true);
@@ -353,6 +384,55 @@ export function DameSkySuperadminManager() {
                             {saving ? 'Enregistrement…' : 'Sauvegarder'}
                         </Button>
                     </div>
+                </div>
+            </div>
+
+            {/* ── Interrupteur Général SuperAdmin pour la Bulle Dame SKY ── */}
+            <div className={cn(
+                "p-5 rounded-2xl border transition-all shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4",
+                config.is_active
+                    ? "bg-gradient-to-r from-emerald-950/40 via-slate-900/60 to-emerald-950/30 border-emerald-500/40 shadow-emerald-500/10"
+                    : "bg-gradient-to-r from-rose-950/40 via-slate-900/60 to-rose-950/30 border-rose-500/40 shadow-rose-500/10"
+            )}>
+                <div className="flex items-center gap-3.5">
+                    <div className={cn(
+                        "w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border",
+                        config.is_active
+                            ? "bg-emerald-500/20 border-emerald-400/40 text-emerald-400"
+                            : "bg-rose-500/20 border-rose-400/40 text-rose-400"
+                    )}>
+                        <Crown className="w-6 h-6" />
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h3 className="text-base font-bold text-white">Bulle Flottante Dame SKY Chat</h3>
+                            <Badge className={cn(
+                                "text-xs font-semibold px-2.5 py-0.5",
+                                config.is_active
+                                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                                    : "bg-rose-500/20 text-rose-300 border-rose-500/30"
+                            )}>
+                                {config.is_active ? "🟢 Activée (Visible pour tous)" : "🔴 Désactivée (Masquée partout)"}
+                            </Badge>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                            {config.is_active
+                                ? "La bulle Dame SKY est disponible sur le Campus, les dashboards et la page d'accueil."
+                                : "La bulle flottante est totalement masquée et inaccessible pour tous les étudiants, professeurs et administrateurs."}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3 self-end sm:self-auto">
+                    <span className="text-xs font-medium text-slate-300">
+                        {config.is_active ? "Désactiver" : "Activer"}
+                    </span>
+                    <Switch
+                        id="dame-sky-master-toggle"
+                        checked={config.is_active}
+                        onCheckedChange={handleToggleMasterActive}
+                        className="data-[state=checked]:bg-emerald-500"
+                    />
                 </div>
             </div>
 
