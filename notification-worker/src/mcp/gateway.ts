@@ -780,8 +780,8 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
             description: 'Passerelle MCP IziTeach haute performance pour Claude Desktop, Manus IA, Cursor, ChatGPT et agents IA autonomes.',
             authentication: 'Bearer token header (Authorization: Bearer cf_live_...)',
             endpoints: {
-                jsonrpc: `POST https://campusflow-worker.kleintaptue1.workers.dev/mcp-gateway`,
-                sse: `GET https://campusflow-worker.kleintaptue1.workers.dev/mcp-gateway`,
+                jsonrpc: `POST https://iziteach-worker.kleintaptue1.workers.dev/mcp-gateway`,
+                sse: `GET https://iziteach-worker.kleintaptue1.workers.dev/mcp-gateway`,
             },
             supported_methods: ['tools/list', 'tools/call', 'initialize', 'ping'],
             tools_count: WORKER_MCP_TOOLS.length,
@@ -824,12 +824,23 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
             if (supRes.ok) {
                 const verified = await supRes.json() as any;
                 if (verified && verified.valid) {
+                    // ── DÉFENSE EN PROFONDEUR (WORKER SIDE) ──
+                    // La RPC Supabase retourne déjà is_superadmin=false pour les clés compromises,
+                    // mais on ajoute une 2ème couche : on filtre les permissions superadmin:*
+                    // si le serveur ne confirme pas explicitement is_superadmin=true.
+                    const verifiedPerms: string[] = verified.permissions || [];
+                    const isSuperFromServer = Boolean(verified.is_superadmin);
+                    // Si le serveur dit is_superadmin=false, on supprime toute permission superadmin:*
+                    // par sécurité (en cas de bug futur côté RPC)
+                    const sanitizedPerms = isSuperFromServer
+                        ? verifiedPerms
+                        : verifiedPerms.filter((p: string) => !p.startsWith('superadmin:'));
                     agentKey = {
                         id: verified.agent_id,
                         name: verified.agent_name,
                         organization_id: verified.organization_id,
-                        is_superadmin: verified.is_superadmin ? 1 : 0,
-                        permissions: JSON.stringify(verified.permissions || []),
+                        is_superadmin: isSuperFromServer ? 1 : 0,
+                        permissions: JSON.stringify(sanitizedPerms),
                         rate_limit_per_minute: verified.rate_limit_per_minute || 30,
                         bulk_action_threshold: verified.bulk_action_threshold || 10,
                     };
@@ -842,11 +853,19 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
         return json({ jsonrpc: '2.0', error: { code: -32001, message: 'Clé API invalide, inactive ou révoquée' }, id: null }, 401);
     }
 
-    const permissions: string[] = typeof agentKey.permissions === 'string'
+    const rawPermissions: string[] = typeof agentKey.permissions === 'string'
         ? JSON.parse(agentKey.permissions || '[]')
         : (agentKey.permissions || []);
 
     const isSuperadmin = Boolean(agentKey.is_superadmin);
+
+    // ── TRIPLE VÉRIFICATION SÉCURITÉ ──
+    // Si isSuperadmin=false, filtrer les permissions superadmin:* résiduelles
+    // (3ème couche de protection après DB constraint + RPC fix)
+    const permissions: string[] = isSuperadmin
+        ? rawPermissions
+        : rawPermissions.filter(p => !p.startsWith('superadmin:'));
+
     const orgId = agentKey.organization_id;
     const agentName = agentKey.name || 'Sky Agent';
 
