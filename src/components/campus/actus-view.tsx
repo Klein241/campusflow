@@ -250,6 +250,16 @@ export function ActusView({ orgId, orgSlug, userId, userName, userRole, onSkyUpd
     const [storyImage, setStoryImage] = useState<File | null>(null);
     const [storyImagePreview, setStoryImagePreview] = useState('');
     const [storyVisibility, setStoryVisibility] = useState<'public' | 'friends' | 'selected'>('public');
+
+    const handleStoryImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setStoryImage(file);
+        const reader = new FileReader();
+        reader.onload = () => setStoryImagePreview(reader.result as string);
+        reader.readAsDataURL(file);
+    };
+
     const [publishingStory, setPublishingStory] = useState(false);
     const [viewingStory, setViewingStory] = useState<StoryItem | null>(null);
     const [storyIndex, setStoryIndex] = useState(0);

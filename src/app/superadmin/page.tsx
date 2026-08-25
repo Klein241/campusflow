@@ -26,6 +26,7 @@ import { SkyAgentSuperadminManager } from '@/components/superadmin/SkyAgentSuper
 import { DameSkySuperadminManager } from '@/components/superadmin/DameSkySuperadminManager';
 import { MarketingHub } from '@/components/superadmin/marketing/MarketingHub';
 import { SkyAgentBubble } from '@/components/sky-agent/SkyAgentBubble';
+import { SuperadminPaymentsTab } from '@/components/superadmin/SuperadminPaymentsTab';
 
 // ═══════════════════════════════════════════════════════════════════════
 // IZITEACH — SUPERADMIN PANEL
@@ -33,7 +34,7 @@ import { SkyAgentBubble } from '@/components/sky-agent/SkyAgentBubble';
 // Protected by platform_admins table (Supabase Auth + RLS)
 // ═══════════════════════════════════════════════════════════════════════
 
-type Tab = 'overview' | 'orgs' | 'users' | 'domains' | 'announcements' | 'points' | 'pricing' | 'requests' | 'ads' | 'marketing' | 'email' | 'bugs' | 'compte' | 'sky_agent';
+type Tab = 'overview' | 'payments' | 'orgs' | 'users' | 'domains' | 'announcements' | 'points' | 'pricing' | 'requests' | 'ads' | 'marketing' | 'email' | 'bugs' | 'compte' | 'sky_agent';
 
 interface Stats {
     total_orgs: number;
@@ -79,6 +80,7 @@ interface ActivityItem {
 
 const SIDEBAR: { id: Tab; label: string; icon: any; emoji?: string }[] = [
     { id: 'overview',       label: 'Vue d\'ensemble',  icon: LayoutDashboard, emoji: '📊' },
+    { id: 'payments',       label: 'Paiements & Commissions', icon: CreditCard, emoji: '💳' },
     { id: 'orgs',           label: 'Organisations',    icon: Building2,       emoji: '🏫' },
     { id: 'users',          label: 'Utilisateurs',     icon: Users,           emoji: '👥' },
     { id: 'points',         label: 'Sky Points',       icon: Star,            emoji: '⭐' },
@@ -1085,6 +1087,15 @@ export default function SuperAdminPage() {
                                         </div>
                                     </div>
                                 </div>
+                            </motion.div>
+                        )}
+
+                        {/* ══════════════════════════════════════════
+                            PAIEMENTS & COMMISSIONS SUPERADMIN
+                        ══════════════════════════════════════════ */}
+                        {tab === 'payments' && (
+                            <motion.div key="payments" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                                <SuperadminPaymentsTab />
                             </motion.div>
                         )}
 

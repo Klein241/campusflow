@@ -8,6 +8,13 @@
 // utilise encore cette colonne sous ce nom).
 // ============================================================
 
+export interface EcheancePaiement {
+  tranche: number
+  nom: string
+  montant: number
+  date_limite?: string
+}
+
 export interface Filiere {
   id: string
   code: string
@@ -15,9 +22,12 @@ export interface Filiere {
   description?: string
   duree_mois: number
   frais_scolarite: number
+  frais_inscription?: number
+  echeances?: EcheancePaiement[]
   couleur: string
   icone: string
   is_active: boolean
+  organization_id?: string
   created_at: string
   updated_at: string
   // Relations chargées à la demande

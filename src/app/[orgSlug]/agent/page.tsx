@@ -227,7 +227,7 @@ export default function AgentDedicatedPage() {
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 const res = await uploadToR2(file, 'sky-agent-attachments');
-                if (res.success && res.url) {
+                if (res && res.url) {
                     setAttachments(prev => [...prev, {
                         name: file.name,
                         url: res.url!,

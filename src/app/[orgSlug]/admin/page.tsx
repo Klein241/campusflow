@@ -2256,6 +2256,8 @@ ${bodyHtml}
 
                     {tab === 'payments' && (
                         <AdminPaymentsTab
+                            orgId={org?.id}
+                            orgSlug={orgSlug}
                             pays={pays}
                             students={students}
                             saving={saving}

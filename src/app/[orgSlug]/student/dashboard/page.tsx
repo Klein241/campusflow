@@ -27,6 +27,8 @@ import { cn } from '@/lib/utils';
 import { ReviewSection } from '@/components/shared/ReviewSection';
 import { BugReportButton } from '@/components/shared/BugReportButton';
 import { SkyAgentBubble } from '@/components/sky-agent/SkyAgentBubble';
+import { PaymentButton } from '@/components/payment/PaymentButton';
+import { formatXAF } from '@/lib/camerpay';
 
 // ═══════════════════════════════════════════════════════
 // CAMPUSFLOW — DASHBOARD ÉTUDIANT (holographic-ring design)
@@ -573,43 +575,157 @@ export default function StudentDashboard() {
                     )}
 
                     {/* ═══ PAYMENTS ═══ */}
-                    {tab === 'payments' && (
-                        <motion.div key="payments" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-4 pt-4">
-                            <h2 className="font-black text-lg text-gradient-primary">💰 Paiements</h2>
-                            <Card className="bg-linear-to-br from-emerald-500/10 to-teal-500/5 border-emerald-500/20 backdrop-blur-sm overflow-hidden text-center">
-                                <CardContent className="p-5">
-                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total payé</p>
-                                    <p className="text-3xl font-black text-emerald-400 mt-1">{fmt(totalPaid)} XAF</p>
-                                    <p className="text-sm text-muted-foreground mt-1">{payments.length} paiement(s)</p>
-                                </CardContent>
-                            </Card>
-                            {payments.length > 0 ? payments.map((p: any) => (
-                                <motion.div key={p.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-                                    <Card className="bg-card/50 backdrop-blur-sm border-white/10 overflow-hidden">
-                                        <CardContent className="p-4 flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center",
-                                                    p.payment_method === 'momo' ? 'bg-yellow-500/20' : p.payment_method === 'orange_money' ? 'bg-orange-500/20' : 'bg-emerald-500/20')}>
-                                                    <CircleDollarSign className={cn("w-5 h-5",
-                                                        p.payment_method === 'momo' ? 'text-yellow-400' : p.payment_method === 'orange_money' ? 'text-orange-400' : 'text-emerald-400')} />
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm font-medium">{p.description || 'Scolarité'}</p>
-                                                    <p className="text-[10px] text-muted-foreground">
-                                                        {p.payment_method === 'momo' ? 'MTN MoMo' : p.payment_method === 'orange_money' ? 'Orange Money' : 'Espèces'}
-                                                        {' • '}{new Date(p.paid_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <span className="text-sm font-black text-emerald-400">{fmt(p.amount)}</span>
+                    {tab === 'payments' && (() => {
+                        const totalTuition = Number(classroom?.frais_scolarite || filiere?.frais_scolarite || 0);
+                        const remainingBalance = Math.max(0, totalTuition - totalPaid);
+                        const schedule = (classroom?.echeances || filiere?.echeances || []) as any[];
+
+                        return (
+                            <motion.div key="payments" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-4 pt-4">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="font-black text-lg text-gradient-primary">💰 Frais de Scolarité &amp; Paiements</h2>
+                                    {remainingBalance > 0 && (
+                                        <PaymentButton
+                                            organizationId={org.id}
+                                            organizationSlug={orgSlug}
+                                            paymentType="scolarite"
+                                            amount={remainingBalance}
+                                            description={`Scolarité ${org.name} — ${student.first_name} ${student.last_name}`}
+                                            customerName={`${student.first_name} ${student.last_name}`}
+                                            customerPhone={student.phone}
+                                            label="Régler le solde"
+                                            className="bg-gradient-to-r from-emerald-600 to-teal-600 text-xs font-bold rounded-xl h-9"
+                                        />
+                                    )}
+                                </div>
+
+                                {/* Summary Grid */}
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <Card className="bg-white/[0.03] border-white/10 backdrop-blur-sm overflow-hidden">
+                                        <CardContent className="p-4 space-y-1">
+                                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Scolarité totale</p>
+                                            <p className="text-2xl font-black text-white font-mono">{formatXAF(totalTuition)}</p>
+                                            <p className="text-[11px] text-slate-400">{classroom?.name || filiere?.nom || 'Filière'}</p>
                                         </CardContent>
                                     </Card>
-                                </motion.div>
-                            )) : (
-                                <div className="text-center py-12 text-slate-500"><CreditCard className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm">Aucun paiement</p></div>
-                            )}
-                        </motion.div>
-                    )}
+
+                                    <Card className="bg-emerald-500/10 border-emerald-500/20 backdrop-blur-sm overflow-hidden">
+                                        <CardContent className="p-4 space-y-1">
+                                            <p className="text-[10px] text-emerald-300 uppercase tracking-wider">Montant réglé</p>
+                                            <p className="text-2xl font-black text-emerald-400 font-mono">{formatXAF(totalPaid)}</p>
+                                            <p className="text-[11px] text-emerald-300/80">{payments.length} versement(s)</p>
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card className={cn(
+                                        "backdrop-blur-sm overflow-hidden",
+                                        remainingBalance === 0
+                                            ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
+                                            : "bg-amber-500/10 border-amber-500/20 text-amber-300"
+                                    )}>
+                                        <CardContent className="p-4 space-y-1">
+                                            <p className="text-[10px] uppercase tracking-wider opacity-80">Reste à payer</p>
+                                            <p className="text-2xl font-black font-mono">
+                                                {remainingBalance === 0 ? '0 XAF (Soldé ✓)' : formatXAF(remainingBalance)}
+                                            </p>
+                                            <p className="text-[11px] opacity-80">
+                                                {remainingBalance === 0 ? 'Scolarité entièrement payée' : 'Paiement en ligne disponible'}
+                                            </p>
+                                        </CardContent>
+                                    </Card>
+                                </div>
+
+                                {/* Échéancier de paiement si défini */}
+                                {schedule.length > 0 && (
+                                    <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 space-y-3">
+                                        <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                                            <Calendar className="w-4 h-4 text-indigo-400" /> Échéancier officiel par tranches
+                                        </h3>
+                                        <div className="space-y-2">
+                                            {schedule.map((ech: any, idx: number) => {
+                                                const trancheAmt = Number(ech.montant) || 0;
+                                                return (
+                                                    <div
+                                                        key={idx}
+                                                        className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 text-xs"
+                                                    >
+                                                        <div className="flex items-center gap-2.5">
+                                                            <span className="w-6 h-6 rounded-lg bg-indigo-500/20 text-indigo-300 font-bold text-[11px] flex items-center justify-center">
+                                                                {ech.tranche || idx + 1}
+                                                            </span>
+                                                            <div>
+                                                                <p className="font-bold text-white">{ech.nom || `Tranche ${idx + 1}`}</p>
+                                                                {ech.date_limite && (
+                                                                    <p className="text-[10px] text-slate-400">
+                                                                        Date limite : {new Date(ech.date_limite).toLocaleDateString('fr-FR')}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="font-mono font-bold text-emerald-400">
+                                                                {formatXAF(trancheAmt)}
+                                                            </span>
+                                                            {remainingBalance > 0 && (
+                                                                <PaymentButton
+                                                                    organizationId={org.id}
+                                                                    organizationSlug={orgSlug}
+                                                                    paymentType="scolarite"
+                                                                    amount={trancheAmt}
+                                                                    description={`${ech.nom || `Tranche ${idx + 1}`} — ${student.first_name} ${student.last_name}`}
+                                                                    customerName={`${student.first_name} ${student.last_name}`}
+                                                                    customerPhone={student.phone}
+                                                                    label="Payer tranche"
+                                                                    size="sm"
+                                                                    showAmount={false}
+                                                                    className="bg-indigo-600 hover:bg-indigo-500 text-[11px] h-7 px-2.5 rounded-lg"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Historique des versements */}
+                                <div className="space-y-2.5">
+                                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                        Historique des reçus de versement ({payments.length})
+                                    </h3>
+                                    {payments.length > 0 ? payments.map((p: any) => (
+                                        <motion.div key={p.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
+                                            <Card className="bg-card/50 backdrop-blur-sm border-white/10 overflow-hidden">
+                                                <CardContent className="p-4 flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center",
+                                                            p.payment_method === 'momo' ? 'bg-yellow-500/20' : p.payment_method === 'orange_money' ? 'bg-orange-500/20' : 'bg-emerald-500/20')}>
+                                                            <CircleDollarSign className={cn("w-5 h-5",
+                                                                p.payment_method === 'momo' ? 'text-yellow-400' : p.payment_method === 'orange_money' ? 'text-orange-400' : 'text-emerald-400')} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-medium">{p.description || 'Scolarité'}</p>
+                                                            <p className="text-[10px] text-muted-foreground">
+                                                                {p.payment_method === 'momo' ? 'MTN MoMo' : p.payment_method === 'orange_money' ? 'Orange Money' : 'Espèces / Guichet'}
+                                                                {' • '}{new Date(p.paid_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <span className="text-sm font-black text-emerald-400 font-mono">{formatXAF(p.amount)}</span>
+                                                </CardContent>
+                                            </Card>
+                                        </motion.div>
+                                    )) : (
+                                        <div className="text-center py-10 text-slate-500 bg-white/[0.01] rounded-2xl border border-dashed border-white/5">
+                                            <CreditCard className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                                            <p className="text-sm">Aucun versement enregistré</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </motion.div>
+                        );
+                    })()}
 
                     {/* ═══ CURSUS ═══ */}
                     {tab === 'cursus' && (

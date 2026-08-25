@@ -5,10 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
     School, Plus, Pencil, Trash2, Save, X, BookOpen,
-    GraduationCap, Loader2
+    GraduationCap, Loader2, Coins
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { FilierePricingModal } from '@/components/admin/pricing/FilierePricingModal';
+import { formatXAF } from '@/lib/camerpay';
+import type { EcheancePaiement } from '@/lib/filieres/types';
 
 const COLLEGE = ['6ème', '5ème', '4ème', '3ème'];
 const LYCEE = ['2nde', '1ère', 'Tle'];
@@ -20,6 +23,9 @@ interface Cls {
     capacity?: number;
     hourly_rate?: number;
     monthly_fee?: number;
+    frais_scolarite?: number;
+    frais_inscription?: number;
+    echeances?: EcheancePaiement[];
 }
 
 interface Sub {
@@ -89,6 +95,21 @@ export function AdminClassesSubjectsTab({
     const [editingSubId, setEditingSubId] = useState<string | null>(null);
     const [editSubName, setEditSubName] = useState('');
     const [editSubCoef, setEditSubCoef] = useState('1');
+
+    // Pricing & Installments modal state
+    const [pricingModal, setPricingModal] = useState<{
+        open: boolean;
+        id: string;
+        name: string;
+        type: 'classroom' | 'filiere';
+        fraisScolarite?: number;
+        fraisInscription?: number;
+        echeances?: EcheancePaiement[];
+    } | null>(null);
+
+    const handlePricingSaved = (id: string, fraisScolarite: number, fraisInscription: number, echeances: EcheancePaiement[]) => {
+        setCls(prev => prev.map(c => c.id === id ? { ...c, frais_scolarite: fraisScolarite, frais_inscription: fraisInscription, echeances } : c));
+    };
 
     const handleAddClass = async (name?: string) => {
         const clsName = name || directNewCls.trim();
@@ -280,7 +301,23 @@ export function AdminClassesSubjectsTab({
                                         </div>
 
                                         {c.id && editingClsId !== c.id && (
-                                            <div className="flex items-center gap-1">
+                                            <div className="flex items-center gap-1.5">
+                                                <button
+                                                    onClick={() => setPricingModal({
+                                                        open: true,
+                                                        id: c.id!,
+                                                        name: c.name,
+                                                        type: 'classroom',
+                                                        fraisScolarite: c.frais_scolarite || 0,
+                                                        fraisInscription: c.frais_inscription || 0,
+                                                        echeances: c.echeances || [],
+                                                    })}
+                                                    className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-xl bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 transition shadow-sm"
+                                                    title="Configurer les tarifs et tranches de scolarité"
+                                                >
+                                                    <Coins className="w-3.5 h-3.5 text-emerald-400" />
+                                                    {c.frais_scolarite ? formatXAF(c.frais_scolarite) : 'Définir tarif'}
+                                                </button>
                                                 <button
                                                     onClick={() => {
                                                         setEditingClsId(c.id!);
@@ -567,6 +604,21 @@ export function AdminClassesSubjectsTab({
                         ))}
                     </div>
                 </div>
+            )}
+
+            {/* Modal de tarification & échéancier */}
+            {pricingModal && (
+                <FilierePricingModal
+                    open={pricingModal.open}
+                    onClose={() => setPricingModal(null)}
+                    targetType={pricingModal.type}
+                    targetId={pricingModal.id}
+                    targetName={pricingModal.name}
+                    initialFraisScolarite={pricingModal.fraisScolarite}
+                    initialFraisInscription={pricingModal.fraisInscription}
+                    initialEcheances={pricingModal.echeances}
+                    onSaved={(scol, insc, echs) => handlePricingSaved(pricingModal.id, scol, insc, echs)}
+                />
             )}
         </div>
     );
