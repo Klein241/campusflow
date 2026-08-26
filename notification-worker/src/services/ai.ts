@@ -15,46 +15,52 @@ export interface SupportedLanguage {
     m2m_code?: string;
     countries: string[];
     is_african: boolean;
+    quality_stars: 1 | 2 | 3 | 4 | 5; // qualité de traduction (1=faible, 5=excellent)
+    quality_label: string; // description courte de la qualité
 }
 
 export const IZITEACH_SUPPORTED_LANGUAGES: Record<string, SupportedLanguage> = {
-    // ── 5 Langues Internationales ──
-    fr: { code: 'fr', name_fr: 'Français', name_native: 'Français', tier: 1, m2m_code: 'fr', countries: ['FR', 'SN', 'CI', 'CM', 'CD', 'MG'], is_african: false },
-    en: { code: 'en', name_fr: 'Anglais', name_native: 'English', tier: 1, m2m_code: 'en', countries: ['GB', 'US', 'NG', 'GH', 'KE', 'ZA'], is_african: false },
-    ar: { code: 'ar', name_fr: 'Arabe', name_native: 'العربية', tier: 1, m2m_code: 'ar', countries: ['EG', 'DZ', 'MA', 'TN', 'SD', 'TD'], is_african: false },
-    es: { code: 'es', name_fr: 'Espagnol', name_native: 'Español', tier: 1, m2m_code: 'es', countries: ['ES', 'GQ'], is_african: false },
-    pt: { code: 'pt', name_fr: 'Portugais', name_native: 'Português', tier: 1, m2m_code: 'pt', countries: ['PT', 'AO', 'MZ', 'GW', 'CV'], is_african: false },
+    // ── 5 Langues Internationales ── (★★★★★ couverture excellente M2M100)
+    fr:  { code: 'fr',  name_fr: 'Français',       name_native: 'Français',     tier: 1, m2m_code: 'fr', countries: ['FR', 'SN', 'CI', 'CM', 'CD', 'MG'], is_african: false, quality_stars: 5, quality_label: 'Excellente' },
+    en:  { code: 'en',  name_fr: 'Anglais',         name_native: 'English',      tier: 1, m2m_code: 'en', countries: ['GB', 'US', 'NG', 'GH', 'KE', 'ZA'], is_african: false, quality_stars: 5, quality_label: 'Excellente' },
+    ar:  { code: 'ar',  name_fr: 'Arabe',           name_native: 'العربية',      tier: 1, m2m_code: 'ar', countries: ['EG', 'DZ', 'MA', 'TN', 'SD', 'TD'], is_african: false, quality_stars: 5, quality_label: 'Excellente' },
+    es:  { code: 'es',  name_fr: 'Espagnol',        name_native: 'Español',      tier: 1, m2m_code: 'es', countries: ['ES', 'GQ'],                          is_african: false, quality_stars: 5, quality_label: 'Excellente' },
+    pt:  { code: 'pt',  name_fr: 'Portugais',       name_native: 'Português',    tier: 1, m2m_code: 'pt', countries: ['PT', 'AO', 'MZ', 'GW', 'CV'],        is_african: false, quality_stars: 5, quality_label: 'Excellente' },
+    zh:  { code: 'zh',  name_fr: 'Chinois',         name_native: '中文',          tier: 1, m2m_code: 'zh', countries: ['CN', 'TW'],                          is_african: false, quality_stars: 5, quality_label: 'Excellente' },
+    ru:  { code: 'ru',  name_fr: 'Russe',           name_native: 'Русский',      tier: 1, m2m_code: 'ru', countries: ['RU'],                                is_african: false, quality_stars: 5, quality_label: 'Excellente' },
+    de:  { code: 'de',  name_fr: 'Allemand',        name_native: 'Deutsch',      tier: 1, m2m_code: 'de', countries: ['DE'],                                is_african: false, quality_stars: 5, quality_label: 'Excellente' },
+    it:  { code: 'it',  name_fr: 'Italien',         name_native: 'Italiano',     tier: 1, m2m_code: 'it', countries: ['IT'],                                is_african: false, quality_stars: 5, quality_label: 'Excellente' },
 
-    // ── Langues Africaines — Tier 1 (LLM direct + M2M100) ──
-    sw:  { code: 'sw',  name_fr: 'Swahili',       name_native: 'Kiswahili',    tier: 1, m2m_code: 'sw', countries: ['KE', 'TZ', 'CD', 'UG', 'RW'], is_african: true },
-    ha:  { code: 'ha',  name_fr: 'Haoussa',       name_native: 'Hausa',        tier: 1, m2m_code: 'ha', countries: ['NG', 'NE', 'CM'], is_african: true },
-    yo:  { code: 'yo',  name_fr: 'Yoruba',        name_native: 'Yorùbá',       tier: 1, m2m_code: 'yo', countries: ['NG', 'BJ', 'TG'], is_african: true },
-    ig:  { code: 'ig',  name_fr: 'Igbo',          name_native: 'Igbo',         tier: 1, m2m_code: 'ig', countries: ['NG'], is_african: true },
-    am:  { code: 'am',  name_fr: 'Amharique',     name_native: 'አማርኛ',        tier: 1, m2m_code: 'am', countries: ['ET'], is_african: true },
-    zu:  { code: 'zu',  name_fr: 'Zoulou',        name_native: 'isiZulu',      tier: 1, m2m_code: 'zu', countries: ['ZA'], is_african: true },
-    wo:  { code: 'wo',  name_fr: 'Wolof',         name_native: 'Wolof',        tier: 1, m2m_code: 'wo', countries: ['SN', 'GM'], is_african: true },
-    so:  { code: 'so',  name_fr: 'Somali',        name_native: 'Soomaali',     tier: 1, m2m_code: 'so', countries: ['SO', 'DJ', 'ET'], is_african: true },
-    tw:  { code: 'tw',  name_fr: 'Twi (Akan)',    name_native: 'Twi',          tier: 1, m2m_code: 'ak', countries: ['GH'], is_african: true },
+    // ── Langues Africaines — Tier 1 (★★★★ bonne couverture M2M100) ──
+    sw:  { code: 'sw',  name_fr: 'Swahili',         name_native: 'Kiswahili',    tier: 1, m2m_code: 'sw', countries: ['KE', 'TZ', 'CD', 'UG', 'RW'],        is_african: true,  quality_stars: 4, quality_label: 'Bonne' },
+    ha:  { code: 'ha',  name_fr: 'Haoussa',         name_native: 'Hausa',        tier: 1, m2m_code: 'ha', countries: ['NG', 'NE', 'CM'],                    is_african: true,  quality_stars: 4, quality_label: 'Bonne' },
+    yo:  { code: 'yo',  name_fr: 'Yoruba',          name_native: 'Yorùbá',       tier: 1, m2m_code: 'yo', countries: ['NG', 'BJ', 'TG'],                    is_african: true,  quality_stars: 4, quality_label: 'Bonne' },
+    ig:  { code: 'ig',  name_fr: 'Igbo',            name_native: 'Igbo',         tier: 1, m2m_code: 'ig', countries: ['NG'],                                is_african: true,  quality_stars: 3, quality_label: 'Correcte' },
+    am:  { code: 'am',  name_fr: 'Amharique',       name_native: 'አማርኛ',        tier: 1, m2m_code: 'am', countries: ['ET'],                                is_african: true,  quality_stars: 4, quality_label: 'Bonne' },
+    zu:  { code: 'zu',  name_fr: 'Zoulou',          name_native: 'isiZulu',      tier: 1, m2m_code: 'zu', countries: ['ZA'],                                is_african: true,  quality_stars: 3, quality_label: 'Correcte' },
+    wo:  { code: 'wo',  name_fr: 'Wolof',           name_native: 'Wolof',        tier: 1, m2m_code: 'wo', countries: ['SN', 'GM'],                          is_african: true,  quality_stars: 3, quality_label: 'Correcte' },
+    so:  { code: 'so',  name_fr: 'Somali',          name_native: 'Soomaali',     tier: 1, m2m_code: 'so', countries: ['SO', 'DJ', 'ET'],                    is_african: true,  quality_stars: 3, quality_label: 'Correcte' },
+    tw:  { code: 'tw',  name_fr: 'Twi (Akan)',      name_native: 'Twi',          tier: 1, m2m_code: 'ak', countries: ['GH'],                                is_african: true,  quality_stars: 3, quality_label: 'Correcte' },
 
-    // ── Langues Africaines — Tier 2 (Cloudflare AI M2M100 & NLLB) ──
-    lin: { code: 'lin', name_fr: 'Lingala',       name_native: 'Lingála',      tier: 2, m2m_code: 'ln', countries: ['CD', 'CG'], is_african: true },
-    ful: { code: 'ful', name_fr: 'Fulfulde/Peul', name_native: 'Fulfulde',     tier: 2, m2m_code: 'ff', countries: ['CM', 'GN', 'ML', 'SN', 'BF', 'NE'], is_african: true },
-    bam: { code: 'bam', name_fr: 'Bambara',       name_native: 'Bamanankan',   tier: 2, m2m_code: 'bm', countries: ['ML'], is_african: true },
-    kin: { code: 'kin', name_fr: 'Kinyarwanda',   name_native: 'Kinyarwanda',  tier: 2, m2m_code: 'rw', countries: ['RW', 'UG', 'CD'], is_african: true },
-    mlg: { code: 'mlg', name_fr: 'Malgache',      name_native: 'Malagasy',     tier: 2, m2m_code: 'mg', countries: ['MG'], is_african: true },
-    dyu: { code: 'dyu', name_fr: 'Dioula',        name_native: 'Dioula',       tier: 2, m2m_code: 'bm', countries: ['BF', 'CI'], is_african: true },
-    bci: { code: 'bci', name_fr: 'Baoulé',        name_native: 'Baoulé',       tier: 2, m2m_code: 'ak', countries: ['CI'], is_african: true },
-    dje: { code: 'dje', name_fr: 'Zarma',         name_native: 'Zarma',        tier: 2, m2m_code: 'ha', countries: ['NE'], is_african: true },
-    ewo: { code: 'ewo', name_fr: 'Ewondo',        name_native: 'Ewondo',       tier: 2, m2m_code: 'ln', countries: ['CM'], is_african: true },
-    dua: { code: 'dua', name_fr: 'Duala',         name_native: 'Duala',        tier: 2, m2m_code: 'ln', countries: ['CM'], is_african: true },
-    fan: { code: 'fan', name_fr: 'Beti-Fang',     name_native: 'Fang',         tier: 2, m2m_code: 'ln', countries: ['CM', 'GA', 'GQ'], is_african: true },
-    nya: { code: 'nya', name_fr: 'Chichewa',      name_native: 'ChiCheŵa',     tier: 2, m2m_code: 'ny', countries: ['MW', 'ZM', 'MZ'], is_african: true },
-    sna: { code: 'sna', name_fr: 'Shona',         name_native: 'chiShona',     tier: 2, m2m_code: 'sn', countries: ['ZW', 'MZ'], is_african: true },
-    xho: { code: 'xho', name_fr: 'Xhosa',         name_native: 'isiXhosa',     tier: 2, m2m_code: 'xh', countries: ['ZA'], is_african: true },
-    orm: { code: 'orm', name_fr: 'Oromo',         name_native: 'Afaan Oromoo', tier: 2, m2m_code: 'om', countries: ['ET', 'KE'], is_african: true },
-    tir: { code: 'tir', name_fr: 'Tigrigna',      name_native: 'ትግርኛ',        tier: 2, m2m_code: 'ti', countries: ['ER', 'ET'], is_african: true },
-    lug: { code: 'lug', name_fr: 'Luganda',       name_native: 'Oluganda',     tier: 2, m2m_code: 'lg', countries: ['UG'], is_african: true },
-    run: { code: 'run', name_fr: 'Kirundi',       name_native: 'Ikirundi',     tier: 2, m2m_code: 'rw', countries: ['BI'], is_african: true },
+    // ── Langues Africaines — Tier 2 (★★ couverture limitée) ──
+    lin: { code: 'lin', name_fr: 'Lingala',          name_native: 'Lingála',      tier: 2, m2m_code: 'ln', countries: ['CD', 'CG'],                          is_african: true,  quality_stars: 2, quality_label: 'Limitée' },
+    ful: { code: 'ful', name_fr: 'Fulfulde/Peul',    name_native: 'Fulfulde',     tier: 2, m2m_code: 'ff', countries: ['CM', 'GN', 'ML', 'SN', 'BF', 'NE'], is_african: true,  quality_stars: 2, quality_label: 'Limitée' },
+    bam: { code: 'bam', name_fr: 'Bambara',          name_native: 'Bamanankan',   tier: 2, m2m_code: 'bm', countries: ['ML'],                                is_african: true,  quality_stars: 2, quality_label: 'Limitée' },
+    kin: { code: 'kin', name_fr: 'Kinyarwanda',      name_native: 'Kinyarwanda',  tier: 2, m2m_code: 'rw', countries: ['RW', 'UG', 'CD'],                   is_african: true,  quality_stars: 3, quality_label: 'Correcte' },
+    mlg: { code: 'mlg', name_fr: 'Malgache',         name_native: 'Malagasy',     tier: 2, m2m_code: 'mg', countries: ['MG'],                                is_african: true,  quality_stars: 3, quality_label: 'Correcte' },
+    dyu: { code: 'dyu', name_fr: 'Dioula',           name_native: 'Dioula',       tier: 2, m2m_code: 'bm', countries: ['BF', 'CI'],                         is_african: true,  quality_stars: 2, quality_label: 'Limitée' },
+    bci: { code: 'bci', name_fr: 'Baoulé',           name_native: 'Baoulé',       tier: 2, m2m_code: 'ak', countries: ['CI'],                                is_african: true,  quality_stars: 2, quality_label: 'Limitée' },
+    dje: { code: 'dje', name_fr: 'Zarma',            name_native: 'Zarma',        tier: 2, m2m_code: 'ha', countries: ['NE'],                                is_african: true,  quality_stars: 2, quality_label: 'Limitée' },
+    ewo: { code: 'ewo', name_fr: 'Ewondo',           name_native: 'Ewondo',       tier: 2, m2m_code: 'ln', countries: ['CM'],                                is_african: true,  quality_stars: 1, quality_label: 'Expérimentale' },
+    dua: { code: 'dua', name_fr: 'Duala',            name_native: 'Duala',        tier: 2, m2m_code: 'ln', countries: ['CM'],                                is_african: true,  quality_stars: 1, quality_label: 'Expérimentale' },
+    fan: { code: 'fan', name_fr: 'Beti-Fang',        name_native: 'Fang',         tier: 2, m2m_code: 'ln', countries: ['CM', 'GA', 'GQ'],                   is_african: true,  quality_stars: 1, quality_label: 'Expérimentale' },
+    nya: { code: 'nya', name_fr: 'Chichewa',         name_native: 'ChiCheŵa',     tier: 2, m2m_code: 'ny', countries: ['MW', 'ZM', 'MZ'],                   is_african: true,  quality_stars: 3, quality_label: 'Correcte' },
+    sna: { code: 'sna', name_fr: 'Shona',            name_native: 'chiShona',     tier: 2, m2m_code: 'sn', countries: ['ZW', 'MZ'],                         is_african: true,  quality_stars: 3, quality_label: 'Correcte' },
+    xho: { code: 'xho', name_fr: 'Xhosa',            name_native: 'isiXhosa',     tier: 2, m2m_code: 'xh', countries: ['ZA'],                               is_african: true,  quality_stars: 3, quality_label: 'Correcte' },
+    orm: { code: 'orm', name_fr: 'Oromo',            name_native: 'Afaan Oromoo', tier: 2, m2m_code: 'om', countries: ['ET', 'KE'],                         is_african: true,  quality_stars: 2, quality_label: 'Limitée' },
+    tir: { code: 'tir', name_fr: 'Tigrigna',         name_native: 'ትግርኛ',        tier: 2, m2m_code: 'ti', countries: ['ER', 'ET'],                         is_african: true,  quality_stars: 2, quality_label: 'Limitée' },
+    lug: { code: 'lug', name_fr: 'Luganda',          name_native: 'Oluganda',     tier: 2, m2m_code: 'lg', countries: ['UG'],                               is_african: true,  quality_stars: 2, quality_label: 'Limitée' },
+    run: { code: 'run', name_fr: 'Kirundi',          name_native: 'Ikirundi',     tier: 2, m2m_code: 'rw', countries: ['BI'],                               is_african: true,  quality_stars: 3, quality_label: 'Correcte' },
 };
 
 function hasRepetitiveLoop(text: string): boolean {

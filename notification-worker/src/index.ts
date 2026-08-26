@@ -44,6 +44,7 @@ import { handleMcpGateway } from './mcp/gateway';
 import { syncToSupabase } from './mcp/tools';
 import { handleSkyAgentChat, handleSkyAgentClearSession } from './services/sky-agent';
 import { handleCron, handleAgentWebhook } from './cron';
+import { translateTextWithAi, IZITEACH_SUPPORTED_LANGUAGES } from './services/ai';
 
 export * from './types';
 export * from './lib/cors';
@@ -159,6 +160,25 @@ export default {
             if (pathname === '/api/r2/delete' && method === 'POST') return handleR2Delete(request, env);
             if (pathname === '/api/r2/list' && method === 'GET') return handleR2List(request, env);
             if (pathname.startsWith('/r2/') && method === 'GET') return handleR2Serve(request, env);
+
+            // ── AI Translation (Cloudflare Workers AI — gratuit) ──
+            if (pathname === '/api/translate' && method === 'POST') {
+                try {
+                    const { text, target_lang, source_lang } = await request.json() as any;
+                    if (!text || !target_lang) {
+                        return jsonResponse({ error: 'text et target_lang sont requis' }, 400);
+                    }
+                    const result = await translateTextWithAi(env, String(text), String(target_lang), source_lang || 'fr');
+                    return jsonResponse({ ok: true, ...result });
+                } catch (e: any) {
+                    return jsonResponse({ error: e.message || 'Erreur de traduction' }, 500);
+                }
+            }
+
+            // ── Langues disponibles ──
+            if (pathname === '/api/translate/languages' && method === 'GET') {
+                return jsonResponse({ ok: true, languages: IZITEACH_SUPPORTED_LANGUAGES });
+            }
 
             return jsonResponse({
                 error: 'Not found',

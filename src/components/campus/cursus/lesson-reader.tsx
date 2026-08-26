@@ -8,7 +8,7 @@ import {
     ChevronLeft, ChevronRight, Copy,
     Check, Trash2, FileText,
     Eye, Code2, ChevronDown, ChevronUp,
-    Mic, Play, Pause, Download, Loader2, Lock
+    Mic, Play, Pause, Download, Loader2, Lock, Globe, Star, X as XIcon
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -78,7 +78,40 @@ const LANGUAGE_META: Record<string, { name: string; flag: string }> = {
     wo:  { name: 'Wolof', flag: '🌍' },
     tw:  { name: 'Twi', flag: '🌍' },
     so:  { name: 'Soomaali', flag: '🌍' },
+    nya: { name: 'ChiCheŵa', flag: '🌍' },
+    sna: { name: 'chiShona', flag: '🌍' },
+    xho: { name: 'isiXhosa', flag: '🌍' },
+    run: { name: 'Ikirundi', flag: '🌍' },
+    zh:  { name: '中文', flag: '🇨🇳' },
+    ru:  { name: 'Русский', flag: '🇷🇺' },
+    de:  { name: 'Deutsch', flag: '🇩🇪' },
+    it:  { name: 'Italiano', flag: '🇮🇹' },
 };
+
+// Catalogue complet des langues avec qualité (chargé depuis le worker)
+const WORKER_URL = 'https://campusflow-worker.kleintaptue1.workers.dev';
+
+interface LangCatalogEntry {
+    code: string;
+    name_fr: string;
+    name_native: string;
+    quality_stars: 1 | 2 | 3 | 4 | 5;
+    quality_label: string;
+    is_african: boolean;
+    countries: string[];
+}
+
+function QualityStars({ stars }: { stars: number }) {
+    const colors = ['text-red-400', 'text-orange-400', 'text-yellow-400', 'text-lime-400', 'text-emerald-400'];
+    const color = colors[Math.min(stars - 1, 4)];
+    return (
+        <span className="flex items-center gap-0.5">
+            {Array.from({ length: 5 }).map((_, i) => (
+                <Star key={i} className={cn('w-2.5 h-2.5', i < stars ? `${color} fill-current` : 'text-white/10 fill-current')} />
+            ))}
+        </span>
+    );
+}
 
 // Palette de couleurs pour surlignage
 const HIGHLIGHT_COLORS = [
@@ -373,6 +406,75 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
     const savedSelectionText = useRef<string>('');  // ← clé du fix: texte sauvegardé avant mousedown
     const [copied, setCopied] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
+
+    // ── TRADUCTION EN TEMPS RÉEL ──────────────────────────────────
+    const [showTranslation, setShowTranslation] = useState(false);
+    const [langCatalog, setLangCatalog]         = useState<LangCatalogEntry[]>([]);
+    const [translating, setTranslating]         = useState(false);
+    const [translatedContent, setTranslatedContent] = useState<string | null>(null);
+    const [selectedLang, setSelectedLang]       = useState<LangCatalogEntry | null>(null);
+    const [translationQuality, setTranslationQuality] = useState<number>(0);
+    const [translationMethod, setTranslationMethod]   = useState<string>('');
+
+    // Charger le catalogue de langues depuis le worker
+    useEffect(() => {
+        if (showTranslation && langCatalog.length === 0) {
+            fetch(`${WORKER_URL}/api/translate/languages`)
+                .then(r => r.json())
+                .then((data: any) => {
+                    if (data.languages) {
+                        const langs: LangCatalogEntry[] = Object.values(data.languages);
+                        setLangCatalog(langs.sort((a, b) => b.quality_stars - a.quality_stars));
+                    }
+                })
+                .catch(() => {});
+        }
+    }, [showTranslation, langCatalog.length]);
+
+    const translateLesson = async (lang: LangCatalogEntry) => {
+        setSelectedLang(lang);
+        setTranslating(true);
+        setTranslatedContent(null);
+        try {
+            // Extraire le texte brut du contenu de la leçon
+            let rawText = '';
+            try {
+                const blocks = JSON.parse(lesson.content || '[]');
+                if (Array.isArray(blocks)) {
+                    rawText = blocks.map((b: any) => b.value || '').join('\n\n');
+                } else {
+                    rawText = lesson.content || '';
+                }
+            } catch {
+                rawText = lesson.content || '';
+            }
+
+            const res = await fetch(`${WORKER_URL}/api/translate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: rawText, target_lang: lang.code, source_lang: 'fr' }),
+            });
+            const data = await res.json() as any;
+            if (data.ok && data.translated_text && data.translated_text !== rawText) {
+                setTranslatedContent(data.translated_text);
+                setTranslationQuality(lang.quality_stars);
+                setTranslationMethod(data.method || '');
+            } else {
+                setTranslatedContent(null);
+                toast.error(`Traduction ${lang.name_fr} non disponible pour ce contenu.`);
+            }
+        } catch {
+            toast.error('Erreur lors de la traduction. Réessayez.');
+        } finally {
+            setTranslating(false);
+        }
+    };
+
+    const resetTranslation = () => {
+        setTranslatedContent(null);
+        setSelectedLang(null);
+        setTranslationQuality(0);
+    };
 
     // ── MULTILINGUISME & BILINGUISME SYNCHRONE (STYLE TELEGRAM) ──
     const hasOriginal = Boolean(
@@ -689,7 +791,129 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
                             </span>
                         )}
                     </button>
+
+                    {/* Bouton Traduction */}
+                    <button
+                        onClick={() => { setShowTranslation(t => !t); if (translatedContent) resetTranslation(); }}
+                        className={cn(
+                            "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all",
+                            showTranslation
+                                ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
+                                : "bg-white/[0.04] border-white/[0.06] text-slate-400 hover:text-white"
+                        )}
+                        title="Traduire ce cours dans une autre langue"
+                    >
+                        <Globe className="w-3.5 h-3.5" />
+                        {selectedLang ? selectedLang.name_native : 'Traduire'}
+                    </button>
                 </div>
+
+                {/* ── Panneau de traduction ── */}
+                <AnimatePresence>
+                    {showTranslation && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="flex-none overflow-hidden border-b border-emerald-500/20 bg-[#0b1520]"
+                        >
+                            <div className="p-3">
+                                {/* Header du panneau */}
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-2">
+                                        <Globe className="w-4 h-4 text-emerald-400" />
+                                        <span className="text-xs font-bold text-white">Traduire ce cours</span>
+                                        {selectedLang && translatedContent && (
+                                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-[10px] font-semibold">
+                                                {selectedLang.name_native}
+                                                <QualityStars stars={translationQuality} />
+                                            </span>
+                                        )}
+                                    </div>
+                                    {selectedLang && translatedContent && (
+                                        <button
+                                            onClick={resetTranslation}
+                                            className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 transition"
+                                        >
+                                            <XIcon className="w-3 h-3" /> Revenir à l\'original
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Chargement du catalogue */}
+                                {langCatalog.length === 0 ? (
+                                    <div className="flex items-center gap-2 text-slate-500 text-xs py-2">
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        Chargement des langues disponibles...
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {/* Langues Internationales */}
+                                        <p className="text-[9px] uppercase font-bold text-slate-500 tracking-widest">Langues internationales</p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {langCatalog.filter(l => !l.is_african && l.code !== 'fr').map(lang => (
+                                                <button
+                                                    key={lang.code}
+                                                    onClick={() => translateLesson(lang)}
+                                                    disabled={translating}
+                                                    className={cn(
+                                                        "flex flex-col items-start gap-0.5 px-2.5 py-1.5 rounded-xl border text-left transition-all text-[10px]",
+                                                        selectedLang?.code === lang.code
+                                                            ? "bg-emerald-500/20 border-emerald-500/40 text-white"
+                                                            : "bg-white/[0.04] border-white/[0.06] text-slate-300 hover:border-white/20 hover:text-white",
+                                                        translating && selectedLang?.code === lang.code && "opacity-70"
+                                                    )}
+                                                    title={`Qualité de traduction : ${lang.quality_label}`}
+                                                >
+                                                    <span className="font-semibold">{lang.name_native}</span>
+                                                    <QualityStars stars={lang.quality_stars} />
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* Langues Africaines */}
+                                        <p className="text-[9px] uppercase font-bold text-slate-500 tracking-widest mt-2">🌍 Langues africaines</p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {langCatalog.filter(l => l.is_african).map(lang => (
+                                                <button
+                                                    key={lang.code}
+                                                    onClick={() => translateLesson(lang)}
+                                                    disabled={translating}
+                                                    className={cn(
+                                                        "flex flex-col items-start gap-0.5 px-2.5 py-1.5 rounded-xl border text-left transition-all text-[10px]",
+                                                        selectedLang?.code === lang.code
+                                                            ? "bg-emerald-500/20 border-emerald-500/40 text-white"
+                                                            : lang.quality_stars >= 3
+                                                                ? "bg-white/[0.04] border-white/[0.06] text-slate-300 hover:border-white/20 hover:text-white"
+                                                                : "bg-white/[0.02] border-white/[0.04] text-slate-500 hover:border-white/10 hover:text-slate-400",
+                                                        translating && selectedLang?.code === lang.code && "opacity-70"
+                                                    )}
+                                                    title={`${lang.name_fr} (${lang.name_native}) — Qualité : ${lang.quality_label}`}
+                                                >
+                                                    <span className="font-semibold">{lang.name_native}</span>
+                                                    <div className="flex items-center gap-1">
+                                                        <QualityStars stars={lang.quality_stars} />
+                                                        {lang.quality_stars <= 2 && (
+                                                            <span className="text-[8px] text-orange-400">{lang.quality_label}</span>
+                                                        )}
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* Traduction en cours */}
+                                        {translating && (
+                                            <div className="flex items-center gap-2 text-emerald-400 text-xs py-1">
+                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                Traduction en cours en {selectedLang?.name_fr}...
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* ── Highlight mode bar (couleurs + instruction) ── */}
                 <AnimatePresence>
@@ -839,8 +1063,60 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
                                 )}
                             </AnimatePresence>
 
-                            {/* Lesson content blocks */}
-                            {activeBlocks.length === 0 ? (
+                            {/* ── Contenu Traduit en Temps Réel ── */}
+                            {translatedContent && selectedLang ? (
+                                <div className="space-y-6">
+                                    {/* Bannière de traduction active */}
+                                    <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-600/15 via-teal-600/10 to-emerald-600/15 border border-emerald-500/30 flex items-center justify-between gap-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-xl shrink-0">
+                                                🌍
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="text-xs font-bold text-white">Traduction en {selectedLang.name_native} ({selectedLang.name_fr})</span>
+                                                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-semibold">
+                                                        <QualityStars stars={translationQuality} />
+                                                        <span className="ml-1">{selectedLang.quality_label}</span>
+                                                    </span>
+                                                </div>
+                                                <p className="text-[11px] text-slate-400 mt-0.5">
+                                                    Traduction automatique générée par l'IA d'IziTeach (Cloudflare AI).
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={resetTranslation}
+                                            className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold shrink-0 transition"
+                                        >
+                                            Original 🇫🇷
+                                        </button>
+                                    </div>
+
+                                    {/* Paragraphes traduits */}
+                                    <div className="space-y-4">
+                                        {translatedContent.split('\n\n').map((paragraph, idx) => {
+                                            const trimmed = paragraph.trim();
+                                            if (!trimmed) return null;
+                                            if (trimmed.startsWith('```')) {
+                                                return (
+                                                    <div key={idx} className="space-y-3">
+                                                        {renderTextWithCode(trimmed, notes, colorMap)}
+                                                    </div>
+                                                );
+                                            }
+                                            return (
+                                                <div
+                                                    key={idx}
+                                                    className="text-slate-100 font-normal leading-[1.9] tracking-wide whitespace-pre-line text-[15px]"
+                                                >
+                                                    {trimmed}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ) : activeBlocks.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center py-20 text-center">
                                     <BookOpen className="w-12 h-12 text-slate-600 mb-3" />
                                     <p className="text-slate-500 text-sm">Cette leçon n'a pas encore de contenu</p>
