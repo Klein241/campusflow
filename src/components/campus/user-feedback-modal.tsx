@@ -129,7 +129,7 @@ export function UserFeedbackModal({
             const { data: { user } } = await supabase.auth.getUser();
             const authUserId = user?.id || userId;
 
-            const { error } = await supabase.from('bug_reports').insert({
+            const bugPayload: Record<string, unknown> = {
                 organization_id: orgId || null,
                 org_name: orgName,
                 user_id: authUserId,
@@ -142,8 +142,14 @@ export function UserFeedbackModal({
                 page_url: typeof window !== 'undefined' ? window.location.href : null,
                 browser_info: typeof navigator !== 'undefined' ? navigator.userAgent : null,
                 status: 'open'
-            });
+            };
 
+            let { error } = await supabase.from('bug_reports').insert(bugPayload);
+            // Fallback: si l'user_id n'est pas dans public.users (étudiant/visiteur), réessayer sans user_id
+            if (error && (error.code === '23503' || error.message?.includes('foreign key'))) {
+                const { error: retryErr } = await supabase.from('bug_reports').insert({ ...bugPayload, user_id: null });
+                error = retryErr;
+            }
 
             if (error) throw error;
 
@@ -296,12 +302,14 @@ export function UserFeedbackModal({
                 organization_id:    orgId || null,
                 school_name:        orgName,
                 user_id:            userId,
-                author_name:        userName,
+                author_name:        userName || 'Membre IziTeach',
                 author_role:        userRole === 'teacher' ? 'Professeur' : 'Étudiant',
                 rating:             Number(appRating),
                 comment:            appComment.trim(),
-                sky_points_awarded: Number(pointsToAward),
-                is_featured:        true
+                points_awarded:     Number(pointsToAward),  // INTEGER
+                sky_points_awarded: true,                    // BOOLEAN (points déjà crédités)
+                is_featured:        true,
+                is_published:       true
             });
 
             if (error) throw error;

@@ -49,7 +49,7 @@ export function BugReportButton({ userId, userName, userRole, orgId, orgName, or
                 screenshot_url = uploaded?.url || null;
             }
 
-            const { error } = await supabase.from('bug_reports').insert({
+            const bugPayload: Record<string, unknown> = {
                 user_id: userId,
                 user_name: userName,
                 user_role: userRole,
@@ -60,7 +60,14 @@ export function BugReportButton({ userId, userName, userRole, orgId, orgName, or
                 description: description.trim(),
                 screenshot_url,
                 status: 'open',
-            });
+            };
+
+            let { error } = await supabase.from('bug_reports').insert(bugPayload);
+            // Fallback FK: si l'user_id n'est pas dans public.users, réessayer sans user_id
+            if (error && (error.code === '23503' || error.message?.includes('foreign key'))) {
+                const { error: retryErr } = await supabase.from('bug_reports').insert({ ...bugPayload, user_id: null });
+                error = retryErr;
+            }
 
             if (error) throw error;
 
