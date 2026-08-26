@@ -64,7 +64,7 @@ async function fetchSupabaseRest(env: Env, path: string, options: { method?: str
 
 // ── Exécuteur direct Cloudflare D1 + Synchronisation Supabase Directe ──────────────────
 async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx: { agentKey: any; isSuperadmin: boolean; orgId: string | null; agentName: string; agentId: string }, env: Env): Promise<any> {
-    const db = env.IZITEACH_DB;
+    const db = env.CAMPUSFLOW_DB;
 
     // 🔒 SÉCURITÉ MULTI-TENANT : Un agent d'école ne peut JAMAIS écraser targetOrgId
     const targetOrgId = ctx.isSuperadmin ? (args.org_id || ctx.orgId) : ctx.orgId;
@@ -2253,7 +2253,7 @@ function syncToSupabase(env: Env, tableName: string, operation: string, payload:
         body: operation === 'DELETE' ? undefined : JSON.stringify(payload),
     }).catch(() => {
         // En cas d'erreur de Supabase, enregistrer dans pending_supabase_sync sur D1 pour réconciliation automatique
-        env.IZITEACH_DB.prepare(
+        env.CAMPUSFLOW_DB.prepare(
             `INSERT INTO pending_supabase_sync (id, table_name, operation, record_id, payload, created_at, retry_count, status)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 'pending')`
         ).bind(crypto.randomUUID(), tableName, operation, recordId, JSON.stringify(payload), new Date().toISOString()).run().catch(() => {});
@@ -2265,7 +2265,7 @@ function logMcpAction(env: Env, log: { agentKeyId: string; orgId: string | null;
     const now = new Date().toISOString();
 
     // 1. Log dans D1
-    env.IZITEACH_DB.prepare(
+    env.CAMPUSFLOW_DB.prepare(
         `INSERT INTO ai_agent_logs (id, agent_key_id, organization_id, is_superadmin, tool_name, input_summary, output_summary, status, error_message, duration_ms, executed_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`
     ).bind(id, log.agentKeyId, log.orgId, log.isSuperadmin ? 1 : 0, log.toolName, log.inputSummary, log.outputSummary, log.status, log.errorMessage || null, log.durationMs, now)

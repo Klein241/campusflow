@@ -11,7 +11,7 @@ export interface Env {
     // R2 Storage (10GB free)
     LIBRARY_BUCKET: R2Bucket;
     // D1 — Miroir failover Supabase
-    IZITEACH_DB: D1Database;
+    CAMPUSFLOW_DB: D1Database;
     // Cloudflare AI — Traduction langues africaines (M2M100 Meta, gratuit)
     AI: Ai;
     // Queue (optional — only if on Workers Paid plan)

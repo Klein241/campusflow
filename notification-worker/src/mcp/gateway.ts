@@ -780,8 +780,8 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
             description: 'Passerelle MCP IziTeach haute performance pour Claude Desktop, Manus IA, Cursor, ChatGPT et agents IA autonomes.',
             authentication: 'Bearer token header (Authorization: Bearer cf_live_...)',
             endpoints: {
-                jsonrpc: `POST https://iziteach-worker.kleintaptue1.workers.dev/mcp-gateway`,
-                sse: `GET https://iziteach-worker.kleintaptue1.workers.dev/mcp-gateway`,
+                jsonrpc: `POST https://campusflow-worker.kleintaptue1.workers.dev/mcp-gateway`,
+                sse: `GET https://campusflow-worker.kleintaptue1.workers.dev/mcp-gateway`,
             },
             supported_methods: ['tools/list', 'tools/call', 'initialize', 'ping'],
             tools_count: WORKER_MCP_TOOLS.length,
@@ -805,7 +805,7 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
     // 2. Vérification sur D1 (avec fallback Supabase si absent dans D1)
     let agentKey: any = null;
     try {
-        agentKey = await env.IZITEACH_DB.prepare(
+        agentKey = await env.CAMPUSFLOW_DB.prepare(
             `SELECT * FROM ai_agent_keys WHERE key_hash = ?1 AND is_active = 1`
         ).bind(keyHash).first();
     } catch {}
