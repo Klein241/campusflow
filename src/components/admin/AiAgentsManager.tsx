@@ -951,15 +951,6 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
             )}
         </div>
     );
-
-    function resetCreateForm() {
-        setNewKeyName('');
-        setNewKeyDesc('');
-        setNewKeyPerms([]);
-        setNewKeyRate(10);
-        setNewKeyBulk(5);
-        setNewKeyExpires('');
-    }
 }
 
 // ── Agent Key Card ────────────────────────────────────────────────
