@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Globe, Star, X, Loader2, CheckCircle2, Sparkles } from 'lucide-react';
+import { Globe, Star, X, Loader2, CheckCircle2, Sparkles, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
     startBackgroundTranslation,
@@ -66,6 +66,8 @@ export function TranslationDialog({
     const [loadingLangs, setLoadingLangs] = useState(false);
     const [activeTask, setActiveTask] = useState<TranslationTask | undefined>(undefined);
     const [selectedLangCode, setSelectedLangCode] = useState<string | null>(null);
+    // Langue sélectionnée en attente de confirmation (permet le bouton Retour)
+    const [pendingLang, setPendingLang] = useState<LangCatalogEntry | null>(null);
 
     // Charger les langues
     useEffect(() => {
@@ -99,12 +101,16 @@ export function TranslationDialog({
         return () => window.removeEventListener('iziteach_translation_tasks_updated', handleUpdate);
     }, [isOpen, itemId]);
 
+    // Réinitialiser la sélection en attente quand on ferme
+    useEffect(() => {
+        if (!isOpen) setPendingLang(null);
+    }, [isOpen]);
+
     if (!isOpen) return null;
 
-    const handleSelectLanguage = async (lang: LangCatalogEntry) => {
-        setSelectedLangCode(lang.code);
-
-        // Si déjà en cache, ouvrir directement
+    // Étape 1 : l'utilisateur clique sur une langue → on affiche une confirmation
+    const handleSelectLanguage = (lang: LangCatalogEntry) => {
+        // Si déjà en cache, ouvrir directement sans confirmation
         const cached = getSavedTranslation(userId, itemId, lang.code);
         if (cached) {
             toast.success(`Traduction en ${lang.name_native} chargée depuis vos cours traduits !`);
@@ -112,6 +118,16 @@ export function TranslationDialog({
             onClose();
             return;
         }
+        // Sinon, montrer l'étape de confirmation avec bouton Retour
+        setPendingLang(lang);
+    };
+
+    // Étape 2 : l'utilisateur confirme → lancer la traduction et fermer le panneau de liste
+    const handleConfirmTranslation = async () => {
+        if (!pendingLang) return;
+        const lang = pendingLang;
+        setPendingLang(null);
+        setSelectedLangCode(lang.code);
 
         if (!rawText || !rawText.trim()) {
             toast.error('Aucun contenu textuel à traduire.');
@@ -201,8 +217,64 @@ export function TranslationDialog({
                         </div>
                     )}
 
-                    {/* Liste des langues */}
-                    <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+                    {/* Panneau de confirmation — langue sélectionnée, bouton Retour disponible */}
+                    <AnimatePresence mode="wait">
+                    {pendingLang ? (
+                        <motion.div
+                            key="confirm"
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            transition={{ duration: 0.18 }}
+                            className="flex-1 flex flex-col gap-4"
+                        >
+                            {/* Info langue */}
+                            <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-3">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-lg">
+                                        {pendingLang.is_african ? '🌍' : '🌐'}
+                                    </div>
+                                    <div>
+                                        <p className="font-black text-white text-sm">{pendingLang.name_native}</p>
+                                        <p className="text-xs text-slate-400">{pendingLang.name_fr}</p>
+                                    </div>
+                                    <div className="ml-auto flex flex-col items-end gap-1">
+                                        <QualityStars stars={pendingLang.quality_stars} />
+                                        <span className="text-[10px] text-slate-400">{pendingLang.quality_label}</span>
+                                    </div>
+                                </div>
+                                {pendingLang.quality_stars <= 2 && (
+                                    <p className="text-[11px] text-orange-300 bg-orange-500/10 border border-orange-500/20 rounded-xl px-3 py-2">
+                                        ⚠️ Qualité de traduction limitée pour cette langue — résultats expérimentaux.
+                                    </p>
+                                )}
+                            </div>
+
+                            <p className="text-xs text-slate-400 text-center">
+                                La traduction démarrera en arrière-plan. Vous pouvez continuer à naviguer.
+                            </p>
+
+                            {/* Boutons Retour + Confirmer */}
+                            <div className="flex gap-3 mt-auto">
+                                <button
+                                    onClick={() => setPendingLang(null)}
+                                    className="flex-1 flex items-center justify-center gap-2 h-10 rounded-xl bg-white/[0.05] hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-sm font-semibold transition-all"
+                                >
+                                    <ArrowLeft className="w-4 h-4" />
+                                    Retour
+                                </button>
+                                <button
+                                    onClick={handleConfirmTranslation}
+                                    className="flex-[2] flex items-center justify-center gap-2 h-10 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-sm font-black transition-all shadow-lg shadow-emerald-500/20"
+                                >
+                                    <Sparkles className="w-4 h-4" />
+                                    Traduire en {pendingLang.name_native}
+                                </button>
+                            </div>
+                        </motion.div>
+                    ) : (
+                    <motion.div key="list" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.18 }} className="flex-1 overflow-y-auto space-y-4 pr-1">
+                        {/* Liste des langues */}
                         {loadingLangs ? (
                             <div className="flex flex-col items-center justify-center py-12 text-slate-400 text-xs gap-2">
                                 <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
@@ -286,7 +358,9 @@ export function TranslationDialog({
                                 </div>
                             </>
                         )}
-                    </div>
+                    </motion.div>
+                    )}
+                    </AnimatePresence>
 
                     {/* Footer */}
                     <div className="pt-2 border-t border-white/[0.08] flex items-center justify-between text-[11px] text-slate-500">

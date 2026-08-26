@@ -1216,66 +1216,101 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                                 {chLessons.map((lesson: any, li: number) => {
                                     const done = isLessonCompleted(lesson.id);
                                     const lessonDrip = isContentUnlocked(lesson);
+                                    const isTranslated = savedTranslations.some(t => t.id === lesson.id);
+
                                     return (
-                                        <motion.div key={lesson.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: li * 0.04 }}
-                                            className={cn('rounded-xl border overflow-hidden transition-all',
+                                        <motion.div
+                                            key={lesson.id}
+                                            initial={{ opacity: 0, y: 6 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ delay: li * 0.04 }}
+                                            className={cn(
+                                                'rounded-2xl border p-3.5 transition-all space-y-3',
                                                 !lessonDrip.isUnlocked
                                                     ? 'border-amber-500/20 bg-amber-500/[0.03]'
                                                     : done
-                                                        ? 'border-emerald-500/25 bg-emerald-500/[0.05]'
-                                                        : 'border-white/[0.08] bg-white/[0.03]')}>
-                                            <div className="flex items-center gap-2.5 px-3 py-3">
-                                                <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+                                                        ? 'border-emerald-500/25 bg-emerald-500/[0.04]'
+                                                        : 'border-white/[0.08] bg-white/[0.03] hover:border-white/15'
+                                            )}
+                                        >
+                                            {/* ── En-tête : Icône + Titre complet + Badges ── */}
+                                            <div className="flex items-start gap-3">
+                                                <div className={cn(
+                                                    'w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5',
                                                     !lessonDrip.isUnlocked
-                                                        ? 'bg-amber-500/15'
+                                                        ? 'bg-amber-500/15 text-amber-400'
                                                         : done
-                                                            ? 'bg-emerald-500/20'
-                                                            : 'bg-white/[0.06]')}>
+                                                            ? 'bg-emerald-500/20 text-emerald-400'
+                                                            : 'bg-indigo-500/15 text-indigo-400'
+                                                )}>
                                                     {!lessonDrip.isUnlocked ? (
-                                                        <Lock className="w-4 h-4 text-amber-400" />
+                                                        <Lock className="w-4 h-4" />
                                                     ) : done ? (
-                                                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                                        <CheckCircle2 className="w-4 h-4" />
                                                     ) : (
-                                                        <Play className="w-3.5 h-3.5 text-slate-400" />
+                                                        <BookOpen className="w-4 h-4" />
                                                     )}
                                                 </div>
+
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-semibold text-white leading-tight">{lesson.title}</p>
-                                                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <h4 className="text-sm font-bold text-white leading-snug break-words">
+                                                            {lesson.title}
+                                                        </h4>
+                                                        <div className="shrink-0">
+                                                            <DiscussButton
+                                                                context={{ type: 'lesson', id: lesson.id, title: lesson.title, parentTitle: selectedCh?.title }}
+                                                                orgId={orgId}
+                                                                userId={userId}
+                                                                userName={userName}
+                                                                onOpenChat={onOpenGroupChat || (() => {})}
+                                                                size="xs"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Badges d'informations */}
+                                                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                                                         {!lessonDrip.isUnlocked && lessonDrip.statusBadgeLabel ? (
-                                                            <span className="text-[9px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded-md">
+                                                            <span className="text-[9px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-md">
                                                                 🔒 {lessonDrip.statusBadgeLabel}
                                                             </span>
                                                         ) : null}
+                                                        {lesson.estimated_minutes && (
+                                                            <span className="text-[10px] text-slate-400 bg-white/[0.04] px-2 py-0.5 rounded-md flex items-center gap-1">
+                                                                <Clock className="w-2.5 h-2.5 text-slate-500" />
+                                                                {lesson.estimated_minutes} min
+                                                            </span>
+                                                        )}
                                                         {lesson.language && lesson.language !== 'fr' && (
-                                                            <span className="text-[9px] font-bold text-violet-300 bg-violet-500/15 border border-violet-500/30 px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                                                            <span className="text-[9px] font-bold text-violet-300 bg-violet-500/15 border border-violet-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
                                                                 🌍 {lesson.language.toUpperCase()}
                                                             </span>
                                                         )}
-                                                        {lesson.content_original && (
-                                                            <span className="text-[9px] font-bold text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded-md">
-                                                                2 Langues
+                                                        {isTranslated && (
+                                                            <span className="text-[9px] font-bold text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                                                ✨ Traduit
                                                             </span>
                                                         )}
-                                                        {lesson.estimated_minutes && (
-                                                            <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
-                                                                <Clock className="w-2.5 h-2.5" />{lesson.estimated_minutes} min
+                                                        {done && (
+                                                            <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-md">
+                                                                ✓ Terminé
                                                             </span>
                                                         )}
-                                                        {done && <span className="text-[10px] text-emerald-400 font-medium">✓ Terminé</span>}
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-1 shrink-0">
-                                                    <DiscussButton context={{ type: 'lesson', id: lesson.id, title: lesson.title, parentTitle: selectedCh?.title }}
-                                                        orgId={orgId} userId={userId} userName={userName}
-                                                        onOpenChat={onOpenGroupChat || (() => {})} size="xs" />
-                                                    {!lessonDrip.isUnlocked ? (
-                                                        <div className="text-[10px] text-amber-400 font-medium px-2 py-1 bg-amber-500/10 rounded-lg border border-amber-500/20">
-                                                            🔒 Verrouillé
-                                                        </div>
-                                                    ) : (
-                                                        <>
-                                                            {/* Bouton Traduire sur la carte de leçon */}
+                                            </div>
+
+                                            {/* ── Barre d'actions épurée et espacée ── */}
+                                            <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between gap-2 flex-wrap">
+                                                {!lessonDrip.isUnlocked ? (
+                                                    <div className="w-full text-center text-xs text-amber-400 font-medium py-1.5 bg-amber-500/10 rounded-xl border border-amber-500/20">
+                                                        🔒 Leçon Verrouillée selon le calendrier pédagogique
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        {/* Actions Secondaires : Traduire & Notes */}
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
                                                             {lesson.content && (
                                                                 <button
                                                                     onClick={() => {
@@ -1302,55 +1337,68 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                                                                     }}
                                                                     title="Traduire cette leçon avec IziTeach IA"
                                                                     className={cn(
-                                                                        "flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all",
-                                                                        savedTranslations.some(t => t.id === lesson.id)
-                                                                            ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30"
-                                                                            : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20"
+                                                                        "flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all shadow-sm",
+                                                                        isTranslated
+                                                                            ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/30"
+                                                                            : "bg-emerald-500/10 border-emerald-500/25 text-emerald-300 hover:bg-emerald-500/20"
                                                                     )}
                                                                 >
-                                                                    <Globe className="w-3 h-3" />
+                                                                    <Globe className="w-3.5 h-3.5" />
                                                                     <span>Traduire</span>
-                                                                    {savedTranslations.some(t => t.id === lesson.id) && (
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                                                                    )}
                                                                 </button>
                                                             )}
-                                                            {/* Bloc Notes button */}
+
                                                             <button
-                                                                onClick={() => setBlocNotesLesson({ ...lesson, chapter_title: selectedCh?.title })}
-                                                                title="Bloc Notes"
-                                                                className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-semibold hover:bg-indigo-500/20 transition-all">
-                                                                📝
+                                                                onClick={() => setBlocNotesLesson({ ...lesson, chapter_title: selectedCh?.title, subject_title: selectedSub?.name })}
+                                                                title="Prendre des notes sur cette leçon"
+                                                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 hover:bg-indigo-500/20 text-xs font-semibold transition-all"
+                                                            >
+                                                                <StickyNote className="w-3.5 h-3.5" />
+                                                                <span>Notes</span>
                                                             </button>
-                                                            {lesson.content && (
-                                                                <button onClick={() => setReaderLesson({ ...lesson, chapter_title: selectedCh?.title })}
-                                                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-500/15 border border-indigo-500/25 text-indigo-400 text-[10px] font-semibold hover:bg-indigo-500/25 transition-all">
-                                                                    <Maximize2 className="w-3 h-3" />Lire
-                                                                </button>
-                                                            )}
+                                                        </div>
+
+                                                        {/* Actions Principales : Vidéo, Lire, Fait */}
+                                                        <div className="flex items-center gap-1.5 flex-wrap ml-auto">
                                                             {lesson.video_url && (
-                                                                <button onClick={async () => {
-                                                                    setVideoPopup({ url: lesson.video_url, title: lesson.title, contentId: lesson.id, contentType: 'lesson' });
-                                                                    setVideoNote('');
-                                                                    setVideoStartTime(Date.now());
-                                                                    // Track view
-                                                                    await supabase.from('lesson_video_views').upsert({
-                                                                        user_id: userId, content_type: 'lesson', content_id: lesson.id, organization_id: orgId, opened_at: new Date().toISOString()
-                                                                    }, { onConflict: 'user_id,content_type,content_id', ignoreDuplicates: false });
-                                                                }}
-                                                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-violet-500/15 border border-violet-500/25 text-violet-400 text-[10px] font-semibold hover:bg-violet-500/25 transition-all">
-                                                                    🎦 Vidéo
+                                                                <button
+                                                                    onClick={async () => {
+                                                                        setVideoPopup({ url: lesson.video_url, title: lesson.title, contentId: lesson.id, contentType: 'lesson' });
+                                                                        setVideoNote('');
+                                                                        setVideoStartTime(Date.now());
+                                                                        await supabase.from('lesson_video_views').upsert({
+                                                                            user_id: userId, content_type: 'lesson', content_id: lesson.id, organization_id: orgId, opened_at: new Date().toISOString()
+                                                                        }, { onConflict: 'user_id,content_type,content_id', ignoreDuplicates: false });
+                                                                    }}
+                                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-500/15 border border-violet-500/30 text-violet-300 text-xs font-bold hover:bg-violet-500/25 transition-all"
+                                                                >
+                                                                    <Play className="w-3.5 h-3.5" />
+                                                                    <span>Vidéo</span>
                                                                 </button>
                                                             )}
+
+                                                            {lesson.content && (
+                                                                <button
+                                                                    onClick={() => setReaderLesson({ ...lesson, chapter_title: selectedCh?.title, subject_title: selectedSub?.name })}
+                                                                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-950/40"
+                                                                >
+                                                                    <Maximize2 className="w-3.5 h-3.5" />
+                                                                    <span>Lire</span>
+                                                                </button>
+                                                            )}
+
                                                             {!done && (
-                                                                <button onClick={() => markLessonDone(lesson.id)}
-                                                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 text-[10px] font-semibold hover:bg-emerald-500/25 transition-all">
-                                                                    ✅ Fait
+                                                                <button
+                                                                    onClick={() => markLessonDone(lesson.id)}
+                                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold hover:bg-emerald-500/25 transition-all"
+                                                                >
+                                                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                                                    <span>Fait</span>
                                                                 </button>
                                                             )}
-                                                        </>
-                                                    )}
-                                                </div>
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                         </motion.div>
                                     );

@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Star, Send, Loader2, CheckCircle2, Edit3, MessageSquare } from 'lucide-react';
+import { Star, Send, Loader2, CheckCircle2, Edit3, MessageSquare, Gift, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { creditSkyPoints } from '@/lib/sky-points-service';
 
 interface ReviewSectionProps {
     userId: string;
@@ -78,6 +79,7 @@ export function ReviewSection({ userId, userName, userRole, orgId, orgName }: Re
                 is_verified: true,
             };
 
+            const isFirstReview = !existingReview;
             let error;
             if (existingReview) {
                 ({ error } = await supabase
@@ -90,11 +92,35 @@ export function ReviewSection({ userId, userName, userRole, orgId, orgName }: Re
 
             if (error) throw error;
 
+            // Créditer le bonus Sky Points pour le premier avis (50 points)
+            if (isFirstReview && userId) {
+                try {
+                    await creditSkyPoints(
+                        userId,
+                        50,
+                        'review_bonus',
+                        `Bonus avis ${rating} étoiles pour ${orgName}`,
+                        userRole,
+                        orgId
+                    );
+                } catch (creditErr) {
+                    console.warn('Could not credit review Sky points bonus:', creditErr);
+                }
+            }
+
             setSaved(true);
             setEditing(false);
             await loadReview();
             setTimeout(() => setSaved(false), 2000);
-            toast.success(existingReview ? '✅ Avis mis à jour !' : '⭐ Avis publié avec succès !');
+            
+            if (isFirstReview) {
+                toast.success('🎉 Avis publié avec succès ! +50 Sky Points crédités sur votre compte !', {
+                    duration: 6000,
+                    icon: '🎁'
+                });
+            } else {
+                toast.success('✅ Votre avis a été mis à jour avec succès !');
+            }
         } catch (e: any) {
             toast.error('Erreur : ' + e.message);
         } finally {
@@ -153,6 +179,13 @@ export function ReviewSection({ userId, userName, userRole, orgId, orgName }: Re
             {/* Form (new or editing) */}
             {(!existingReview || editing) && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+                    {!existingReview && (
+                        <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs font-semibold">
+                            <Gift className="w-4 h-4 text-amber-400 shrink-0" />
+                            <span>🎁 <strong>+50 Sky Points</strong> offerts immédiatement lors de la publication de votre avis !</span>
+                        </div>
+                    )}
+
                     {/* Star rating */}
                     <div>
                         <label className="text-xs font-bold text-slate-400 block mb-2">Note globale <span className="text-red-400">*</span></label>

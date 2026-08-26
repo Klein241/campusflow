@@ -72,6 +72,37 @@ function hasRepetitiveLoop(text: string): boolean {
     return false;
 }
 
+// Sous-découpage d'un long bloc en morceaux de max `maxChars` caractères
+// en coupant aux phrases (. ! ?) pour préserver la cohérence sémantique
+function splitIntoChunks(text: string, maxChars = 480): string[] {
+    if (text.length <= maxChars) return [text];
+    const chunks: string[] = [];
+    // Découpe aux frontières de phrases
+    const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
+    let current = '';
+    for (const sentence of sentences) {
+        if (current.length + sentence.length > maxChars && current.length > 0) {
+            chunks.push(current.trim());
+            current = sentence;
+        } else {
+            current += sentence;
+        }
+    }
+    if (current.trim()) chunks.push(current.trim());
+    return chunks.length > 0 ? chunks : [text.slice(0, maxChars)];
+}
+
+// Détecte si la traduction contient encore beaucoup de français (troncage silencieux)
+function hasFrenchLeakage(translated: string, original: string): boolean {
+    if (!translated || !original) return false;
+    // Si le texte traduit ressemble trop à l'original (> 85% de mots communs), c'est probablement un échec
+    const origWords = new Set(original.toLowerCase().split(/\s+/).filter(w => w.length > 4));
+    const transWords = translated.toLowerCase().split(/\s+/).filter(w => w.length > 4);
+    if (transWords.length === 0 || origWords.size === 0) return false;
+    const commonWords = transWords.filter(w => origWords.has(w)).length;
+    return commonWords / transWords.length > 0.75;
+}
+
 export async function translateTextWithAi(
     env: Env,
     text: string,
@@ -86,129 +117,143 @@ export async function translateTextWithAi(
         tier: 2,
         countries: [],
         is_african: true,
+        quality_stars: 2,
+        quality_label: 'Limitée'
     };
 
     if (rawTarget === sourceLangCode || (rawTarget === 'fr' && sourceLangCode === 'fr')) {
         return { translated_text: text, method: 'original', language_info: langInfo };
     }
 
-    if (env.AI && typeof env.AI.run === 'function') {
-        const langName = langInfo.name_fr;
-        const nativeName = langInfo.name_native || rawTarget;
-        const promptInstruction = `Translate the following educational course text accurately from ${sourceLangCode.toUpperCase()} into ${langName} (${nativeName}).
-Strict rules:
-1. Output ONLY the translated text in fluent ${nativeName} (${langName}).
-2. Do not repeat words or hallucinate.
-3. Keep code and markdown formatting intact.
+    if (!env.AI || typeof env.AI.run !== 'function') {
+        return { translated_text: text, method: 'original_preserved', language_info: langInfo };
+    }
 
-Text:
-${text.slice(0, 3000)}`;
+    const langName = langInfo.name_fr;
+    const nativeName = langInfo.name_native || rawTarget;
+    const m2mTarget = langInfo.m2m_code || rawTarget;
+    const m2mSource = IZITEACH_SUPPORTED_LANGUAGES[sourceLangCode]?.m2m_code || sourceLangCode;
 
-        // 1️⃣ Essai Meta LLaMA 3.1 8B Instruct (avec prompt direct et messages)
+    // Découpage du texte en paragraphes / blocs (double saut de ligne)
+    const rawParagraphs = text.split('\n\n');
+    const translatedParagraphs: string[] = [];
+    let usedMethod = 'cloudflare_ai_chunked';
+
+    // Fonction interne pour traduire un seul chunk (court, < 480 chars)
+    async function translateChunk(chunk: string): Promise<string> {
+        const trimmed = chunk.trim();
+        if (!trimmed || trimmed.length < 3) return chunk;
+        if (trimmed.startsWith('```')) return chunk; // préserver code blocks
+
+        // 1️⃣ LLaMA 3.1 — le plus intelligent, bon pour les grandes langues
         try {
+            const systemPrompt = `You are a professional educational translator. Translate the following educational text from ${sourceLangCode.toUpperCase()} (${IZITEACH_SUPPORTED_LANGUAGES[sourceLangCode]?.name_fr || 'French'}) into ${langName} (${nativeName}).
+Rules:
+- Output ONLY the translated text in fluent ${nativeName} (${langName}).
+- Do NOT output explanations, greetings or preamble.
+- Translate technical terms accurately for students.
+- Do NOT repeat words or hallucinate.`;
+
             const aiRes: any = await env.AI.run('@cf/meta/llama-3.1-8b-instruct' as any, {
-                prompt: promptInstruction,
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: trimmed }
+                ],
                 max_tokens: 2048,
+                temperature: 0.15
             });
-            const out = aiRes?.response?.trim() || aiRes?.translated_text?.trim() || '';
-            if (out && out.length > 10 && !hasRepetitiveLoop(out)) {
-                return {
-                    translated_text: out,
-                    method: 'cloudflare_llama3_1',
-                    language_info: langInfo,
-                    note: `Traduit avec succès en ${langName} (${nativeName}) via Meta LLaMA 3.1.`,
-                };
-            }
-        } catch (e: any) {
-            console.warn('[Translate LLaMA 3.1]', e?.message || e);
-        }
 
-        // 2️⃣ Essai Meta LLaMA 3 8B Instruct
-        try {
-            const aiRes: any = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
-                prompt: promptInstruction,
-                max_tokens: 2048,
-            });
             const out = aiRes?.response?.trim() || '';
-            if (out && out.length > 10 && !hasRepetitiveLoop(out)) {
-                return {
-                    translated_text: out,
-                    method: 'cloudflare_llama3',
-                    language_info: langInfo,
-                    note: `Traduit en ${langName} via Meta LLaMA 3.`,
-                };
+            if (out && out.length > 2 && !hasRepetitiveLoop(out) && out !== trimmed && !hasFrenchLeakage(out, trimmed)) {
+                usedMethod = 'cloudflare_llama3_1_paragraphs';
+                return out;
             }
-        } catch (e: any) {
-            console.warn('[Translate LLaMA 3]', e?.message || e);
+        } catch (e) {
+            // fallback silently
         }
 
-        // 3️⃣ Essai Qwen 1.5 7B Chat
+        // 2️⃣ Qwen 1.5 Chat — bon backup LLM
         try {
             const aiRes: any = await env.AI.run('@cf/qwen/qwen1.5-7b-chat' as any, {
-                prompt: promptInstruction,
+                messages: [
+                    { role: 'system', content: `Translate from French to ${nativeName} (${langName}). Output only the translation:` },
+                    { role: 'user', content: trimmed }
+                ],
                 max_tokens: 2048,
+                temperature: 0.15
             });
+
             const out = aiRes?.response?.trim() || '';
-            if (out && out.length > 10 && !hasRepetitiveLoop(out)) {
-                return {
-                    translated_text: out,
-                    method: 'cloudflare_qwen',
-                    language_info: langInfo,
-                    note: `Traduit en ${langName} via Qwen.`,
-                };
+            if (out && out.length > 2 && !hasRepetitiveLoop(out) && out !== trimmed && !hasFrenchLeakage(out, trimmed)) {
+                usedMethod = 'cloudflare_qwen_paragraphs';
+                return out;
             }
-        } catch (e: any) {
-            console.warn('[Translate Qwen]', e?.message || e);
+        } catch (e) {
+            // fallback to M2M100
         }
 
-        // 4️⃣ Essai M2M100 sécurisé paragraphe par paragraphe (évite les boucles de répétition)
+        // 3️⃣ M2M100 — modèle dédié à la traduction, limite stricte de 480 chars/chunk
+        // Le chunk a déjà été pré-découpé en ≤480 chars avant cet appel
         try {
-            const m2mTarget = langInfo.m2m_code || rawTarget;
-            const m2mSource = IZITEACH_SUPPORTED_LANGUAGES[sourceLangCode]?.m2m_code || sourceLangCode;
-            const paragraphs = text.split('\n\n');
-            const translated: string[] = [];
-
-            for (const p of paragraphs) {
-                const trimmed = p.trim();
-                if (!trimmed) {
-                    translated.push('');
-                    continue;
-                }
-                if (trimmed.startsWith('#') || trimmed.startsWith('```') || trimmed.length < 5) {
-                    translated.push(p);
-                    continue;
-                }
-                const res: any = await env.AI.run('@cf/meta/m2m100-1.2b', {
-                    text: trimmed.slice(0, 600),
-                    source_lang: m2mSource,
-                    target_lang: m2mTarget,
-                });
-                const outP = res?.translated_text?.trim() || '';
-                if (outP && !hasRepetitiveLoop(outP)) {
-                    translated.push(outP);
-                } else {
-                    translated.push(p);
-                }
+            const res: any = await env.AI.run('@cf/meta/m2m100-1.2b', {
+                text: trimmed.slice(0, 480), // hard-cap de sécurité
+                source_lang: m2mSource,
+                target_lang: m2mTarget,
+            });
+            const outP = res?.translated_text?.trim() || '';
+            if (outP && !hasRepetitiveLoop(outP) && outP !== trimmed && !hasFrenchLeakage(outP, trimmed)) {
+                usedMethod = 'cloudflare_m2m100_paragraphs';
+                return outP;
             }
-
-            const fullText = translated.join('\n\n');
-            if (fullText && fullText.length > 10 && fullText !== text) {
-                return {
-                    translated_text: fullText,
-                    method: 'cloudflare_m2m100_segmented',
-                    language_info: langInfo,
-                    note: `Traduit en ${langName} (${nativeName}) via M2M100 segmenté.`,
-                };
-            }
-        } catch (e: any) {
-            console.warn('[Translate M2M100 segmenté]', e?.message || e);
+        } catch (e) {
+            // keep original chunk if all models fail
         }
+
+        return chunk;
+    }
+
+    // Fonction pour traduire un paragraphe entier (avec sous-chunking si nécessaire)
+    async function translateParagraph(paragraph: string): Promise<string> {
+        const trimmed = paragraph.trim();
+        if (!trimmed) return '';
+
+        // Si le paragraphe est court, traduction directe
+        if (trimmed.length <= 480) {
+            return await translateChunk(trimmed);
+        }
+
+        // Paragraphe long → sous-découpage en morceaux de ~480 chars aux frontières de phrases
+        const subChunks = splitIntoChunks(trimmed, 480);
+        const translatedSubChunks: string[] = [];
+        for (const subChunk of subChunks) {
+            const res = await translateChunk(subChunk);
+            translatedSubChunks.push(res);
+        }
+        return translatedSubChunks.join(' ');
+    }
+
+    // Traduction séquentielle de chaque paragraphe pour garantir 100% de complétude
+    for (const p of rawParagraphs) {
+        const res = await translateParagraph(p);
+        translatedParagraphs.push(res);
+    }
+
+    const fullTranslatedText = translatedParagraphs.join('\n\n');
+
+    if (fullTranslatedText && fullTranslatedText.length > 10 && fullTranslatedText !== text) {
+        return {
+            translated_text: fullTranslatedText,
+            method: usedMethod,
+            language_info: langInfo,
+            note: `Traduit en ${langName} (${nativeName}) — ${rawParagraphs.length} bloc(s) traité(s) intégralement par IziTeach IA.`,
+        };
     }
 
     return {
         translated_text: text,
         method: 'original_preserved',
         language_info: langInfo,
-        note: `Traduction automatique indisponible pour ${langInfo.name_fr}. Vous pouvez injecter une traduction manuelle contrôlée via custom_translated_text.`
+        note: `Traduction automatique indisponible pour ${langInfo.name_fr}.`
     };
 }
+

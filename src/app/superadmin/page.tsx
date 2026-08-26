@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { uploadToR2 } from '@/lib/r2';
 import { SuperadminStylesPricing } from '@/components/superadmin/superadmin-styles-pricing';
-import { SuperadminOrgCards } from '@/components/superadmin/superadmin-org-cards';
+import { SuperadminOrgCards, OrgCardItem } from '@/components/superadmin/superadmin-org-cards';
 import { SuperadminNotificationBell } from '@/components/superadmin/SuperadminNotificationBell';
 import { IziTeachLogo } from '@/components/brand/iziteach-logo';
 import { SkyAgentSuperadminManager } from '@/components/superadmin/SkyAgentSuperadminManager';
@@ -48,21 +48,8 @@ interface Stats {
     new_orgs_week: number;
 }
 
-interface OrgItem {
-    id: string;
-    name: string;
-    slug: string;
-    school_type: string;
-    city: string;
-    country: string;
-    custom_domain: string | null;
-    domain_verified: boolean;
-    is_active: boolean;
-    created_at: string;
-    student_count: number;
-    teacher_count: number;
-    logo_url: string | null;
-}
+// OrgItem is now imported as OrgCardItem from superadmin-org-cards
+type OrgItem = OrgCardItem;
 
 interface UserItem {
     id: string;
@@ -278,43 +265,50 @@ export default function SuperAdminPage() {
             if (settled[2].status === 'fulfilled') usersRes = settled[2].value;
             if (settled[3].status === 'fulfilled') activityRes = settled[3].value;
 
-            // 1. Process or Fallback Organizations
-            let finalOrgs: OrgItem[] = (orgsRes?.data as OrgItem[]) || [];
-            if (!finalOrgs || finalOrgs.length === 0) {
-                const { data: directOrgs } = await supabase
-                    .from('organizations')
-                    .select('*')
-                    .order('created_at', { ascending: false });
+            // 1. Process Organizations with complete direct data (certification_badge, badge_title, sky_points, etc.)
+            let finalOrgs: OrgCardItem[] = [];
+            const { data: directOrgs, error: orgErr } = await supabase
+                .from('organizations')
+                .select('*')
+                .order('created_at', { ascending: false });
 
-                if (directOrgs && directOrgs.length > 0) {
-                    const { data: allStudents } = await supabase.from('student_profiles').select('id, organization_id');
-                    const { data: allTeachers } = await supabase.from('teacher_profiles').select('id, organization_id');
+            if (directOrgs && directOrgs.length > 0) {
+                const { data: allStudents } = await supabase.from('student_profiles').select('id, organization_id');
+                const { data: allTeachers } = await supabase.from('teacher_profiles').select('id, organization_id');
 
-                    finalOrgs = directOrgs.map(o => ({
-                        id: o.id,
-                        name: o.name,
-                        slug: o.slug,
-                        school_type: o.school_type || o.type || 'École',
-                        city: o.city || '',
-                        country: o.country || 'Cameroun',
-                        custom_domain: o.custom_domain,
-                        domain_verified: !!o.domain_verified,
-                        is_active: o.is_active !== false,
-                        created_at: o.created_at,
-                        logo_url: o.logo_url,
-                        student_count: (allStudents || []).filter(s => s.organization_id === o.id).length,
-                        teacher_count: (allTeachers || []).filter(t => t.organization_id === o.id).length,
-                        sky_points: o.sky_points || 0,
-                        phone: o.phone || '',
-                        email: o.email || '',
-                        brand_color: o.brand_color || '',
-                        // Badge certification
-                        certification_badge: o.certification_badge || 'none',
-                        badge_title: o.badge_title || null,
-                        is_online_academy: !!o.is_online_academy,
-                        verification_docs: o.verification_docs || [],
-                    }));
-                }
+                finalOrgs = directOrgs.map(o => ({
+                    id: o.id,
+                    name: o.name,
+                    slug: o.slug,
+                    school_type: o.school_type || o.type || 'École',
+                    city: o.city || '',
+                    country: o.country || 'Cameroun',
+                    custom_domain: o.custom_domain,
+                    domain_verified: !!o.domain_verified,
+                    is_active: o.is_active !== false,
+                    created_at: o.created_at,
+                    logo_url: o.logo_url,
+                    student_count: (allStudents || []).filter(s => s.organization_id === o.id).length,
+                    teacher_count: (allTeachers || []).filter(t => t.organization_id === o.id).length,
+                    sky_points: typeof o.sky_points === 'number' ? o.sky_points : 1000,
+                    phone: o.phone || '',
+                    email: o.email || '',
+                    brand_color: o.brand_color || '',
+                    hero_template: o.hero_template || '',
+                    landing_layout: o.landing_layout || '',
+                    // Badge certification
+                    certification_badge: o.certification_badge || 'none',
+                    badge_title: o.badge_title || null,
+                    is_online_academy: !!o.is_online_academy,
+                    verification_docs: o.verification_docs || [],
+                }));
+            } else if (orgsRes?.data && orgsRes.data.length > 0) {
+                finalOrgs = (orgsRes.data as any[]).map(o => ({
+                    ...o,
+                    certification_badge: o.certification_badge || 'none',
+                    badge_title: o.badge_title || null,
+                    sky_points: typeof o.sky_points === 'number' ? o.sky_points : 1000,
+                }));
             }
             setOrgs(finalOrgs);
 

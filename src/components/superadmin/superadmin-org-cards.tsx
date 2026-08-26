@@ -87,35 +87,71 @@ export function SuperadminOrgCards({
     const [detailLoading, setDetailLoading] = useState(false);
     const [detailTab, setDetailTab] = useState<'overview' | 'students' | 'teachers' | 'programs'>('overview');
 
-    // Open detail modal & load rosters
+    // Open detail modal & load rosters safely
     const openDetailModal = async (org: OrgCardItem) => {
         setDetailOrg(org);
         setDetailTab('overview');
         setDetailLoading(true);
         try {
-            // Load students
-            const { data: stData } = await supabase
-                .from('student_profiles')
-                .select('*')
-                .or(`organization_id.eq.${org.id},org_slug.eq.${org.slug}`)
-                .order('created_at', { ascending: false });
-            setDetailStudents(stData || []);
+            // Load students safely (direct organization_id query with fallback)
+            let stData: any[] = [];
+            try {
+                const { data, error } = await supabase
+                    .from('student_profiles')
+                    .select('*')
+                    .eq('organization_id', org.id)
+                    .order('created_at', { ascending: false });
+                if (!error && data && data.length > 0) {
+                    stData = data;
+                } else {
+                    // Fallback to org_id or org_slug if column exists
+                    const { data: fbData } = await supabase
+                        .from('student_profiles')
+                        .select('*')
+                        .or(`organization_id.eq.${org.id},org_id.eq.${org.id}`);
+                    if (fbData && fbData.length > 0) stData = fbData;
+                }
+            } catch (e) {
+                console.error('Error loading students for roster:', e);
+            }
+            setDetailStudents(stData);
 
-            // Load teachers
-            const { data: tcData } = await supabase
-                .from('teacher_profiles')
-                .select('*')
-                .or(`organization_id.eq.${org.id},org_slug.eq.${org.slug}`)
-                .order('created_at', { ascending: false });
-            setDetailTeachers(tcData || []);
+            // Load teachers safely
+            let tcData: any[] = [];
+            try {
+                const { data, error } = await supabase
+                    .from('teacher_profiles')
+                    .select('*')
+                    .eq('organization_id', org.id)
+                    .order('created_at', { ascending: false });
+                if (!error && data && data.length > 0) {
+                    tcData = data;
+                } else {
+                    const { data: fbData } = await supabase
+                        .from('teacher_profiles')
+                        .select('*')
+                        .or(`organization_id.eq.${org.id},org_id.eq.${org.id}`);
+                    if (fbData && fbData.length > 0) tcData = fbData;
+                }
+            } catch (e) {
+                console.error('Error loading teachers for roster:', e);
+            }
+            setDetailTeachers(tcData);
 
-            // Load programs
-            const { data: prData } = await supabase
-                .from('programs')
-                .select('*')
-                .or(`organization_id.eq.${org.id},org_slug.eq.${org.slug}`)
-                .order('created_at', { ascending: false });
-            setDetailPrograms(prData || []);
+            // Load programs (filieres and classrooms)
+            let prData: any[] = [];
+            try {
+                const [filRes, clsRes] = await Promise.allSettled([
+                    supabase.from('filieres').select('*').eq('organization_id', org.id),
+                    supabase.from('classrooms').select('*').eq('organization_id', org.id)
+                ]);
+                const filieres = filRes.status === 'fulfilled' && filRes.value.data ? filRes.value.data.map(f => ({ ...f, _type: 'filiere' })) : [];
+                const classrooms = clsRes.status === 'fulfilled' && clsRes.value.data ? clsRes.value.data.map(c => ({ ...c, _type: 'classroom' })) : [];
+                prData = [...filieres, ...classrooms];
+            } catch (e) {
+                console.error('Error loading filieres/classrooms for roster:', e);
+            }
+            setDetailPrograms(prData);
         } catch (err: any) {
             console.error('Error loading org details:', err);
         } finally {
@@ -134,16 +170,23 @@ export function SuperadminOrgCards({
         if (!badgeModalOrg) return;
         setSavingBadge(true);
         try {
+            const finalTitle = badgeTitle.trim() || (badgeType === 'verified_physical' ? 'Établissement Agréé' : badgeType === 'verified_online' ? 'Académie Certifiée' : null);
             const { error } = await supabase
                 .from('organizations')
                 .update({
                     certification_badge: badgeType,
-                    badge_title: badgeTitle.trim() || null,
+                    badge_title: finalTitle,
                     badge_issued_at: badgeType !== 'none' ? new Date().toISOString() : null,
                 })
                 .eq('id', badgeModalOrg.id);
+
             if (error) throw error;
-            toast.success(badgeType === 'none' ? 'Badge retiré.' : `Badge ${badgeType === 'verified_physical' ? '🏛️ Établissement Agréé' : '🎓 Académie Certifiée'} attribué !`);
+
+            toast.success(badgeType === 'none' ? 'Badge retiré.' : `Badge ${badgeType === 'verified_physical' ? '🏛️ Établissement Agréé' : '🎓 Académie Certifiée'} validé avec succès !`);
+            
+            // Sync locally in state
+            badgeModalOrg.certification_badge = badgeType;
+            badgeModalOrg.badge_title = finalTitle;
             setBadgeModalOrg(null);
             onRefresh();
         } catch (err: any) {
@@ -176,22 +219,41 @@ export function SuperadminOrgCards({
         setEditCustomDomain(org.custom_domain || '');
     };
 
-    // Save edited org
+    // Save edited org with cascade update
     const handleSaveEdit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editOrg) return;
         setSavingEdit(true);
         try {
+            const oldSlug = (editOrg.slug || '').trim().toLowerCase();
+            const newSlug = editSlug.trim().toLowerCase();
+            const newName = editName.trim();
+
             // Check uniqueness of name if changed
-            if (editName.trim().toLowerCase() !== (editOrg.name || '').toLowerCase()) {
+            if (newName.toLowerCase() !== (editOrg.name || '').toLowerCase()) {
                 const { data: dup } = await supabase
                     .from('organizations')
                     .select('id')
-                    .ilike('name', editName.trim())
+                    .ilike('name', newName)
                     .neq('id', editOrg.id)
                     .limit(1);
                 if (dup && dup.length > 0) {
-                    toast.error(`Un établissement portant le nom "${editName.trim()}" existe déjà.`);
+                    toast.error(`Un établissement portant le nom "${newName}" existe déjà.`);
+                    setSavingEdit(false);
+                    return;
+                }
+            }
+
+            // Check uniqueness of slug if changed
+            if (newSlug !== oldSlug) {
+                const { data: dupSlug } = await supabase
+                    .from('organizations')
+                    .select('id')
+                    .eq('slug', newSlug)
+                    .neq('id', editOrg.id)
+                    .limit(1);
+                if (dupSlug && dupSlug.length > 0) {
+                    toast.error(`Le slug "${newSlug}" est déjà utilisé par un autre établissement.`);
                     setSavingEdit(false);
                     return;
                 }
@@ -200,9 +262,10 @@ export function SuperadminOrgCards({
             const { error } = await supabase
                 .from('organizations')
                 .update({
-                    name: editName.trim(),
-                    slug: editSlug.trim().toLowerCase(),
+                    name: newName,
+                    slug: newSlug,
                     type: editType,
+                    school_type: editType,
                     city: editCity.trim(),
                     country: editCountry.trim(),
                     phone: editPhone.trim(),
@@ -211,13 +274,36 @@ export function SuperadminOrgCards({
                 })
                 .eq('id', editOrg.id);
 
-            if (error) {
-                toast.error('Erreur lors de la mise à jour : ' + error.message);
-            } else {
-                toast.success(`Établissement "${editName}" mis à jour avec succès !`);
-                setEditOrg(null);
-                onRefresh();
+            if (error) throw error;
+
+            // Cascade updates to all related tables if slug changed
+            if (oldSlug !== newSlug) {
+                try {
+                    await Promise.allSettled([
+                        supabase.from('student_profiles').update({ org_slug: newSlug }).eq('organization_id', editOrg.id),
+                        supabase.from('teacher_profiles').update({ org_slug: newSlug }).eq('organization_id', editOrg.id),
+                        supabase.from('student_pending_registrations').update({ org_slug: newSlug }).eq('organization_id', editOrg.id),
+                        supabase.from('admin_recovery_requests').update({ org_slug: newSlug }).eq('org_id', editOrg.id),
+                    ]);
+                } catch (cascadeErr) {
+                    console.warn('Cascade update warning:', cascadeErr);
+                }
             }
+
+            // Sync localStorage cache for immediate reflection
+            if (typeof window !== 'undefined') {
+                try {
+                    localStorage.setItem(`campusflow_org_name_${editOrg.id}`, newName);
+                    localStorage.setItem(`campusflow_org_slug_${editOrg.id}`, newSlug);
+                    window.dispatchEvent(new CustomEvent('organization_updated', {
+                        detail: { id: editOrg.id, name: newName, slug: newSlug }
+                    }));
+                } catch {}
+            }
+
+            toast.success(`Établissement "${newName}" mis à jour avec succès !`);
+            setEditOrg(null);
+            onRefresh();
         } catch (err: any) {
             toast.error('Erreur: ' + err.message);
         } finally {
@@ -466,57 +552,72 @@ export function SuperadminOrgCards({
         if (!pointsModalOrg) return;
         setSavingPoints(true);
         try {
-            const current = pointsModalOrg.sky_points || 0;
-            const delta = action === 'add' ? Math.abs(pointsDelta) : -Math.abs(pointsDelta);
-            const newBal = Math.max(0, current + delta);
+            // 1. Query fresh live balance from Supabase
+            let liveBalance = 1000;
+            const { data: liveOrg } = await supabase
+                .from('organizations')
+                .select('sky_points, owner_id')
+                .eq('id', pointsModalOrg.id)
+                .single();
 
+            if (liveOrg && typeof liveOrg.sky_points === 'number') {
+                liveBalance = liveOrg.sky_points;
+            } else if (typeof pointsModalOrg.sky_points === 'number') {
+                liveBalance = pointsModalOrg.sky_points;
+            }
+
+            const delta = action === 'add' ? Math.abs(pointsDelta) : -Math.abs(pointsDelta);
+            const newBal = Math.max(0, liveBalance + delta);
+
+            // 2. Update organizations table
             const { error } = await supabase
                 .from('organizations')
                 .update({ sky_points: newBal })
                 .eq('id', pointsModalOrg.id);
 
-            if (error) {
-                toast.error('Erreur Supabase : ' + error.message);
-            } else {
-                toast.success(`⭐ Solde de ${pointsModalOrg.name} mis à jour : ${new Intl.NumberFormat('fr-FR').format(newBal)} pts`);
+            if (error) throw error;
 
-                // 1. Sync points to owner profile (teacher_profiles) if available
-                if (pointsModalOrg.owner_id) {
-                    try {
-                        await supabase
-                            .from('teacher_profiles')
-                            .update({ sky_points: newBal })
-                            .eq('id', pointsModalOrg.owner_id);
-                    } catch {}
-                }
+            toast.success(`⭐ Solde de "${pointsModalOrg.name}" mis à jour : ${new Intl.NumberFormat('fr-FR').format(newBal)} pts`);
 
-                // 2. Sync localStorage cache for instant local reflection
-                if (typeof window !== 'undefined') {
-                    try {
-                        localStorage.setItem(`campusflow_admin_points_${pointsModalOrg.id}`, newBal.toString());
-                        localStorage.setItem(`campusflow_admin_points_${pointsModalOrg.slug}`, newBal.toString());
-                        window.dispatchEvent(new CustomEvent('sky_points_updated', {
-                            detail: { newBalance: newBal, orgId: pointsModalOrg.id }
-                        }));
-                        window.dispatchEvent(new Event('storage'));
-                    } catch {}
-                }
-
-                // 3. Insert transaction record for audit
+            // 3. Sync points to owner profile (teacher_profiles / student_profiles) if available
+            const ownerId = liveOrg?.owner_id || pointsModalOrg.owner_id;
+            if (ownerId) {
                 try {
-                    await supabase.from('sky_points_transactions').insert({
-                        target_type: 'organization',
-                        target_id: pointsModalOrg.id,
-                        target_name: pointsModalOrg.name,
-                        amount: delta,
-                        balance_after: newBal,
-                        reason: `Ajustement Superadmin (${action === 'add' ? '+' : '-'}${Math.abs(pointsDelta)} pts)`,
-                    });
+                    await Promise.allSettled([
+                        supabase.from('teacher_profiles').update({ sky_points: newBal }).eq('id', ownerId),
+                        supabase.from('student_profiles').update({ sky_points: newBal }).eq('id', ownerId),
+                    ]);
                 } catch {}
-
-                setPointsModalOrg(null);
-                onRefresh();
             }
+
+            // 4. Sync localStorage cache for instant local reflection
+            if (typeof window !== 'undefined') {
+                try {
+                    localStorage.setItem(`campusflow_admin_points_${pointsModalOrg.id}`, newBal.toString());
+                    localStorage.setItem(`campusflow_admin_points_${pointsModalOrg.slug}`, newBal.toString());
+                    window.dispatchEvent(new CustomEvent('sky_points_updated', {
+                        detail: { newBalance: newBal, orgId: pointsModalOrg.id }
+                    }));
+                    window.dispatchEvent(new Event('storage'));
+                } catch {}
+            }
+
+            // 5. Insert transaction record for audit
+            try {
+                await supabase.from('sky_transactions').insert({
+                    student_id: ownerId || pointsModalOrg.id,
+                    amount: delta,
+                    transaction_type: 'superadmin_adjustment',
+                    type: 'superadmin_adjustment',
+                    description: `Ajustement Superadmin (${action === 'add' ? '+' : '-'}${Math.abs(pointsDelta)} pts) — ${pointsModalOrg.name}`,
+                    organization_id: pointsModalOrg.id,
+                });
+            } catch {}
+
+            // Update in-memory org item
+            pointsModalOrg.sky_points = newBal;
+            setPointsModalOrg(null);
+            onRefresh();
         } catch (err: any) {
             toast.error('Erreur: ' + err.message);
         } finally {
