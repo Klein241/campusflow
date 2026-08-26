@@ -46,7 +46,7 @@ function buildEmailHtml(html: string | undefined, text: string | undefined, org_
       <div style="color:#CBD5E1;font-size:14px;line-height:1.75;white-space:pre-line;">${text || ''}</div>
     </div>
     <p style="text-align:center;color:#475569;font-size:11px;margin-top:20px;">
-      Envoyé via CampusFlow · ${org_name}<br/>
+      Envoyé via IziTeach · ${org_name}<br/>
       <span style="font-size:10px;">Ne pas répondre à cet email</span>
     </p>
   </div>
@@ -90,7 +90,7 @@ async function sendViaBrevo(
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            sender: { name: fromName, email: 'noreply@campusflow.app' },
+            sender: { name: fromName, email: 'noreply@iziteach.com' },
             to: to.map(email => ({ email })),
             subject,
             htmlContent: html,
@@ -115,7 +115,7 @@ async function handleEmailSend(request: Request, env: Env): Promise<Response> {
         from_name?: string;
     };
 
-    const { to, subject, html, text, org_name = 'CampusFlow', org_logo, from_name } = body;
+    const { to, subject, html, text, org_name = 'IziTeach', org_logo, from_name } = body;
 
     if (!to?.length) return json({ error: 'recipients (to) required' }, 400);
     if (!subject)    return json({ error: 'subject required' }, 400);
@@ -130,7 +130,7 @@ async function handleEmailSend(request: Request, env: Env): Promise<Response> {
 
     const emailHtml  = buildEmailHtml(html, text, org_name, org_logo, subject);
     const fromName   = from_name || org_name;
-    const fromAddr   = `${fromName} <noreply@campusflow.app>`;
+    const fromAddr   = `${fromName} <noreply@iziteach.com>`;
 
     // Chunking : Resend max 50/call, Brevo max 50/call
     const CHUNK = 50;

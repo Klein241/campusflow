@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
- * DAME SKY — Directrice Académique & Mentore Suprême d'IziTeach / CampusFlow
+ * DAME SKY — Directrice Académique & Mentore Suprême d'IziTeach
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  * 🤖 MOTEUR IA :
@@ -60,11 +60,11 @@ export interface SkyAgentRequest {
 }
 
 // ────────────────────────────────────────────────────────────────
-//  Base de Connaissances Universelle IziTeach / CampusFlow
+//  Base de Connaissances Universelle IziTeach
 // ────────────────────────────────────────────────────────────────
 
 const IZITEACH_KNOWLEDGE_BASE = `
-CONNAISSANCE INTÉGRALE DES FONCTIONNALITÉS IZITEACH & CAMPUSFLOW :
+CONNAISSANCE INTÉGRALE DES FONCTIONNALITÉS IZITEACH :
 1. CURSUS & DRIP CONTENT :
    - Organisation par Matières, Chapitres, Leçons (texte riche, audio, vidéo, PDF) et Exercices notés.
    - Système de libération progressive (Drip Content) par date ou complétion préalable.
@@ -105,7 +105,7 @@ function buildSystemPrompt(
 ): string {
     const orgName = ctx?.org_name || 'notre établissement partenaire';
     const userName = ctx?.user_name || '';
-    const currentPage = ctx?.current_page || 'CampusFlow';
+    const currentPage = ctx?.current_page || 'IziTeach';
     const statsBlock = ctx?.stats
         ? '\n\nDonnées contextuelles en temps réel de l\'établissement :\n' +
           Object.entries(ctx.stats).map(([k, v]) => `- ${k}: ${v}`).join('\n')
@@ -121,7 +121,7 @@ function buildSystemPrompt(
 
     const selectedTemperament = temperamentInstructions[temperament] || temperamentInstructions.strict_pedagogue;
 
-    return `Tu es DAME SKY, Directrice Académique & Mentore Suprême de ${orgName} sur la plateforme IziTeach / CampusFlow.
+    return `Tu es DAME SKY, Directrice Académique & Mentore Suprême de ${orgName} sur la plateforme IziTeach.
 
 PERSONNALITÉ & POSTURE :
 - Tu es une femme d'expérience, distinguée, cultivée, chaleureuse mais profondément sérieuse et exigeante, comme une véritable professeure émérite.

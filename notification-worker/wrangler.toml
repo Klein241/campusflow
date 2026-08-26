@@ -1,10 +1,10 @@
 # ══════════════════════════════════════════════════════════
-# CAMPUSFLOW — Unified Worker
+# IZITEACH — Unified Worker
 # Notification gateway + R2 storage + Push + Cron
 # v3.0.0 — School notifications + Enhanced R2
 # ══════════════════════════════════════════════════════════
 
-name = "campusflow-worker"
+name = "iziteach-worker"
 account_id = "29af63e0139b75f78259902d4ee51e07"
 main = "src/index.ts"
 compatibility_date = "2025-06-01"
@@ -57,13 +57,13 @@ BROADCAST_RATE_LIMIT_MS = "100"          # 10 req/s for broadcasts
 # ── R2 Bucket (10GB free Cloudflare R2) ──────────────────
 [[r2_buckets]]
 binding = "LIBRARY_BUCKET"
-bucket_name = "campusflow-actifs"
+bucket_name = "iziteach-actifs"
 
 # ── D1 Database (Failover automatique Supabase) ───────────
 # Base miroir pour dual-write : si Supabase tombe, D1 prend le relais
 [[d1_databases]]
-binding = "CAMPUSFLOW_DB"
-database_name = "campusflow-db"
+binding = "IZITEACH_DB"
+database_name = "iziteach-db"
 database_id = "18ca6cd1-0f43-41f1-a3a3-4dffd5998e58"
 
 # ── Cloudflare AI (M2M100 Meta — Traduction langues africaines) ────

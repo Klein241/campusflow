@@ -261,6 +261,17 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
 
     useEffect(() => { loadData(); }, [loadData]);
 
+    // Reset create form
+    const resetCreateForm = () => {
+        setNewKeyName('');
+        setNewKeyDesc('');
+        setNewKeyLanguage('fr');
+        setNewKeyPerms([]);
+        setNewKeyRate(10);
+        setNewKeyBulk(5);
+        setNewKeyExpires('');
+    };
+
     // Create agent key
     const handleCreateKey = async () => {
         if (!newKeyName.trim()) { toast.error('Donnez un nom à cet agent IA'); return; }
@@ -269,16 +280,17 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
         setCreating(true);
         try {
             const { data, error } = await supabase.rpc('create_ai_agent_key', {
-                p_org_id:       orgId,
-                p_name:         newKeyName.trim(),
-                p_description:  newKeyDesc.trim() || null,
-                p_permissions:  newKeyPerms,
-                p_rate_limit:   newKeyRate,
+                p_org_id:         orgId,
+                p_name:           newKeyName.trim(),
+                p_description:    newKeyDesc.trim() || null,
+                p_permissions:    newKeyPerms,
+                p_rate_limit:     newKeyRate,
                 p_bulk_threshold: newKeyBulk,
-                p_expires_at:   newKeyExpires || null,
+                p_expires_at:     newKeyExpires || null,
             });
 
             if (error) throw error;
+            if (!data?.full_key) throw new Error('La clé générée est invalide. Réessayez.');
 
             // Sauvegarder la langue par défaut si disponible
             if (data?.id && newKeyLanguage) {
@@ -287,6 +299,10 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
                 } catch {}
             }
 
+            // Fermer le formulaire EN PREMIER pour éviter le conflit DOM React
+            setShowCreateForm(false);
+            resetCreateForm();
+            // Afficher la clé et recharger la liste
             setCreatedKey(data.full_key);
             toast.success('Clé agent créée — copiez-la maintenant !');
             await loadData();

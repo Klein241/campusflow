@@ -91,7 +91,7 @@ async function requireD1Auth(
         return json({ error: 'Unauthorized — missing or invalid session token' }, 401);
     }
     try {
-        const row = await env.CAMPUSFLOW_DB
+        const row = await env.IZITEACH_DB
             .prepare('SELECT expires_at FROM session_tokens WHERE token = ?1 LIMIT 1')
             .bind(token)
             .first<{ expires_at: string }>();
@@ -130,14 +130,14 @@ async function handleD1Write(request: Request, env: Env, pathname: string): Prom
         // INSERT OR REPLACE : idiome SQLite universel pour l'idempotence.
         // Fonctionne même si la table n'a pas de UNIQUE INDEX explicite —
         // contrairement à ON CONFLICT(id) qui exige une contrainte déclarée.
-        await env.CAMPUSFLOW_DB.prepare(
+        await env.IZITEACH_DB.prepare(
             `INSERT OR REPLACE INTO ${table} (${cols.join(', ')}) VALUES (${placeholders})`
         ).bind(...values).run();
 
         // Trace pour replay D1 → Supabase
         const dedupKey = `${table}::${body.id}::${operation}`;
         try {
-            await env.CAMPUSFLOW_DB.prepare(
+            await env.IZITEACH_DB.prepare(
                 `INSERT INTO pending_supabase_sync
                    (id, table_name, operation, record_id, payload, dedup_key, status, retry_count, created_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', 0, ?7)
@@ -154,7 +154,7 @@ async function handleD1Write(request: Request, env: Env, pathname: string): Prom
         } catch (syncErr: any) {
             // Si l'index dedup_key n'existe pas encore : fallback sans ON CONFLICT
             if (syncErr.message?.includes('no such index') || syncErr.message?.includes('does not match')) {
-                await env.CAMPUSFLOW_DB.prepare(
+                await env.IZITEACH_DB.prepare(
                     `INSERT OR IGNORE INTO pending_supabase_sync
                        (id, table_name, operation, record_id, payload, status, retry_count, created_at)
                      VALUES (?1, ?2, ?3, ?4, ?5, 'pending', 0, ?6)`
@@ -187,11 +187,11 @@ async function handleD1Read(request: Request, env: Env, pathname: string): Promi
     try {
         let stmt;
         if (orgId) {
-            stmt = env.CAMPUSFLOW_DB.prepare(
+            stmt = env.IZITEACH_DB.prepare(
                 `SELECT * FROM ${table} WHERE organization_id = ?1 ORDER BY created_at DESC LIMIT ?2 OFFSET ?3`
             ).bind(orgId, limit, offset);
         } else {
-            stmt = env.CAMPUSFLOW_DB.prepare(
+            stmt = env.IZITEACH_DB.prepare(
                 `SELECT * FROM ${table} ORDER BY created_at DESC LIMIT ?1 OFFSET ?2`
             ).bind(limit, offset);
         }
@@ -211,14 +211,14 @@ async function handleD1Delete(request: Request, env: Env, pathname: string): Pro
     if (!body?.id) return json({ error: 'Missing id' }, 400);
 
     try {
-        await env.CAMPUSFLOW_DB.prepare(
+        await env.IZITEACH_DB.prepare(
             `DELETE FROM ${table} WHERE id = ?1`
         ).bind(body.id).run();
 
         // Trace DELETE pour replay vers Supabase
         const dedupKey = `${table}::${body.id}::DELETE`;
         try {
-            await env.CAMPUSFLOW_DB.prepare(
+            await env.IZITEACH_DB.prepare(
                 `INSERT INTO pending_supabase_sync
                    (id, table_name, operation, record_id, payload, dedup_key, status, retry_count, created_at)
                  VALUES (?1, ?2, 'DELETE', ?3, ?4, ?5, 'pending', 0, ?6)
@@ -233,7 +233,7 @@ async function handleD1Delete(request: Request, env: Env, pathname: string): Pro
             ).run();
         } catch (syncErr: any) {
             if (syncErr.message?.includes('no such index') || syncErr.message?.includes('does not match')) {
-                await env.CAMPUSFLOW_DB.prepare(
+                await env.IZITEACH_DB.prepare(
                     `INSERT OR IGNORE INTO pending_supabase_sync
                        (id, table_name, operation, record_id, payload, status, retry_count, created_at)
                      VALUES (?1, ?2, 'DELETE', ?3, ?4, 'pending', 0, ?5)`
@@ -271,7 +271,7 @@ async function handleHealthWithD1(request: Request, env: Env): Promise<Response>
     // Test D1
     const d1Start = Date.now();
     try {
-        await env.CAMPUSFLOW_DB.prepare('SELECT 1').run();
+        await env.IZITEACH_DB.prepare('SELECT 1').run();
         results.d1 = { status: 'up', latency_ms: Date.now() - d1Start };
     } catch {
         results.d1 = { status: 'down', latency_ms: Date.now() - d1Start };
@@ -279,7 +279,7 @@ async function handleHealthWithD1(request: Request, env: Env): Promise<Response>
 
     // Pending syncs en attente
     try {
-        const { results: pending } = await env.CAMPUSFLOW_DB.prepare(
+        const { results: pending } = await env.IZITEACH_DB.prepare(
             'SELECT COUNT(*) as count FROM pending_supabase_sync WHERE synced_at IS NULL'
         ).all();
         results.pending_syncs = (pending[0] as any)?.count ?? 0;
@@ -324,7 +324,7 @@ async function processOutbox(env: Env): Promise<void> {
             try {
                 const payload = entry.payload;
                 if (entry.operation === 'DELETE') {
-                    await env.CAMPUSFLOW_DB.prepare(
+                    await env.IZITEACH_DB.prepare(
                         `DELETE FROM ${entry.table_name} WHERE id = ?1`
                     ).bind(String(entry.record_id)).run();
                 } else {
@@ -336,7 +336,7 @@ async function processOutbox(env: Env): Promise<void> {
                             ? JSON.stringify(v) : v;
                     });
                     // INSERT OR REPLACE : universel SQLite, pas besoin de UNIQUE INDEX explicite
-                    await env.CAMPUSFLOW_DB.prepare(
+                    await env.IZITEACH_DB.prepare(
                         `INSERT OR REPLACE INTO ${entry.table_name} (${cols.join(', ')}) VALUES (${placeholders})`
                     ).bind(...values).run();
                 }
@@ -455,7 +455,7 @@ async function reconcilePendingSyncs(env: Env): Promise<void> {
         }
 
         // [SPEC 3] Lire le batch de pending à rejouer
-        const { results: pending } = await env.CAMPUSFLOW_DB.prepare(
+        const { results: pending } = await env.IZITEACH_DB.prepare(
             `SELECT * FROM pending_supabase_sync
              WHERE synced_at IS NULL AND retry_count < ?1 AND status != 'abandoned'
              ORDER BY created_at ASC LIMIT ?2`
@@ -502,7 +502,7 @@ async function reconcilePendingSyncs(env: Env): Promise<void> {
                 });
 
                 if (res.ok || res.status === 409) {
-                    await env.CAMPUSFLOW_DB.prepare(
+                    await env.IZITEACH_DB.prepare(
                         `UPDATE pending_supabase_sync
                          SET synced_at = ?1, status = 'resolved'
                          WHERE id = ?2`
@@ -512,7 +512,7 @@ async function reconcilePendingSyncs(env: Env): Promise<void> {
                     const errText = await res.text().catch(() => `HTTP ${res.status}`);
                     const newRetry = row.retry_count + 1;
                     const status = newRetry >= MAX_RETRY_COUNT ? 'abandoned' : 'retrying';
-                    await env.CAMPUSFLOW_DB.prepare(
+                    await env.IZITEACH_DB.prepare(
                         `UPDATE pending_supabase_sync
                          SET retry_count = ?1, last_tried = ?2, status = ?3, last_error = ?4
                          WHERE id = ?5`
@@ -535,7 +535,7 @@ async function reconcilePendingSyncs(env: Env): Promise<void> {
                             }),
                         }).catch(() => {
                             // Log persistant D1 si l'alerte échoue
-                            env.CAMPUSFLOW_DB.prepare(
+                            env.IZITEACH_DB.prepare(
                                 `INSERT INTO system_alerts(id, service, event, table_name, error_msg, created_at)
                                  VALUES(?1,'Worker','SYNC_ABANDONED',?2,?3,?4)`
                             ).bind(crypto.randomUUID(), row.table_name, errText, new Date().toISOString()).run();
@@ -544,7 +544,7 @@ async function reconcilePendingSyncs(env: Env): Promise<void> {
                 }
             } catch (err: any) {
                 const newRetry = row.retry_count + 1;
-                await env.CAMPUSFLOW_DB.prepare(
+                await env.IZITEACH_DB.prepare(
                     `UPDATE pending_supabase_sync
                      SET retry_count = ?1, last_tried = ?2, status = ?3, last_error = ?4
                      WHERE id = ?5`
@@ -565,7 +565,7 @@ async function reconcilePendingSyncs(env: Env): Promise<void> {
 async function purgeSyncResolved(env: Env): Promise<void> {
     try {
         const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-        const result = await env.CAMPUSFLOW_DB.prepare(
+        const result = await env.IZITEACH_DB.prepare(
             `DELETE FROM pending_supabase_sync
              WHERE status = 'resolved' AND synced_at < ?1`
         ).bind(cutoff).run();

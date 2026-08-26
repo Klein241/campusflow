@@ -805,7 +805,7 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
     // 2. Vérification sur D1 (avec fallback Supabase si absent dans D1)
     let agentKey: any = null;
     try {
-        agentKey = await env.CAMPUSFLOW_DB.prepare(
+        agentKey = await env.IZITEACH_DB.prepare(
             `SELECT * FROM ai_agent_keys WHERE key_hash = ?1 AND is_active = 1`
         ).bind(keyHash).first();
     } catch {}

@@ -5,7 +5,7 @@
 export const CORS_HEADERS: Record<string, string> = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, X-Custom-Domain, X-Org-Slug, X-Admin-Key, X-User-Id, X-CampusFlow-Token, x-agent-key, x-superadmin-key',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, X-Custom-Domain, X-Org-Slug, X-Admin-Key, X-User-Id, X-IziTeach-Token, x-agent-key, x-superadmin-key',
     'Access-Control-Max-Age': '86400',
 };
 

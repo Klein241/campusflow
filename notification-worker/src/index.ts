@@ -1,5 +1,5 @@
 /**
- * CAMPUSFLOW / IZITEACH — UNIFIED NOTIFICATION & MCP WORKER
+ * IZITEACH — UNIFIED NOTIFICATION & MCP WORKER
  * Modular architecture:
  *  - routes/notifications.ts  → Notification gateway & preferences
  *  - routes/domains.ts        → Custom domain automation (Netlify API)
