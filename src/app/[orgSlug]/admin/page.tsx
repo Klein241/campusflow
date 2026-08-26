@@ -51,6 +51,10 @@ import { AdminLandingTab } from '@/components/admin/tabs/AdminLandingTab';
 import { AdminSettingsTab } from '@/components/admin/tabs/AdminSettingsTab';
 import { AdminMonitoringTab } from '@/components/admin/tabs/AdminMonitoringTab';
 import { AdminCertificatesTab } from '@/components/admin/tabs/AdminCertificatesTab';
+import { getSchoolTypeConfig } from '@/lib/school-type-adapter';
+import { AdminProCohortTab } from '@/components/admin/pro/AdminProCohortTab';
+import { AdminIndependentTrainerTab } from '@/components/admin/pro/AdminIndependentTrainerTab';
+import { SchoolTypeBanner } from '@/components/admin/pro/SchoolTypeBanner';
 
 // ═══ ERROR BOUNDARY (catches React render errors) ═══
 class AdminErrorBoundary extends Component<{ children: ReactNode; orgSlug: string }, { hasError: boolean; error: Error | null }> {
@@ -2016,7 +2020,21 @@ ${bodyHtml}
         setSaving(false);
     };
 
-    // Sel component is now defined outside AdminPage to prevent React 19 hydration issues
+    // Adaptateur dynamique selon le type d'établissement (Centre Pro, Formateur Indépendant, Lycée...)
+    const schoolConfig = getSchoolTypeConfig(org?.school_type);
+
+    const activeSides = SIDES.filter(i => !schoolConfig.hiddenTabs.includes(i.id)).map(i => {
+        let label = i.label;
+        if (i.id === 'classes') label = schoolConfig.terms.classes;
+        else if (i.id === 'teachers') label = schoolConfig.terms.teachers;
+        else if (i.id === 'students') label = schoolConfig.terms.students;
+        else if (i.id === 'grades') label = schoolConfig.terms.grades;
+        else if (i.id === 'evaluations') label = schoolConfig.terms.evaluations;
+        else if (i.id === 'timetable') label = schoolConfig.terms.timetable;
+        else if (i.id === 'rooms') label = schoolConfig.terms.rooms;
+        else if (i.id === 'certificates') label = schoolConfig.terms.certificates;
+        return { ...i, label };
+    });
 
     return (
         <div className="min-h-screen bg-[#0B0E14] text-white flex overflow-x-hidden">
@@ -2032,9 +2050,14 @@ ${bodyHtml}
                         <IziTeachLogo variant="symbol" size="xs" />
                         <span className="font-bold text-sm truncate">{org.name}</span>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">Backoffice</p>
+                    <div className="mt-1 flex items-center justify-between">
+                        <p className="text-xs text-slate-500">Backoffice</p>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 text-slate-400 font-medium">
+                            {schoolConfig.badgeIcon} {schoolConfig.categoryLabel.split(' ')[0]}
+                        </span>
+                    </div>
                 </div>
-                <nav className="p-2 space-y-0.5 flex-1 overflow-y-auto pb-16">{SIDES.map(i => (<button key={i.id} onClick={() => onTab(i.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${tab === i.id ? 'bg-teal-600/15 text-teal-300 font-medium' : 'text-slate-400 hover:bg-white/5'}`}><i.icon className="w-4 h-4" />{i.label}</button>))}
+                <nav className="p-2 space-y-0.5 flex-1 overflow-y-auto pb-16">{activeSides.map(i => (<button key={i.id} onClick={() => onTab(i.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${tab === i.id ? 'bg-teal-600/15 text-teal-300 font-medium' : 'text-slate-400 hover:bg-white/5'}`}><i.icon className="w-4 h-4" />{i.label}</button>))}
                     <div className="mt-3 pt-3 border-t border-white/5 space-y-0.5">
                         <button onClick={() => router.push(navTo('library'))} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-emerald-400 hover:bg-emerald-600/10"><BookMarked className="w-4 h-4" />Bibliothèque</button>
                         <button onClick={() => router.push(navTo('shop'))} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-teal-400 hover:bg-teal-600/10"><ShoppingBag className="w-4 h-4" />Marketplace</button>
@@ -2055,11 +2078,23 @@ ${bodyHtml}
                             <Settings className="w-5 h-5" />
                         </button>
                         <h1 className="text-lg font-black text-gradient-primary">
-                            {SIDES.find(i => i.id === tab)?.label}
+                            {activeSides.find(i => i.id === tab)?.label || SIDES.find(i => i.id === tab)?.label}
                         </h1>
                     </div>
 
                     <div className="flex items-center gap-2 sm:gap-3">
+                        {/* Sélecteur & Badge Mode d'Établissement (Centre Pro, Formateur Solo, etc.) */}
+                        {org && (
+                            <SchoolTypeBanner
+                                org={org}
+                                config={schoolConfig}
+                                onTypeChanged={(newType) => {
+                                    setOrg((p: any) => ({ ...p, school_type: newType }));
+                                    toast.success('Adaptation du backoffice appliquée instantanément !');
+                                }}
+                            />
+                        )}
+
                         {/* Admin Notification Bell */}
                         {org && (
                             <AdminNotificationBell
@@ -2160,21 +2195,57 @@ ${bodyHtml}
                         />
                     )}
 
-                    {/* ═══ CLASSES & MATIÈRES ═══ */}
+                    {/* ═══ CLASSES / SESSIONS & COHORTES / OFFRES ═══ */}
                     {(tab === 'classes' || (tab as string) === 'subjects') && (
-                        <AdminClassesSubjectsTab
-                            org={org}
-                            isCL={isCL}
-                            cls={cls}
-                            setCls={setCls}
-                            subs={subs}
-                            setSubs={setSubs}
-                            teachers={teachers}
-                            filieres={filieres}
-                            saving={saving}
-                            saveSubs={saveSubs}
-                            saveCls={saveCls}
-                        />
+                        schoolConfig.category === 'independent_trainer' ? (
+                            <AdminIndependentTrainerTab
+                                org={org}
+                                config={schoolConfig}
+                                cls={cls}
+                                students={students}
+                                subs={subs}
+                                onRefresh={() => {
+                                    void (async () => {
+                                        const { data: c } = await supabase.from('classrooms').select('*').eq('organization_id', org.id).order('name');
+                                        setCls((c || []).map((x: any) => ({ id: x.id, name: x.name, cycle: x.cycle || '', filiere_id: x.filiere_id, level: x.level || 1, capacity: x.capacity || 50 })));
+                                    })();
+                                }}
+                            />
+                        ) : schoolConfig.category === 'training_center' ? (
+                            <AdminProCohortTab
+                                org={org}
+                                config={schoolConfig}
+                                cls={cls}
+                                subs={subs}
+                                students={students}
+                                teachers={teachers}
+                                onRefresh={() => {
+                                    void (async () => {
+                                        const { data: c } = await supabase.from('classrooms').select('*').eq('organization_id', org.id).order('name');
+                                        setCls((c || []).map((x: any) => ({ id: x.id, name: x.name, cycle: x.cycle || '', filiere_id: x.filiere_id, level: x.level || 1, capacity: x.capacity || 50 })));
+                                        const { data: s } = await supabase.from('subjects').select('*').eq('organization_id', org.id).order('name');
+                                        setSubs((s || []).map((x: any) => ({ id: x.id, name: x.name, code: x.code || '', coefficient: x.coefficient || 1, classroom_id: x.classroom_id, teacher_id: x.teacher_id })));
+                                    })();
+                                }}
+                                onSelectClass={(clsId) => {
+                                    setTab('students');
+                                }}
+                            />
+                        ) : (
+                            <AdminClassesSubjectsTab
+                                org={org}
+                                isCL={isCL}
+                                cls={cls}
+                                setCls={setCls}
+                                subs={subs}
+                                setSubs={setSubs}
+                                teachers={teachers}
+                                filieres={filieres}
+                                saving={saving}
+                                saveSubs={saveSubs}
+                                saveCls={saveCls}
+                            />
+                        )
                     )}
 
                     {/* ═══ ROOMS ═══ */}
