@@ -407,10 +407,11 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
     const [copied, setCopied] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
 
-    // ── TRADUCTION EN TEMPS RÉEL ──────────────────────────────────
+    // ── TRADUCTION EN TEMPS RÉEL (IziTeach IA) ──────────────────
     const [showTranslation, setShowTranslation] = useState(false);
     const [langCatalog, setLangCatalog]         = useState<LangCatalogEntry[]>([]);
     const [translating, setTranslating]         = useState(false);
+    const [translationProgress, setTranslationProgress] = useState(15);
     const [translatedContent, setTranslatedContent] = useState<string | null>(null);
     const [selectedLang, setSelectedLang]       = useState<LangCatalogEntry | null>(null);
     const [translationQuality, setTranslationQuality] = useState<number>(0);
@@ -431,10 +432,39 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
         }
     }, [showTranslation, langCatalog.length]);
 
+    // Vérifier si la leçon est déjà traduite dans le localStorage pour l'utilisateur
+    useEffect(() => {
+        if (isOpen && lesson.id && userId) {
+            try {
+                const { getSavedTranslation } = require('@/lib/course-translation-service');
+                const cached = getSavedTranslation(userId, lesson.id);
+                if (cached && !translatedContent) {
+                    setTranslatedContent(cached.translated_text);
+                    setSelectedLang({
+                        code: cached.target_lang,
+                        name_fr: cached.target_lang_name,
+                        name_native: cached.target_lang_native,
+                        quality_stars: cached.quality_stars as any,
+                        quality_label: cached.quality_stars >= 4 ? 'Bonne' : 'Correcte',
+                        is_african: true,
+                        countries: []
+                    });
+                    setTranslationQuality(cached.quality_stars);
+                }
+            } catch {}
+        }
+    }, [isOpen, lesson.id, userId]);
+
     const translateLesson = async (lang: LangCatalogEntry) => {
         setSelectedLang(lang);
         setTranslating(true);
+        setTranslationProgress(15);
         setTranslatedContent(null);
+
+        const progressTimer = setInterval(() => {
+            setTranslationProgress(p => p < 85 ? p + Math.floor(Math.random() * 10) + 5 : p);
+        }, 400);
+
         try {
             // Extraire le texte brut du contenu de la leçon
             let rawText = '';
@@ -454,16 +484,41 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text: rawText, target_lang: lang.code, source_lang: 'fr' }),
             });
+            clearInterval(progressTimer);
+            setTranslationProgress(100);
+
             const data = await res.json() as any;
             if (data.ok && data.translated_text && data.translated_text !== rawText) {
                 setTranslatedContent(data.translated_text);
                 setTranslationQuality(lang.quality_stars);
                 setTranslationMethod(data.method || '');
+
+                // Enregistrer dans l'historique "Mes cours traduits"
+                try {
+                    const { saveTranslation } = require('@/lib/course-translation-service');
+                    saveTranslation(userId, {
+                        id: lesson.id,
+                        type: 'lesson',
+                        title: lesson.title,
+                        target_lang: lang.code,
+                        target_lang_name: lang.name_fr,
+                        target_lang_native: lang.name_native,
+                        quality_stars: lang.quality_stars,
+                        translated_text: data.translated_text,
+                        original_text: rawText,
+                        translated_at: new Date().toISOString(),
+                        chapter_title: lesson.chapter_title,
+                        subject_title: lesson.subject_title
+                    });
+                } catch {}
+
+                toast.success(`🎉 Traduction en ${lang.name_native} enregistrée dans "Mes cours traduits" !`);
             } else {
                 setTranslatedContent(null);
                 toast.error(`Traduction ${lang.name_fr} non disponible pour ce contenu.`);
             }
         } catch {
+            clearInterval(progressTimer);
             toast.error('Erreur lors de la traduction. Réessayez.');
         } finally {
             setTranslating(false);
@@ -903,9 +958,23 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
 
                                         {/* Traduction en cours */}
                                         {translating && (
-                                            <div className="flex items-center gap-2 text-emerald-400 text-xs py-1">
-                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                                Traduction en cours en {selectedLang?.name_fr}...
+                                            <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-2 mt-2">
+                                                <div className="flex items-center justify-between text-xs text-emerald-300 font-semibold">
+                                                    <span className="flex items-center gap-1.5">
+                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                        Traduction en cours en {selectedLang?.name_native} ({selectedLang?.name_fr})...
+                                                    </span>
+                                                    <span className="font-mono font-bold text-emerald-400">{translationProgress}%</span>
+                                                </div>
+                                                <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden border border-emerald-500/20">
+                                                    <div
+                                                        className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-300"
+                                                        style={{ width: `${translationProgress}%` }}
+                                                    />
+                                                </div>
+                                                <p className="text-[10px] text-slate-400 italic text-center">
+                                                    ⏳ Veuillez patienter ! Génération fluide par IziTeach IA.
+                                                </p>
                                             </div>
                                         )}
                                     </div>
@@ -1081,7 +1150,7 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
                                                     </span>
                                                 </div>
                                                 <p className="text-[11px] text-slate-400 mt-0.5">
-                                                    Traduction automatique générée par l'IA d'IziTeach (Cloudflare AI).
+                                                    Traduction automatique générée par <strong>IziTeach IA</strong>.
                                                 </p>
                                             </div>
                                         </div>

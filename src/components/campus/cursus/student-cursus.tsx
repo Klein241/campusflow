@@ -5,7 +5,8 @@ import {
     BookOpen, Play, CheckCircle2, Award, Star, Timer, FileText,
     Send, X, Trophy, BarChart3, GraduationCap, MessageSquare,
     Clock, Zap, TrendingUp, Flag, Maximize2, ChevronRight,
-    Lock, Target, Layers, StickyNote, Save, RotateCcw
+    Lock, Target, Layers, StickyNote, Save, RotateCcw,
+    Globe, Sparkles, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +23,14 @@ import { deductSkyPoints } from '@/lib/sky-points-service';
 import { isContentUnlocked } from '@/lib/cursus-drip-service';
 import { ClassSelectorCards } from './class-selector-cards';
 import type { ContentBlock } from './rich-content-editor';
+import { TranslationDialog } from './translation-dialog';
+import { TranslatedCoursesModal } from './translated-courses-modal';
+import {
+    getSavedTranslations,
+    subscribeToTranslationTasks,
+    TranslatedItem,
+    TranslationTask
+} from '@/lib/course-translation-service';
 
 // ─── Palette couleurs ──────────────────────────────────────────────────────
 const SUBJECT_COLORS = [
@@ -83,6 +92,42 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
     // ── Vues dédiées (Feature 4 shortcuts) ──
     const [showProgressionView, setShowProgressionView] = useState(false);
     const [showExercisesView,   setShowExercisesView]   = useState(false);
+
+    // ── Traduction IziTeach IA & Mes cours traduits ──
+    const [showTranslatedCoursesModal, setShowTranslatedCoursesModal] = useState(false);
+    const [translationDialog, setTranslationDialog] = useState<{
+        isOpen: boolean;
+        itemId: string;
+        type: 'lesson' | 'chapter';
+        title: string;
+        rawText: string;
+        chapterTitle?: string;
+        subjectTitle?: string;
+    }>({
+        isOpen: false,
+        itemId: '',
+        type: 'lesson',
+        title: '',
+        rawText: '',
+    });
+    const [savedTranslations, setSavedTranslations] = useState<TranslatedItem[]>([]);
+    const [activeTranslationTasks, setActiveTranslationTasks] = useState<TranslationTask[]>([]);
+
+    useEffect(() => {
+        if (!userId) return;
+        setSavedTranslations(getSavedTranslations(userId));
+        const unsub = subscribeToTranslationTasks((tasks) => {
+            setActiveTranslationTasks(tasks.filter(t => t.status === 'translating'));
+        });
+        const handleTranslationsChanged = () => {
+            setSavedTranslations(getSavedTranslations(userId));
+        };
+        window.addEventListener('iziteach_translations_changed', handleTranslationsChanged);
+        return () => {
+            unsub();
+            window.removeEventListener('iziteach_translations_changed', handleTranslationsChanged);
+        };
+    }, [userId]);
 
     const loadData = async () => {
         setLoading(true);
@@ -317,6 +362,40 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                     initialShowNotes={true}
                 />
             )}
+
+            {/* ── Translation Dialog ── */}
+            <TranslationDialog
+                isOpen={translationDialog.isOpen}
+                onClose={() => setTranslationDialog(prev => ({ ...prev, isOpen: false }))}
+                itemId={translationDialog.itemId}
+                type={translationDialog.type}
+                title={translationDialog.title}
+                rawText={translationDialog.rawText}
+                userId={userId}
+                chapterTitle={translationDialog.chapterTitle}
+                subjectTitle={translationDialog.subjectTitle}
+                onOpenReader={(item) => {
+                    setReaderLesson({
+                        id: item.id,
+                        title: item.title,
+                        content: item.translated_text,
+                        content_original: item.original_text,
+                        language: item.target_lang,
+                        chapter_title: item.chapter_title,
+                        subject_title: item.subject_title
+                    });
+                }}
+            />
+
+            {/* ── Modal Mes cours traduits ── */}
+            <TranslatedCoursesModal
+                isOpen={showTranslatedCoursesModal}
+                onClose={() => setShowTranslatedCoursesModal(false)}
+                userId={userId}
+                onOpenLessonReader={(lessonData) => {
+                    setReaderLesson(lessonData);
+                }}
+            />
 
             {/* ══════════════════════════════════════════════════════
                 VUE PROGRESSION — Toutes les leçons de toutes matières
@@ -647,63 +726,165 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                 ))}
             </div>
 
-            {/* ═══ BLOC NOTES CARD ═══ */}
-            {(() => {
-                const notedLessons = lessons.filter(l => notedLessonIds.includes(l.id));
-                return (
-                    <motion.div
-                        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-                        className="rounded-2xl border border-indigo-500/20 bg-gradient-to-br from-indigo-500/10 to-violet-500/5 p-4"
-                    >
+            {/* ── Active Background Translation Tasks Banner ── */}
+            {activeTranslationTasks.length > 0 && (
+                <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-teal-950/60 to-emerald-950/70 border border-emerald-500/40 shadow-xl space-y-2.5"
+                >
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-emerald-300 font-bold text-xs">
+                            <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                            <span>Traductions IziTeach IA en cours ({activeTranslationTasks.length} tâche{activeTranslationTasks.length > 1 ? 's' : ''} active{activeTranslationTasks.length > 1 ? 's' : ''})</span>
+                        </div>
+                        <button
+                            onClick={() => setShowTranslatedCoursesModal(true)}
+                            className="text-[11px] text-emerald-300 hover:text-white underline font-semibold flex items-center gap-1"
+                        >
+                            <span>Mes cours traduits</span>
+                        </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {activeTranslationTasks.map(task => (
+                            <div key={task.id} className="space-y-1 bg-black/40 p-2.5 rounded-xl border border-emerald-500/20">
+                                <div className="flex items-center justify-between text-[11px] text-slate-200">
+                                    <span className="truncate max-w-[200px] font-medium">{task.title} → <strong className="text-emerald-300">{task.targetLangNative}</strong></span>
+                                    <span className="font-mono text-emerald-400 font-bold">{task.progress}%</span>
+                                </div>
+                                <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                                    <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-300" style={{ width: `${task.progress}%` }} />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <p className="text-[11px] text-slate-400 italic text-center">
+                        ⏳ Veuillez patienter ! Vous pouvez continuer à naviguer dans l'application, les traductions ne seront pas interrompues.
+                    </p>
+                </motion.div>
+            )}
+
+            {/* ═══ DUAL CARDS: BLOC NOTES & MES COURS TRADUITS ═══ */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* ── CARD 1: BLOC NOTES ── */}
+                {(() => {
+                    const notedLessons = lessons.filter(l => notedLessonIds.includes(l.id));
+                    return (
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+                            className="rounded-2xl border border-indigo-500/20 bg-gradient-to-br from-indigo-500/10 to-violet-500/5 p-4 flex flex-col justify-between"
+                        >
+                            <div>
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-xl bg-indigo-500/20 flex items-center justify-center">
+                                            <StickyNote className="w-4 h-4 text-indigo-400" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-black text-white">Bloc Notes</p>
+                                            <p className="text-[10px] text-slate-500">
+                                                {notedLessons.length > 0
+                                                    ? `${notedLessons.length} leçon${notedLessons.length > 1 ? 's' : ''} avec notes`
+                                                    : 'Aucune note encore'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {notedLessons.length > 0 && (
+                                        <span className="text-[10px] text-indigo-400 bg-indigo-500/15 px-2 py-0.5 rounded-full font-semibold">
+                                            {notedLessons.length}
+                                        </span>
+                                    )}
+                                </div>
+
+                                {notedLessons.length === 0 ? (
+                                    <div className="flex items-center gap-2 py-2">
+                                        <p className="text-[11px] text-slate-600">
+                                            Cliquez sur 📝 dans une leçon pour prendre des notes. Elles apparaissent ici.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-wrap gap-2">
+                                        {notedLessons.slice(0, 4).map(l => {
+                                            const ch = chapters.find(c => c.id === l.chapter_id);
+                                            const sub = ch ? subjects.find(s => s.id === ch.subject_id) : null;
+                                            return (
+                                                <motion.button
+                                                    key={l.id}
+                                                    whileTap={{ scale: 0.97 }}
+                                                    onClick={() => setBlocNotesLesson({ ...l, chapter_title: ch?.title, subject_title: sub?.name })}
+                                                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/20 transition-all group"
+                                                >
+                                                    <StickyNote className="w-3 h-3 text-indigo-400 group-hover:scale-110 transition-transform" />
+                                                    <span className="text-[11px] font-semibold text-indigo-300 max-w-[120px] truncate">{l.title}</span>
+                                                </motion.button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </motion.div>
+                    );
+                })()}
+
+                {/* ── CARD 2: MES COURS TRADUITS ── */}
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
+                    className="rounded-2xl border border-emerald-500/25 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-emerald-500/5 p-4 flex flex-col justify-between"
+                >
+                    <div>
                         <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-xl bg-indigo-500/20 flex items-center justify-center">
-                                    <StickyNote className="w-4 h-4 text-indigo-400" />
+                                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                                    <Globe className="w-4 h-4" />
                                 </div>
                                 <div>
-                                    <p className="text-xs font-black text-white">Bloc Notes</p>
+                                    <p className="text-xs font-black text-white flex items-center gap-1.5">
+                                        <span>Mes cours traduits</span>
+                                        <Sparkles className="w-3 h-3 text-emerald-400" />
+                                    </p>
                                     <p className="text-[10px] text-slate-500">
-                                        {notedLessons.length > 0
-                                            ? `${notedLessons.length} leçon${notedLessons.length > 1 ? 's' : ''} avec notes`
-                                            : 'Aucune note encore'}
+                                        {savedTranslations.length > 0
+                                            ? `${savedTranslations.length} contenu${savedTranslations.length > 1 ? 's' : ''} hors-ligne`
+                                            : 'Aucune traduction encore'}
                                     </p>
                                 </div>
                             </div>
-                            {notedLessons.length > 0 && (
-                                <span className="text-[10px] text-indigo-400 bg-indigo-500/15 px-2 py-0.5 rounded-full font-semibold">
-                                    {notedLessons.length}
-                                </span>
-                            )}
+                            <button
+                                onClick={() => setShowTranslatedCoursesModal(true)}
+                                className="text-[10px] text-emerald-300 hover:text-white bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 px-2.5 py-1 rounded-full font-bold transition flex items-center gap-1"
+                            >
+                                <span>Ouvrir</span>
+                                <span>({savedTranslations.length})</span>
+                            </button>
                         </div>
 
-                        {notedLessons.length === 0 ? (
+                        {savedTranslations.length === 0 ? (
                             <div className="flex items-center gap-2 py-2">
                                 <p className="text-[11px] text-slate-600">
-                                    Cliquez sur 📝 dans une leçon pour prendre des notes. Elles apparaissent ici.
+                                    Cliquez sur 🌍 Traduire sur une leçon ou un chapitre pour générer une traduction avec IziTeach IA.
                                 </p>
                             </div>
                         ) : (
                             <div className="flex flex-wrap gap-2">
-                                {notedLessons.map(l => {
-                                    const ch = chapters.find(c => c.id === l.chapter_id);
-                                    const sub = ch ? subjects.find(s => s.id === ch.subject_id) : null;
-                                    return (
-                                        <motion.button
-                                            key={l.id}
-                                            whileTap={{ scale: 0.97 }}
-                                            onClick={() => setBlocNotesLesson({ ...l, chapter_title: ch?.title, subject_title: sub?.name })}
-                                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/20 transition-all group"
-                                        >
-                                            <StickyNote className="w-3 h-3 text-indigo-400 group-hover:scale-110 transition-transform" />
-                                            <span className="text-[11px] font-semibold text-indigo-300 max-w-[120px] truncate">{l.title}</span>
-                                        </motion.button>
-                                    );
-                                })}
+                                {savedTranslations.slice(0, 4).map(item => (
+                                    <button
+                                        key={`${item.id}_${item.target_lang}`}
+                                        onClick={() => setShowTranslatedCoursesModal(true)}
+                                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all text-left group"
+                                    >
+                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
+                                            {item.target_lang_native}
+                                        </span>
+                                        <span className="text-[11px] font-semibold text-slate-200 max-w-[110px] truncate group-hover:text-emerald-300">
+                                            {item.title}
+                                        </span>
+                                    </button>
+                                ))}
                             </div>
                         )}
-                    </motion.div>
-                );
-            })()}
+                    </div>
+                </motion.div>
+            </div>
 
             {/* ── Sélecteur de Filières / Classes (si étudiant multi-filières ou multi-classes) ── */}
             {studentClasses.length > 1 && (
@@ -930,9 +1111,40 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                         {/* ── Contenu du chapitre (si le prof a ajouté du texte/média directement) ── */}
                         {selectedCh?.content && (
                             <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] overflow-hidden">
-                                <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06] bg-white/[0.02]">
-                                    <BookOpen className="w-4 h-4 text-indigo-400" />
-                                    <span className="text-xs font-semibold text-white">Contenu du chapitre</span>
+                                <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] bg-white/[0.02]">
+                                    <div className="flex items-center gap-2">
+                                        <BookOpen className="w-4 h-4 text-indigo-400" />
+                                        <span className="text-xs font-semibold text-white">Contenu du chapitre</span>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            let rawText = '';
+                                            try {
+                                                const blocks = JSON.parse(selectedCh.content || '[]');
+                                                if (Array.isArray(blocks)) {
+                                                    rawText = blocks.map((b: any) => b.value || '').join('\n\n');
+                                                } else {
+                                                    rawText = selectedCh.content || '';
+                                                }
+                                            } catch {
+                                                rawText = selectedCh.content || '';
+                                            }
+                                            setTranslationDialog({
+                                                isOpen: true,
+                                                itemId: selectedCh.id,
+                                                type: 'chapter',
+                                                title: selectedCh.title,
+                                                rawText,
+                                                chapterTitle: selectedCh.title,
+                                                subjectTitle: selectedSub?.name
+                                            });
+                                        }}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 text-xs font-semibold transition-all shadow-sm"
+                                        title="Traduire le contenu et l'introduction du chapitre avec IziTeach IA"
+                                    >
+                                        <Globe className="w-3.5 h-3.5" />
+                                        <span>Traduire le chapitre</span>
+                                    </button>
                                 </div>
                                 <div className="px-4 py-4">
                                     <RichContentRenderer
@@ -1063,6 +1275,46 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                                                         </div>
                                                     ) : (
                                                         <>
+                                                            {/* Bouton Traduire sur la carte de leçon */}
+                                                            {lesson.content && (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        let rawText = '';
+                                                                        try {
+                                                                            const blocks = JSON.parse(lesson.content || '[]');
+                                                                            if (Array.isArray(blocks)) {
+                                                                                rawText = blocks.map((b: any) => b.value || '').join('\n\n');
+                                                                            } else {
+                                                                                rawText = lesson.content || '';
+                                                                            }
+                                                                        } catch {
+                                                                            rawText = lesson.content || '';
+                                                                        }
+                                                                        setTranslationDialog({
+                                                                            isOpen: true,
+                                                                            itemId: lesson.id,
+                                                                            type: 'lesson',
+                                                                            title: lesson.title,
+                                                                            rawText,
+                                                                            chapterTitle: selectedCh?.title,
+                                                                            subjectTitle: selectedSub?.name
+                                                                        });
+                                                                    }}
+                                                                    title="Traduire cette leçon avec IziTeach IA"
+                                                                    className={cn(
+                                                                        "flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all",
+                                                                        savedTranslations.some(t => t.id === lesson.id)
+                                                                            ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30"
+                                                                            : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20"
+                                                                    )}
+                                                                >
+                                                                    <Globe className="w-3 h-3" />
+                                                                    <span>Traduire</span>
+                                                                    {savedTranslations.some(t => t.id === lesson.id) && (
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                                                    )}
+                                                                </button>
+                                                            )}
                                                             {/* Bloc Notes button */}
                                                             <button
                                                                 onClick={() => setBlocNotesLesson({ ...lesson, chapter_title: selectedCh?.title })}
@@ -1082,10 +1334,9 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                                                                     setVideoNote('');
                                                                     setVideoStartTime(Date.now());
                                                                     // Track view
-                                                                    await supabase.from('lesson_video_views').upsert(
-                                                                        { user_id: userId, content_type: 'lesson', content_id: lesson.id, organization_id: orgId, opened_at: new Date().toISOString() },
-                                                                        { onConflict: 'user_id,content_type,content_id', ignoreDuplicates: false }
-                                                                    );
+                                                                    await supabase.from('lesson_video_views').upsert({
+                                                                        user_id: userId, content_type: 'lesson', content_id: lesson.id, organization_id: orgId, opened_at: new Date().toISOString()
+                                                                    }, { onConflict: 'user_id,content_type,content_id', ignoreDuplicates: false });
                                                                 }}
                                                                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-violet-500/15 border border-violet-500/25 text-violet-400 text-[10px] font-semibold hover:bg-violet-500/25 transition-all">
                                                                     🎦 Vidéo
