@@ -8,7 +8,7 @@ import {
   Calendar, MessageSquare, ShieldCheck, ArrowRight, CheckCircle2,
   Globe, Smartphone, Star, ChevronRight, Sparkles, Building2,
   Award, Laptop, Zap, Check, ExternalLink, Shield, BookMarked,
-  Layers, Lock, Play, ShoppingBag, HelpCircle
+  Layers, Lock, Play, ShoppingBag, HelpCircle, Menu, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PlatformReviewsSection } from '@/components/platform-reviews';
@@ -91,6 +91,8 @@ export default function LandingPage() {
     loadSchools();
   }, []);
 
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
     <div className="min-h-screen bg-[#060911] text-white overflow-x-hidden font-sans selection:bg-indigo-500/30">
 
@@ -119,19 +121,91 @@ export default function LandingPage() {
             <a href="#reviews" className="hover:text-white transition-colors flex items-center gap-1">⭐ Avis</a>
           </div>
 
-          <div className="flex items-center gap-3">
-            <Link href="/login">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link href="/login" className="hidden sm:block">
               <Button variant="ghost" size="sm" className="text-slate-300 hover:text-white hover:bg-white/5 text-xs font-bold">
-                Se connecter
+                Espace Membres
               </Button>
             </Link>
-            <Link href="/onboarding">
+            <Link href="/onboarding" className="hidden sm:block">
               <Button size="sm" className="bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white font-black text-xs rounded-xl shadow-lg shadow-indigo-500/25 h-10 px-4">
                 Créer mon école <ArrowRight className="w-3.5 h-3.5 ml-1" />
               </Button>
             </Link>
+
+            {/* Mobile Hamburger Button */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:text-white"
+              aria-label="Menu"
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Navigation Drawer */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="md:hidden border-b border-white/10 bg-[#0A0E18] px-4 py-5 space-y-3 overflow-hidden shadow-2xl"
+            >
+              <div className="grid grid-cols-2 gap-2">
+                <Link
+                  href="/library"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold text-xs"
+                >
+                  <span className="text-base">📚</span> Bibliothèque
+                </Link>
+                <Link
+                  href="/news"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-2 p-3 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-bold text-xs"
+                >
+                  <span className="text-base">📰</span> Actualités
+                </Link>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <a
+                  href="#schools"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-2 p-3 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-bold text-xs hover:text-white"
+                >
+                  <span className="text-base">🏛️</span> Établissements
+                </a>
+                <a
+                  href="#features"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-2 p-3 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-bold text-xs hover:text-white"
+                >
+                  <span className="text-base">⚡</span> Fonctionnalités
+                </a>
+              </div>
+
+              <div className="pt-2 border-t border-white/5 flex flex-col gap-2">
+                <Link
+                  href="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full text-center py-2.5 rounded-xl bg-white/5 text-white font-bold text-xs hover:bg-white/10"
+                >
+                  👤 Espace Membres (Connexion)
+                </Link>
+                <Link
+                  href="/onboarding"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full text-center py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-600 text-white font-black text-xs shadow-lg shadow-indigo-500/20"
+                >
+                  ✨ Créer mon École / Académie
+                </Link>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </nav>
 
       {/* ═════ HERO SECTION ═════ */}
@@ -509,7 +583,7 @@ export default function LandingPage() {
             <Link href="/news" className="hover:text-white transition-colors">Actualités & Journal</Link>
             <Link href="/login" className="hover:text-white transition-colors">Espace Membres</Link>
           </div>
-          <p>© 2026 SYGMA-TECH. Tous droits réservés.</p>
+          <p>© 2026 THE GREATSOFT. Tous droits réservés.</p>
         </div>
       </footer>
     </div>

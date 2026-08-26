@@ -7,7 +7,7 @@ import {
     BookOpen, Search, Download, Eye, Heart, ArrowLeft, Filter,
     Sparkles, GraduationCap, School, ShieldCheck, Share2, Clock,
     FileText, Video, Music, Image as ImageIcon, Link2, FolderOpen,
-    CheckCircle2, Star, ExternalLink, X, ChevronRight, BookMarked
+    CheckCircle2, Star, ExternalLink, X, ChevronRight, BookMarked, Menu
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -168,6 +168,8 @@ export default function GlobalLibraryPage() {
             }
         });
 
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
     return (
         <div className="min-h-screen bg-[#060911] text-white overflow-x-hidden font-sans selection:bg-indigo-500/30 pb-20">
 
@@ -190,19 +192,72 @@ export default function GlobalLibraryPage() {
                         </Link>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        <Link href="/login">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        <Link href="/login" className="hidden sm:block">
                             <Button variant="ghost" size="sm" className="text-slate-300 hover:text-white hover:bg-white/5 text-xs font-bold">
-                                Connexion
+                                Espace Membre
                             </Button>
                         </Link>
-                        <Link href="/onboarding">
+                        <Link href="/onboarding" className="hidden sm:block">
                             <Button size="sm" className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs px-4 rounded-xl shadow-lg shadow-emerald-500/20">
                                 Inscrire un Établissement
                             </Button>
                         </Link>
+                        {/* Mobile Menu Toggle Button */}
+                        <button
+                            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                            className="md:hidden p-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:text-white"
+                            aria-label="Menu"
+                        >
+                            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                        </button>
                     </div>
                 </div>
+
+                {/* Mobile Menu Dropdown */}
+                <AnimatePresence>
+                    {mobileMenuOpen && (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="md:hidden border-b border-white/10 bg-[#0A0E18] px-4 py-5 space-y-3 overflow-hidden shadow-2xl"
+                        >
+                            <div className="grid grid-cols-2 gap-2">
+                                <Link
+                                    href="/library"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold text-xs"
+                                >
+                                    <span className="text-base">📚</span> Bibliothèque
+                                </Link>
+                                <Link
+                                    href="/news"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className="flex items-center gap-2 p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-bold text-xs"
+                                >
+                                    <span className="text-base">📰</span> Actualités
+                                </Link>
+                            </div>
+                            <div className="pt-2 border-t border-white/5 flex flex-col gap-2">
+                                <Link
+                                    href="/login"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className="w-full text-center py-2.5 rounded-xl bg-white/5 text-white font-bold text-xs"
+                                >
+                                    👤 Espace Membres & Connexion
+                                </Link>
+                                <Link
+                                    href="/onboarding"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className="w-full text-center py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-xs"
+                                >
+                                    ✨ Inscrire un Établissement
+                                </Link>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </nav>
 
             {/* ═════ HEADER HERO ═════ */}

@@ -1274,7 +1274,7 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             if (!targetOrgId) throw { code: -32602, message: 'Organisation requise' };
 
             if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
-                // 1. Résolution de la matière (par UUID ou par nom)
+                // 1. Résolution de la matière et de l'organisation
                 let subject: any = null;
                 const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(subInput);
                 if (isUuid) {
@@ -1289,92 +1289,180 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 const actualSubjectId = subject?.id || (isUuid ? subInput : null);
                 const subjectName = subject?.name || args.title || subInput || 'Formation';
 
-                // 2. Récupérer les chapitres du programme (teacher_curricula)
+                // Récupération des infos organisation
+                const orgRes = await fetchSupabaseRest(env, `organizations?id=eq.${encodeURIComponent(targetOrgId)}&select=name,logo_url,city,country&limit=1`);
+                const orgName = orgRes?.[0]?.name || 'Établissement Agréé IziTeach';
+
+                // 2. Récupération réelle de TOUS les chapitres de la matière
                 let chapters: any[] = [];
                 if (actualSubjectId) {
-                    const currPath = `teacher_curricula?subject_id=eq.${encodeURIComponent(actualSubjectId)}&organization_id=eq.${encodeURIComponent(targetOrgId)}&order=order_index.asc,created_at.asc`;
-                    const currRes = await fetchSupabaseRest(env, currPath);
-                    chapters = currRes || [];
+                    const chRes = await fetchSupabaseRest(env, `chapters?subject_id=eq.${encodeURIComponent(actualSubjectId)}&order=position.asc`);
+                    if (chRes && chRes.length > 0) chapters = chRes;
                 }
-
-                // 3. Récupérer les épreuves/exercices si demandé
-                let exercises: any[] = [];
-                if (args.include_exercises) {
-                    const exPath = `exam_papers?org_id=eq.${encodeURIComponent(targetOrgId)}&subject=ilike.${encodeURIComponent(`%${subjectName}%`)}&limit=20`;
-                    const exRes = await fetchSupabaseRest(env, exPath);
-                    exercises = exRes || [];
-                }
-
-                // Si pas de chapitres en BDD, structurer des modules professionnels par défaut
                 if (chapters.length === 0) {
-                    chapters = [
-                        { title: 'Module 1 : Fondements & Principes Clés', description: `Introduction approfondie aux concepts fondamentaux de ${subjectName}, enjeux contemporains et méthodologie de base.` },
-                        { title: 'Module 2 : Stratégies & Outils Opérationnels', description: `Déploiement pratique, boîte à outils, processus pas à pas et bonnes pratiques professionnelles.` },
-                        { title: 'Module 3 : Analyse, Optimisation & Performance', description: `Indicateurs de performance (KPIs), analyse des résultats et leviers d'amélioration continue.` },
-                        { title: 'Module 4 : Études de Cas & Guide d\'Application', description: `Mise en situation concrète, exercices d'application directe et synthèse d'évaluation.` }
-                    ];
+                    const chRes = await fetchSupabaseRest(env, `chapters?organization_id=eq.${encodeURIComponent(targetOrgId)}&title=ilike.${encodeURIComponent(`%${subjectName}%`)}&order=position.asc`);
+                    if (chRes && chRes.length > 0) chapters = chRes;
                 }
+
+                // 3. Récupération réelle de TOUTES les leçons associées
+                const chapterIds = chapters.map(c => c.id).filter(Boolean);
+                let allLessons: any[] = [];
+                if (chapterIds.length > 0) {
+                    const lRes = await fetchSupabaseRest(env, `lessons?chapter_id=in.(${chapterIds.join(',')})&order=position.asc`);
+                    if (lRes) allLessons = lRes;
+                }
+
+                // 4. Récupération réelle de TOUS les exercices / évaluations
+                let allExercises: any[] = [];
+                const lessonIds = allLessons.map(l => l.id).filter(Boolean);
+                if (chapterIds.length > 0 || lessonIds.length > 0) {
+                    let exQuery = `exercises?select=id,chapter_id,lesson_id,title,type,questions,max_score,duration_minutes,created_at&order=created_at.asc`;
+                    if (chapterIds.length > 0) exQuery += `&chapter_id=in.(${chapterIds.join(',')})`;
+                    const exRes = await fetchSupabaseRest(env, exQuery);
+                    if (exRes) allExercises = exRes;
+                }
+
+                // Associer les leçons et exercices à chaque chapitre
+                const enrichedChapters = chapters.map((chap, idx) => {
+                    const chapLessons = allLessons.filter(l => l.chapter_id === chap.id).sort((a, b) => (a.position || 0) - (b.position || 0));
+                    const chapExercises = allExercises.filter(e => e.chapter_id === chap.id || chapLessons.some(l => l.id === e.lesson_id));
+                    return {
+                        ...chap,
+                        module_num: chap.position || (idx + 1),
+                        lessons: chapLessons,
+                        exercises: chapExercises,
+                    };
+                });
+
+                // Si aucune leçon en BDD, structurer un contenu pédagogique par défaut
+                const finalChapters = enrichedChapters.length > 0 ? enrichedChapters : [
+                    {
+                        module_num: 1,
+                        title: 'Module 1 : Fondements & Principes Clés',
+                        description: `Concepts fondamentaux de ${subjectName}, cadre méthodologique et objectifs de la formation.`,
+                        lessons: [{ title: 'Introduction & Définitions', content: `Ce premier chapitre pose les bases méthodologiques et théoriques indispensables pour la maîtrise de ${subjectName}.` }],
+                        exercises: []
+                    },
+                    {
+                        module_num: 2,
+                        title: 'Module 2 : Stratégies & Outils Opérationnels',
+                        description: 'Déploiement pratique, processus pas à pas et outils indispensables.',
+                        lessons: [{ title: 'Méthodes et Applications Pratiques', content: `Mise en œuvre des processus clés dans un environnement professionnel réel.` }],
+                        exercises: []
+                    }
+                ];
+
+                const totalLessonsCount = finalChapters.reduce((acc, c) => acc + (c.lessons?.length || 0), 0);
+                const totalExercisesCount = finalChapters.reduce((acc, c) => acc + (c.exercises?.length || 0), 0);
+
+                // Helper de conversion Markdown/Texte vers HTML sémantique propre
+                const formatContentToHtml = (raw: string | null) => {
+                    if (!raw) return '<p class="empty-content">Contenu en cours de rédaction par l\'équipe pédagogique.</p>';
+                    if (/<(p|div|h[1-6]|ul|ol|table|blockquote)/i.test(raw)) return raw;
+
+                    let formatted = raw
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/```([\s\S]*?)```/g, '<pre class="code-box"><code>$1</code></pre>')
+                        .replace(/^### (.*$)/gim, '<h4>$1</h4>')
+                        .replace(/^## (.*$)/gim, '<h3>$1</h3>')
+                        .replace(/^# (.*$)/gim, '<h2>$1</h2>')
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                        .replace(/^\> (.*$)/gim, '<blockquote class="callout">$1</blockquote>')
+                        .replace(/^- (.*$)/gim, '<li>$1</li>')
+                        .replace(/(<li>.*<\/li>)/gms, '<ul>$1</ul>')
+                        .replace(/\n\n+/g, '</p><p>')
+                        .replace(/\n/g, '<br/>');
+
+                    return `<p>${formatted}</p>`;
+                };
 
                 // Titre et description finale
                 const bookTitle = args.title || `Manuel : ${subjectName}`;
-                const bookDesc = args.description || `Manuel de référence pour la matière ${subjectName} comprenant ${chapters.length} modules complets et ${exercises.length} exercices pratiques.`;
+                const bookDesc = args.description || `Manuel de référence officiel pour ${subjectName} réunissant ${finalChapters.length} chapitres détaillés, ${totalLessonsCount} leçons complètes et ${totalExercisesCount} évaluations pratiques.`;
 
-                // 4. Générer le document HTML interactif et stylisé
-                const chaptersHtml = chapters.map((c, i) => `
-                    <div class="chapter" id="chap-${i+1}">
-                        <div class="chapter-badge">Module ${i+1}</div>
-                        <h2>${c.title}</h2>
-                        <p class="chapter-desc">${c.description || ''}</p>
-                        <div class="chapter-body">
-                            <p>Ce module explore en détail les compétences essentielles et les démarches opérationnelles attendues pour maîtriser <strong>${c.title}</strong>.</p>
-                            <div class="key-points">
-                                <h4>🎯 Objectifs d'apprentissage :</h4>
-                                <ul>
-                                    <li>Comprendre les principes théoriques et méthodologiques.</li>
-                                    <li>Appliquer les bonnes pratiques dans un contexte professionnel ou académique.</li>
-                                    <li>Évaluer et optimiser les résultats obtenus.</li>
-                                </ul>
-                            </div>
+                // 5. Génération HTML complète du livre
+                const chaptersHtml = finalChapters.map((chap, i) => `
+                    <section class="chapter-card" id="chap-${chap.module_num}">
+                        <div class="chapter-header">
+                            <span class="chap-badge">Chapitre ${chap.module_num}</span>
+                            <h2>${chap.title}</h2>
+                            ${chap.description ? `<p class="chap-desc">${chap.description}</p>` : ''}
                         </div>
-                    </div>
-                `).join('');
 
-                const exercisesHtml = exercises.length > 0 ? `
-                    <div class="exercises-section" id="exercises">
-                        <h2>📝 Évaluations & Exercices Pratiques</h2>
-                        ${exercises.map((e, ei) => `
-                            <div class="exercise-card">
-                                <h3>Exercice ${ei+1} : ${e.title}</h3>
-                                <p>${e.instructions || 'Répondez aux consignes suivantes avec précision.'}</p>
+                        ${(chap.lessons && chap.lessons.length > 0) ? `
+                            <div class="lessons-container">
+                                ${chap.lessons.map((les: any, li: number) => `
+                                    <article class="lesson-card" id="lesson-${chap.module_num}-${li+1}">
+                                        <div class="lesson-meta">
+                                            <span class="lesson-num">Leçon ${chap.module_num}.${li+1}</span>
+                                            ${les.estimated_minutes ? `<span class="lesson-time">⏱️ ${les.estimated_minutes} min</span>` : ''}
+                                        </div>
+                                        <h3 class="lesson-title">${les.title}</h3>
+                                        <div class="lesson-body">
+                                            ${formatContentToHtml(les.content || les.description)}
+                                        </div>
+                                    </article>
+                                `).join('')}
                             </div>
-                        `).join('')}
-                    </div>
-                ` : '';
+                        ` : `
+                            <div class="lesson-card">
+                                <p class="chap-body-text">Contenu pédagogique complet validé par l'académie.</p>
+                            </div>
+                        `}
+
+                        ${(chap.exercises && chap.exercises.length > 0) ? `
+                            <div class="chap-exercises" id="exercises-${chap.module_num}">
+                                <h4>📝 Évaluations & Exercices du Chapitre ${chap.module_num}</h4>
+                                ${chap.exercises.map((ex: any, ei: number) => `
+                                    <div class="exercise-item">
+                                        <h5>Exercice ${ei+1} : ${ex.title}</h5>
+                                        ${ex.type ? `<span class="ex-type-badge">${ex.type.toUpperCase()}</span>` : ''}
+                                        <div class="ex-body">
+                                            ${typeof ex.questions === 'string' ? `<p>${ex.questions}</p>` : (
+                                                Array.isArray(ex.questions) ? ex.questions.map((q: any, qi: number) => `
+                                                    <div class="q-box">
+                                                        <p><strong>Q${qi+1}.</strong> ${q.question || q.title || q.text || 'Question d\'application'}</p>
+                                                        ${Array.isArray(q.options) ? `<ul class="q-options">${q.options.map((opt: string) => `<li>${opt}</li>`).join('')}</ul>` : ''}
+                                                        ${q.explanation ? `<div class="q-answer">💡 <em>Correction : ${q.explanation}</em></div>` : ''}
+                                                    </div>
+                                                `).join('') : '<p>Répondez aux questions d\'application selon les instructions du cours.</p>'
+                                            )}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                    </section>
+                `).join('');
 
                 const fullBookHtml = `<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${bookTitle}</title>
+    <title>${bookTitle} — IziTeach Édition</title>
     <style>
         :root {
             --primary: #4F46E5;
             --primary-light: #818CF8;
             --bg: #0B0E14;
-            --surface: #161B26;
-            --surface-hover: #1F2937;
+            --surface: #141923;
+            --surface-card: #1A2130;
             --text: #F8FAFC;
             --text-muted: #94A3B8;
             --border: rgba(255, 255, 255, 0.1);
             --gold: #F59E0B;
+            --emerald: #10B981;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.8; font-size: 16px; }
         
         .book-hero {
             background: radial-gradient(circle at top center, #1E1B4B 0%, #0B0E14 100%);
-            padding: 60px 20px 40px;
+            padding: 70px 20px 45px;
             text-align: center;
             border-bottom: 1px solid var(--border);
         }
@@ -1394,19 +1482,18 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             margin-bottom: 20px;
         }
         .book-title {
-            font-size: 32px;
+            font-size: 34px;
             font-weight: 900;
             letter-spacing: -0.5px;
             margin-bottom: 12px;
-            background: linear-gradient(135deg, #FFFFFF 0%, #CBD5E1 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: #FFFFFF;
         }
         .book-subtitle {
             font-size: 15px;
             color: var(--text-muted);
-            max-width: 650px;
+            max-width: 680px;
             margin: 0 auto 24px;
+            line-height: 1.6;
         }
         .book-meta-tags {
             display: flex;
@@ -1418,167 +1505,221 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         .meta-tag {
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid var(--border);
-            padding: 4px 12px;
-            border-radius: 6px;
+            padding: 5px 14px;
+            border-radius: 999px;
             color: #CBD5E1;
+            font-weight: 600;
         }
 
-        .book-container { max-width: 820px; margin: 0 auto; padding: 40px 20px; }
+        .book-container { max-width: 860px; margin: 0 auto; padding: 40px 20px 80px; }
         
         .toc-card {
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 24px;
+            border-radius: 20px;
+            padding: 28px;
             margin-bottom: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
-        .toc-card h3 { font-size: 18px; color: var(--primary-light); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
-        .toc-list { list-style: none; display: grid; gap: 8px; }
+        .toc-card h3 { font-size: 19px; color: var(--primary-light); margin-bottom: 18px; display: flex; align-items: center; gap: 8px; font-weight: 800; }
+        .toc-list { list-style: none; display: grid; gap: 10px; }
         .toc-list a {
             display: flex;
             align-items: center;
             justify-content: space-between;
             color: var(--text);
             text-decoration: none;
-            padding: 10px 14px;
-            border-radius: 8px;
-            background: rgba(255, 255, 255, 0.02);
+            padding: 12px 16px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 14px;
+            font-weight: 600;
             transition: all 0.2s;
         }
-        .toc-list a:hover { background: rgba(99, 102, 241, 0.15); color: var(--primary-light); transform: translateX(4px); }
+        .toc-list a:hover { background: rgba(99, 102, 241, 0.15); border-color: var(--primary-light); color: var(--primary-light); transform: translateX(4px); }
 
-        .chapter {
+        .chapter-card {
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: 16px;
+            border-radius: 20px;
             padding: 32px;
-            margin-bottom: 30px;
-            scroll-margin-top: 20px;
+            margin-bottom: 40px;
+            scroll-margin-top: 30px;
         }
-        .chapter-badge {
+        .chapter-header { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 24px; }
+        .chap-badge {
             display: inline-block;
             background: var(--primary);
             color: white;
             font-size: 11px;
             font-weight: 800;
-            padding: 4px 10px;
+            padding: 4px 12px;
             border-radius: 6px;
             text-transform: uppercase;
             margin-bottom: 12px;
+            letter-spacing: 0.5px;
         }
-        .chapter h2 { font-size: 22px; font-weight: 800; margin-bottom: 10px; color: white; }
-        .chapter-desc { color: var(--text-muted); font-size: 14px; margin-bottom: 20px; }
-        .chapter-body { color: #CBD5E1; font-size: 15px; }
-        
-        .key-points {
-            background: rgba(99, 102, 241, 0.08);
-            border-left: 4px solid var(--primary-light);
-            border-radius: 0 8px 8px 0;
-            padding: 16px 20px;
-            margin: 20px 0;
-        }
-        .key-points h4 { color: var(--primary-light); font-size: 14px; margin-bottom: 8px; }
-        .key-points ul { margin-left: 20px; }
-        .key-points li { margin-bottom: 4px; font-size: 14px; }
+        .chapter-card h2 { font-size: 24px; font-weight: 900; margin-bottom: 10px; color: white; }
+        .chap-desc { color: var(--text-muted); font-size: 14px; }
 
-        .exercises-section { margin-top: 40px; }
-        .exercise-card {
-            background: rgba(16, 185, 129, 0.08);
-            border: 1px solid rgba(16, 185, 129, 0.25);
-            border-radius: 12px;
-            padding: 20px;
-            margin-top: 16px;
+        .lessons-container { display: flex; flex-direction: column; gap: 24px; }
+        .lesson-card {
+            background: var(--surface-card);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 16px;
+            padding: 24px;
         }
-        .exercise-card h3 { color: #34D399; font-size: 16px; margin-bottom: 8px; }
+        .lesson-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+        .lesson-num { font-size: 11px; font-weight: 800; color: var(--primary-light); text-transform: uppercase; letter-spacing: 0.5px; }
+        .lesson-time { font-size: 11px; color: var(--text-muted); }
+        .lesson-title { font-size: 18px; font-weight: 800; color: white; margin-bottom: 16px; }
+        .lesson-body { color: #CBD5E1; font-size: 15px; line-height: 1.8; }
+        .lesson-body p { margin-bottom: 14px; }
+        .lesson-body strong { color: white; font-weight: 700; }
+        .lesson-body ul { margin: 12px 0 16px 24px; }
+        .lesson-body li { margin-bottom: 6px; }
+        .lesson-body h3, .lesson-body h4 { color: #E2E8F0; margin: 18px 0 10px; font-weight: 700; }
+        .callout { border-left: 4px solid var(--primary-light); background: rgba(99, 102, 241, 0.08); padding: 12px 18px; border-radius: 0 8px 8px 0; margin: 16px 0; font-style: italic; color: #E0E7FF; }
+        .code-box { background: #0F131D; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 14px; overflow-x: auto; font-family: monospace; font-size: 13px; color: #A5B4FC; margin: 14px 0; }
+
+        .chap-exercises {
+            margin-top: 30px;
+            background: rgba(16, 185, 129, 0.06);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            border-radius: 16px;
+            padding: 24px;
+        }
+        .chap-exercises h4 { color: #34D399; font-size: 16px; font-weight: 800; margin-bottom: 16px; }
+        .exercise-item { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 18px; margin-bottom: 14px; }
+        .exercise-item h5 { font-size: 15px; color: white; margin-bottom: 8px; font-weight: 700; }
+        .ex-type-badge { display: inline-block; font-size: 9px; font-weight: 800; background: rgba(16, 185, 129, 0.2); color: #34D399; padding: 2px 8px; border-radius: 4px; margin-bottom: 10px; }
+        .q-box { margin-top: 10px; padding: 10px 0; border-top: 1px solid rgba(255,255,255,0.05); }
+        .q-options { list-style: disc; margin: 8px 0 8px 24px; color: #94A3B8; font-size: 14px; }
+        .q-answer { margin-top: 6px; font-size: 13px; color: #FCD34D; }
 
         .book-footer {
             text-align: center;
-            padding: 40px;
+            padding: 50px 20px;
             color: var(--text-muted);
-            font-size: 12px;
+            font-size: 13px;
             border-top: 1px solid var(--border);
         }
         @media print {
             body { background: white; color: black; }
-            .chapter, .toc-card { border: 1px solid #ccc; background: none; color: black; }
-            .book-title { color: black; -webkit-text-fill-color: black; }
+            .chapter-card, .lesson-card, .toc-card { border: 1px solid #ccc; background: none; color: black; box-shadow: none; }
+            .book-title, .lesson-title { color: black; }
+            .lesson-body { color: #222; }
         }
     </style>
 </head>
 <body>
     <header class="book-hero">
-        <div class="cert-badge">⭐ Manuel Officiel IziTeach</div>
+        <div class="cert-badge">⭐ Manuel Officiel IziTeach • Édition Certifiée</div>
         <h1 class="book-title">${bookTitle}</h1>
         <p class="book-subtitle">${bookDesc}</p>
         <div class="book-meta-tags">
+            <span class="meta-tag">🏫 Établissement : ${orgName}</span>
             <span class="meta-tag">📚 Matière : ${subjectName}</span>
-            <span class="meta-tag">📑 ${chapters.length} Modules</span>
-            <span class="meta-tag">🎓 Version Certifiée Numérique</span>
+            <span class="meta-tag">📑 ${finalChapters.length} Chapitres</span>
+            <span class="meta-tag">📖 ${totalLessonsCount} Leçons Intégrales</span>
+            ${totalExercisesCount > 0 ? `<span class="meta-tag">📝 ${totalExercisesCount} Exercices</span>` : ''}
         </div>
     </header>
 
     <main class="book-container">
         <div class="toc-card">
-            <h3>📑 Sommaire & Table des Matières</h3>
+            <h3>📑 Sommaire & Programme Officiel</h3>
             <ul class="toc-list">
-                ${chapters.map((c, i) => `<li><a href="#chap-${i+1}"><span>Module ${i+1} : ${c.title}</span> <span>→</span></a></li>`).join('')}
-                ${exercises.length > 0 ? `<li><a href="#exercises"><span>Évaluations & Exercices (${exercises.length})</span> <span>→</span></a></li>` : ''}
+                ${finalChapters.map((c: any) => `
+                    <li>
+                        <a href="#chap-${c.module_num}">
+                            <span>Chapitre ${c.module_num} : ${c.title} (${c.lessons?.length || 0} leçons)</span>
+                            <span>→</span>
+                        </a>
+                    </li>
+                `).join('')}
             </ul>
         </div>
 
         ${chaptersHtml}
-        ${exercisesHtml}
     </main>
 
     <footer class="book-footer">
-        <p>Édition numérique IziTeach — Certifiée pour la formation académique et professionnelle.</p>
+        <p><strong>© 2026 THE GREATSOFT</strong> • Tous droits réservés • Plateforme Éducative IziTeach</p>
     </footer>
 </body>
 </html>`;
 
                 const fileUrl = `data:text/html;charset=utf-8,${encodeURIComponent(fullBookHtml)}`;
 
-                // 5. Enregistrement direct dans library_items (publication par défaut)
+                // 6. Enregistrement ou mise à jour dans library_items
                 if (args.publish_to_library !== false) {
-                    const itemId = crypto.randomUUID();
+                    let itemId = crypto.randomUUID();
                     const now = new Date().toISOString();
-                    const libPayload = {
-                        id: itemId,
-                        organization_id: targetOrgId,
-                        title: bookTitle,
-                        description: bookDesc,
-                        category: args.category || 'cours',
-                        subject_id: actualSubjectId,
-                        classroom_id: subject?.classroom_id || args.classroom_id || null,
-                        file_type: 'doc',
-                        file_url: fileUrl,
-                        file_size: fullBookHtml.length,
-                        is_public: args.is_public !== false,
-                        download_count: 0,
-                        created_at: now,
-                    };
-                    const inserted = await fetchSupabaseRest(env, 'library_items', { method: 'POST', body: libPayload });
-                    if (inserted) {
-                        return {
-                            success: true,
-                            item_id: itemId,
+
+                    // Vérifier si un document existe déjà pour cette matière/titre
+                    let existingQuery = `library_items?organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+                    if (actualSubjectId) existingQuery += `&subject_id=eq.${encodeURIComponent(actualSubjectId)}`;
+                    else existingQuery += `&title=eq.${encodeURIComponent(bookTitle)}`;
+                    existingQuery += `&limit=1`;
+
+                    const existing = await fetchSupabaseRest(env, existingQuery);
+                    if (existing && existing.length > 0) {
+                        itemId = existing[0].id;
+                        await fetchSupabaseRest(env, `library_items?id=eq.${encodeURIComponent(itemId)}`, {
+                            method: 'PATCH',
+                            body: {
+                                title: bookTitle,
+                                description: bookDesc,
+                                file_url: fileUrl,
+                                file_size: fullBookHtml.length,
+                                file_type: 'doc',
+                                is_public: args.is_public !== false,
+                            }
+                        });
+                    } else {
+                        const libPayload = {
+                            id: itemId,
+                            organization_id: targetOrgId,
                             title: bookTitle,
-                            subject: subjectName,
-                            chapters_count: chapters.length,
-                            exercises_count: exercises.length,
-                            file_url_generated: true,
+                            description: bookDesc,
+                            category: args.category || 'cours',
+                            subject_id: actualSubjectId,
+                            classroom_id: subject?.classroom_id || args.classroom_id || null,
+                            file_type: 'doc',
+                            file_url: fileUrl,
+                            file_size: fullBookHtml.length,
                             is_public: args.is_public !== false,
-                            message: `Livre "${bookTitle}" compilé avec son lecteur complet et publié avec succès dans la Bibliothèque Numérique.`
+                            download_count: 0,
+                            created_at: now,
                         };
+                        await fetchSupabaseRest(env, 'library_items', { method: 'POST', body: libPayload });
                     }
+
+                    return {
+                        success: true,
+                        item_id: itemId,
+                        title: bookTitle,
+                        subject: subjectName,
+                        total_chapters: finalChapters.length,
+                        total_lessons: totalLessonsCount,
+                        total_exercises: totalExercisesCount,
+                        file_size_bytes: fullBookHtml.length,
+                        file_size_formatted: `${(fullBookHtml.length / 1024).toFixed(1)} KB`,
+                        is_public: args.is_public !== false,
+                        message: `✅ Manuel complet "${bookTitle}" généré avec succès (${finalChapters.length} chapitres, ${totalLessonsCount} leçons intégrales, ${totalExercisesCount} évaluations) et synchronisé dans la Bibliothèque IziTeach.`
+                    };
                 }
 
                 return {
                     success: true,
                     title: bookTitle,
                     subject: subjectName,
-                    chapters_count: chapters.length,
-                    exercises_count: exercises.length,
+                    total_chapters: finalChapters.length,
+                    total_lessons: totalLessonsCount,
+                    total_exercises: totalExercisesCount,
+                    file_size_formatted: `${(fullBookHtml.length / 1024).toFixed(1)} KB`,
                     file_url: fileUrl,
                     message: `Livre "${bookTitle}" compilé avec succès (non publié).`
                 };

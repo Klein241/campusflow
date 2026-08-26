@@ -641,7 +641,7 @@ export default function DemoPage() {
                         </div>
                         <span>IziTeach • Enseigner simplement</span>
                     </div>
-                    <p>© 2026 SYGMA-TECH</p>
+                    <p>© 2026 THE GREATSOFT</p>
                 </div>
             </footer>
         </div>

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
     Newspaper, Bell, Calendar, Clock, Share2, ArrowLeft, Tag,
     Sparkles, ShieldCheck, CheckCircle2, ChevronRight, X, Eye,
-    Send, Award, Flame, ExternalLink, Bookmark
+    Send, Award, Flame, ExternalLink, Bookmark, Menu
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -115,12 +115,32 @@ export default function GlobalNewsPage() {
         fetchNews();
     }, []);
 
+    // Deep link: open article from ?id= query param
+    useEffect(() => {
+        if (typeof window !== 'undefined' && news.length > 0) {
+            const params = new URLSearchParams(window.location.search);
+            const targetId = params.get('id');
+            if (targetId) {
+                const found = news.find(n => n.id === targetId);
+                if (found) setSelectedArticle(found);
+            }
+        }
+    }, [news]);
+
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
     const shareArticle = (item: NewsItem) => {
-        const text = `📰 ${item.title}\n\n${item.body.slice(0, 150)}...\n\nDécouvrez sur IziTeach : ${window.location.href}`;
+        const articleUrl = `${window.location.origin}/news?id=${encodeURIComponent(item.id)}`;
+        const shareText = `📰 ${item.title}\n\n${item.body.slice(0, 160)}...`;
         if (navigator.share) {
-            navigator.share({ title: item.title, text, url: window.location.href }).catch(() => {});
+            // Note: pass text WITHOUT url inside it so WhatsApp/Telegram don't duplicate the link
+            navigator.share({
+                title: item.title,
+                text: shareText,
+                url: articleUrl,
+            }).catch(() => {});
         } else {
-            navigator.clipboard.writeText(text);
+            navigator.clipboard.writeText(`${shareText}\n\n👉 Lire sur IziTeach : ${articleUrl}`);
             toast.success('Lien de l\'article copié 📋');
         }
     };
@@ -156,19 +176,72 @@ export default function GlobalNewsPage() {
                         </Link>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        <Link href="/login">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        <Link href="/login" className="hidden sm:block">
                             <Button variant="ghost" size="sm" className="text-slate-300 hover:text-white hover:bg-white/5 text-xs font-bold">
-                                Connexion
+                                Espace Membre
                             </Button>
                         </Link>
-                        <Link href="/onboarding">
+                        <Link href="/onboarding" className="hidden sm:block">
                             <Button size="sm" className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs px-4 rounded-xl shadow-lg shadow-indigo-500/20">
                                 Inscrire un Établissement
                             </Button>
                         </Link>
+                        {/* Mobile Hamburger Button */}
+                        <button
+                            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                            className="md:hidden p-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:text-white"
+                            aria-label="Menu"
+                        >
+                            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                        </button>
                     </div>
                 </div>
+
+                {/* Mobile Menu Dropdown */}
+                <AnimatePresence>
+                    {mobileMenuOpen && (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="md:hidden border-b border-white/10 bg-[#0A0E18] px-4 py-5 space-y-3 overflow-hidden shadow-2xl"
+                        >
+                            <div className="grid grid-cols-2 gap-2">
+                                <Link
+                                    href="/library"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 font-bold text-xs"
+                                >
+                                    <span className="text-base">📚</span> Bibliothèque
+                                </Link>
+                                <Link
+                                    href="/news"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className="flex items-center gap-2 p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-bold text-xs"
+                                >
+                                    <span className="text-base">📰</span> Actualités
+                                </Link>
+                            </div>
+                            <div className="pt-2 border-t border-white/5 flex flex-col gap-2">
+                                <Link
+                                    href="/login"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className="w-full text-center py-2.5 rounded-xl bg-white/5 text-white font-bold text-xs"
+                                >
+                                    👤 Espace Membres & Connexion
+                                </Link>
+                                <Link
+                                    href="/onboarding"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className="w-full text-center py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-black text-xs"
+                                >
+                                    ✨ Créer mon Établissement
+                                </Link>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </nav>
 
             {/* ═════ HEADER HERO ═════ */}

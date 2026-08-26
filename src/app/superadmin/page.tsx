@@ -10,7 +10,8 @@ import {
     Mail, Lock, School, UserCheck, Activity,
     BarChart3, Zap, Clock, CheckSquare, Star, Plus, Minus, Menu, X,
     MessageSquare, Send, Crown, CreditCard,
-    Image as ImageIcon, Video as VideoIcon, Link as LinkIcon, Target, Gift, Copy, Sparkles, Coins, Bug, Bot
+    Image as ImageIcon, Video as VideoIcon, Link as LinkIcon, Target, Gift, Copy, Sparkles, Coins, Bug, Bot,
+    BookOpen, Newspaper
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -27,6 +28,8 @@ import { DameSkySuperadminManager } from '@/components/superadmin/DameSkySuperad
 import { MarketingHub } from '@/components/superadmin/marketing/MarketingHub';
 import { SkyAgentBubble } from '@/components/sky-agent/SkyAgentBubble';
 import { SuperadminPaymentsTab } from '@/components/superadmin/SuperadminPaymentsTab';
+import { SuperadminLibraryTab } from '@/components/superadmin/SuperadminLibraryTab';
+import { SuperadminNewsTab } from '@/components/superadmin/SuperadminNewsTab';
 
 // ═══════════════════════════════════════════════════════════════════════
 // IZITEACH — SUPERADMIN PANEL
@@ -34,7 +37,7 @@ import { SuperadminPaymentsTab } from '@/components/superadmin/SuperadminPayment
 // Protected by platform_admins table (Supabase Auth + RLS)
 // ═══════════════════════════════════════════════════════════════════════
 
-type Tab = 'overview' | 'payments' | 'orgs' | 'users' | 'domains' | 'announcements' | 'points' | 'pricing' | 'requests' | 'ads' | 'marketing' | 'email' | 'bugs' | 'compte' | 'sky_agent';
+type Tab = 'overview' | 'library' | 'news' | 'payments' | 'orgs' | 'users' | 'domains' | 'announcements' | 'points' | 'pricing' | 'requests' | 'ads' | 'marketing' | 'email' | 'bugs' | 'compte' | 'sky_agent';
 
 interface Stats {
     total_orgs: number;
@@ -80,6 +83,8 @@ interface ActivityItem {
 
 const SIDEBAR: { id: Tab; label: string; icon: any; emoji?: string }[] = [
     { id: 'overview',       label: 'Vue d\'ensemble',  icon: LayoutDashboard, emoji: '📊' },
+    { id: 'library',        label: 'Bibliothèque Globale', icon: BookOpen, emoji: '📚' },
+    { id: 'news',           label: 'Actualités & Journal', icon: Newspaper, emoji: '📰' },
     { id: 'payments',       label: 'Paiements & Commissions', icon: CreditCard, emoji: '💳' },
     { id: 'orgs',           label: 'Organisations',    icon: Building2,       emoji: '🏫' },
     { id: 'users',          label: 'Utilisateurs',     icon: Users,           emoji: '👥' },
@@ -91,7 +96,7 @@ const SIDEBAR: { id: Tab; label: string; icon: any; emoji?: string }[] = [
     { id: 'marketing',      label: 'Marketing & IA',   icon: Sparkles,        emoji: '🚀' },
     { id: 'email',          label: 'Email Providers',  icon: Mail,            emoji: '📧' },
     { id: 'domains',        label: 'Domaines',         icon: Globe,           emoji: '🌐' },
-    { id: 'announcements',  label: 'Annonces',         icon: Megaphone,       emoji: '📢' },
+    { id: 'announcements',  label: 'Annonces Réseau',  icon: Megaphone,       emoji: '📢' },
     { id: 'sky_agent',      label: 'Dame SKY',         icon: Crown,           emoji: '👑' },
     { id: 'compte',         label: 'Mon Compte',        icon: Lock,            emoji: '🔑' },
 ];
@@ -1087,6 +1092,24 @@ export default function SuperAdminPage() {
                                         </div>
                                     </div>
                                 </div>
+                            </motion.div>
+                        )}
+
+                        {/* ══════════════════════════════════════════
+                            BIBLIOTHÈQUE GLOBALE
+                        ══════════════════════════════════════════ */}
+                        {tab === 'library' && (
+                            <motion.div key="library" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                                <SuperadminLibraryTab />
+                            </motion.div>
+                        )}
+
+                        {/* ══════════════════════════════════════════
+                            ACTUALITÉS & JOURNAL OFFICIEL
+                        ══════════════════════════════════════════ */}
+                        {tab === 'news' && (
+                            <motion.div key="news" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                                <SuperadminNewsTab />
                             </motion.div>
                         )}
 
