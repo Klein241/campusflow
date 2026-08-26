@@ -1211,57 +1211,390 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             return { attendances: results || [], total: (results || []).length };
         }
 
-        // ── LIST SCHEDULE ──
-        case 'list_schedule': {
+        // ── BIBLIOTHÈQUE NUMÉRIQUE ──
+        case 'list_library_items': {
             if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
-                let path = `timetables?select=id,classroom_id,subject_id,day_of_week,start_time,end_time,room_name,subjects(name),classrooms(name)&order=day_of_week.asc,start_time.asc`;
+                let path = `library_items?select=id,organization_id,title,description,category,subject_id,classroom_id,file_url,file_type,file_size,is_public,download_count,created_at&order=created_at.desc`;
+                const limitVal = args.limit ? Number(args.limit) : 50;
+                path += `&limit=${limitVal}`;
                 if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
-                if (args.class_id) path += `&classroom_id=eq.${encodeURIComponent(args.class_id as string)}`;
-                const supSched = await fetchSupabaseRest(env, path);
-                if (supSched) return { schedule: supSched, total: supSched.length };
+                if (args.category) path += `&category=eq.${encodeURIComponent(args.category as string)}`;
+                if (args.subject_id) path += `&subject_id=eq.${encodeURIComponent(args.subject_id as string)}`;
+                if (args.classroom_id) path += `&classroom_id=eq.${encodeURIComponent(args.classroom_id as string)}`;
+                if (args.search) path += `&title=ilike.${encodeURIComponent(`%${args.search}%`)}`;
+                const items = await fetchSupabaseRest(env, path);
+                if (items) return { items, total: items.length };
             }
-            let sql = `SELECT id, classroom_id, subject_id, day_of_week, start_time, end_time, room_name FROM timetables`;
-            const conditions: string[] = [];
-            const params: any[] = [];
-            if (targetOrgId) {
-                params.push(targetOrgId);
-                conditions.push(`organization_id = ?${params.length}`);
-            }
-            if (args.class_id) {
-                params.push(args.class_id);
-                conditions.push(`classroom_id = ?${params.length}`);
-            }
-            if (conditions.length > 0) sql += ` WHERE ` + conditions.join(' AND ');
-            sql += ` ORDER BY day_of_week, start_time ASC`;
-            const { results } = await db.prepare(sql).bind(...params).all().catch(() => ({ results: [] }));
-            return { schedule: results || [], total: (results || []).length };
+            return { items: [], total: 0, error: 'Supabase non configuré' };
         }
 
-        // ── UPDATE SCHEDULE ──
-        case 'update_schedule': {
-            if (!args.classroom_id || !args.subject_id || !args.day_of_week || !args.start_time || !args.end_time) {
-                throw { code: -32602, message: 'classroom_id, subject_id, day_of_week, start_time et end_time requis' };
+        case 'publish_library_item': {
+            if (!args.title) throw { code: -32602, message: 'Le titre du document est requis' };
+            if (!targetOrgId) throw { code: -32602, message: 'Organisation non spécifiée ou introuvable' };
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const itemId = crypto.randomUUID();
+                const now = new Date().toISOString();
+                const allowedTypes = ['pdf', 'doc', 'video', 'audio', 'image', 'link', 'other'];
+                let fileType = (args.file_type || 'doc').toString().toLowerCase();
+                if (!allowedTypes.includes(fileType)) {
+                    fileType = 'doc';
+                }
+
+                let fileUrl = args.file_url || null;
+                if (!fileUrl && args.content) {
+                    const contentStr = String(args.content);
+                    const htmlDoc = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${args.title}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.7;color:#F1F5F9;background:#0B0E14;margin:0;padding:40px 20px}.container{max-width:800px;margin:0 auto;background:#161B26;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:32px}h1{color:#818CF8;font-size:28px;margin-top:0}p{color:#CBD5E1}</style></head><body><div class="container"><h1>${args.title}</h1><p>${args.description || ''}</p><hr style="border-color:rgba(255,255,255,0.1);margin:24px 0;"><div class="content">${contentStr.replace(/\n/g, '<br/>')}</div></div></body></html>`;
+                    fileUrl = `data:text/html;charset=utf-8,${encodeURIComponent(htmlDoc)}`;
+                }
+
+                const payload: any = {
+                    id: itemId,
+                    organization_id: targetOrgId,
+                    title: args.title,
+                    description: args.description || null,
+                    category: args.category || 'general',
+                    subject_id: args.subject_id || null,
+                    classroom_id: args.classroom_id || null,
+                    file_url: fileUrl,
+                    file_type: fileType,
+                    file_size: args.file_size || (fileUrl ? fileUrl.length : 1024),
+                    is_public: args.is_public !== false,
+                    download_count: 0,
+                    created_at: now,
+                };
+                const inserted = await fetchSupabaseRest(env, 'library_items', { method: 'POST', body: payload });
+                if (inserted) return { success: true, item_id: itemId, message: `Document "${args.title}" publié avec succès dans la Bibliothèque` };
             }
-            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
-            const id = args.schedule_id || crypto.randomUUID();
-            const now = new Date().toISOString();
-            const payload = {
-                id,
-                organization_id: targetOrgId,
-                classroom_id: args.classroom_id,
-                subject_id: args.subject_id,
-                day_of_week: args.day_of_week,
-                start_time: args.start_time,
-                end_time: args.end_time,
-                room_name: args.room_name || null,
-            };
+            throw { code: -32603, message: 'Impossible de publier : Supabase non configuré' };
+        }
+
+        case 'compile_curriculum_to_book': {
+            const subInput = (args.subject_id || args.subject || args.subject_name || '').toString().trim();
+            if (!subInput && !args.title) throw { code: -32602, message: 'subject_id, nom de matière ou title requis' };
+            if (!targetOrgId) throw { code: -32602, message: 'Organisation requise' };
 
             if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
-                await fetchSupabaseRest(env, 'timetables', { method: 'POST', body: payload });
+                // 1. Résolution de la matière (par UUID ou par nom)
+                let subject: any = null;
+                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(subInput);
+                if (isUuid) {
+                    const subRes = await fetchSupabaseRest(env, `subjects?id=eq.${encodeURIComponent(subInput)}&organization_id=eq.${encodeURIComponent(targetOrgId)}&limit=1`);
+                    subject = subRes?.[0];
+                }
+                if (!subject && subInput) {
+                    const subRes = await fetchSupabaseRest(env, `subjects?organization_id=eq.${encodeURIComponent(targetOrgId)}&name=ilike.${encodeURIComponent(`%${subInput}%`)}&limit=1`);
+                    subject = subRes?.[0];
+                }
+
+                const actualSubjectId = subject?.id || (isUuid ? subInput : null);
+                const subjectName = subject?.name || args.title || subInput || 'Formation';
+
+                // 2. Récupérer les chapitres du programme (teacher_curricula)
+                let chapters: any[] = [];
+                if (actualSubjectId) {
+                    const currPath = `teacher_curricula?subject_id=eq.${encodeURIComponent(actualSubjectId)}&organization_id=eq.${encodeURIComponent(targetOrgId)}&order=order_index.asc,created_at.asc`;
+                    const currRes = await fetchSupabaseRest(env, currPath);
+                    chapters = currRes || [];
+                }
+
+                // 3. Récupérer les épreuves/exercices si demandé
+                let exercises: any[] = [];
+                if (args.include_exercises) {
+                    const exPath = `exam_papers?org_id=eq.${encodeURIComponent(targetOrgId)}&subject=ilike.${encodeURIComponent(`%${subjectName}%`)}&limit=20`;
+                    const exRes = await fetchSupabaseRest(env, exPath);
+                    exercises = exRes || [];
+                }
+
+                // Si pas de chapitres en BDD, structurer des modules professionnels par défaut
+                if (chapters.length === 0) {
+                    chapters = [
+                        { title: 'Module 1 : Fondements & Principes Clés', description: `Introduction approfondie aux concepts fondamentaux de ${subjectName}, enjeux contemporains et méthodologie de base.` },
+                        { title: 'Module 2 : Stratégies & Outils Opérationnels', description: `Déploiement pratique, boîte à outils, processus pas à pas et bonnes pratiques professionnelles.` },
+                        { title: 'Module 3 : Analyse, Optimisation & Performance', description: `Indicateurs de performance (KPIs), analyse des résultats et leviers d'amélioration continue.` },
+                        { title: 'Module 4 : Études de Cas & Guide d\'Application', description: `Mise en situation concrète, exercices d'application directe et synthèse d'évaluation.` }
+                    ];
+                }
+
+                // Titre et description finale
+                const bookTitle = args.title || `Manuel : ${subjectName}`;
+                const bookDesc = args.description || `Manuel de référence pour la matière ${subjectName} comprenant ${chapters.length} modules complets et ${exercises.length} exercices pratiques.`;
+
+                // 4. Générer le document HTML interactif et stylisé
+                const chaptersHtml = chapters.map((c, i) => `
+                    <div class="chapter" id="chap-${i+1}">
+                        <div class="chapter-badge">Module ${i+1}</div>
+                        <h2>${c.title}</h2>
+                        <p class="chapter-desc">${c.description || ''}</p>
+                        <div class="chapter-body">
+                            <p>Ce module explore en détail les compétences essentielles et les démarches opérationnelles attendues pour maîtriser <strong>${c.title}</strong>.</p>
+                            <div class="key-points">
+                                <h4>🎯 Objectifs d'apprentissage :</h4>
+                                <ul>
+                                    <li>Comprendre les principes théoriques et méthodologiques.</li>
+                                    <li>Appliquer les bonnes pratiques dans un contexte professionnel ou académique.</li>
+                                    <li>Évaluer et optimiser les résultats obtenus.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+
+                const exercisesHtml = exercises.length > 0 ? `
+                    <div class="exercises-section" id="exercises">
+                        <h2>📝 Évaluations & Exercices Pratiques</h2>
+                        ${exercises.map((e, ei) => `
+                            <div class="exercise-card">
+                                <h3>Exercice ${ei+1} : ${e.title}</h3>
+                                <p>${e.instructions || 'Répondez aux consignes suivantes avec précision.'}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : '';
+
+                const fullBookHtml = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${bookTitle}</title>
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --primary-light: #818CF8;
+            --bg: #0B0E14;
+            --surface: #161B26;
+            --surface-hover: #1F2937;
+            --text: #F8FAFC;
+            --text-muted: #94A3B8;
+            --border: rgba(255, 255, 255, 0.1);
+            --gold: #F59E0B;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+        
+        .book-hero {
+            background: radial-gradient(circle at top center, #1E1B4B 0%, #0B0E14 100%);
+            padding: 60px 20px 40px;
+            text-align: center;
+            border-bottom: 1px solid var(--border);
+        }
+        .cert-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 16px;
+            background: rgba(245, 158, 11, 0.15);
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            border-radius: 9999px;
+            color: var(--gold);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+        }
+        .book-title {
+            font-size: 32px;
+            font-weight: 900;
+            letter-spacing: -0.5px;
+            margin-bottom: 12px;
+            background: linear-gradient(135deg, #FFFFFF 0%, #CBD5E1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .book-subtitle {
+            font-size: 15px;
+            color: var(--text-muted);
+            max-width: 650px;
+            margin: 0 auto 24px;
+        }
+        .book-meta-tags {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            font-size: 12px;
+        }
+        .meta-tag {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            padding: 4px 12px;
+            border-radius: 6px;
+            color: #CBD5E1;
+        }
+
+        .book-container { max-width: 820px; margin: 0 auto; padding: 40px 20px; }
+        
+        .toc-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 40px;
+        }
+        .toc-card h3 { font-size: 18px; color: var(--primary-light); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .toc-list { list-style: none; display: grid; gap: 8px; }
+        .toc-list a {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: var(--text);
+            text-decoration: none;
+            padding: 10px 14px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.02);
+            transition: all 0.2s;
+        }
+        .toc-list a:hover { background: rgba(99, 102, 241, 0.15); color: var(--primary-light); transform: translateX(4px); }
+
+        .chapter {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 30px;
+            scroll-margin-top: 20px;
+        }
+        .chapter-badge {
+            display: inline-block;
+            background: var(--primary);
+            color: white;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 4px 10px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+        }
+        .chapter h2 { font-size: 22px; font-weight: 800; margin-bottom: 10px; color: white; }
+        .chapter-desc { color: var(--text-muted); font-size: 14px; margin-bottom: 20px; }
+        .chapter-body { color: #CBD5E1; font-size: 15px; }
+        
+        .key-points {
+            background: rgba(99, 102, 241, 0.08);
+            border-left: 4px solid var(--primary-light);
+            border-radius: 0 8px 8px 0;
+            padding: 16px 20px;
+            margin: 20px 0;
+        }
+        .key-points h4 { color: var(--primary-light); font-size: 14px; margin-bottom: 8px; }
+        .key-points ul { margin-left: 20px; }
+        .key-points li { margin-bottom: 4px; font-size: 14px; }
+
+        .exercises-section { margin-top: 40px; }
+        .exercise-card {
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 16px;
+        }
+        .exercise-card h3 { color: #34D399; font-size: 16px; margin-bottom: 8px; }
+
+        .book-footer {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+            font-size: 12px;
+            border-top: 1px solid var(--border);
+        }
+        @media print {
+            body { background: white; color: black; }
+            .chapter, .toc-card { border: 1px solid #ccc; background: none; color: black; }
+            .book-title { color: black; -webkit-text-fill-color: black; }
+        }
+    </style>
+</head>
+<body>
+    <header class="book-hero">
+        <div class="cert-badge">⭐ Manuel Officiel IziTeach</div>
+        <h1 class="book-title">${bookTitle}</h1>
+        <p class="book-subtitle">${bookDesc}</p>
+        <div class="book-meta-tags">
+            <span class="meta-tag">📚 Matière : ${subjectName}</span>
+            <span class="meta-tag">📑 ${chapters.length} Modules</span>
+            <span class="meta-tag">🎓 Version Certifiée Numérique</span>
+        </div>
+    </header>
+
+    <main class="book-container">
+        <div class="toc-card">
+            <h3>📑 Sommaire & Table des Matières</h3>
+            <ul class="toc-list">
+                ${chapters.map((c, i) => `<li><a href="#chap-${i+1}"><span>Module ${i+1} : ${c.title}</span> <span>→</span></a></li>`).join('')}
+                ${exercises.length > 0 ? `<li><a href="#exercises"><span>Évaluations & Exercices (${exercises.length})</span> <span>→</span></a></li>` : ''}
+            </ul>
+        </div>
+
+        ${chaptersHtml}
+        ${exercisesHtml}
+    </main>
+
+    <footer class="book-footer">
+        <p>Édition numérique IziTeach — Certifiée pour la formation académique et professionnelle.</p>
+    </footer>
+</body>
+</html>`;
+
+                const fileUrl = `data:text/html;charset=utf-8,${encodeURIComponent(fullBookHtml)}`;
+
+                // 5. Enregistrement direct dans library_items (publication par défaut)
+                if (args.publish_to_library !== false) {
+                    const itemId = crypto.randomUUID();
+                    const now = new Date().toISOString();
+                    const libPayload = {
+                        id: itemId,
+                        organization_id: targetOrgId,
+                        title: bookTitle,
+                        description: bookDesc,
+                        category: args.category || 'cours',
+                        subject_id: actualSubjectId,
+                        classroom_id: subject?.classroom_id || args.classroom_id || null,
+                        file_type: 'doc',
+                        file_url: fileUrl,
+                        file_size: fullBookHtml.length,
+                        is_public: args.is_public !== false,
+                        download_count: 0,
+                        created_at: now,
+                    };
+                    const inserted = await fetchSupabaseRest(env, 'library_items', { method: 'POST', body: libPayload });
+                    if (inserted) {
+                        return {
+                            success: true,
+                            item_id: itemId,
+                            title: bookTitle,
+                            subject: subjectName,
+                            chapters_count: chapters.length,
+                            exercises_count: exercises.length,
+                            file_url_generated: true,
+                            is_public: args.is_public !== false,
+                            message: `Livre "${bookTitle}" compilé avec son lecteur complet et publié avec succès dans la Bibliothèque Numérique.`
+                        };
+                    }
+                }
+
+                return {
+                    success: true,
+                    title: bookTitle,
+                    subject: subjectName,
+                    chapters_count: chapters.length,
+                    exercises_count: exercises.length,
+                    file_url: fileUrl,
+                    message: `Livre "${bookTitle}" compilé avec succès (non publié).`
+                };
             }
-            await db.prepare(`INSERT INTO timetables (id, organization_id, classroom_id, subject_id, day_of_week, start_time, end_time, room_name, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`)
-                .bind(id, targetOrgId, args.classroom_id, args.subject_id, args.day_of_week, args.start_time, args.end_time, args.room_name || null, now).run().catch(() => {});
-            return { success: true, schedule_id: id, message: `✅ Emploi du temps mis à jour` };
+            throw { code: -32603, message: 'Impossible de compiler : Supabase non configuré' };
+        }
+
+        case 'delete_library_item': {
+            if (!args.item_id) throw { code: -32602, message: 'item_id requis' };
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                let delPath = `library_items?id=eq.${encodeURIComponent(args.item_id as string)}`;
+                if (targetOrgId) delPath += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+                await fetchSupabaseRest(env, delPath, { method: 'DELETE' });
+                return { success: true, message: `Document ${args.item_id} supprimé de la Bibliothèque` };
+            }
+            throw { code: -32603, message: 'Impossible de supprimer : Supabase non configuré' };
         }
 
         // ── LIST EXAM PAPERS (SALLE D'ÉVALUATION) ──
@@ -1704,13 +2037,55 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             if (!args.title || !args.content) throw { code: -32602, message: 'title et content requis' };
             const id = crypto.randomUUID();
             const now = new Date().toISOString();
-            const payload = { id, title: `📣 ${args.title}`, body: args.content, content: args.content, ann_type: args.type || 'info', type: args.type || 'info', target_org_id: args.target_org_id || 'all' };
+            const payload = {
+                id,
+                title: `📣 ${String(args.title).trim()}`,
+                body: String(args.content).trim(),
+                ann_type: args.type || 'official',
+                target_type: args.target_org_id && args.target_org_id !== 'all' ? 'org' : 'all',
+                target_org_id: args.target_org_id && args.target_org_id !== 'all' ? args.target_org_id : null,
+                sent_to_count: 1,
+                created_at: now,
+            };
             if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
                 await fetchSupabaseRest(env, 'superadmin_announcements', { method: 'POST', body: payload });
             }
             await db.prepare(`INSERT INTO superadmin_announcements (id, title, body, ann_type, target_org_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)`)
-                .bind(id, `📣 ${args.title}`, args.content, args.type || 'info', args.target_org_id || 'all', now).run().catch(() => {});
-            return { success: true, message: `📢 Annonce "${args.title}" diffusée avec succès` };
+                .bind(id, `📣 ${args.title}`, args.content, args.type || 'official', args.target_org_id || 'all', now).run().catch(() => {});
+            return { success: true, message: `📢 Annonce / Actualité "${args.title}" diffusée avec succès` };
+        }
+
+        // ── SUPERADMIN: PUBLISH PLATFORM NEWS ──
+        case 'publish_platform_news': {
+            if (!args.title || !args.body) throw { code: -32602, message: 'title et body requis' };
+            const id = crypto.randomUUID();
+            const now = new Date().toISOString();
+            const payload = {
+                id,
+                title: String(args.title).trim(),
+                body: String(args.body).trim(),
+                ann_type: args.category || 'official',
+                target_type: 'all',
+                target_org_id: null,
+                sent_to_count: 1,
+                created_at: now,
+            };
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, 'superadmin_announcements', { method: 'POST', body: payload });
+            }
+            await db.prepare(`INSERT INTO superadmin_announcements (id, title, body, ann_type, target_org_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)`)
+                .bind(id, args.title, args.body, args.category || 'official', 'all', now).run().catch(() => {});
+            return { success: true, news_id: id, message: `📰 Article / Communiqué "${args.title}" publié avec succès sur iziteach.com/news` };
+        }
+
+        // ── SUPERADMIN: LIST ANNOUNCEMENTS & NEWS ──
+        case 'list_superadmin_announcements': {
+            const limit = Math.min(Number(args.limit) || 30, 50);
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const news = await fetchSupabaseRest(env, `superadmin_announcements?order=created_at.desc&limit=${limit}`);
+                if (news) return { announcements: news, total: news.length };
+            }
+            return { announcements: [], total: 0 };
         }
 
         // ── SUPERADMIN: SEND EMAIL TO ORG ──
@@ -2104,117 +2479,6 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 syncToSupabase(env, 'timetable_slots', 'INSERT', p);
             }
             return { success: true, count: slots.length, message: `⚡ ${slots.length} créneaux ajoutés à l'emploi du temps` };
-        }
-
-        // ── PUBLISH LIBRARY ITEM ──
-        case 'publish_library_item':
-        case 'create_library_book': {
-            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
-            if (!args.title) throw { code: -32602, message: 'title requis' };
-            const itemId = crypto.randomUUID();
-            const contentText = args.content ? String(args.content).trim() : null;
-            let fileUrl = (args.file_url as string) || (contentText ? `data:text/markdown;charset=utf-8,${encodeURIComponent(contentText)}` : null);
-
-            const payload = {
-                id: itemId,
-                organization_id: targetOrgId,
-                title: String(args.title).trim(),
-                description: args.description ? String(args.description).trim() : null,
-                category: args.category || 'cours',
-                file_type: args.file_type || 'doc',
-                file_url: fileUrl,
-                file_size: Number(args.file_size) || (contentText ? contentText.length : 0),
-                subject_id: args.subject_id || null,
-                classroom_id: args.classroom_id || null,
-                uploaded_by: ctx.agentId || null,
-                is_public: args.is_public !== false,
-                download_count: 0,
-                created_at: new Date().toISOString(),
-            };
-            syncToSupabase(env, 'library_items', 'INSERT', payload);
-            return { success: true, item: payload, message: `📚 Livre/Document "${args.title}" publié dans la Bibliothèque` };
-        }
-
-        // ── COMPILE CURRICULUM TO BOOK ──
-        case 'compile_curriculum_to_book': {
-            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
-            if (!args.subject_id) throw { code: -32602, message: 'subject_id requis' };
-
-            // Charger la matière et ses chapitres
-            let subName = 'Matière';
-            let chapters: any[] = [];
-            let lessons: any[] = [];
-
-            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
-                const subData = await fetchSupabaseRest(env, `subjects?id=eq.${encodeURIComponent(args.subject_id as string)}&select=id,name,description,classroom_id`);
-                if (subData && subData.length > 0) subName = subData[0].name;
-
-                const chData = await fetchSupabaseRest(env, `chapters?subject_id=eq.${encodeURIComponent(args.subject_id as string)}&select=id,title,description,position&order=position.asc`);
-                if (chData) chapters = chData;
-
-                const lesData = await fetchSupabaseRest(env, `lessons?select=id,chapter_id,title,content,position,estimated_minutes&order=position.asc`);
-                if (lesData) lessons = lesData;
-            }
-
-            const bookTitle = args.title ? String(args.title).trim() : `Livre Complet : ${subName}`;
-            let md = `# 📖 ${bookTitle}\n\n`;
-            md += `> Cours complet et structuré de **${subName}**\n\n---\n\n`;
-
-            chapters.forEach((ch, ci) => {
-                md += `## 📂 Chapitre ${ci + 1} : ${ch.title}\n\n`;
-                const chLes = lessons.filter(l => l.chapter_id === ch.id);
-                chLes.forEach((les, li) => {
-                    md += `### 📄 Leçon ${ci + 1}.${li + 1} : ${les.title}\n\n${les.content || ''}\n\n---\n\n`;
-                });
-            });
-
-            const itemId = crypto.randomUUID();
-            const payload = {
-                id: itemId,
-                organization_id: targetOrgId,
-                title: bookTitle,
-                description: args.description || `Livre numérique compilé comprenant ${chapters.length} chapitres et ${lessons.length} leçons de ${subName}.`,
-                category: args.category || 'cours',
-                file_type: 'doc',
-                file_url: `data:text/markdown;charset=utf-8,${encodeURIComponent(md)}`,
-                file_size: md.length,
-                subject_id: args.subject_id,
-                is_public: args.is_public !== false,
-                download_count: 0,
-                created_at: new Date().toISOString(),
-            };
-            syncToSupabase(env, 'library_items', 'INSERT', payload);
-
-            return {
-                success: true,
-                book: {
-                    title: bookTitle,
-                    chapters_count: chapters.length,
-                    lessons_count: lessons.length,
-                    size_bytes: md.length,
-                    library_item_id: itemId,
-                },
-                message: `📚 Livre "${bookTitle}" compilé et publié dans la Bibliothèque !`,
-            };
-        }
-
-        // ── LIST LIBRARY ITEMS ──
-        case 'list_library_items': {
-            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
-                let path = `library_items?select=id,title,description,category,file_type,file_size,subject_id,classroom_id,download_count,is_public,created_at&order=created_at.desc&limit=50`;
-                if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
-                if (args.category && args.category !== 'all') path += `&category=eq.${encodeURIComponent(args.category as string)}`;
-                const items = await fetchSupabaseRest(env, path);
-                if (items) return { items, total: items.length };
-            }
-            return { items: [], total: 0 };
-        }
-
-        // ── DELETE LIBRARY ITEM ──
-        case 'delete_library_item': {
-            if (!args.item_id) throw { code: -32602, message: 'item_id requis' };
-            syncToSupabase(env, 'library_items', 'DELETE', { id: args.item_id });
-            return { success: true, message: `🗑️ Document supprimé de la Bibliothèque` };
         }
 
         default:

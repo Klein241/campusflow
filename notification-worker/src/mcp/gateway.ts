@@ -634,9 +634,45 @@ const WORKER_MCP_TOOLS = [
     },
     {
         name: 'send_superadmin_announcement',
-        description: '[Superadmin] Diffuser une annonce officielle à toutes les écoles ou une école cible',
+        description: '[Superadmin] Diffuser une annonce officielle ou un article d\'actualité sur la plateforme IziTeach',
         permission: 'superadmin:announcements',
-        inputSchema: { type: 'object', properties: { title: { type: 'string' }, content: { type: 'string' }, target_org_id: { type: 'string' }, type: { type: 'string', enum: ['info', 'warning', 'urgent', 'success'] } }, required: ['title', 'content'] },
+        inputSchema: {
+            type: 'object',
+            properties: {
+                title: { type: 'string' },
+                content: { type: 'string' },
+                target_org_id: { type: 'string', description: 'ID de l\'organisation ou "all" pour toutes les écoles et la page publique' },
+                type: { type: 'string', enum: ['official', 'pedagogy', 'update', 'exam', 'info', 'warning', 'urgent', 'success'] },
+                publish_to_news_page: { type: 'boolean', description: 'Afficher publiquement sur la page actualités iziteach.com/news' }
+            },
+            required: ['title', 'content']
+        },
+    },
+    {
+        name: 'publish_platform_news',
+        description: '[Superadmin] Publier un article ou un communiqué officiel directement sur la page Actualités publique de IziTeach.com',
+        permission: 'superadmin:announcements',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                title: { type: 'string' },
+                body: { type: 'string' },
+                category: { type: 'string', enum: ['official', 'pedagogy', 'update', 'exam', 'info'] },
+                author_name: { type: 'string' },
+            },
+            required: ['title', 'body']
+        },
+    },
+    {
+        name: 'list_superadmin_announcements',
+        description: '[Superadmin] Consulter la liste des annonces officielles et actualités de la plateforme IziTeach',
+        permission: 'superadmin:announcements',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                limit: { type: 'number' }
+            }
+        },
     },
     {
         name: 'send_email_to_org',

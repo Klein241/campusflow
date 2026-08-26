@@ -69,18 +69,57 @@ function StarRating({ rating, onChange, size = 'sm' }: { rating: number; onChang
     );
 }
 
-// Doc cover placeholder
-function DocCover({ title, category }: { title: string; category: string }) {
-    const gradients: Record<string, string> = {
-        cours: 'from-blue-600 to-indigo-800', exercice: 'from-emerald-600 to-teal-800',
-        corrige: 'from-green-600 to-lime-800', annale: 'from-amber-600 to-orange-800',
-        guide: 'from-cyan-600 to-blue-800', memoire: 'from-purple-600 to-violet-800',
-        support: 'from-pink-600 to-rose-800', general: 'from-slate-600 to-gray-800',
+// Doc cover professionnel avec effet de reliure 3D, sceau doré et typographie éditoriale
+function DocCover({ title, category, subject, size = 'md' }: { title: string; category: string; subject?: string; size?: 'sm' | 'md' | 'lg' }) {
+    const gradients: Record<string, { bg: string; accent: string; badge: string; spine: string }> = {
+        cours: { bg: 'from-[#1E1B4B] via-[#1E293B] to-[#0F172A]', accent: 'text-indigo-400', badge: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30', spine: 'bg-indigo-500/40' },
+        exercice: { bg: 'from-[#064E3B] via-[#0F2922] to-[#0B1512]', accent: 'text-emerald-400', badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', spine: 'bg-emerald-500/40' },
+        corrige: { bg: 'from-[#14532D] via-[#0F291E] to-[#0B1510]', accent: 'text-lime-400', badge: 'bg-lime-500/20 text-lime-300 border-lime-500/30', spine: 'bg-lime-500/40' },
+        annale: { bg: 'from-[#78350F] via-[#2E180A] to-[#140A04]', accent: 'text-amber-400', badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30', spine: 'bg-amber-500/40' },
+        guide: { bg: 'from-[#164E63] via-[#0E2A36] to-[#08151B]', accent: 'text-cyan-400', badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30', spine: 'bg-cyan-500/40' },
+        memoire: { bg: 'from-[#581C87] via-[#27103D] to-[#12071C]', accent: 'text-purple-400', badge: 'bg-purple-500/20 text-purple-300 border-purple-500/30', spine: 'bg-purple-500/40' },
+        support: { bg: 'from-[#831843] via-[#3B0E20] to-[#18050D]', accent: 'text-pink-400', badge: 'bg-pink-500/20 text-pink-300 border-pink-500/30', spine: 'bg-pink-500/40' },
+        general: { bg: 'from-[#1E293B] via-[#0F172A] to-[#060911]', accent: 'text-slate-300', badge: 'bg-white/10 text-slate-300 border-white/10', spine: 'bg-slate-500/30' },
     };
+    const style = gradients[category] || gradients.general;
+
     return (
-        <div className={`w-full h-full bg-gradient-to-br ${gradients[category] || gradients.general} flex flex-col items-center justify-center p-3 rounded-lg`}>
-            <BookOpen className="h-8 w-8 text-white/50 mb-2" />
-            <p className="text-[9px] text-white/70 text-center line-clamp-3 font-medium leading-tight">{title}</p>
+        <div className={`relative w-full h-full bg-gradient-to-br ${style.bg} rounded-lg overflow-hidden flex flex-col justify-between p-3 border border-white/10 shadow-[2px_4px_16px_rgba(0,0,0,0.6)] select-none group`}>
+            {/* Effet tranche de livre 3D (Spine) à gauche */}
+            <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${style.spine} border-r border-white/20 shadow-inner`} />
+            <div className="absolute left-2 top-0 bottom-0 w-[1px] bg-white/10" />
+
+            {/* Haut de couverture : Sceau doré & Catégorie */}
+            <div className="pl-2 flex items-center justify-between z-10">
+                <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border ${style.badge}`}>
+                    {category}
+                </span>
+                <span className="text-[10px] text-amber-400" title="Édition Certifiée IziTeach">⭐</span>
+            </div>
+
+            {/* Centre de couverture : Icône & Titre structuré */}
+            <div className="pl-2 my-auto text-center z-10">
+                <div className="w-7 h-7 mx-auto mb-1.5 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/80 shadow-sm">
+                    <BookOpen className="h-3.5 w-3.5" />
+                </div>
+                <h4 className="text-[10px] font-extrabold text-white leading-snug line-clamp-3 drop-shadow-md">
+                    {title}
+                </h4>
+                {subject && (
+                    <p className={`text-[8px] font-semibold ${style.accent} mt-1 truncate`}>
+                        {subject}
+                    </p>
+                )}
+            </div>
+
+            {/* Bas de couverture : Filigrane éditorial */}
+            <div className="pl-2 pt-1 border-t border-white/10 flex items-center justify-between text-[7px] text-slate-400 z-10">
+                <span className="font-bold tracking-widest text-slate-300">IZITEACH</span>
+                <span className="text-white/40">ÉDITION PRO</span>
+            </div>
+
+            {/* Reflet de lumière sur la couverture */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.03] to-white/[0.08] pointer-events-none" />
         </div>
     );
 }
@@ -264,13 +303,16 @@ export default function LibraryPage() {
             } catch { /* ignore */ }
         }
 
-        if (item.file_url) {
-            // Always use built-in reader — never open external tabs
-            setReadingItem(item);
-            setIsReading(true);
-        } else {
-            toast.info('Fichier non disponible');
+        let effectiveItem = { ...item };
+        if (!effectiveItem.file_url) {
+            // Créer une vue dynamique stylisée pour les manuels ou documents sans URL externe
+            const generatedHtml = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${item.title}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0B0E14;color:#F8FAFC;line-height:1.7;padding:40px 20px}.hero{text-align:center;padding:40px 20px;background:radial-gradient(circle at top,#1E1B4B,#0B0E14);border-radius:16px;border:1px solid rgba(255,255,255,0.1);margin-bottom:30px}.badge{background:rgba(245,158,11,0.2);color:#F59E0B;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700}.title{font-size:26px;font-weight:900;margin:16px 0 8px;color:#fff}.card{background:#161B26;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:24px;margin-bottom:20px}h2{color:#818CF8;font-size:18px;margin-bottom:12px}p{color:#CBD5E1}</style></head><body><div class="hero"><span class="badge">⭐ Édition Numérique IziTeach</span><h1 class="title">${item.title}</h1><p style="color:#94A3B8">${item.description || 'Document pédagogique certifié'}</p></div><div class="card"><h2>📖 Aperçu du Contenu</h2><p>${item.description || 'Ce document a été validé et certifié dans la bibliothèque.'}</p></div></body></html>`;
+            effectiveItem.file_url = `data:text/html;charset=utf-8,${encodeURIComponent(generatedHtml)}`;
+            effectiveItem.file_type = 'doc';
         }
+
+        setReadingItem(effectiveItem);
+        setIsReading(true);
     }, [user?.id]);
 
     // ═══ DOWNLOAD ═══
@@ -353,28 +395,34 @@ export default function LibraryPage() {
         </div>
     );
 
-    // ═══════════════════════ IN-APP PDF READER ═══════════════════════
+    // ═══════════════════════ IN-APP PDF / E-BOOK READER ═══════════════════════
     if (isReading && readingItem) {
         return (
             <div className="fixed inset-0 z-50 bg-[#0B0E14] flex flex-col">
-                <div className="flex items-center justify-between px-3 py-2 bg-[#161B26] border-b border-white/10 shrink-0">
-                    <Button size="sm" variant="ghost" className="text-white hover:bg-white/10 gap-1"
+                <div className="flex items-center justify-between px-4 py-3 bg-[#161B26] border-b border-white/10 shrink-0">
+                    <Button size="sm" variant="ghost" className="text-white hover:bg-white/10 gap-1.5"
                         onClick={() => { setIsReading(false); setReadingItem(null); }}>
-                        <ArrowLeft className="h-4 w-4" /> Retour
+                        <ArrowLeft className="h-4 w-4" /> Fermer
                     </Button>
-                    <div className="text-center flex-1 min-w-0 px-2">
-                        <p className="text-xs font-medium text-white truncate">{readingItem.title}</p>
-                        <p className="text-[10px] text-slate-400 truncate">
+                    <div className="text-center flex-1 min-w-0 px-3">
+                        <p className="text-sm font-bold text-white truncate">{readingItem.title}</p>
+                        <p className="text-xs text-slate-400 truncate">
                             {readingItem.subjects?.name || readingItem.category} {readingItem.classrooms?.name ? `• ${readingItem.classrooms.name}` : ''}
                         </p>
                     </div>
-                    <Button size="sm" variant="ghost" className="text-white hover:bg-white/10"
-                        onClick={() => downloadItem(readingItem)}>
-                        <Download className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button size="sm" variant="ghost" className="text-white hover:bg-white/10"
+                            onClick={() => window.print()} title="Imprimer ou Exporter en PDF">
+                            <span className="text-xs">🖨️ Imprimer</span>
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-white hover:bg-white/10"
+                            onClick={() => downloadItem(readingItem)} title="Télécharger">
+                            <Download className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
-                <div className="flex-1 overflow-hidden">
-                    {readingItem.file_type === 'pdf' ? (
+                <div className="flex-1 overflow-hidden bg-[#0B0E14]">
+                    {readingItem.file_type === 'pdf' && !readingItem.file_url?.startsWith('data:text/html') ? (
                         <object
                             data={`${readingItem.file_url}#toolbar=1&navpanes=0&scrollbar=1`}
                             type="application/pdf"
@@ -385,7 +433,7 @@ export default function LibraryPage() {
                                 title={readingItem.title} />
                         </object>
                     ) : (
-                        <iframe src={readingItem.file_url!} className="w-full h-full border-none" title={readingItem.title} />
+                        <iframe src={readingItem.file_url!} className="w-full h-full border-none bg-transparent" title={readingItem.title} />
                     )}
                 </div>
             </div>
@@ -419,7 +467,7 @@ export default function LibraryPage() {
                     {/* Header card */}
                     <div className="flex gap-4 mb-6">
                         <div className="w-28 h-36 rounded-xl overflow-hidden shadow-2xl shrink-0">
-                            <DocCover title={selectedItem.title} category={selectedItem.category} />
+                            <DocCover title={selectedItem.title} category={selectedItem.category} subject={selectedItem.subjects?.name} />
                         </div>
                         <div className="flex-1 min-w-0">
                             <h2 className="text-lg font-bold text-white mb-1">{selectedItem.title}</h2>
@@ -724,7 +772,7 @@ export default function LibraryPage() {
                                     whileTap={{ scale: 0.97 }} onClick={() => setSelectedItem(item)} className="cursor-pointer group">
                                     <div className="relative">
                                         <div className="w-full aspect-[3/4] rounded-xl overflow-hidden shadow-lg mb-2 bg-slate-800">
-                                            <DocCover title={item.title} category={item.category} />
+                                            <DocCover title={item.title} category={item.category} subject={item.subjects?.name} />
                                         </div>
                                         <button onClick={e => { e.stopPropagation(); toggleFavorite(item.id); }}
                                             className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">

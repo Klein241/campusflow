@@ -103,14 +103,19 @@ export default function LandingPage() {
             <IziTeachLogo variant="compact" size="md" className="flex sm:hidden" />
           </div>
 
-          <div className="hidden md:flex items-center gap-7 text-xs font-bold text-slate-300">
-            <a href="#models" className="hover:text-white transition-colors">Modèles Écoles & En Ligne</a>
+          <div className="hidden md:flex items-center gap-6 text-xs font-bold text-slate-300">
+            <a href="#models" className="hover:text-white transition-colors">Modèles Écoles</a>
             <a href="#schools" className="hover:text-white transition-colors flex items-center gap-1.5">
               <span>🏛️ Établissements</span>
               <span className="px-1.5 py-0.2 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px]">{schools.length}</span>
             </a>
+            <Link href="/library" className="hover:text-emerald-400 transition-colors flex items-center gap-1 font-extrabold text-emerald-300">
+              <span>📚 Bibliothèque</span>
+            </Link>
+            <Link href="/news" className="hover:text-indigo-400 transition-colors flex items-center gap-1 font-extrabold text-indigo-300">
+              <span>📰 Actualités</span>
+            </Link>
             <a href="#features" className="hover:text-white transition-colors">Fonctionnalités</a>
-            <a href="#types" className="hover:text-white transition-colors">Formations</a>
             <a href="#reviews" className="hover:text-white transition-colors flex items-center gap-1">⭐ Avis</a>
           </div>
 
@@ -499,6 +504,11 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           {/* Footer: Logo horizontal avec slogan */}
           <IziTeachLogo variant="horizontal" size="sm" />
+          <div className="flex items-center gap-6 text-xs text-slate-400">
+            <Link href="/library" className="hover:text-white transition-colors">Bibliothèque Numérique</Link>
+            <Link href="/news" className="hover:text-white transition-colors">Actualités & Journal</Link>
+            <Link href="/login" className="hover:text-white transition-colors">Espace Membres</Link>
+          </div>
           <p>© 2026 SYGMA-TECH. Tous droits réservés.</p>
         </div>
       </footer>
