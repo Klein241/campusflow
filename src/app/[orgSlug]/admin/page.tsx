@@ -2258,23 +2258,41 @@ ${bodyHtml}
                         />
                     )}
 
-                    {/* ═══ TEACHERS ═══ */}
+                    {/* ═══ TEACHERS / PROFIL FORMATEUR INDÉPENDANT ═══ */}
                     {tab === 'teachers' && (
-                        <AdminTeachersTab
-                            teachers={teachers}
-                            setTeachers={setTeachers}
-                            cls={cls}
-                            subs={subs}
-                            setSubs={setSubs}
-                            saving={saving}
-                            createTeacher={createTeacher}
-                            deleteTeacher={deleteTeacher}
-                            resetTeacherPin={resetTeacherPin}
-                            setSuspendModal={setSuspendModal}
-                            setEmailModalOpen={setEmailModalOpen}
-                            publicBase={publicBase}
-                            assignTeacherToSubject={assignTeacherToSubject}
-                        />
+                        schoolConfig.category === 'independent_trainer' ? (
+                            <AdminIndependentTrainerTab
+                                org={org}
+                                config={schoolConfig}
+                                cls={cls}
+                                students={students}
+                                subs={subs}
+                                onRefresh={() => {
+                                    void (async () => {
+                                        const { data: c } = await supabase.from('classrooms').select('*').eq('organization_id', org.id).order('name');
+                                        setCls((c || []).map((x: any) => ({ id: x.id, name: x.name, cycle: x.cycle || '', filiere_id: x.filiere_id, level: x.level || 1, capacity: x.capacity || 50 })));
+                                        const { data: s } = await supabase.from('students').select('*').eq('organization_id', org.id).order('last_name');
+                                        setStudents(s || []);
+                                    })();
+                                }}
+                            />
+                        ) : (
+                            <AdminTeachersTab
+                                teachers={teachers}
+                                setTeachers={setTeachers}
+                                cls={cls}
+                                subs={subs}
+                                setSubs={setSubs}
+                                saving={saving}
+                                createTeacher={createTeacher}
+                                deleteTeacher={deleteTeacher}
+                                resetTeacherPin={resetTeacherPin}
+                                setSuspendModal={setSuspendModal}
+                                setEmailModalOpen={setEmailModalOpen}
+                                publicBase={publicBase}
+                                assignTeacherToSubject={assignTeacherToSubject}
+                            />
+                        )
                     )}
 
                     {/* ═══ STUDENTS ═══ */}
