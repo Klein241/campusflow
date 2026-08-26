@@ -794,7 +794,9 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
     const rawKey = (authHeader.replace(/^Bearer\s+/i, '').trim()) || queryKey.trim();
 
     if (!rawKey || !rawKey.startsWith('cf_live_')) {
-        return json({ jsonrpc: '2.0', error: { code: -32001, message: 'Clé API manquante. Utilisez: Authorization: Bearer cf_live_xxxxx ou le paramètre ?key=' }, id: null }, 401);
+        return json({ jsonrpc: '2.0', error: { code: -32001, message: 'Clé API manquante. Utilisez: Authorization: Bearer cf_live_xxxxx ou le paramètre ?key=' }, id: null }, 401, {
+            'WWW-Authenticate': 'Bearer realm="IziTeach MCP", error="invalid_token", error_description="Missing or invalid cf_live_ token"'
+        });
     }
 
     // 1. SHA-256 de la clé API
@@ -850,7 +852,9 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
     }
 
     if (!agentKey) {
-        return json({ jsonrpc: '2.0', error: { code: -32001, message: 'Clé API invalide, inactive ou révoquée' }, id: null }, 401);
+        return json({ jsonrpc: '2.0', error: { code: -32001, message: 'Clé API invalide, inactive ou révoquée' }, id: null }, 401, {
+            'WWW-Authenticate': 'Bearer realm="IziTeach MCP", error="invalid_token", error_description="The API key is invalid, inactive, or revoked"'
+        });
     }
 
     const rawPermissions: string[] = typeof agentKey.permissions === 'string'
