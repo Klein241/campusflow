@@ -426,7 +426,7 @@ const WORKER_MCP_TOOLS = [
     {
         name: 'publish_library_item',
         description: 'Publier un livre, cours, document ou ressource pédagogique dans la Bibliothèque Numérique de l\'établissement',
-        permission: 'write:curriculum',
+        permission: 'write:library',
         inputSchema: {
             type: 'object',
             properties: {
@@ -446,7 +446,7 @@ const WORKER_MCP_TOOLS = [
     {
         name: 'compile_curriculum_to_book',
         description: 'Compiler tous les chapitres, leçons et exercices d\'une matière en un livre complet structuré et le publier automatiquement dans la Bibliothèque Numérique de l\'école',
-        permission: 'write:curriculum',
+        permission: 'write:library',
         inputSchema: {
             type: 'object',
             properties: {
@@ -464,7 +464,7 @@ const WORKER_MCP_TOOLS = [
     {
         name: 'list_library_items',
         description: 'Consulter et rechercher les livres et documents dans la Bibliothèque Numérique de l\'établissement',
-        permission: 'read:curriculum',
+        permission: 'read:library',
         inputSchema: {
             type: 'object',
             properties: {
@@ -479,7 +479,7 @@ const WORKER_MCP_TOOLS = [
     {
         name: 'delete_library_item',
         description: 'Supprimer un livre ou document de la Bibliothèque Numérique',
-        permission: 'write:curriculum',
+        permission: 'write:library',
         inputSchema: { type: 'object', properties: { item_id: { type: 'string' } }, required: ['item_id'] },
     },
     // ── SALLE D'ÉVALUATION & EXAMENS ──
@@ -921,10 +921,19 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
             if (t.name === 'translate_content' && (permissions.includes('translate:content') || permissions.includes('write:curriculum'))) return true;
             // Délégation Chat Dame SKY (Claude / MANUS) : accès aux cours publiés et au chat
             if (permissions.includes('chat:dame_sky')) {
-                if (['list_subjects', 'list_chapters', 'list_lessons', 'get_lesson', 'search_published_lessons', 'list_exercises', 'list_chat_messages', 'send_chat_message', 'list_forms', 'list_supported_languages', 'get_org_info', 'list_classes'].includes(t.name)) {
+                if (['list_subjects', 'list_chapters', 'list_lessons', 'get_lesson', 'search_published_lessons', 'list_exercises', 'list_chat_messages', 'send_chat_message', 'list_forms', 'list_supported_languages', 'get_org_info', 'list_classes', 'list_library_items'].includes(t.name)) {
                     return true;
                 }
             }
+            // Bibliothèque & Livres : accessible si read:library OU read:curriculum / write:library OU write:curriculum
+            if (t.name === 'list_library_items' && (permissions.includes('read:library') || permissions.includes('read:curriculum'))) return true;
+            if (['publish_library_item', 'compile_curriculum_to_book', 'delete_library_item'].includes(t.name) && (permissions.includes('write:library') || permissions.includes('write:curriculum'))) return true;
+            // Emploi du temps : accessible si read:schedule OU read:timetable / write:schedule OU write:timetable
+            if (t.name === 'list_schedule' && (permissions.includes('read:schedule') || permissions.includes('read:timetable'))) return true;
+            if (['create_schedule_slot', 'update_schedule', 'update_schedule_slot', 'delete_schedule_slot', 'bulk_create_schedule'].includes(t.name) && (permissions.includes('write:schedule') || permissions.includes('write:timetable'))) return true;
+            // Examens & Salle d'évaluation
+            if (t.name === 'list_exam_papers' && (permissions.includes('read:grades') || permissions.includes('read:curriculum'))) return true;
+            if (['create_exam_paper', 'update_exam_paper', 'delete_exam_paper', 'launch_exam_session'].includes(t.name) && (permissions.includes('write:grades') || permissions.includes('write:curriculum'))) return true;
             // Étudiants admin : accessible si admin:students OU read:students / write:students
             if (['list_students'].includes(t.name) && (permissions.includes('read:students') || permissions.includes('admin:students'))) return true;
             if (['create_student', 'update_student', 'delete_student', 'create_teacher', 'list_teachers'].includes(t.name) && (permissions.includes('admin:students') || permissions.includes('write:students'))) return true;
@@ -950,10 +959,22 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
         if (!isAllowed) {
             if (toolName === 'list_supported_languages' || toolName === 'get_org_info' || toolName === 'list_classes') {
                 isAllowed = true;
-            } else if (permissions.includes('chat:dame_sky') && ['list_subjects', 'list_chapters', 'list_lessons', 'get_lesson', 'search_published_lessons', 'list_exercises', 'list_chat_messages', 'send_chat_message', 'list_forms'].includes(toolName)) {
+            } else if (permissions.includes('chat:dame_sky') && ['list_subjects', 'list_chapters', 'list_lessons', 'get_lesson', 'search_published_lessons', 'list_exercises', 'list_chat_messages', 'send_chat_message', 'list_forms', 'list_library_items'].includes(toolName)) {
                 isAllowed = true;
             } else if (toolName === 'translate_content') {
                 isAllowed = permissions.includes('translate:content') || permissions.includes('write:curriculum') || permissions.includes('write:exercises');
+            } else if (toolName === 'list_library_items') {
+                isAllowed = permissions.includes('read:library') || permissions.includes('read:curriculum');
+            } else if (['publish_library_item', 'compile_curriculum_to_book', 'delete_library_item'].includes(toolName)) {
+                isAllowed = permissions.includes('write:library') || permissions.includes('write:curriculum');
+            } else if (toolName === 'list_schedule') {
+                isAllowed = permissions.includes('read:schedule') || permissions.includes('read:timetable');
+            } else if (['create_schedule_slot', 'update_schedule', 'update_schedule_slot', 'delete_schedule_slot', 'bulk_create_schedule'].includes(toolName)) {
+                isAllowed = permissions.includes('write:schedule') || permissions.includes('write:timetable');
+            } else if (toolName === 'list_exam_papers') {
+                isAllowed = permissions.includes('read:grades') || permissions.includes('read:curriculum');
+            } else if (['create_exam_paper', 'update_exam_paper', 'delete_exam_paper', 'launch_exam_session'].includes(toolName)) {
+                isAllowed = permissions.includes('write:grades') || permissions.includes('write:curriculum');
             } else if (toolName === 'list_students') {
                 isAllowed = permissions.includes('read:students') || permissions.includes('admin:students');
             } else if (['create_student', 'update_student', 'delete_student', 'create_teacher', 'list_teachers'].includes(toolName)) {
