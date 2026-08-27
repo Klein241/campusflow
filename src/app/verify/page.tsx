@@ -90,10 +90,10 @@ function VerifyContent() {
     };
 
     useEffect(() => {
-        if (initialCode) {
-            handleVerify(initialCode);
+        if (code) {
+            handleVerify(code);
         }
-    }, [initialCode]);
+    }, []);
 
     const handleRePrint = () => {
         if (!result) return;

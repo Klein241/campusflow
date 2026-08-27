@@ -67,6 +67,7 @@ school app/
 | 71 | `071_fix_verify_ai_agent_key_sql_syntax.sql` | Correction syntaxe verify_ai_agent_key |
 | 72 | `072_fix_sky_transactions_columns_and_review_bonus.sql` | Fix colonnes transactions Sky Points & bonus review |
 | 73 | `073_pro_training_center_schema.sql` | 🏢 Schéma complet Centres de Formation Pro & Formateurs Indépendants (sessions, durées, rythmes, jalons, attestations pro) |
+| 74 | `074_fix_superadmin_credit_sky_points.sql` | Fonction RPC superadmin_credit_org_sky_points pour créditer les Sky Points sans blocage RLS |
 
 ### Phase 2 — Fichiers thématiques (`supabase-migrations/`, non numérotés)
 

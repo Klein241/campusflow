@@ -547,72 +547,74 @@ export function SuperadminOrgCards({
         }
     };
 
-    // Adjust Sky Points for org
+    // Adjust Sky Points for org (Via RPC SECURITY DEFINER pour contourner tout blocage RLS)
     const handleAdjustPoints = async (action: 'add' | 'remove') => {
         if (!pointsModalOrg) return;
         setSavingPoints(true);
         try {
-            // 1. Query fresh live balance from Supabase
-            let liveBalance = 1000;
-            const { data: liveOrg } = await supabase
-                .from('organizations')
-                .select('sky_points, owner_id')
-                .eq('id', pointsModalOrg.id)
-                .single();
-
-            if (liveOrg && typeof liveOrg.sky_points === 'number') {
-                liveBalance = liveOrg.sky_points;
-            } else if (typeof pointsModalOrg.sky_points === 'number') {
-                liveBalance = pointsModalOrg.sky_points;
-            }
-
             const delta = action === 'add' ? Math.abs(pointsDelta) : -Math.abs(pointsDelta);
-            const newBal = Math.max(0, liveBalance + delta);
+            let newBal = 1000;
 
-            // 2. Update organizations table
-            const { error } = await supabase
-                .from('organizations')
-                .update({ sky_points: newBal })
-                .eq('id', pointsModalOrg.id);
+            // 1. Tenter l'appel RPC sécurisé (qui passe à travers la RLS)
+            const { data: rpcResult, error: rpcError } = await supabase.rpc('superadmin_credit_org_sky_points', {
+                p_org_id: pointsModalOrg.id,
+                p_delta: delta,
+                p_reason: `Ajustement Superadmin (${action === 'add' ? '+' : '-'}${Math.abs(pointsDelta)} pts)`
+            });
 
-            if (error) throw error;
+            if (!rpcError && rpcResult && rpcResult.success) {
+                newBal = rpcResult.new_balance;
+            } else {
+                console.warn('[Superadmin] RPC not available or failed, fallback to direct update:', rpcError?.message);
+                // Fallback direct
+                let liveBalance = 1000;
+                const { data: liveOrg } = await supabase
+                    .from('organizations')
+                    .select('sky_points, owner_id')
+                    .eq('id', pointsModalOrg.id)
+                    .single();
+
+                if (liveOrg && typeof liveOrg.sky_points === 'number') {
+                    liveBalance = liveOrg.sky_points;
+                } else if (typeof pointsModalOrg.sky_points === 'number') {
+                    liveBalance = pointsModalOrg.sky_points;
+                }
+
+                newBal = Math.max(0, liveBalance + delta);
+
+                const { error: updateErr } = await supabase
+                    .from('organizations')
+                    .update({ sky_points: newBal })
+                    .eq('id', pointsModalOrg.id);
+
+                if (updateErr) throw updateErr;
+
+                const ownerId = liveOrg?.owner_id || pointsModalOrg.owner_id;
+                if (ownerId) {
+                    try {
+                        await Promise.allSettled([
+                            supabase.from('teacher_profiles').update({ sky_points: newBal }).eq('id', ownerId),
+                            supabase.from('student_profiles').update({ sky_points: newBal }).eq('id', ownerId),
+                        ]);
+                    } catch {}
+                }
+            }
 
             toast.success(`⭐ Solde de "${pointsModalOrg.name}" mis à jour : ${new Intl.NumberFormat('fr-FR').format(newBal)} pts`);
 
-            // 3. Sync points to owner profile (teacher_profiles / student_profiles) if available
-            const ownerId = liveOrg?.owner_id || pointsModalOrg.owner_id;
-            if (ownerId) {
-                try {
-                    await Promise.allSettled([
-                        supabase.from('teacher_profiles').update({ sky_points: newBal }).eq('id', ownerId),
-                        supabase.from('student_profiles').update({ sky_points: newBal }).eq('id', ownerId),
-                    ]);
-                } catch {}
-            }
-
-            // 4. Sync localStorage cache for instant local reflection
+            // 2. Sync localStorage cache & events for instant local reflection
             if (typeof window !== 'undefined') {
                 try {
                     localStorage.setItem(`campusflow_admin_points_${pointsModalOrg.id}`, newBal.toString());
-                    localStorage.setItem(`campusflow_admin_points_${pointsModalOrg.slug}`, newBal.toString());
+                    if (pointsModalOrg.slug) {
+                        localStorage.setItem(`campusflow_admin_points_${pointsModalOrg.slug}`, newBal.toString());
+                    }
                     window.dispatchEvent(new CustomEvent('sky_points_updated', {
                         detail: { newBalance: newBal, orgId: pointsModalOrg.id }
                     }));
                     window.dispatchEvent(new Event('storage'));
                 } catch {}
             }
-
-            // 5. Insert transaction record for audit
-            try {
-                await supabase.from('sky_transactions').insert({
-                    student_id: ownerId || pointsModalOrg.id,
-                    amount: delta,
-                    transaction_type: 'superadmin_adjustment',
-                    type: 'superadmin_adjustment',
-                    description: `Ajustement Superadmin (${action === 'add' ? '+' : '-'}${Math.abs(pointsDelta)} pts) — ${pointsModalOrg.name}`,
-                    organization_id: pointsModalOrg.id,
-                });
-            } catch {}
 
             // Update in-memory org item
             pointsModalOrg.sky_points = newBal;
