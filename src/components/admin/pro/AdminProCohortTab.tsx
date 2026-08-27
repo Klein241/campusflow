@@ -258,9 +258,23 @@ export function AdminProCohortTab({
         }
     };
 
-    // ── 6. Génération directe d'Attestation PRO ──
+    // ── 6. Génération directe d'Attestation PRO avec Compétences ──
     const handleGenerateCertificate = (student: any, session: any) => {
         try {
+            // Récupérer les modules de cette session
+            const sessionSubs = subs.filter(s => s.classroom_id === session?.id);
+            const modulesList = sessionSubs.length > 0
+                ? sessionSubs.map(s => ({
+                    name: s.name,
+                    hours: s.coefficient ? s.coefficient * 30 : 40,
+                    status: 'Validé'
+                }))
+                : [
+                    { name: 'Fondamentaux & Pratique Métier', hours: 80, status: 'Validé' },
+                    { name: 'Atelier Pratique & Études de Cas', hours: 120, status: 'Validé' },
+                    { name: 'Projet Professionnel & Soutenance', hours: 160, status: 'Validé' }
+                ];
+
             const certData: CertificateData = {
                 org: {
                     name: org?.name || 'Centre de Formation Professionnelle',
@@ -270,13 +284,17 @@ export function AdminProCohortTab({
                     phone: org?.phone,
                     email: org?.email,
                     city: org?.city || 'Yaoundé',
-                    country: org?.country || 'Cameroun'
+                    country: org?.country || 'Cameroun',
+                    accreditation_number: org?.pro_accreditation_number || undefined
                 },
                 student: {
                     first_name: student.first_name,
                     last_name: student.last_name,
                     matricule: student.matricule,
-                    classroom_name: session?.name
+                    classroom_name: session?.name,
+                    filiere_name: session?.name,
+                    training_duration: session?.cycle || '3 Mois (Formation Professionnelle)',
+                    rhythm: session?.rhythm || 'Présentiel & Pratique'
                 },
                 certificate: {
                     title: 'ATTESTATION DE FIN DE FORMATION PROFESSIONNELLE',
@@ -286,14 +304,15 @@ export function AdminProCohortTab({
                     date_issued: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
                     location: org?.city || 'Yaoundé',
                     signatory1_title: 'Le Directeur du Centre',
-                    signatory1_name: certSignatory || 'La Direction Pédagogique',
+                    signatory1_name: certSignatory || org?.default_signatory_name || 'La Direction Pédagogique',
                     show_stamp: true,
-                    show_signature: true
+                    show_signature: true,
+                    modules: modulesList
                 }
             };
 
-            generateCertificatePDF(certData, 1);
-            toast.success(`🎓 Attestation officielle générée pour ${student.first_name} ${student.last_name} !`);
+            generateCertificatePDF(certData, 5); // Template 5 PRO par défaut pour les centres de formation
+            toast.success(`🎓 Attestation officielle PRO générée pour ${student.first_name} ${student.last_name} !`);
             setCertModalStudent(null);
         } catch (e: any) {
             toast.error('Erreur génération attestation : ' + e.message);

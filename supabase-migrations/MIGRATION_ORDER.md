@@ -58,6 +58,15 @@ school app/
 | 62 | `062_forms_system_and_rls.sql` | Sondages et formulaires publics |
 | 63 | `063_dame_sky_config_and_moderation.sql` | Configuration globale, tempérament & alertes sécurité / anti-fraude de Dame SKY |
 | 64 | `064_dame_sky_projects_skills_quiz.sql` | Projets/dossiers thématiques, historique, Skills IA SuperAdmin & Quiz révision Sky Points |
+| 65 | `065_marketing_crm_and_sky_agent_key_fixes.sql` | Campagnes Marketing, CRM Prospects & Fix Clé IA Agent |
+| 66 | `066_chat_external_agent_config.sql` | Agents IA externes connectés au chat & MCP |
+| 67 | `067_mcp_library_schedule_and_sky_toggle.sql` | MCP sync planning & bascule Dame Sky |
+| 68 | `068_autonomous_event_webhooks_and_security_fix.sql` | Webhooks triggers autonomes & sécurité |
+| 69 | `069_payment_system.sql` | Tranches de paiement et gestion scolarité |
+| 70 | `070_mcp_security_critical_fix.sql` | Sécurité critique MCP & permissions |
+| 71 | `071_fix_verify_ai_agent_key_sql_syntax.sql` | Correction syntaxe verify_ai_agent_key |
+| 72 | `072_fix_sky_transactions_columns_and_review_bonus.sql` | Fix colonnes transactions Sky Points & bonus review |
+| 73 | `073_pro_training_center_schema.sql` | 🏢 Schéma complet Centres de Formation Pro & Formateurs Indépendants (sessions, durées, rythmes, jalons, attestations pro) |
 
 ### Phase 2 — Fichiers thématiques (`supabase-migrations/`, non numérotés)
 

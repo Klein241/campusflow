@@ -55,6 +55,8 @@ import { getSchoolTypeConfig } from '@/lib/school-type-adapter';
 import { AdminProCohortTab } from '@/components/admin/pro/AdminProCohortTab';
 import { AdminIndependentTrainerTab } from '@/components/admin/pro/AdminIndependentTrainerTab';
 import { SchoolTypeBanner } from '@/components/admin/pro/SchoolTypeBanner';
+import { AdminProCalendarTab } from '@/components/admin/pro/AdminProCalendarTab';
+import { AdminProPricingGrid } from '@/components/admin/pro/AdminProPricingGrid';
 
 // ═══ ERROR BOUNDARY (catches React render errors) ═══
 class AdminErrorBoundary extends Component<{ children: ReactNode; orgSlug: string }, { hasError: boolean; error: Error | null }> {
@@ -99,7 +101,7 @@ const Sel = ({ v, onChange, opts, ph = '—' }: { v: string, onChange: (v: strin
     </select>
 );
 
-type Tab = 'general' | 'landing' | 'premium_styles' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'disciplines' | 'modeles' | 'cursus' | 'settings' | 'chat' | 'stories' | 'actus' | 'groupes' | 'whatsapp' | 'exam_room' | 'monitoring' | 'certificates' | 'ai_agents';
+type Tab = 'general' | 'landing' | 'premium_styles' | 'setup' | 'classes' | 'rooms' | 'subjects' | 'teachers' | 'students' | 'timetable' | 'evaluations' | 'grades' | 'payments' | 'pricing' | 'disciplines' | 'modeles' | 'cursus' | 'settings' | 'chat' | 'stories' | 'actus' | 'groupes' | 'whatsapp' | 'exam_room' | 'monitoring' | 'certificates' | 'ai_agents';
 interface Cls { id?: string; name: string; cycle: string; filiere_id: string | null; level: number; capacity: number; }
 interface Sub { id?: string; name: string; code: string; coefficient: number; classroom_id: string; teacher_id: string | null; }
 interface Room { id?: string; name: string; }
@@ -114,7 +116,9 @@ const SIDES = [
     { id: 'certificates' as Tab, icon: Award, label: '🎓 Certificats' },
     { id: 'timetable' as Tab, icon: Calendar, label: 'Emploi du temps' }, { id: 'evaluations' as Tab, icon: ClipboardList, label: 'Évaluations' },
     { id: 'grades' as Tab, icon: BarChart3, label: 'Notes' },
-    { id: 'payments' as Tab, icon: CreditCard, label: 'Paiements' }, { id: 'disciplines' as Tab, icon: ShieldCheck, label: 'Discipline' },
+    { id: 'payments' as Tab, icon: CreditCard, label: 'Paiements' },
+    { id: 'pricing' as Tab, icon: Coins, label: '💰 Tarifs & Plans' },
+    { id: 'disciplines' as Tab, icon: ShieldCheck, label: 'Discipline' },
     { id: 'whatsapp' as Tab, icon: PhoneCall, label: '📱 File WhatsApp' },
     { id: 'modeles' as Tab, icon: FileText, label: 'Modèles PDF' },
     { id: 'cursus' as Tab, icon: BookMarked, label: 'Cursus' },
@@ -2317,17 +2321,34 @@ ${bodyHtml}
                         />
                     )}
 
+                    {/* ═══ TIMETABLE / PLANNING DES SESSIONS PRO ═══ */}
                     {tab === 'timetable' && (
-                        <AdminTimetableTab
-                            ttSlots={ttSlots}
-                            cls={cls}
-                            subs={subs}
-                            rooms={rooms}
-                            saving={saving}
-                            addSlot={addSlot}
-                            delSlot={delSlot}
-                            exportTimetablePdf={exportTimetablePdf}
-                        />
+                        (schoolConfig.category === 'training_center' || schoolConfig.category === 'independent_trainer' || schoolConfig.category === 'online_academy') ? (
+                            <AdminProCalendarTab
+                                org={org}
+                                config={schoolConfig}
+                                cls={cls}
+                                subs={subs}
+                                teachers={teachers}
+                                onRefresh={() => {
+                                    void (async () => {
+                                        const { data: c } = await supabase.from('classrooms').select('*').eq('organization_id', org.id).order('name');
+                                        setCls((c || []).map((x: any) => ({ id: x.id, name: x.name, cycle: x.cycle || '', filiere_id: x.filiere_id, level: x.level || 1, capacity: x.capacity || 50 })));
+                                    })();
+                                }}
+                            />
+                        ) : (
+                            <AdminTimetableTab
+                                ttSlots={ttSlots}
+                                cls={cls}
+                                subs={subs}
+                                rooms={rooms}
+                                saving={saving}
+                                addSlot={addSlot}
+                                delSlot={delSlot}
+                                exportTimetablePdf={exportTimetablePdf}
+                            />
+                        )
                     )}
 
                     {tab === 'evaluations' && (
@@ -2353,6 +2374,16 @@ ${bodyHtml}
                             addPay={addPay}
                             exportPaymentsPdf={exportPaymentsPdf}
                             printPaymentReceipt={printPaymentReceipt}
+                        />
+                    )}
+
+                    {tab === 'pricing' && (
+                        <AdminProPricingGrid
+                            org={org}
+                            config={schoolConfig}
+                            onSaved={() => {
+                                onTab('general');
+                            }}
                         />
                     )}
 

@@ -208,7 +208,7 @@ export function AdminIndependentTrainerTab({
         try {
             const certData: CertificateData = {
                 org: {
-                    name: trainerHeadline ? `${org?.name} — ${trainerHeadline}` : org?.name,
+                    name: org?.name || 'Formateur Expert & Consultant',
                     logo_url: org?.logo_url,
                     signature_url: org?.signature_url,
                     stamp_url: org?.stamp_url,
@@ -221,24 +221,32 @@ export function AdminIndependentTrainerTab({
                     first_name: student.first_name,
                     last_name: student.last_name,
                     matricule: student.matricule,
-                    classroom_name: offer?.name
+                    classroom_name: offer?.name,
+                    filiere_name: offer?.name,
+                    training_duration: offer?.cycle || 'Formation Intensive & Pratique',
+                    rhythm: 'Coaching & Ateliers Pratiques'
                 },
                 certificate: {
-                    title: 'ATTESTATION DE FORMATION CERTIFIANTE',
+                    title: 'ATTESTATION DE FORMATION PROFESSIONNELLE',
                     subtitle: 'DÉLIVRÉE PAR LE FORMATEUR EXPERT',
                     course_name: offer?.name || 'Formation & Accompagnement',
                     mention: certMention,
                     date_issued: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
                     location: org?.city || 'En Ligne',
-                    signatory1_title: 'Le Formateur Référent',
-                    signatory1_name: org?.name || 'Expert Formateur',
+                    signatory1_title: 'Le Formateur Expert',
+                    signatory1_name: org?.name || 'Formateur Référent',
                     show_stamp: true,
-                    show_signature: true
+                    show_signature: true,
+                    modules: [
+                        { name: 'Maîtrise Opérationnelle & Pratique', hours: 40, status: 'Validé' },
+                        { name: 'Mise en situation & Étude de Cas Réelle', hours: 60, status: 'Validé' },
+                        { name: 'Projet d\'application et Validation Finale', hours: 60, status: 'Acquis' }
+                    ]
                 }
             };
 
-            generateCertificatePDF(certData, 1);
-            toast.success(`🎓 Attestation officielle générée pour ${student.first_name} ${student.last_name} !`);
+            generateCertificatePDF(certData, 5); // Template 5 PRO spécialisé
+            toast.success(`🎓 Attestation officielle délivrée pour ${student.first_name} ${student.last_name} !`);
             setCertModalStudent(null);
         } catch (e: any) {
             toast.error('Erreur génération attestation : ' + e.message);
