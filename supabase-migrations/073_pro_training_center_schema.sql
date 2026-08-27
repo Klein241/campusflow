@@ -76,15 +76,9 @@ BEGIN
     CREATE POLICY "pro_milestones_select" ON public.pro_session_milestones
     FOR SELECT USING (true);
 
-    DROP POLICY IF EXISTS "pro_milestones_admin_all" ON public.pro_session_milestones;
-    CREATE POLICY "pro_milestones_admin_all" ON public.pro_session_milestones
-    FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM public.organizations org
-            WHERE org.id = pro_session_milestones.organization_id
-            AND (org.owner_id = auth.uid() OR org.created_by = auth.uid())
-        )
-    );
+    DROP POLICY IF EXISTS "pro_milestones_all" ON public.pro_session_milestones;
+    CREATE POLICY "pro_milestones_all" ON public.pro_session_milestones
+    FOR ALL USING (true) WITH CHECK (true);
 END $$;
 
 -- 6. RPC: Verify Certificate Code (Public lookup)
