@@ -18,9 +18,18 @@ import Link from 'next/link';
 function VerifyContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    const initialCode = searchParams.get('code') || '';
 
-    const [code, setCode] = useState(initialCode);
+    const [code, setCode] = useState(() => {
+        const fromQuery = searchParams.get('code');
+        if (fromQuery) return fromQuery;
+        if (typeof window !== 'undefined') {
+            const path = window.location.pathname;
+            const match = path.match(/\/verify\/([^/?#]+)/);
+            if (match && match[1] && match[1] !== '_') return decodeURIComponent(match[1]);
+        }
+        return '';
+    });
+
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState<any | null>(null);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);

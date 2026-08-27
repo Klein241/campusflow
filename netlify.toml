@@ -117,6 +117,12 @@
   to = "/superadmin/index.html"
   status = 200
 
+# Verify certificate SPA route
+[[redirects]]
+  from = "/verify/*"
+  to = "/verify/index.html"
+  status = 200
+
 # Fallback SPA for any unmatched route
 [[redirects]]
   from = "/*"
