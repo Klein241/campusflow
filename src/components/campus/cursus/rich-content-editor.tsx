@@ -313,16 +313,55 @@ export function RichContentEditor({
                             </button>
                         </div>
 
-                        {/* TEXT */}
-                        {block.type === 'text' && (
-                            <textarea
-                                value={block.value}
-                                onChange={e => update(i, { type: 'text', value: e.target.value })}
-                                placeholder={i === 0 ? placeholder : 'Continuer le texte...'}
-                                rows={3}
-                                className="w-full min-h-[72px] bg-white/[0.04] border border-white/10 text-white placeholder:text-slate-600 rounded-xl px-3 py-2.5 text-sm leading-relaxed resize-none focus:outline-none focus:border-indigo-500/40 transition"
-                            />
-                        )}
+                        {/* TEXT WITH INTELLIGENT WORD COUNTER */}
+                        {block.type === 'text' && (() => {
+                            const words = block.value.trim() ? block.value.trim().split(/\s+/).filter(Boolean).length : 0;
+                            const readingTime = Math.max(1, Math.ceil(words / 180));
+                            const isOptimal = words > 0 && words <= 380;
+                            const isMedium = words > 380 && words <= 580;
+                            const isLong = words > 580;
+
+                            return (
+                                <div className="space-y-1.5">
+                                    <textarea
+                                        value={block.value}
+                                        onChange={e => update(i, { type: 'text', value: e.target.value })}
+                                        placeholder={i === 0 ? placeholder : 'Continuer le texte de la leçon...'}
+                                        rows={3}
+                                        className={cn(
+                                            "w-full min-h-[80px] bg-white/[0.04] border text-white placeholder:text-slate-600 rounded-xl px-3 py-2.5 text-sm leading-relaxed resize-none focus:outline-none transition",
+                                            isLong ? "border-amber-500/40 focus:border-amber-400" : "border-white/10 focus:border-indigo-500/40"
+                                        )}
+                                    />
+                                    {/* Indicateur de mots & Traductibilité IA */}
+                                    <div className="flex items-center justify-between text-[11px] px-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className={cn(
+                                                "font-bold flex items-center gap-1",
+                                                words === 0 ? "text-slate-500" :
+                                                isOptimal ? "text-emerald-400" :
+                                                isMedium ? "text-amber-400" : "text-orange-400"
+                                            )}>
+                                                {words === 0 ? '0 mot' : `${words} mots (~${readingTime} min de lecture)`}
+                                            </span>
+                                            {words > 0 && (
+                                                <span className={cn(
+                                                    "px-2 py-0.5 rounded-full text-[10px] font-semibold border hidden sm:inline-flex items-center gap-1",
+                                                    isOptimal ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20" :
+                                                    isMedium ? "bg-amber-500/10 text-amber-300 border-amber-500/20" :
+                                                    "bg-orange-500/10 text-orange-300 border-orange-500/20"
+                                                )}>
+                                                    {isOptimal ? '✨ Rétention & Traduction IA Optimale' :
+                                                     isMedium ? '⚡ Longueur Équilibrée' :
+                                                     '💡 Conseil : Scinder en 2 leçons pour une meilleure assimilation'}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <span className="text-[10px] text-slate-500">M2M100 chunking auto</span>
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                         {/* IMAGE */}
                         {block.type === 'image' && (

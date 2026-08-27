@@ -15,6 +15,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { SchoolTypeConfig } from '@/lib/school-type-adapter';
 import { generateCertificatePDF, type CertificateData } from '@/lib/certificate-pdf';
+import { StudentAccessCredentialsModal } from './StudentAccessCredentialsModal';
+import { DirectMobileMoneyPaymentModal } from './DirectMobileMoneyPaymentModal';
 import { cn } from '@/lib/utils';
 
 interface AdminIndependentTrainerTabProps {
@@ -62,6 +64,16 @@ export function AdminIndependentTrainerTab({
     const [newApprenantPhone, setNewApprenantPhone] = useState('');
     const [newApprenantEmail, setNewApprenantEmail] = useState('');
     const [enrolling, setEnrolling] = useState(false);
+    const [credentialsData, setCredentialsData] = useState<{
+        studentName: string;
+        courseName: string;
+        accessCode: string;
+        pin: string;
+        phone?: string;
+    } | null>(null);
+
+    // Modal Paiement Mobile Money Direct
+    const [paymentModalOffer, setPaymentModalOffer] = useState<any | null>(null);
 
     // Délivrance d'attestation formateur solo
     const [certModalStudent, setCertModalStudent] = useState<any | null>(null);
@@ -91,27 +103,27 @@ export function AdminIndependentTrainerTab({
         }
     };
 
-    // ── 2. Création d'une nouvelle offre ──
+    // ── 2. Création rapide d'une Offre de Formation ──
     const handleCreateOffer = async () => {
         if (!offerTitle.trim()) {
-            toast.error('Veuillez renseigner le nom de la formation / offre');
+            toast.error('Titre de la formation obligatoire');
             return;
         }
 
         setCreatingOffer(true);
         try {
-            const { error } = await supabase
-                .from('classrooms')
-                .insert({
-                    organization_id: org.id,
-                    name: offerTitle.trim(),
-                    cycle: `${offerFormat} • ${offerPrice}`,
-                    level: 1,
-                    capacity: 50
-                });
+            const cycleText = `${offerFormat} • ${offerPrice}`;
+            const { data, error } = await supabase.from('classrooms').insert({
+                organization_id: org.id,
+                name: offerTitle.trim(),
+                cycle: cycleText,
+                level: 1,
+                capacity: 100
+            }).select().single();
 
             if (error) throw error;
-            toast.success(`🎉 Offre "${offerTitle}" créée avec succès !`);
+
+            toast.success(`🎉 Formation "${offerTitle}" créée !`);
             setShowAddOffer(false);
             setOfferTitle('');
             onRefresh();
@@ -122,8 +134,8 @@ export function AdminIndependentTrainerTab({
         }
     };
 
-    // ── 3. Mise à jour d'une offre existante ──
-    const handleUpdateOffer = async () => {
+    // ── 3. Mise à jour d'une Offre ──
+    const handleSaveEditOffer = async () => {
         if (!editingOffer || !editingOffer.name.trim()) return;
         setSavingEditOffer(true);
         try {
@@ -136,7 +148,7 @@ export function AdminIndependentTrainerTab({
                 .eq('id', editingOffer.id);
 
             if (error) throw error;
-            toast.success('Offre de formation mise à jour !');
+            toast.success('Offre mise à jour !');
             setEditingOffer(null);
             onRefresh();
         } catch (e: any) {
@@ -146,7 +158,7 @@ export function AdminIndependentTrainerTab({
         }
     };
 
-    // ── 4. Suppression d'une offre ──
+    // ── 4. Suppression d'une Offre ──
     const handleDeleteOffer = async (id: string, name: string) => {
         if (!confirm(`Supprimer l'offre "${name}" ?`)) return;
         try {
@@ -160,7 +172,7 @@ export function AdminIndependentTrainerTab({
         }
     };
 
-    // ── 5. Inscription directe d'un apprenant ──
+    // ── 5. Inscription directe d'un apprenant avec 12 car + PIN ──
     const handleEnrollStudent = async (offerId: string) => {
         if (!newApprenantFN.trim() || !newApprenantLN.trim()) {
             toast.error('Prénom et nom obligatoires');
@@ -169,10 +181,17 @@ export function AdminIndependentTrainerTab({
 
         setEnrolling(true);
         try {
+            // Code 12 caractères formaté
             const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-            let code = '';
-            for (let i = 0; i < 12; i++) code += chars[Math.floor(Math.random() * chars.length)];
+            let rawCode = '';
+            for (let i = 0; i < 12; i++) rawCode += chars[Math.floor(Math.random() * chars.length)];
+            const formattedCode = `${rawCode.slice(0, 4)}-${rawCode.slice(4, 8)}-${rawCode.slice(8, 12)}`;
+
+            // PIN initial 4 chiffres
+            const pinCode = String(Math.floor(1000 + Math.random() * 9000));
             const mat = `APP${Date.now().toString(36).toUpperCase()}`;
+
+            const offerName = cls.find(c => c.id === offerId)?.name || 'Formation & Coaching';
 
             const { data, error } = await supabase.from('student_profiles').insert({
                 organization_id: org.id,
@@ -182,15 +201,26 @@ export function AdminIndependentTrainerTab({
                 phone: newApprenantPhone.trim() || null,
                 email: newApprenantEmail.trim() || null,
                 matricule: mat,
-                access_code: code,
+                access_code: formattedCode,
+                pin_code: pinCode,
                 pin_set: false,
                 approval_status: 'approved'
             }).select().single();
 
             if (error) throw error;
 
-            toast.success(`🎉 Apprenant inscrit ! Code d'accès : ${code}`, { duration: 6000 });
+            toast.success(`🎉 Apprenant inscrit avec succès !`);
             setShowEnrollModal(false);
+
+            // Ouvrir la modale d'identifiants prête pour WhatsApp
+            setCredentialsData({
+                studentName: `${newApprenantFN.trim()} ${newApprenantLN.trim()}`,
+                courseName: offerName,
+                accessCode: formattedCode,
+                pin: pinCode,
+                phone: newApprenantPhone.trim() || undefined
+            });
+
             setNewApprenantFN('');
             setNewApprenantLN('');
             setNewApprenantPhone('');
@@ -385,7 +415,7 @@ export function AdminIndependentTrainerTab({
                                             </p>
                                         </div>
 
-                                        <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between text-xs">
+                                        <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between text-xs flex-wrap gap-2">
                                             <button
                                                 onClick={() => setSelectedOfferForStudents(item)}
                                                 className="text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 text-[11px]"
@@ -393,13 +423,25 @@ export function AdminIndependentTrainerTab({
                                                 <Users className="w-3 h-3" />
                                                 Voir les {enrolled.length} apprenant{enrolled.length > 1 ? 's' : ''}
                                             </button>
-                                            <button
-                                                onClick={() => handleCopyEnrollLink(item.name)}
-                                                className="text-slate-400 hover:text-white font-semibold flex items-center gap-1 text-[10px]"
-                                            >
-                                                <Copy className="w-2.5 h-2.5" />
-                                                Lien inscription
-                                            </button>
+
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => setPaymentModalOffer(item)}
+                                                    className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 text-[11px] bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20"
+                                                    title="Générer un lien de paiement Mobile Money"
+                                                >
+                                                    <DollarSign className="w-3 h-3" />
+                                                    Paiement MoMo
+                                                </button>
+
+                                                <button
+                                                    onClick={() => handleCopyEnrollLink(item.name)}
+                                                    className="text-slate-400 hover:text-white font-semibold flex items-center gap-1 text-[10px]"
+                                                >
+                                                    <Copy className="w-2.5 h-2.5" />
+                                                    Lien
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 );
@@ -814,7 +856,7 @@ export function AdminIndependentTrainerTab({
                                     Annuler
                                 </Button>
                                 <Button
-                                    onClick={handleUpdateOffer}
+                                    onClick={handleSaveEditOffer}
                                     disabled={savingEditOffer}
                                     className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl"
                                 >
@@ -825,6 +867,33 @@ export function AdminIndependentTrainerTab({
                     </div>
                 )}
             </AnimatePresence>
+
+            {/* ═══ MODAL : Fiche Identifiants (12 car + PIN) & WhatsApp ═══ */}
+            {credentialsData && (
+                <StudentAccessCredentialsModal
+                    open={Boolean(credentialsData)}
+                    onClose={() => setCredentialsData(null)}
+                    studentName={credentialsData.studentName}
+                    courseName={credentialsData.courseName}
+                    accessCode={credentialsData.accessCode}
+                    pin={credentialsData.pin}
+                    phone={credentialsData.phone}
+                    orgName={org?.name || 'Formateur Expert'}
+                    orgSlug={org?.slug || ''}
+                />
+            )}
+
+            {/* ═══ MODAL : Paiement Direct Mobile Money (MTN / Orange) ═══ */}
+            {paymentModalOffer && (
+                <DirectMobileMoneyPaymentModal
+                    open={Boolean(paymentModalOffer)}
+                    onClose={() => setPaymentModalOffer(null)}
+                    courseName={paymentModalOffer.name}
+                    coursePrice={paymentModalOffer.tuition_fee || paymentModalOffer.cycle || 50000}
+                    orgName={org?.name || 'Formateur Expert'}
+                    orgSlug={org?.slug || ''}
+                />
+            )}
         </div>
     );
 }

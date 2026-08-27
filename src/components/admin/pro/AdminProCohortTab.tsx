@@ -16,6 +16,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { SchoolTypeConfig } from '@/lib/school-type-adapter';
 import { CERTIFICATE_TEMPLATES, generateCertificatePDF, type CertificateData } from '@/lib/certificate-pdf';
+import { StudentAccessCredentialsModal } from './StudentAccessCredentialsModal';
+import { DirectMobileMoneyPaymentModal } from './DirectMobileMoneyPaymentModal';
 import { cn } from '@/lib/utils';
 
 interface AdminProCohortTabProps {
@@ -69,6 +71,18 @@ export function AdminProCohortTab({
     const [newStudentPhone, setNewStudentPhone] = useState('');
     const [newStudentEmail, setNewStudentEmail] = useState('');
     const [creatingStudent, setCreatingStudent] = useState(false);
+
+    // Modal Credentials (12 car + PIN)
+    const [credentialsData, setCredentialsData] = useState<{
+        studentName: string;
+        courseName: string;
+        accessCode: string;
+        pin: string;
+        phone?: string;
+    } | null>(null);
+
+    // Modal Paiement Mobile Money Direct
+    const [paymentModalSession, setPaymentModalSession] = useState<any | null>(null);
 
     // Certificate generation modal for a student
     const [certModalStudent, setCertModalStudent] = useState<any | null>(null);
@@ -215,7 +229,7 @@ export function AdminProCohortTab({
         }
     };
 
-    // ── 5. Inscription directe d'un apprenant dans la session ──
+    // ── 5. Inscription directe d'un apprenant dans la session avec Code 12 car + PIN ──
     const handleCreateStudentInSession = async (classroomId: string) => {
         if (!newStudentFN.trim() || !newStudentLN.trim()) {
             toast.error('Nom et prénom obligatoires');
@@ -224,10 +238,17 @@ export function AdminProCohortTab({
 
         setCreatingStudent(true);
         try {
+            // Génération Code 12 caractères (format: XXXX-XXXX-XXXX)
             const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-            let code = '';
-            for (let i = 0; i < 12; i++) code += chars[Math.floor(Math.random() * chars.length)];
+            let rawCode = '';
+            for (let i = 0; i < 12; i++) rawCode += chars[Math.floor(Math.random() * chars.length)];
+            const formattedCode = `${rawCode.slice(0, 4)}-${rawCode.slice(4, 8)}-${rawCode.slice(8, 12)}`;
+
+            // Génération PIN 4 chiffres initial
+            const pinCode = String(Math.floor(1000 + Math.random() * 9000));
             const mat = `STG${Date.now().toString(36).toUpperCase()}`;
+
+            const sessionName = cls.find(c => c.id === classroomId)?.name || 'Formation Professionnelle';
 
             const { data, error } = await supabase.from('student_profiles').insert({
                 organization_id: org.id,
@@ -237,15 +258,26 @@ export function AdminProCohortTab({
                 phone: newStudentPhone.trim() || null,
                 email: newStudentEmail.trim() || null,
                 matricule: mat,
-                access_code: code,
+                access_code: formattedCode,
+                pin_code: pinCode,
                 pin_set: false,
                 approval_status: 'approved'
             }).select().single();
 
             if (error) throw error;
 
-            toast.success(`🎉 Stagiaire inscrit avec succès ! Code d'accès : ${code}`, { duration: 6000 });
+            toast.success(`🎉 Stagiaire inscrit avec succès !`);
             setShowAddStudentModal(false);
+
+            // Ouvrir la modale d'identifiants prête pour WhatsApp
+            setCredentialsData({
+                studentName: `${newStudentFN.trim()} ${newStudentLN.trim()}`,
+                courseName: sessionName,
+                accessCode: formattedCode,
+                pin: pinCode,
+                phone: newStudentPhone.trim() || undefined
+            });
+
             setNewStudentFN('');
             setNewStudentLN('');
             setNewStudentPhone('');
@@ -1098,6 +1130,33 @@ export function AdminProCohortTab({
                     </div>
                 )}
             </AnimatePresence>
+
+            {/* ═══ MODAL : Fiche Identifiants (12 car + PIN) & WhatsApp ═══ */}
+            {credentialsData && (
+                <StudentAccessCredentialsModal
+                    open={Boolean(credentialsData)}
+                    onClose={() => setCredentialsData(null)}
+                    studentName={credentialsData.studentName}
+                    courseName={credentialsData.courseName}
+                    accessCode={credentialsData.accessCode}
+                    pin={credentialsData.pin}
+                    phone={credentialsData.phone}
+                    orgName={org?.name || 'Centre de Formation Pro'}
+                    orgSlug={org?.slug || ''}
+                />
+            )}
+
+            {/* ═══ MODAL : Paiement Direct Mobile Money (MTN / Orange) ═══ */}
+            {paymentModalSession && (
+                <DirectMobileMoneyPaymentModal
+                    open={Boolean(paymentModalSession)}
+                    onClose={() => setPaymentModalSession(null)}
+                    courseName={paymentModalSession.name}
+                    coursePrice={paymentModalSession.tuition_fee || 50000}
+                    orgName={org?.name || 'Centre de Formation Pro'}
+                    orgSlug={org?.slug || ''}
+                />
+            )}
         </div>
     );
 }
