@@ -44,7 +44,7 @@ import { handleMcpGateway } from './mcp/gateway';
 import { syncToSupabase } from './mcp/tools';
 import { handleSkyAgentChat, handleSkyAgentClearSession } from './services/sky-agent';
 import { triggerDailyExecutiveReport } from './services/autonomous-report';
-import { createAutopilotSchool, interactWithAutopilotAdmin } from './services/autopilot-school';
+import { createAutopilotSchool, interactWithAutopilotAdmin, runAutopilotCampusPulse } from './services/autopilot-school';
 import { handleCron, handleAgentWebhook } from './cron';
 import { translateTextWithAi, IZITEACH_SUPPORTED_LANGUAGES } from './services/ai';
 
@@ -159,6 +159,40 @@ export default {
                 }
             }
 
+            // ── Données complètes d'une école autopilot (dashboard admin) ──
+            if (pathname === '/api/sky-agent/autopilot-school-data' && method === 'GET') {
+                try {
+                    const { searchParams } = new URL(request.url);
+                    const orgId = searchParams.get('org_id');
+                    if (!orgId) return jsonResponse({ error: 'org_id requis' }, 400);
+
+                    const { fetchSupabaseRest: fetchSupa } = await import('./mcp/tools');
+
+                    const [classrooms, teachers, subjects, students, inscriptions, notifications, logs] = await Promise.all([
+                        fetchSupa(env, `classrooms?organization_id=eq.${orgId}&select=*`).catch(() => []),
+                        fetchSupa(env, `teacher_profiles?organization_id=eq.${orgId}&select=*`).catch(() => []),
+                        fetchSupa(env, `subjects?organization_id=eq.${orgId}&select=*`).catch(() => []),
+                        fetchSupa(env, `student_profiles?organization_id=eq.${orgId}&select=id,first_name,last_name,email,is_active,created_at&limit=100`).catch(() => []),
+                        fetchSupa(env, `inscription_requests?organization_id=eq.${orgId}&select=*&order=created_at.desc&limit=50`).catch(() => []),
+                        fetchSupa(env, `admin_notifications?organization_id=eq.${orgId}&select=*&order=created_at.desc&limit=20`).catch(() => []),
+                        fetchSupa(env, `ai_agent_logs?organization_id=eq.${orgId}&select=*&order=executed_at.desc&limit=30`).catch(() => []),
+                    ]);
+
+                    return jsonResponse({
+                        ok: true,
+                        classrooms: classrooms || [],
+                        teachers: teachers || [],
+                        subjects: subjects || [],
+                        students: students || [],
+                        inscriptions: inscriptions || [],
+                        notifications: notifications || [],
+                        logs: logs || [],
+                    });
+                } catch (e: any) {
+                    return jsonResponse({ error: e.message || 'Erreur récupération données école' }, 500);
+                }
+            }
+
             if (pathname === '/api/sky-agent/autopilot-toggle' && method === 'PATCH') {
                 try {
                     const body = await request.json() as any;
@@ -169,6 +203,15 @@ export default {
                     return jsonResponse({ ok: true, org_id, is_autopilot: is_active, autopilot_status: status });
                 } catch (e: any) {
                     return jsonResponse({ error: e.message || 'Erreur toggle pilote auto' }, 500);
+                }
+            }
+
+            if (pathname === '/api/sky-agent/autopilot-pulse' && method === 'POST') {
+                try {
+                    const res = await runAutopilotCampusPulse(env);
+                    return jsonResponse({ ok: true, ...res });
+                } catch (e: any) {
+                    return jsonResponse({ error: e.message || 'Erreur pulse autopilot' }, 500);
                 }
             }
 

@@ -12,6 +12,7 @@
 
 import { Env } from '../types';
 import { fetchSupabaseRest, executeMcpToolD1 } from '../mcp/tools';
+import { parseAndExecuteInstruction } from './autopilot-actions';
 
 function slugify(text: string): string {
     return text
@@ -384,14 +385,13 @@ Génère 1 classe, 1 professeur référent, 2 matières majeures avec 1 chapitre
 
 /**
  * Supervise et dialogue avec l'administrateur virtuel de l'école
+ * ✅ MOTEUR D'EXÉCUTION RÉELLE : Toutes les instructions sont maintenant exécutées en base
  */
 export async function interactWithAutopilotAdmin(
     orgId: string,
     instruction: string,
     env: Env
-): Promise<{ success: boolean; reply: string; action_taken?: string }> {
-    const apiKey = env.DEEPSEEK_API_KEY || '';
-
+): Promise<{ success: boolean; reply: string; action_taken?: string; executed?: string[] }> {
     // 1. Récupérer les données de l'organisation
     const orgs = await fetchSupabaseRest(env, `organizations?id=eq.${encodeURIComponent(orgId)}&select=id,name,type,slug,is_autopilot,autopilot_status,autopilot_filieres`);
     const org = orgs?.[0];
@@ -400,99 +400,20 @@ export async function interactWithAutopilotAdmin(
         return { success: false, reply: 'Organisation introuvable.' };
     }
 
-    // 2. Appel DeepSeek V4 Flash
-    const systemPrompt = `Tu es l'ADMINISTRATEUR VIRTUEL en pilote automatique de l'établissement "${org.name}" (${org.type}).
-Tu t'adresses directement à ton SUPERVISEUR GÉNÉRAL (le créateur de la plateforme).
-
-POSTURE :
-- Serviable, hautement compétent, direct et proactif.
-- Tu gères toutes les opérations de l'établissement (cours, profs, élèves, examens, annonces).
-- Tu confirmes l'exécution des ordres avec précision et clarté.
-- Aucun balisage markdown brut (pas de **, tirets simples uniquement).
-
-FORMAT DE RÉPONSE : Réponds UNIQUEMENT avec un JSON valide :
-{
-  "reply": "Ta réponse respectueuse et directe au superviseur, confirmant la prise en compte de l'ordre.",
-  "announcement": null OU { "title": "Titre annonce", "message": "Contenu annonce pour le campus", "icon": "📢" }
-}`;
-
-    const userPrompt = `Ordre de supervision reçu : "${instruction}"
-Filières de l'établissement : ${Array.isArray(org.autopilot_filieres) ? org.autopilot_filieres.join(', ') : 'Générales'}
-
-Si l'ordre demande une annonce, un mot d'encouragement, un rappel ou une consigne aux étudiants, renseigne l'objet "announcement". Sinon mets "announcement": null.`;
-
-    let reply = '';
-    let actionTaken = 'instruction_acknowledged';
-
-    try {
-        const res = await fetch('https://api.deepseek.com/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                model: 'deepseek-v4-flash',
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: userPrompt }
-                ],
-                max_tokens: 450,
-                temperature: 0.35,
-                stream: false
-            })
-        });
-
-        const data = await res.json() as any;
-        let rawContent = (data?.choices?.[0]?.message?.content || '').trim();
-        if (rawContent.startsWith('```json')) rawContent = rawContent.replace(/^```json/, '').replace(/```$/, '').trim();
-        else if (rawContent.startsWith('```')) rawContent = rawContent.replace(/^```/, '').replace(/```$/, '').trim();
-
-        try {
-            const parsed = JSON.parse(rawContent);
-            reply = parsed.reply || rawContent;
-
-            // Si une annonce campus a été commandée par le Superadmin, la publier en direct
-            if (parsed.announcement && parsed.announcement.title && parsed.announcement.message) {
-                await fetchSupabaseRest(env, 'admin_notifications', {
-                    method: 'POST',
-                    body: {
-                        id: crypto.randomUUID(),
-                        organization_id: orgId,
-                        title: parsed.announcement.title,
-                        message: parsed.announcement.message,
-                        icon: parsed.announcement.icon || '📢',
-                        created_at: new Date().toISOString(),
-                    }
-                });
-                actionTaken = 'announcement_published_on_campus';
-            }
-        } catch {
-            reply = rawContent;
-        }
-    } catch (err: any) {
-        reply = `Bien reçu Superviseur. Votre directive "${instruction.slice(0, 80)}" a été enregistrée dans le journal opérationnel du campus.`;
-    }
-
-    // Journaliser l'interaction
-    try {
-        await fetchSupabaseRest(env, 'ai_agent_logs', {
-            method: 'POST',
-            body: {
-                organization_id: orgId,
-                tool_name: 'superadmin_autopilot_interaction',
-                input_summary: instruction.slice(0, 300),
-                output_summary: reply.slice(0, 300),
-                status: 'success',
-                executed_at: new Date().toISOString(),
-            }
-        });
-    } catch {}
+    // 2. Déléguer à parseAndExecuteInstruction — qui exécute RÉELLEMENT l'action en DB
+    const result = await parseAndExecuteInstruction(
+        orgId,
+        org.name,
+        Array.isArray(org.autopilot_filieres) ? org.autopilot_filieres : [],
+        instruction,
+        env
+    );
 
     return {
-        success: true,
-        reply,
-        action_taken: actionTaken,
+        success: result.success,
+        reply: result.reply,
+        action_taken: result.executed.join(' | '),
+        executed: result.executed,
     };
 }
 
