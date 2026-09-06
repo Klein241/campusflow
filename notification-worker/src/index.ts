@@ -43,6 +43,8 @@ import { handleR2Upload, handleR2Delete, handleR2List, handleR2Serve } from './s
 import { handleMcpGateway } from './mcp/gateway';
 import { syncToSupabase } from './mcp/tools';
 import { handleSkyAgentChat, handleSkyAgentClearSession } from './services/sky-agent';
+import { triggerDailyExecutiveReport } from './services/autonomous-report';
+import { createAutopilotSchool, interactWithAutopilotAdmin } from './services/autopilot-school';
 import { handleCron, handleAgentWebhook } from './cron';
 import { translateTextWithAi, IZITEACH_SUPPORTED_LANGUAGES } from './services/ai';
 
@@ -118,6 +120,57 @@ export default {
             // ── Sky Agent — Assistant IA contextuel (admin / prof / student) ──
             if (pathname === '/api/sky-agent/chat' && method === 'POST') return handleSkyAgentChat(request, env);
             if (pathname === '/api/sky-agent/session' && method === 'DELETE') return handleSkyAgentClearSession(request, env);
+
+            // ── Dame SKY — Rapport Quotidien Autonome par Email ──
+            if (pathname === '/api/sky-agent/trigger-report' && method === 'POST') {
+                try {
+                    const body = await request.json().catch(() => ({})) as any;
+                    const res = await triggerDailyExecutiveReport(env, body?.email);
+                    return jsonResponse(res);
+                } catch (e: any) {
+                    return jsonResponse({ error: e.message || 'Erreur génération rapport' }, 500);
+                }
+            }
+
+            // ── Écoles en Pilote Automatique (Création & Gestion) ──
+            if (pathname === '/api/sky-agent/autopilot-create' && method === 'POST') {
+                try {
+                    const body = await request.json() as any;
+                    if (!body.name || !body.filieres || !Array.isArray(body.filieres) || body.filieres.length === 0) {
+                        return jsonResponse({ error: 'Le nom et au moins une filière sont requis.' }, 400);
+                    }
+                    const res = await createAutopilotSchool(body, env);
+                    return jsonResponse(res);
+                } catch (e: any) {
+                    return jsonResponse({ error: e.message || 'Erreur création école pilote auto' }, 500);
+                }
+            }
+
+            if (pathname === '/api/sky-agent/autopilot-interact' && method === 'POST') {
+                try {
+                    const body = await request.json() as any;
+                    if (!body.org_id || !body.instruction) {
+                        return jsonResponse({ error: 'org_id et instruction requis' }, 400);
+                    }
+                    const res = await interactWithAutopilotAdmin(body.org_id, body.instruction, env);
+                    return jsonResponse(res);
+                } catch (e: any) {
+                    return jsonResponse({ error: e.message || 'Erreur interaction admin virtuel' }, 500);
+                }
+            }
+
+            if (pathname === '/api/sky-agent/autopilot-toggle' && method === 'PATCH') {
+                try {
+                    const body = await request.json() as any;
+                    const { org_id, is_active } = body;
+                    if (!org_id) return jsonResponse({ error: 'org_id requis' }, 400);
+                    const status = is_active ? 'active' : 'paused';
+                    syncToSupabase(env, 'organizations', 'UPDATE', { id: org_id, is_autopilot: is_active, autopilot_status: status });
+                    return jsonResponse({ ok: true, org_id, is_autopilot: is_active, autopilot_status: status });
+                } catch (e: any) {
+                    return jsonResponse({ error: e.message || 'Erreur toggle pilote auto' }, 500);
+                }
+            }
 
             // ── Agent IA Webhook Trigger (Option A - Temps Réel < 1s) ──
             if ((pathname === '/api/agent/webhook' || pathname === '/agent-webhook' || pathname === '/api/agent-events') && method === 'POST') {

@@ -24,6 +24,7 @@ export interface Env {
     VAPID_EMAIL: string;
     ADMIN_KEY: string;
     SUPERADMIN_PROFILE_ID: string;
+    DEEPSEEK_API_KEY?: string;
     NETLIFY_AUTH_TOKEN?: string;
     NETLIFY_SITE_ID?: string;
     // Vars

@@ -14,6 +14,7 @@ import {
 import { useSkyAgent, type SkyAgentRole, type SkyMessage, type SkyAttachment } from '@/hooks/use-sky-agent';
 import { supabase } from '@/lib/supabase';
 import { uploadToR2 } from '@/lib/r2';
+import { compressImageForVision } from '@/lib/image-compressor';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useOrgSlug } from '@/hooks/use-org-slug';
@@ -137,57 +138,57 @@ export default function AgentDedicatedPage() {
 
     // 4. Reconnaissance Vocale (Web Speech API)
     useEffect(() => {
-        if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
+        if (typeof window !== 'undefined' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
             const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-            const rec = new SpeechRecognition();
-            rec.continuous = false;
-            rec.interimResults = false;
-            rec.lang = 'fr-FR';
+            recognitionRef.current = new SpeechRecognition();
+            recognitionRef.current.continuous = false;
+            recognitionRef.current.interimResults = false;
+            recognitionRef.current.lang = 'fr-FR';
 
-            rec.onresult = (event: any) => {
+            recognitionRef.current.onresult = (event: any) => {
                 const transcript = event.results[0][0].transcript;
-                if (transcript) {
-                    setInputText(prev => (prev ? `${prev} ${transcript}` : transcript));
-                }
+                setInputText(prev => (prev ? `${prev} ${transcript}` : transcript));
                 setIsListening(false);
             };
 
-            rec.onerror = () => setIsListening(false);
-            rec.onend = () => setIsListening(false);
-            recognitionRef.current = rec;
+            recognitionRef.current.onerror = () => setIsListening(false);
+            recognitionRef.current.onend = () => setIsListening(false);
         }
     }, []);
 
     const toggleListening = () => {
         if (!recognitionRef.current) {
-            toast.error('Reconnaissance vocale non supportée sur ce navigateur');
+            toast.error('Reconnaissance vocale non supportée par votre navigateur');
             return;
         }
         if (isListening) {
             recognitionRef.current.stop();
             setIsListening(false);
         } else {
-            recognitionRef.current.start();
-            setIsListening(true);
-            toast.info('🎙️ Parlez maintenant...');
+            try {
+                recognitionRef.current.start();
+                setIsListening(true);
+            } catch {
+                setIsListening(false);
+            }
         }
     };
 
     // 5. Synthèse Vocale (TTS)
     const speakText = (text: string) => {
-        if (!('speechSynthesis' in window) || !ttsVoiceEnabled) return;
-        window.speechSynthesis.cancel();
+        if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
         if (isSpeaking) {
+            window.speechSynthesis.cancel();
             setIsSpeaking(false);
             return;
         }
-        const cleanText = text.replace(/[*#_`>]/g, '').slice(0, 500);
+        const cleanText = text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/\[REWARD_POINT:[^\]]+\]/g, '').trim();
         const utterance = new SpeechSynthesisUtterance(cleanText);
         utterance.lang = 'fr-FR';
         utterance.rate = 1.05;
-        utterance.onstart = () => setIsSpeaking(true);
         utterance.onend = () => setIsSpeaking(false);
         utterance.onerror = () => setIsSpeaking(false);
+        setIsSpeaking(true);
         window.speechSynthesis.speak(utterance);
     };
 
@@ -216,16 +217,24 @@ export default function AgentDedicatedPage() {
         await sendMessage(text, atts);
     };
 
-    // 8. Upload de fichiers vers R2
+    // 8. Upload de fichiers vers R2 avec compression client pour DeepSeek Vision
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;
         setUploading(true);
-        const toastId = toast.loading('Téléversement du fichier...');
+        const toastId = toast.loading('Préparation et téléversement du fichier...');
 
         try {
             for (let i = 0; i < files.length; i++) {
-                const file = files[i];
+                let file = files[i];
+                // Compression Canvas côté client : réduit les photos de 5 Mo à ~40 Ko
+                if (file.type.startsWith('image/')) {
+                    try {
+                        file = await compressImageForVision(file, { maxDimension: 800, quality: 0.72 });
+                    } catch (compErr) {
+                        console.warn('[DameSKY] Erreur compression, fichier original conservé:', compErr);
+                    }
+                }
                 const res = await uploadToR2(file, 'sky-agent-attachments');
                 if (res && res.url) {
                     setAttachments(prev => [...prev, {
@@ -236,7 +245,7 @@ export default function AgentDedicatedPage() {
                     }]);
                 }
             }
-            toast.success('Fichier joint avec succès', { id: toastId });
+            toast.success('Fichier prêt pour l\'analyse IA', { id: toastId });
         } catch (err: any) {
             toast.error('Erreur upload : ' + (err?.message || ''), { id: toastId });
         } finally {
@@ -248,12 +257,12 @@ export default function AgentDedicatedPage() {
         setOpenThinkingMap(prev => ({ ...prev, [msgId]: !prev[msgId] }));
     };
 
-    // Prompts d'actions rapides Backoffice
+    // Prompts d'actions rapides Calibrés DeepSeek V4 Flash & Vision
     const QUICK_PROMPTS = [
+        { label: '🎓 Tuteur par Matière', prompt: 'Explique-moi le concept clé de ma matière avec méthode, rigueur et bienveillance, puis pose-moi une question pour tester ma maîtrise.', icon: '🎓' },
+        { label: '📸 Correction de Devoir', prompt: 'Voici la photo de mon devoir ou exercice. Analyse précisément mes étapes, repère l\'endroit exact de mes erreurs éventuelles et donne-moi la méthode de résolution.', icon: '📸' },
+        { label: '📝 Flashcards & QCM', prompt: 'Génère 5 flashcards (Recto/Verso) et 3 questions de QCM avec barème et corrigé complet sur le chapitre en cours.', icon: '📝' },
         { label: '📊 Présences du jour', prompt: 'Fais-moi un rapport complet des présences et absences de toutes les classes aujourd\'hui.', icon: '👥' },
-        { label: '⏰ Créer un cours', prompt: 'Ajoute un créneau d\'emploi du temps pour lundi de 08:00 à 10:00 dans la classe de 3ème.', icon: '🗓️' },
-        { label: '📕 Compiler un livre', prompt: 'Compile l\'ensemble des chapitres et exercices de la matière principale en un livre pour la bibliothèque.', icon: '📚' },
-        { label: '✍️ Devoir avec corrigé', prompt: 'Génère un devoir type de 5 questions à choix multiples avec barème et corrigé détaillé.', icon: '📝' },
         { label: '💰 Bilan Inscriptions', prompt: 'Donne-moi le bilan des inscriptions validées et des paiements récents de l\'école.', icon: '💳' },
     ];
 

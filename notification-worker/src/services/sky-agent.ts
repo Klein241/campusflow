@@ -163,9 +163,21 @@ RÔLES SPÉCIFIQUES & MODES D'ACTION :
 - Si l'utilisateur est PROFESSEUR : Tu es sa conseillère pédagogique (plans de cours, exercices différenciés, QCM, barèmes de notation, formation continue).
 - Si l'utilisateur est ÉTUDIANT : Tu es sa mentore bienveillante mais exigeante (méthode de travail, explication des concepts, quiz de révision avec gains de Sky Points).
 
+DIRECTIVES SPÉCIFIQUES AUX 3 PILIERS DAME SKY :
+1. 🎓 TUTEUR PÉDAGOGIQUE PAR MATIÈRE :
+   - Explique les concepts avec une clarté absolue, étape par étape, en utilisant la méthode socratique.
+   - Ne donne pas de réponse fleuve : reste concise, structurée (3 paragraphes max ou listes à puces aérées).
+   - Termine toujours par une question d'application pour tester immédiatement la compréhension.
+2. 📸 CORRECTION D'EXERCICES & DEVOIRS PAR PHOTO (VISION) :
+   - Si une image de devoir ou d'exercice est fournie, repère l'énoncé et la copie de l'élève avec précision.
+   - Indique d'abord ce qui est réussi pour encourager l'élève.
+   - Pointe avec exactitude l'étape ou la ligne où se situe l'erreur, et explique la méthode de résolution sans faire tout le devoir à sa place.
+3. 📝 GÉNÉRATEUR AUTOMATIQUE D'ÉVALUATIONS & FLASHCARDS :
+   - Pour les évaluations : formule 3 à 5 questions progressives (QCM ou questions courtes) avec barème sur 20 et corrigé type détaillé.
+   - Pour les flashcards : structure en paires claires Recto (Question / Définition / Formule) et Verso (Réponse / Explication synthétique).
+
 DIRECTIVES SELON LES MODES D'UTILISATION :
 - MODE CORRECTION CRITIQUE ([MODE: CORRECTION CRITIQUE & BARÈME]) :
-  Analyse le texte ou le document fourni avec la plus grande exigence. Structure ta réponse ainsi :
   1. 🎯 Note d'évaluation indicative (/20)
   2. ✨ Acquis démontrés & points forts
   3. ⚠️ Erreurs identifiées, fautes de raisonnement/langue et axes de reproche justifiés
@@ -278,6 +290,92 @@ function formatCoursesBlock(courses: PublicCourse[]): string {
         return `📚 ${c.title}${c.subject ? ` [${c.subject}]` : ''}${c.level ? ` — ${c.level}` : ''}\n${c.description ? `   ${c.description.slice(0, 120)}` : ''}${chaps ? `\n${chaps}` : ''}`;
     }).join('\n\n');
     return `\n\nCOURS PUBLIÉS DE L'ÉTABLISSEMENT (tu peux en parler aux utilisateurs) :\n${list}`;
+}
+
+// ────────────────────────────────────────────────────────────────
+//  Appel Moteur IA DeepSeek (V4 Flash & V4 Flash Vision)
+//  Calibré ULTRA-ÉCONOMIQUE :
+//  - deepseek-v4-flash (texte, tuteur, quiz, flashcards) : max_tokens 450
+//  - deepseek-v4-flash-vision-exp (photos devoirs, schémas) : max_tokens 500
+//  ❌ STRICTEMENT AUCUN APPEL À deepseek-chat OU deepseek-v4-pro
+// ────────────────────────────────────────────────────────────────
+
+async function callDeepSeek(
+    apiKey: string,
+    systemPrompt: string,
+    history: SkyMessage[],
+    userMessage: string,
+    attachments?: SkyAttachment[]
+): Promise<string> {
+    const imageAttachment = attachments?.find(a =>
+        a.type?.startsWith('image/') ||
+        /\.(jpe?g|png|webp|gif|bmp)$/i.test(a.url || '') ||
+        /\.(jpe?g|png|webp|gif|bmp)$/i.test(a.name || '')
+    );
+
+    const hasImage = Boolean(imageAttachment);
+    // Verrouillage strict selon consigne utilisateur :
+    const model = hasImage ? 'deepseek-v4-flash-vision-exp' : 'deepseek-v4-flash';
+    const maxTokens = hasImage ? 500 : 450;
+
+    // Fenêtre glissante : 3-4 derniers messages max (600 chars max par message)
+    const recentHistory = (history || [])
+        .filter(m => m.role === 'user' || m.role === 'assistant')
+        .slice(-4)
+        .map(m => ({
+            role: m.role,
+            content: typeof m.content === 'string' ? m.content.slice(0, 600) : '',
+        }));
+
+    // Construction du payload utilisateur (multimodal si image présente)
+    let userContent: any;
+    if (hasImage && imageAttachment) {
+        userContent = [
+            {
+                type: 'text',
+                text: userMessage || "Peux-tu analyser cette photo de devoir ou d'exercice et m'expliquer la méthode pas à pas ?"
+            },
+            {
+                type: 'image_url',
+                image_url: {
+                    url: imageAttachment.url
+                }
+            }
+        ];
+    } else {
+        userContent = userMessage;
+    }
+
+    const messagesPayload = [
+        { role: 'system', content: systemPrompt },
+        ...recentHistory,
+        { role: 'user', content: userContent }
+    ];
+
+    const res = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model,
+            messages: messagesPayload,
+            max_tokens: maxTokens,
+            temperature: 0.35, // Pédagogie rigoureuse et concise, zéro bavardage
+            stream: false
+        })
+    });
+
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`DeepSeek API error ${res.status}: ${errText.slice(0, 200)}`);
+    }
+
+    const data = await res.json() as any;
+    const text: string = data?.choices?.[0]?.message?.content || '';
+    if (!text.trim()) throw new Error('Empty response from DeepSeek API');
+    return text.trim();
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -607,12 +705,39 @@ export async function handleSkyAgentChat(request: Request, env: Env): Promise<Re
         { role: 'user', content: userPromptText.slice(0, 3000) },
     ];
 
-    // ── 7. Appel IA : Agent externe (Claude / MANUS) ou LLaMA (fallback) ──
+    // ── 7. Appel IA : Priorité absolue DeepSeek V4 Flash & Vision (ultra-économique) ──
     let assistantReply: string;
     let usedExternalAgent = false;
     let agentName = 'Dame SKY';
 
-    if (externalConfig) {
+    const deepseekKey = env.DEEPSEEK_API_KEY || (externalConfig?.external_provider === 'deepseek' ? externalConfig.external_api_key_enc : null);
+
+    if (deepseekKey) {
+        try {
+            assistantReply = await callDeepSeek(deepseekKey, systemPrompt, history, userPromptText, attachments);
+            usedExternalAgent = true;
+            const hasImage = attachments?.some(a =>
+                a.type?.startsWith('image/') ||
+                /\.(jpe?g|png|webp|gif|bmp)$/i.test(a.url || '') ||
+                /\.(jpe?g|png|webp|gif|bmp)$/i.test(a.name || '')
+            );
+            agentName = hasImage
+                ? 'Dame SKY — DeepSeek Vision'
+                : 'Dame SKY — DeepSeek Flash';
+        } catch (dsErr: any) {
+            console.error('[DameSKY] DeepSeek call failed, falling back to Workers AI:', dsErr?.message);
+            // Fallback gracieux et 100% gratuit sur le cluster Workers AI (LLaMA 3.3 70B)
+            try {
+                assistantReply = await callLlama(env, chatMessages);
+            } catch {
+                return json({
+                    success: false,
+                    reply: "Je rencontre une brève interruption de communication avec le réseau central. Veuillez me reformuler votre demande dans un instant. ✨",
+                    session_id,
+                }, 503);
+            }
+        }
+    } else if (externalConfig) {
         // Tentative avec l'agent externe configuré
         try {
             assistantReply = await callExternalAgent(externalConfig, chatMessages);

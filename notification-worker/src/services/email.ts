@@ -103,9 +103,9 @@ async function sendViaBrevo(
     return { ok: res.ok, status: res.status, quotaExceeded, data };
 }
 
-// ── Handler principal ────────────────────────────────────
-async function handleEmailSend(request: Request, env: Env): Promise<Response> {
-    const body = await request.json() as {
+export async function sendEmailInternal(
+    env: Env,
+    params: {
         to:         string[];
         subject:    string;
         html?:      string;
@@ -113,19 +113,19 @@ async function handleEmailSend(request: Request, env: Env): Promise<Response> {
         org_name?:  string;
         org_logo?:  string;
         from_name?: string;
-    };
+    }
+): Promise<{ success: boolean; sent: number; total: number; provider: string; failed_over: boolean; error?: string }> {
+    const { to, subject, html, text, org_name = 'IziTeach', org_logo, from_name } = params;
 
-    const { to, subject, html, text, org_name = 'IziTeach', org_logo, from_name } = body;
-
-    if (!to?.length) return json({ error: 'recipients (to) required' }, 400);
-    if (!subject)    return json({ error: 'subject required' }, 400);
-    if (!html && !text) return json({ error: 'html or text body required' }, 400);
+    if (!to?.length) return { success: false, sent: 0, total: 0, provider: 'none', failed_over: false, error: 'recipients (to) required' };
+    if (!subject)    return { success: false, sent: 0, total: to.length, provider: 'none', failed_over: false, error: 'subject required' };
+    if (!html && !text) return { success: false, sent: 0, total: to.length, provider: 'none', failed_over: false, error: 'html or text body required' };
 
     const resendKey = (env as any).RESEND_API_KEY as string | undefined;
     const brevoKey  = (env as any).BREVO_API_KEY  as string | undefined;
 
     if (!resendKey && !brevoKey) {
-        return json({ error: 'No email provider configured. Add RESEND_API_KEY or BREVO_API_KEY to Worker secrets.' }, 503);
+        return { success: false, sent: 0, total: to.length, provider: 'none', failed_over: false, error: 'No email provider configured. Add RESEND_API_KEY or BREVO_API_KEY to Worker secrets.' };
     }
 
     const emailHtml  = buildEmailHtml(html, text, org_name, org_logo, subject);
@@ -140,7 +140,6 @@ async function handleEmailSend(request: Request, env: Env): Promise<Response> {
     let providerUsed: 'resend' | 'brevo' | 'none' = 'none';
     let totalSent = 0;
     let failedOver = false;
-    const results: any[] = [];
     let lastError: string | null = null;
 
     for (const chunk of chunks) {
@@ -153,15 +152,12 @@ async function handleEmailSend(request: Request, env: Env): Promise<Response> {
                 providerUsed = 'resend';
                 totalSent += chunk.length;
                 await incrementEmailCount(env, 'resend', chunk.length);
-                results.push({ provider: 'resend', chunk_size: chunk.length, status: r.status });
                 sent = true;
             } else if (r.quotaExceeded) {
-                // Quota Resend dépassé → failover vers Brevo
                 failedOver = true;
                 console.log('[Email] Resend quota exceeded → switching to Brevo');
             } else {
                 lastError = r.data?.message || `Resend error ${r.status}`;
-                results.push({ provider: 'resend', chunk_size: chunk.length, status: r.status, error: lastError });
             }
         }
 
@@ -169,30 +165,44 @@ async function handleEmailSend(request: Request, env: Env): Promise<Response> {
         if (!sent && brevoKey) {
             const b = await sendViaBrevo(brevoKey, chunk, subject, emailHtml, fromName);
             if (b.ok) {
-                providerUsed = providerUsed === 'resend' ? 'resend' : 'brevo'; // keep 'resend' if already sent some via resend
+                providerUsed = providerUsed === 'resend' ? 'resend' : 'brevo';
                 if (failedOver) providerUsed = 'brevo';
                 totalSent += chunk.length;
                 await incrementEmailCount(env, 'brevo', chunk.length);
-                results.push({ provider: 'brevo', chunk_size: chunk.length, status: b.status });
                 sent = true;
             } else {
                 lastError = b.data?.message || `Brevo error ${b.status}`;
-                results.push({ provider: 'brevo', chunk_size: chunk.length, status: b.status, error: lastError });
             }
         }
 
-        if (!sent) break; // Arrêt si les deux providers échouent
+        if (!sent) break;
     }
 
     const success = totalSent === to.length;
-    return json({
+    return {
         success,
         sent: totalSent,
         total: to.length,
-        provider: providerUsed,    // visible uniquement dans les logs / superadmin
+        provider: providerUsed,
         failed_over: failedOver,
         ...(lastError ? { error: lastError } : {}),
-    }, success ? 200 : (totalSent > 0 ? 207 : 500));
+    };
+}
+
+// ── Handler principal ────────────────────────────────────
+async function handleEmailSend(request: Request, env: Env): Promise<Response> {
+    const body = await request.json() as {
+        to:         string[];
+        subject:    string;
+        html?:      string;
+        text?:      string;
+        org_name?:  string;
+        org_logo?:  string;
+        from_name?: string;
+    };
+
+    const res = await sendEmailInternal(env, body);
+    return json(res, res.success ? 200 : (res.sent > 0 ? 207 : 500));
 }
 
 // ── Statut email providers (superadmin only) ─────────────

@@ -8,6 +8,8 @@ import { getUserPreferences, buildNotificationMessage } from './services/message
 import { json, jsonResponse, errorResponse } from './lib/cors';
 import { processOutbox, reconcilePendingSyncs, purgeSyncResolved } from './services/d1';
 import { executeMcpToolD1, fetchSupabaseRest } from './mcp/tools';
+import { triggerDailyExecutiveReport, shouldSendReportNow } from './services/autonomous-report';
+import { runAutopilotCampusPulse } from './services/autopilot-school';
 
 // ══════════════════════════════════════════════════════════
 // CRON HANDLER — prayer_no_response Reminders
@@ -117,6 +119,24 @@ async function handleAgentAutonomousHeartbeat(env: Env): Promise<void> {
         const pendingPoints = await fetchSupabaseRest(env, 'sky_point_requests?status=eq.pending&select=id,user_id,organization_id,amount,created_at&limit=5');
         if (pendingPoints && pendingPoints.length > 0) {
             console.log(`[AgentCron] ${pendingPoints.length} demandes de Sky Points en attente détectées.`);
+        }
+
+        // 3. Surveillance & Pulse des Campus en Pilote Automatique (Correction, animation)
+        try {
+            await runAutopilotCampusPulse(env);
+        } catch (pulseErr) {
+            console.warn('[AgentCron] Erreur runAutopilotCampusPulse:', pulseErr);
+        }
+
+        // 4. Rapport Quotidien Dame SKY — envoyé à l'heure configurée par le Superadmin
+        try {
+            const shouldSend = await shouldSendReportNow(env);
+            if (shouldSend) {
+                console.log('[AgentCron] 👑 Déclenchement automatique du Rapport Exécutif Quotidien Dame SKY...');
+                await triggerDailyExecutiveReport(env);
+            }
+        } catch (reportErr) {
+            console.warn('[AgentCron] Erreur triggerDailyExecutiveReport:', reportErr);
         }
     } catch (e) {
         console.error('[AgentCron] Erreur heartbeat:', e);

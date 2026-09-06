@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { SuperadminAutopilotManager } from './SuperadminAutopilotManager';
 
 interface DameSkyConfig {
     id?: string;
@@ -435,6 +436,9 @@ export function DameSkySuperadminManager() {
                     />
                 </div>
             </div>
+
+            {/* ── Section Autopilot & Rapport Quotidien Autonome ── */}
+            <SuperadminAutopilotManager />
 
             {/* ── Section 1 : Configuration du Tempérament & Exigences ── */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
