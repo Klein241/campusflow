@@ -672,8 +672,16 @@ function AdminPageContent() {
                 if (cancelled) return;
                 if (orgError || !o) { setAuthChecked(true); setLoading(false); return; }
 
-                // Verify ownership
-                if (o.owner_id !== authUser.id) {
+                // Verify ownership OR platform admin status
+                let hasAccess = (o.owner_id === authUser.id);
+                if (!hasAccess) {
+                    const { data: isPlatformAdmin } = await supabase.rpc('is_platform_admin');
+                    if (isPlatformAdmin) {
+                        hasAccess = true;
+                    }
+                }
+
+                if (!hasAccess) {
                     setAuthChecked(true);
                     setLoading(false);
                     return;

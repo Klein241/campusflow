@@ -48,6 +48,7 @@ RATE_LIMIT_HOURLY_MAX = "50"             # Max 50 notifs/hour per user
 BROADCAST_RATE_LIMIT_MS = "100"          # 10 req/s for broadcasts
 
 # ── Secrets (set via CLI, not stored in file) ────────────
+# npx wrangler secret put DEEPSEEK_API_KEY
 # npx wrangler secret put SUPABASE_URL
 # npx wrangler secret put SUPABASE_SERVICE_KEY
 # npx wrangler secret put VAPID_PUBLIC_KEY

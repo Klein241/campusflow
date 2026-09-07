@@ -8,7 +8,7 @@ import {
     AlertCircle, RefreshCw, Loader2, ShieldCheck, Zap, X, Sliders,
     BookOpen, Users, UserCheck, Calendar, Search, FileText, ChevronRight,
     BarChart3, Bell, Check, UserPlus, Eye, Filter, ArrowUpRight, Award,
-    CheckCircle, AlertTriangle, Layers, Settings, HelpCircle
+    CheckCircle, AlertTriangle, Layers, Settings, HelpCircle, LayoutDashboard
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -69,7 +69,11 @@ export function SuperadminAutopilotManager() {
     const [schools, setSchools] = useState<AutopilotSchool[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchSchool, setSearchSchool] = useState('');
-    const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused'>('all');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'connected' | 'manual' | 'paused'>('all');
+    const [selectedSchoolIds, setSelectedSchoolIds] = useState<string[]>([]);
+    const [batchLoading, setBatchLoading] = useState(false);
+    const [showBatchModal, setShowBatchModal] = useState(false);
+    const [batchSearch, setBatchSearch] = useState('');
 
     // Rapport Email
     const [superadminEmail, setSuperadminEmail] = useState('kleintaptue1@gmail.com');
@@ -149,8 +153,7 @@ export function SuperadminAutopilotManager() {
                 .order('created_at', { ascending: false });
 
             if (orgsData) {
-                const autoOrgs = orgsData.filter(o => o.is_autopilot === true || o.other_phone_label === 'AUTOPILOT_SCHOOL');
-                setSchools(autoOrgs as any);
+                setSchools(orgsData as any);
             }
         } catch (e: any) {
             console.error('[AutopilotManager] Load error:', e);
@@ -279,6 +282,206 @@ export function SuperadminAutopilotManager() {
             toast.success(`Pilote automatique ${nextActive ? 'activé 🟢' : 'mis en pause ⏸️'} pour ${school.name}`);
         } catch {
             toast.error('Échec du changement d\'état');
+        }
+    };
+
+    // Connecter une école existante (créée personnellement) à Dame SKY
+    const handleConnectSchool = async (school: AutopilotSchool) => {
+        const toastId = toast.loading(`Connexion de "${school.name}" à Dame SKY...`);
+        try {
+            const nowIso = new Date().toISOString();
+            const { data: fils } = await supabase.from('filieres').select('nom').eq('organization_id', school.id);
+            const filieresList = fils && fils.length > 0
+                ? fils.map((f: any) => f.nom)
+                : (school.autopilot_filieres && school.autopilot_filieres.length > 0 ? school.autopilot_filieres : ['Tronc Commun']);
+
+            let { error } = await supabase.from('organizations').update({
+                is_autopilot: true,
+                autopilot_status: 'active',
+                autopilot_filieres: filieresList,
+                autopilot_last_pulse_at: nowIso,
+            }).eq('id', school.id);
+
+            if (error) {
+                await supabase.from('organizations').update({
+                    other_phone_label: 'AUTOPILOT_SCHOOL'
+                }).eq('id', school.id);
+            }
+
+            setSchools(prev => prev.map(s => s.id === school.id ? {
+                ...s,
+                is_autopilot: true,
+                autopilot_status: 'active',
+                autopilot_filieres: filieresList,
+                autopilot_last_pulse_at: nowIso,
+            } : s));
+
+            toast.success(`✨ "${school.name}" est maintenant connectée à Dame SKY en Pilote Automatique !`, { id: toastId });
+            fetch(`${WORKER_URL}/api/sky-agent/autopilot-pulse`, { method: 'POST' }).catch(() => null);
+        } catch (err: any) {
+            toast.error(`Erreur : ${err.message || 'Échec de connexion'}`, { id: toastId });
+        }
+    };
+
+    // Déconnecter une école de Dame SKY (repasse en mode manuel classique)
+    const handleDisconnectSchool = async (school: AutopilotSchool) => {
+        const toastId = toast.loading(`Déconnexion de "${school.name}"...`);
+        try {
+            await supabase.from('organizations').update({
+                is_autopilot: false,
+                autopilot_status: 'paused',
+                other_phone_label: null
+            }).eq('id', school.id);
+
+            setSchools(prev => prev.map(s => s.id === school.id ? {
+                ...s,
+                is_autopilot: false,
+                autopilot_status: 'paused',
+                other_phone_label: undefined,
+            } : s));
+
+            toast.success(`"${school.name}" est repassée en gestion manuelle (déconnectée de Dame SKY).`, { id: toastId });
+        } catch (err: any) {
+            toast.error(`Erreur : ${err.message || 'Échec de déconnexion'}`, { id: toastId });
+        }
+    };
+
+    // Basculer la sélection d'une école
+    const handleToggleSelect = (id: string, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        setSelectedSchoolIds(prev =>
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+        );
+    };
+
+    // Tout sélectionner / Tout désélectionner (parmi les écoles filtrées)
+    const handleToggleSelectAll = () => {
+        if (selectedSchoolIds.length === filteredSchools.length && filteredSchools.length > 0) {
+            setSelectedSchoolIds([]);
+        } else {
+            setSelectedSchoolIds(filteredSchools.map(s => s.id));
+        }
+    };
+
+    // Sélectionner uniquement les écoles manuelles
+    const handleSelectManualOnly = () => {
+        const manualIds = schools.filter(s => !s.is_autopilot && s.other_phone_label !== 'AUTOPILOT_SCHOOL').map(s => s.id);
+        setSelectedSchoolIds(manualIds);
+        if (manualIds.length === 0) {
+            toast.info('Toutes les écoles sont déjà connectées à Dame SKY !');
+        } else {
+            toast.success(`${manualIds.length} école(s) manuelle(s) sélectionnée(s)`);
+        }
+    };
+
+    // Connecter un groupe d'écoles à Dame SKY en Pilote Automatique
+    const handleBulkConnect = async (idsToConnect?: string[]) => {
+        const ids = idsToConnect || selectedSchoolIds;
+        if (ids.length === 0) {
+            toast.error('Veuillez sélectionner au moins un établissement.');
+            return;
+        }
+
+        setBatchLoading(true);
+        const toastId = toast.loading(`Connexion de ${ids.length} école(s) à Dame SKY...`);
+        try {
+            const nowIso = new Date().toISOString();
+
+            for (const id of ids) {
+                const school = schools.find(s => s.id === id);
+                const filieresList = school?.autopilot_filieres && school.autopilot_filieres.length > 0
+                    ? school.autopilot_filieres
+                    : ['Tronc Commun'];
+
+                let { error } = await supabase.from('organizations').update({
+                    is_autopilot: true,
+                    autopilot_status: 'active',
+                    autopilot_filieres: filieresList,
+                    autopilot_last_pulse_at: nowIso,
+                }).eq('id', id);
+
+                if (error) {
+                    await supabase.from('organizations').update({
+                        other_phone_label: 'AUTOPILOT_SCHOOL'
+                    }).eq('id', id);
+                }
+            }
+
+            // Notifier le Worker
+            await fetch(`${WORKER_URL}/api/sky-agent/autopilot-batch-connect`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ org_ids: ids }),
+            }).catch(() => null);
+
+            setSchools(prev => prev.map(s => ids.includes(s.id) ? {
+                ...s,
+                is_autopilot: true,
+                autopilot_status: 'active',
+                autopilot_last_pulse_at: nowIso,
+            } : s));
+
+            toast.success(`✨ ${ids.length} école(s) connectée(s) avec succès à Dame SKY en Pilote Automatique !`, { id: toastId });
+            setSelectedSchoolIds([]);
+            setShowBatchModal(false);
+
+            // Déclencher le cycle IA en arrière-plan
+            fetch(`${WORKER_URL}/api/sky-agent/autopilot-pulse`, { method: 'POST' }).catch(() => null);
+        } catch (err: any) {
+            toast.error(`Erreur connexion groupée : ${err.message || 'Échec'}`, { id: toastId });
+        } finally {
+            setBatchLoading(false);
+        }
+    };
+
+    // Déconnecter un groupe d'écoles (repasser en manuel)
+    const handleBulkDisconnect = async (idsToDisconnect?: string[]) => {
+        const ids = idsToDisconnect || selectedSchoolIds;
+        if (ids.length === 0) return;
+
+        setBatchLoading(true);
+        const toastId = toast.loading(`Déconnexion de ${ids.length} école(s)...`);
+        try {
+            for (const id of ids) {
+                await supabase.from('organizations').update({
+                    is_autopilot: false,
+                    autopilot_status: 'paused',
+                    other_phone_label: null
+                }).eq('id', id);
+            }
+
+            await fetch(`${WORKER_URL}/api/sky-agent/autopilot-batch-disconnect`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ org_ids: ids }),
+            }).catch(() => null);
+
+            setSchools(prev => prev.map(s => ids.includes(s.id) ? {
+                ...s,
+                is_autopilot: false,
+                autopilot_status: 'paused',
+                other_phone_label: undefined,
+            } : s));
+
+            toast.success(`🏫 ${ids.length} école(s) repassée(s) en gestion manuelle`, { id: toastId });
+            setSelectedSchoolIds([]);
+        } catch (err: any) {
+            toast.error(`Erreur déconnexion : ${err.message || 'Échec'}`, { id: toastId });
+        } finally {
+            setBatchLoading(false);
+        }
+    };
+
+    // Lancer un cycle IA groupé (pulse multi-campus)
+    const handleBulkPulse = async () => {
+        const toastId = toast.loading('Lancement du cycle IA groupé pour tous les campus connectés…');
+        try {
+            const res = await fetch(`${WORKER_URL}/api/sky-agent/autopilot-pulse`, { method: 'POST' });
+            const data = await res.json() as any;
+            toast.success(`⚡ Cycle autonome exécuté ! ${data.schoolsChecked || 0} campus vérifiés, ${data.actionsCount || 0} actions académiques menées.`, { id: toastId });
+            await loadAutopilotData();
+        } catch (err: any) {
+            toast.error(`Erreur pulse groupé : ${err.message || 'Échec'}`, { id: toastId });
         }
     };
 
@@ -511,15 +714,25 @@ export function SuperadminAutopilotManager() {
         }
     };
 
+    // Comptages pour les onglets de filtrage
+    const connectedCount = schools.filter(s => (s.is_autopilot === true || s.other_phone_label === 'AUTOPILOT_SCHOOL') && s.autopilot_status !== 'paused').length;
+    const pausedCount = schools.filter(s => (s.is_autopilot === true || s.other_phone_label === 'AUTOPILOT_SCHOOL') && s.autopilot_status === 'paused').length;
+    const manualCount = schools.filter(s => !s.is_autopilot && s.other_phone_label !== 'AUTOPILOT_SCHOOL').length;
+
     // Filtrage des écoles
     const filteredSchools = schools.filter(s => {
         const matchesSearch = s.name.toLowerCase().includes(searchSchool.toLowerCase()) ||
             (s.autopilot_filieres || []).some(f => f.toLowerCase().includes(searchSchool.toLowerCase())) ||
-            (s.city || '').toLowerCase().includes(searchSchool.toLowerCase());
+            (s.city || '').toLowerCase().includes(searchSchool.toLowerCase()) ||
+            (s.slug || '').toLowerCase().includes(searchSchool.toLowerCase());
 
-        if (statusFilter === 'active') return matchesSearch && s.autopilot_status === 'active';
-        if (statusFilter === 'paused') return matchesSearch && s.autopilot_status === 'paused';
-        return matchesSearch;
+        if (!matchesSearch) return false;
+
+        const isConnected = s.is_autopilot === true || s.other_phone_label === 'AUTOPILOT_SCHOOL';
+        if (statusFilter === 'connected') return isConnected && s.autopilot_status !== 'paused';
+        if (statusFilter === 'paused') return isConnected && s.autopilot_status === 'paused';
+        if (statusFilter === 'manual') return !isConnected;
+        return true;
     });
 
     return (
@@ -652,14 +865,30 @@ export function SuperadminAutopilotManager() {
                     <div>
                         <h2 className="text-xl font-bold text-white flex items-center gap-2">
                             <ShieldCheck className="w-6 h-6 text-indigo-400" />
-                            Établissements sous Pilote Automatique ({schools.length})
+                            Connexion & Gestion Autopilot des Écoles ({schools.length})
                         </h2>
                         <p className="text-xs text-slate-400">
-                            Campus 100% autonomes animés par DeepSeek V4 Flash : admission, cours, devoirs et examens
+                            Connectez vos écoles existantes à Dame SKY en 1 clic pour activer l&apos;autonomie complète, ou accédez au Back-Office Admin classique.
                         </p>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                            onClick={() => setShowBatchModal(true)}
+                            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs shadow-lg shadow-emerald-500/20"
+                        >
+                            <Sparkles className="w-4 h-4 mr-1.5" />
+                            Connecter Plusieurs Écoles
+                        </Button>
+                        <Button
+                            variant="outline"
+                            onClick={handleBulkPulse}
+                            className="border-amber-500/30 text-amber-300 hover:bg-amber-500/10 text-xs"
+                            title="Exécuter immédiatement les tâches IA sur tous les campus actifs"
+                        >
+                            <Zap className="w-3.5 h-3.5 mr-1 text-amber-400" />
+                            Cycle IA Groupé
+                        </Button>
                         <Button
                             onClick={() => setShowCreateModal(true)}
                             className="bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-semibold text-xs shadow-lg shadow-indigo-500/20"
@@ -681,7 +910,7 @@ export function SuperadminAutopilotManager() {
                             className="pl-9 bg-black/30 border-white/10 text-white text-xs h-9"
                         />
                     </div>
-                    <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                    <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
                         <Button
                             size="sm"
                             variant={statusFilter === 'all' ? 'default' : 'ghost'}
@@ -692,11 +921,19 @@ export function SuperadminAutopilotManager() {
                         </Button>
                         <Button
                             size="sm"
-                            variant={statusFilter === 'active' ? 'default' : 'ghost'}
-                            onClick={() => setStatusFilter('active')}
-                            className={`text-xs h-8 ${statusFilter === 'active' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                            variant={statusFilter === 'connected' ? 'default' : 'ghost'}
+                            onClick={() => setStatusFilter('connected')}
+                            className={`text-xs h-8 ${statusFilter === 'connected' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'}`}
                         >
-                            Actives ({schools.filter(s => s.autopilot_status === 'active').length})
+                            🤖 Connectées ({connectedCount})
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant={statusFilter === 'manual' ? 'default' : 'ghost'}
+                            onClick={() => setStatusFilter('manual')}
+                            className={`text-xs h-8 ${statusFilter === 'manual' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
+                        >
+                            🏫 Mode Manuel ({manualCount})
                         </Button>
                         <Button
                             size="sm"
@@ -704,8 +941,67 @@ export function SuperadminAutopilotManager() {
                             onClick={() => setStatusFilter('paused')}
                             className={`text-xs h-8 ${statusFilter === 'paused' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:text-white'}`}
                         >
-                            En Pause ({schools.filter(s => s.autopilot_status === 'paused').length})
+                            ⏸️ En Pause ({pausedCount})
                         </Button>
+                    </div>
+                </div>
+
+                {/* Barre de sélection multiple & Actions rapides */}
+                <div className="flex flex-wrap items-center justify-between gap-3 bg-white/[0.03] border border-white/10 px-4 py-2.5 rounded-xl text-xs">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={handleToggleSelectAll}
+                            className="text-xs h-7 text-slate-300 hover:text-white flex items-center gap-2 px-2"
+                        >
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                                selectedSchoolIds.length > 0 && selectedSchoolIds.length === filteredSchools.length
+                                    ? 'bg-indigo-600 border-indigo-500 text-white'
+                                    : 'border-white/30 bg-white/5'
+                            }`}>
+                                {selectedSchoolIds.length > 0 && <Check className="w-3 h-3" />}
+                            </div>
+                            <span>
+                                {selectedSchoolIds.length === filteredSchools.length && filteredSchools.length > 0
+                                    ? 'Tout désélectionner'
+                                    : `Tout sélectionner (${filteredSchools.length})`}
+                            </span>
+                        </Button>
+
+                        <span className="text-slate-600">|</span>
+
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={handleSelectManualOnly}
+                            className="text-xs h-7 text-slate-400 hover:text-white px-2"
+                        >
+                            Sélectionner les écoles manuelles ({manualCount})
+                        </Button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        {selectedSchoolIds.length > 0 ? (
+                            <div className="flex items-center gap-2">
+                                <Badge className="bg-indigo-500/20 text-indigo-300 border-indigo-500/40 text-xs px-2.5 py-1">
+                                    {selectedSchoolIds.length} école(s) cochée(s)
+                                </Badge>
+                                <Button
+                                    size="sm"
+                                    onClick={() => handleBulkConnect()}
+                                    disabled={batchLoading}
+                                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs h-7 px-3 font-bold"
+                                >
+                                    {batchLoading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Sparkles className="w-3 h-3 mr-1" />}
+                                    Connecter la sélection
+                                </Button>
+                            </div>
+                        ) : (
+                            <span className="text-slate-500 text-[11px]">
+                                Cochez plusieurs écoles pour les connecter simultanément à Dame SKY
+                            </span>
+                        )}
                     </div>
                 </div>
 
@@ -713,13 +1009,13 @@ export function SuperadminAutopilotManager() {
                 {loading ? (
                     <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center gap-2">
                         <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
-                        <span className="text-xs">Chargement des établissements autonomes…</span>
+                        <span className="text-xs">Chargement des établissements…</span>
                     </div>
                 ) : filteredSchools.length === 0 ? (
                     <div className="p-12 text-center text-slate-400 border border-white/5 rounded-2xl bg-white/[0.01] space-y-3">
                         <Building2 className="w-10 h-10 mx-auto text-slate-500 opacity-60" />
-                        <p className="text-sm font-semibold text-slate-300">Aucun établissement sous pilote automatique trouvé</p>
-                        <p className="text-xs text-slate-500">Créez votre première école en 1 clic pour activer l'autonomie complète.</p>
+                        <p className="text-sm font-semibold text-slate-300">Aucun établissement trouvé</p>
+                        <p className="text-xs text-slate-500">Créez votre première école ou connectez une école existante.</p>
                         <Button
                             size="sm"
                             onClick={() => setShowCreateModal(true)}
@@ -730,127 +1026,435 @@ export function SuperadminAutopilotManager() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {filteredSchools.map(school => (
-                            <motion.div
-                                key={school.id}
-                                layout
-                                className="p-5 rounded-2xl bg-[#0F1424] border border-white/5 hover:border-indigo-500/40 transition-all shadow-xl space-y-4 flex flex-col justify-between group"
-                            >
-                                <div className="space-y-3">
-                                    {/* Entête de carte */}
-                                    <div className="flex items-start justify-between gap-2">
-                                        <div className="space-y-1 flex-1">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <h3 className="font-bold text-white text-base group-hover:text-indigo-300 transition-colors">
-                                                    {school.name}
-                                                </h3>
+                        {filteredSchools.map(school => {
+                            const isConnected = school.is_autopilot === true || school.other_phone_label === 'AUTOPILOT_SCHOOL';
+                            const isSelected = selectedSchoolIds.includes(school.id);
+                            return (
+                                <motion.div
+                                    key={school.id}
+                                    layout
+                                    className={`p-5 rounded-2xl bg-[#0F1424] border transition-all shadow-xl space-y-4 flex flex-col justify-between group ${
+                                        isSelected
+                                            ? 'border-indigo-500 ring-2 ring-indigo-500/40 bg-gradient-to-br from-indigo-950/40 to-[#0F1424]'
+                                            : isConnected
+                                                ? 'border-indigo-500/30 hover:border-indigo-500/60'
+                                                : 'border-white/5 hover:border-white/20'
+                                    }`}
+                                >
+                                    <div className="space-y-3">
+                                        {/* Entête de carte */}
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => handleToggleSelect(school.id, e)}
+                                                    className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all shrink-0 mt-0.5 ${
+                                                        isSelected
+                                                            ? 'bg-indigo-600 border-indigo-400 text-white shadow-sm ring-2 ring-indigo-500/30'
+                                                            : 'bg-white/5 border-white/20 hover:border-white/40 text-transparent'
+                                                    }`}
+                                                    title={isSelected ? 'Désélectionner' : 'Sélectionner pour action groupée'}
+                                                >
+                                                    <Check className="w-3.5 h-3.5" />
+                                                </button>
+                                                <div className="space-y-1 flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <h3 className="font-bold text-white text-base group-hover:text-indigo-300 transition-colors truncate">
+                                                            {school.name}
+                                                        </h3>
+                                                    </div>
+                                                    <p className="text-xs text-slate-400 flex items-center gap-1.5 truncate">
+                                                        <span>{school.city || 'Campus'}, {school.country || 'Cameroun'}</span>
+                                                        <span>•</span>
+                                                        <span className="text-indigo-400 font-mono">/{school.slug}</span>
+                                                    </p>
+                                                </div>
                                             </div>
-                                            <p className="text-xs text-slate-400 flex items-center gap-1.5">
-                                                <span>{school.city}, {school.country}</span>
-                                                <span>•</span>
-                                                <span className="text-indigo-400 font-mono">/{school.slug}</span>
-                                            </p>
+
+                                            <div className="flex items-center gap-1">
+                                                {isConnected ? (
+                                                    <Badge
+                                                        className={`text-[10px] font-semibold border ${
+                                                            school.autopilot_status === 'active'
+                                                                ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                                                                : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                                        }`}
+                                                    >
+                                                        {school.autopilot_status === 'active' ? '🟢 Dame SKY Actif' : '⏸️ En pause'}
+                                                    </Badge>
+                                                ) : (
+                                                    <Badge className="text-[10px] font-semibold border bg-slate-800/80 text-slate-400 border-white/10">
+                                                        🏫 Manuel
+                                                    </Badge>
+                                                )}
+
+                                                {isConnected && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => handleToggleAutopilot(school)}
+                                                        title={school.autopilot_status === 'active' ? 'Mettre en pause' : 'Réactiver'}
+                                                        className="h-7 w-7 p-0 text-slate-300 hover:text-white hover:bg-white/10"
+                                                    >
+                                                        {school.autopilot_status === 'active' ? <Pause className="w-3.5 h-3.5 text-amber-400" /> : <Play className="w-3.5 h-3.5 text-emerald-400" />}
+                                                    </Button>
+                                                )}
+
+                                                <a
+                                                    href={`/${school.slug}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="h-7 w-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 hover:text-white"
+                                                    title="Visiter la landing page du campus"
+                                                >
+                                                    <ExternalLink className="w-3 h-3" />
+                                                </a>
+                                            </div>
                                         </div>
 
-                                        <div className="flex items-center gap-1">
-                                            <Badge
-                                                className={`text-[10px] font-semibold border ${
-                                                    school.autopilot_status === 'active'
-                                                        ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                                                        : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                                                }`}
-                                            >
-                                                {school.autopilot_status === 'active' ? '🟢 Actif' : '⏸️ En pause'}
-                                            </Badge>
+                                        {/* Statut de connexion et filières */}
+                                        <div className="space-y-1.5">
+                                            <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">
+                                                {isConnected ? 'Filières pilotées' : 'Mode de gestion'}
+                                            </p>
+                                            {isConnected ? (
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {(school.autopilot_filieres && school.autopilot_filieres.length > 0 ? school.autopilot_filieres : ['Tronc Commun']).map((f, idx) => (
+                                                        <span key={idx} className="px-2 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-[11px] text-indigo-300">
+                                                            {f}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs text-slate-400">
+                                                    Gestion manuelle par l&apos;administration. Cliquez ci-dessous pour confier le pilotage à Dame SKY.
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Actions & Administration */}
+                                    <div className="pt-3 border-t border-white/5 space-y-3">
+                                        <div className="flex items-center justify-between text-[11px] text-slate-500">
+                                            <span className="flex items-center gap-1">
+                                                <Clock className="w-3 h-3" />
+                                                {isConnected
+                                                    ? (school.autopilot_pulse_count ? `${school.autopilot_pulse_count} cycles autonomes` : 'Autopilot actif')
+                                                    : 'Mode manuel'}
+                                            </span>
+                                            <span>
+                                                {school.created_at ? new Date(school.created_at).toLocaleDateString('fr-FR') : ''}
+                                            </span>
+                                        </div>
+
+                                        {/* BOUTON PRINCIPAL 1 : ACCÉDER AU VRAI BACK-OFFICE ADMIN COMPLET */}
+                                        <div className="flex items-center gap-2">
                                             <Button
                                                 size="sm"
-                                                variant="ghost"
-                                                onClick={() => handleToggleAutopilot(school)}
-                                                title={school.autopilot_status === 'active' ? 'Mettre en pause' : 'Réactiver'}
-                                                className="h-7 w-7 p-0 text-slate-300 hover:text-white hover:bg-white/10"
+                                                onClick={() => window.open(`/${school.slug}/admin`, '_blank')}
+                                                className="flex-1 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white text-xs h-9 font-bold shadow-md shadow-indigo-600/20 flex items-center justify-center gap-1.5"
                                             >
-                                                {school.autopilot_status === 'active' ? <Pause className="w-3.5 h-3.5 text-amber-400" /> : <Play className="w-3.5 h-3.5 text-emerald-400" />}
+                                                <LayoutDashboard className="w-3.5 h-3.5 text-indigo-300" />
+                                                Ouvrir l&apos;Admin Complet
+                                                <ExternalLink className="w-3 h-3 opacity-60" />
                                             </Button>
-                                            <a
-                                                href={`/${school.slug}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="h-7 w-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 hover:text-white"
-                                                title="Visiter la landing page du campus"
+
+                                            {/* Modal rapide d'administration */}
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => handleOpenAdminDashboard(school)}
+                                                className="border-white/10 hover:bg-white/10 text-slate-300 text-xs h-9 px-2.5"
+                                                title="Aperçu rapide dans une modale"
                                             >
-                                                <ExternalLink className="w-3 h-3" />
-                                            </a>
+                                                <Eye className="w-3.5 h-3.5" />
+                                            </Button>
+                                        </div>
+
+                                        {/* BOUTON PRINCIPAL 2 : CONNEXION / DÉCONNEXION DAME SKY */}
+                                        <div className="flex items-center gap-2">
+                                            {isConnected ? (
+                                                <>
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setInteractOrg(school);
+                                                            setDialogHistory([
+                                                                { sender: 'admin', text: `Bonjour Superviseur. Je suis Dame SKY aux commandes de "${school.name}". Mes actions s'exécutent en direct en base de données. Donnez-moi vos directives.` }
+                                                            ]);
+                                                        }}
+                                                        className="flex-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 text-xs border border-purple-500/30 h-8 font-semibold flex items-center justify-center gap-1.5"
+                                                    >
+                                                        <MessageSquare className="w-3.5 h-3.5 text-purple-400" />
+                                                        Directives Dame SKY
+                                                    </Button>
+
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => handleDisconnectSchool(school)}
+                                                        className="text-red-400/80 hover:text-red-300 hover:bg-red-500/10 text-[11px] h-8 px-2"
+                                                        title="Détacher de Dame SKY (repasser en gestion manuelle)"
+                                                    >
+                                                        Détacher
+                                                    </Button>
+                                                </>
+                                            ) : (
+                                                <Button
+                                                    size="sm"
+                                                    onClick={() => handleConnectSchool(school)}
+                                                    className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs h-8 font-bold shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5"
+                                                >
+                                                    <Sparkles className="w-3.5 h-3.5 text-emerald-200" />
+                                                    Connecter à Dame SKY (Autopilot)
+                                                </Button>
+                                            )}
                                         </div>
                                     </div>
-
-                                    {/* Filières */}
-                                    <div className="space-y-1.5">
-                                        <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Filières structurées</p>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {(school.autopilot_filieres || []).map((f, idx) => (
-                                                <span key={idx} className="px-2 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-[11px] text-indigo-300">
-                                                    {f}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Actions & Administration */}
-                                <div className="pt-3 border-t border-white/5 space-y-3">
-                                    <div className="flex items-center justify-between text-[11px] text-slate-500">
-                                        <span className="flex items-center gap-1">
-                                            <Clock className="w-3 h-3" />
-                                            {school.autopilot_pulse_count ? `${school.autopilot_pulse_count} cycles` : 'Nouveau'}
-                                        </span>
-                                        <span>
-                                            {school.autopilot_last_pulse_at ? new Date(school.autopilot_last_pulse_at).toLocaleDateString('fr-FR') : 'Aujourd\'hui'}
-                                        </span>
-                                    </div>
-
-                                    <div className="flex items-center gap-2">
-                                        {/* BOUTON CLÉ : TABLEAU DE BORD ADMIN */}
-                                        <Button
-                                            size="sm"
-                                            onClick={() => handleOpenAdminDashboard(school)}
-                                            className="flex-1 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white text-xs h-8 font-semibold shadow-md shadow-indigo-600/20"
-                                        >
-                                            <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-indigo-300" />
-                                            Espace Admin
-                                        </Button>
-
-                                        {/* BOUTON ADMIN VIRTUEL (DIRECTIVES IA) */}
-                                        <Button
-                                            size="sm"
-                                            onClick={() => {
-                                                setInteractOrg(school);
-                                                setDialogHistory([
-                                                    { sender: 'admin', text: `Bonjour Superviseur. Je suis l'administrateur virtuel de "${school.name}". Toutes mes actions sont directement exécutées dans la base de données. Donnez-moi vos directives.` }
-                                                ]);
-                                            }}
-                                            className="bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 text-xs border border-purple-500/30 h-8 px-2.5"
-                                            title="Donner des instructions à l'admin virtuel"
-                                        >
-                                            <MessageSquare className="w-3.5 h-3.5" />
-                                        </Button>
-
-                                        {/* BOUTON CURSUS */}
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleViewSchoolDetails(school)}
-                                            className="border-white/10 text-slate-300 hover:text-white text-xs h-8 px-2.5"
-                                            title="Aperçu rapide du cursus"
-                                        >
-                                            <BookOpen className="w-3.5 h-3.5" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        ))}
+                                </motion.div>
+                            );
+                        })}
                     </div>
                 )}
             </div>
+
+            {/* ══════════════════════════════════════════════════════════════
+                BARRE D'ACTIONS FLOTTANTE EN BAS D'ÉCRAN (MULTI-SÉLECTION)
+            ══════════════════════════════════════════════════════════════ */}
+            <AnimatePresence>
+                {selectedSchoolIds.length > 0 && !showBatchModal && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 60 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 60 }}
+                        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-3xl w-[94%] sm:w-auto"
+                    >
+                        <div className="bg-[#0B0F19]/95 backdrop-blur-2xl border-2 border-indigo-500/60 shadow-2xl shadow-indigo-950/80 rounded-2xl p-3 sm:px-5 flex flex-wrap items-center justify-between gap-3 text-white">
+                            <div className="flex items-center gap-2.5">
+                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                                <span className="font-bold text-xs sm:text-sm text-white">
+                                    {selectedSchoolIds.length} établissement(s) sélectionné(s)
+                                </span>
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <Button
+                                    size="sm"
+                                    disabled={batchLoading}
+                                    onClick={() => handleBulkConnect()}
+                                    className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs h-8 font-bold shadow-lg shadow-emerald-500/20 flex items-center gap-1.5"
+                                >
+                                    {batchLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                                    Connecter à Dame SKY ({selectedSchoolIds.length})
+                                </Button>
+
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={batchLoading}
+                                    onClick={() => handleBulkDisconnect()}
+                                    className="border-white/15 hover:bg-white/10 text-slate-300 text-xs h-8"
+                                    title="Détacher de Dame SKY et repasser en gestion manuelle"
+                                >
+                                    Mode Manuel
+                                </Button>
+
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => setSelectedSchoolIds([])}
+                                    className="text-slate-400 hover:text-white text-xs h-8 px-2"
+                                    title="Désélectionner tout"
+                                >
+                                    <X className="w-4 h-4" />
+                                </Button>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ══════════════════════════════════════════════════════════════
+                MODAL : CONNEXION GROUPÉE DE PLUSIEURS ÉCOLES À DAME SKY
+            ══════════════════════════════════════════════════════════════ */}
+            <AnimatePresence>
+                {showBatchModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4"
+                        onClick={() => setShowBatchModal(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                            onClick={e => e.stopPropagation()}
+                            className="bg-[#0B0F1C] border border-emerald-500/40 rounded-3xl w-full max-w-3xl shadow-2xl text-white flex flex-col max-h-[90vh] overflow-hidden"
+                        >
+                            {/* Header */}
+                            <div className="p-5 border-b border-white/10 bg-gradient-to-r from-emerald-950/40 via-[#0D1525] to-[#0B0F1C] flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 text-white font-bold">
+                                        <Sparkles className="w-5 h-5 text-black" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
+                                            Connexion Groupée à Dame SKY
+                                            <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px]">Multi-Campus</Badge>
+                                        </h3>
+                                        <p className="text-xs text-slate-400">
+                                            Sélectionnez les établissements à confier à Dame SKY en pilotage 100% autonome.
+                                        </p>
+                                    </div>
+                                </div>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => setShowBatchModal(false)}
+                                    className="text-slate-400 hover:text-white"
+                                >
+                                    <X className="w-4 h-4" />
+                                </Button>
+                            </div>
+
+                            {/* Content */}
+                            <div className="p-5 overflow-y-auto space-y-4 flex-1">
+                                {/* Search & Quick Select */}
+                                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                                    <div className="relative w-full sm:w-72">
+                                        <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <Input
+                                            placeholder="Filtrer par nom ou ville…"
+                                            value={batchSearch}
+                                            onChange={e => setBatchSearch(e.target.value)}
+                                            className="pl-8 bg-black/40 border-white/10 text-white text-xs h-8"
+                                        />
+                                    </div>
+                                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => {
+                                                const allIds = schools.map(s => s.id);
+                                                setSelectedSchoolIds(allIds);
+                                            }}
+                                            className="text-xs h-8 border-white/10 text-slate-300 hover:bg-white/5"
+                                        >
+                                            Tout cocher ({schools.length})
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={handleSelectManualOnly}
+                                            className="text-xs h-8 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10"
+                                        >
+                                            Cocher les manuelles ({manualCount})
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* List of Schools with Checkboxes */}
+                                <div className="border border-white/10 rounded-2xl overflow-hidden bg-black/20 divide-y divide-white/5 max-h-80 overflow-y-auto">
+                                    {schools
+                                        .filter(s => s.name.toLowerCase().includes(batchSearch.toLowerCase()) || (s.city || '').toLowerCase().includes(batchSearch.toLowerCase()))
+                                        .map(school => {
+                                            const isChecked = selectedSchoolIds.includes(school.id);
+                                            const isConnected = school.is_autopilot === true || school.other_phone_label === 'AUTOPILOT_SCHOOL';
+                                            return (
+                                                <div
+                                                    key={school.id}
+                                                    onClick={() => handleToggleSelect(school.id)}
+                                                    className={`p-3.5 flex items-center justify-between gap-3 cursor-pointer transition-colors ${
+                                                        isChecked ? 'bg-emerald-500/10 hover:bg-emerald-500/15' : 'hover:bg-white/[0.02]'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
+                                                            isChecked ? 'bg-emerald-600 border-emerald-500 text-white shadow-sm' : 'border-white/20 bg-white/5'
+                                                        }`}>
+                                                            {isChecked && <Check className="w-3.5 h-3.5" />}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <div className="font-semibold text-xs sm:text-sm text-white truncate">
+                                                                {school.name}
+                                                            </div>
+                                                            <div className="text-[11px] text-slate-400 truncate">
+                                                                {school.city || 'Campus'}, {school.country} • <span className="font-mono text-indigo-400">/{school.slug}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        {isConnected ? (
+                                                            <Badge className="bg-emerald-500/10 text-emerald-300 border-emerald-500/20 text-[10px]">
+                                                                🤖 Déjà connecté
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge className="bg-slate-800 text-slate-400 border-white/10 text-[10px]">
+                                                                🏫 Manuel
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                </div>
+
+                                {/* Information Alert */}
+                                <div className="p-3.5 rounded-xl bg-emerald-950/20 border border-emerald-500/30 text-xs text-emerald-300/90 flex items-start gap-2.5">
+                                    <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="font-semibold text-white">Ce que Dame SKY va prendre en charge :</p>
+                                        <ul className="list-disc list-inside space-y-0.5 mt-1 text-[11px] text-slate-300">
+                                            <li>Validation automatique et bienveillante des demandes d&apos;inscription</li>
+                                            <li>Correction et notation des copies d&apos;exercices déposées</li>
+                                            <li>Animation pédagogique et conseils académiques quotidiens</li>
+                                            <li>Inclusion dans le rapport exécutif quotidien envoyé à votre e-mail</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Footer */}
+                            <div className="p-4 border-t border-white/10 bg-black/40 flex flex-wrap items-center justify-between gap-3">
+                                <div className="text-xs text-slate-400">
+                                    <span className="font-bold text-white">{selectedSchoolIds.length}</span> école(s) sélectionnée(s) sur {schools.length}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setShowBatchModal(false)}
+                                        className="border-white/10 text-slate-300 text-xs h-9"
+                                    >
+                                        Annuler
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        disabled={selectedSchoolIds.length === 0 || batchLoading}
+                                        onClick={() => handleBulkConnect()}
+                                        className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs h-9 font-bold shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 px-4"
+                                    >
+                                        {batchLoading ? (
+                                            <>
+                                                <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                                                Connexion en cours…
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Sparkles className="w-3.5 h-3.5 mr-1" />
+                                                Activer l&apos;Autopilot pour les {selectedSchoolIds.length} écoles
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* ══════════════════════════════════════════════════════════════
                 MODAL MAJEUR : TABLEAU DE BORD ADMIN COMPLET DE L'ÉCOLE

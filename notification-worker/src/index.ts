@@ -206,6 +206,51 @@ export default {
                 }
             }
 
+            if (pathname === '/api/sky-agent/autopilot-batch-connect' && method === 'POST') {
+                try {
+                    const body = await request.json() as any;
+                    const { org_ids, filieres } = body;
+                    if (!Array.isArray(org_ids) || org_ids.length === 0) {
+                        return jsonResponse({ error: 'org_ids array requis' }, 400);
+                    }
+                    const nowIso = new Date().toISOString();
+                    for (const org_id of org_ids) {
+                        syncToSupabase(env, 'organizations', 'UPDATE', {
+                            id: org_id,
+                            is_autopilot: true,
+                            autopilot_status: 'active',
+                            ...(Array.isArray(filieres) && filieres.length > 0 ? { autopilot_filieres: filieres } : {}),
+                            autopilot_last_pulse_at: nowIso,
+                        });
+                    }
+                    runAutopilotCampusPulse(env).catch(() => null);
+                    return jsonResponse({ ok: true, connected_count: org_ids.length, org_ids });
+                } catch (e: any) {
+                    return jsonResponse({ error: e.message || 'Erreur batch connect' }, 500);
+                }
+            }
+
+            if (pathname === '/api/sky-agent/autopilot-batch-disconnect' && method === 'POST') {
+                try {
+                    const body = await request.json() as any;
+                    const { org_ids } = body;
+                    if (!Array.isArray(org_ids) || org_ids.length === 0) {
+                        return jsonResponse({ error: 'org_ids array requis' }, 400);
+                    }
+                    for (const org_id of org_ids) {
+                        syncToSupabase(env, 'organizations', 'UPDATE', {
+                            id: org_id,
+                            is_autopilot: false,
+                            autopilot_status: 'paused',
+                            other_phone_label: null
+                        });
+                    }
+                    return jsonResponse({ ok: true, disconnected_count: org_ids.length, org_ids });
+                } catch (e: any) {
+                    return jsonResponse({ error: e.message || 'Erreur batch disconnect' }, 500);
+                }
+            }
+
             if (pathname === '/api/sky-agent/autopilot-pulse' && method === 'POST') {
                 try {
                     const res = await runAutopilotCampusPulse(env);

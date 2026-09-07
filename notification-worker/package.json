@@ -3,9 +3,9 @@
     "version": "2.0.0",
     "private": true,
     "scripts": {
-        "dev": "npx wrangler dev",
-        "deploy": "npx wrangler deploy",
-        "tail": "npx wrangler tail"
+        "dev": "npx wrangler dev src/index.ts --config wrangler.toml",
+        "deploy": "npx wrangler deploy src/index.ts --config wrangler.toml",
+        "tail": "npx wrangler tail --config wrangler.toml"
     },
     "devDependencies": {
         "@cloudflare/workers-types": "^4.20250301.0",

@@ -112,6 +112,7 @@ export default function SchoolLandingPage() {
     const [showCredModal, setShowCredModal]   = useState(false);
     const [credSaved, setCredSaved]           = useState(false);
     const [codeCopied, setCodeCopied]         = useState(false);
+    const [showInscModal, setShowInscModal]   = useState(false);
 
     // Gallery lightbox with navigation
     const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
@@ -124,6 +125,7 @@ export default function SchoolLandingPage() {
     }, []);
 
     const scrollToInscription = () => {
+        setShowInscModal(true);
         const el = document.getElementById('inscription');
         if (el) {
             el.scrollIntoView({ behavior: 'smooth' });
@@ -252,6 +254,7 @@ export default function SchoolLandingPage() {
             return;
         }
 
+        setShowInscModal(false);
         setGeneratedCode(code);
         setShowCredModal(true);
         setInscSubmitting(false);
@@ -1141,9 +1144,46 @@ export default function SchoolLandingPage() {
                                         <p className="text-xs text-slate-500">Sélectionnez la classe dans laquelle vous souhaitez vous inscrire. Elle sera automatiquement assignée à votre dossier.</p>
                                     </div>
 
-                                    {classrooms.length === 0 ? (
-                                        <div className="text-center py-10 text-slate-500 text-sm">
-                                            Aucune classe disponible pour le moment.
+                                    {classrooms.length === 0 && filieres.length > 0 ? (
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="text-xs text-slate-400 mb-1.5 block font-medium">
+                                                    Filière / Spécialité souhaitée <span className="text-red-400">*</span>
+                                                </label>
+                                                <div className="grid sm:grid-cols-2 gap-2">
+                                                    {filieres.map((f: any) => {
+                                                        const sel = selectedClassroom?.filiere_id === f.id;
+                                                        return (
+                                                            <button key={f.id} type="button"
+                                                                onClick={() => setSelectedClassroom({ id: null, name: f.nom, filiere_id: f.id })}
+                                                                className={cn(
+                                                                    'p-3.5 rounded-xl text-left text-xs font-semibold transition-all duration-200 border flex items-center justify-between',
+                                                                    sel
+                                                                        ? 'text-white border-transparent shadow-lg bg-emerald-500/20 border-emerald-500'
+                                                                        : 'bg-white/[0.04] border-white/[0.08] text-slate-300 hover:bg-white/[0.08]'
+                                                                )}
+                                                                style={sel ? { borderColor: bc, backgroundColor: `${bc}15` } : {}}>
+                                                                <span>{f.nom}</span>
+                                                                {sel && <CheckCircle2 className="w-4 h-4" style={{ color: bc }} />}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : classrooms.length === 0 ? (
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="text-xs text-slate-400 mb-1.5 block font-medium">
+                                                    Formation / Spécialité souhaitée <span className="text-red-400">*</span>
+                                                </label>
+                                                <input
+                                                    value={selectedClassroom?.name || ''}
+                                                    onChange={e => setSelectedClassroom({ id: null, name: e.target.value })}
+                                                    placeholder="Ex : Formation Professionnelle / Cursus d'Excellence"
+                                                    className="w-full h-12 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors"
+                                                />
+                                            </div>
                                         </div>
                                     ) : (
                                         <div className="space-y-4">
@@ -1413,6 +1453,244 @@ export default function SchoolLandingPage() {
                     </div>
                 </motion.div>
             </section>
+
+            {/* ═══ MODAL D'INSCRIPTION RAPIDE (ACCESSIBLE DEPUIS TOUS LES TEMPLATES) ═══ */}
+            <AnimatePresence>
+                {showInscModal && !showCredModal && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[190] bg-black/85 backdrop-blur-xl flex items-center justify-center p-4 overflow-y-auto">
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            transition={{ type: 'spring', damping: 22 }}
+                            className="w-full max-w-2xl rounded-3xl border bg-[#0D111A] shadow-2xl overflow-hidden my-8"
+                            style={{ borderColor: `${bc}40` }}>
+
+                            {/* Modal Header */}
+                            <div className="relative p-6 border-b border-white/10 flex items-center justify-between"
+                                style={{ background: `linear-gradient(135deg, ${bc}20, transparent)` }}>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white"
+                                        style={{ background: `linear-gradient(135deg, ${bc}, ${bc}90)` }}>
+                                        <GraduationCap className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-base font-black text-white">Demande d&apos;inscription</h3>
+                                        <p className="text-xs text-slate-400">{org.name} — Rejoindre la formation</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setShowInscModal(false)}
+                                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 flex items-center justify-center transition">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            {/* Step Indicator */}
+                            <div className="px-6 pt-5 pb-2">
+                                <div className="flex items-center">
+                                    {[
+                                        { label: 'Formation', icon: BookOpen },
+                                        { label: 'Informations', icon: User },
+                                        { label: 'Code PIN', icon: Key },
+                                    ].map((step, i) => (
+                                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                                            <div className="flex items-center w-full">
+                                                {i > 0 && <div className={cn('flex-1 h-0.5 transition-all', i <= inscStep ? 'opacity-100' : 'opacity-20')} style={{ background: bc }} />}
+                                                <div className={cn(
+                                                    'w-8 h-8 rounded-full flex items-center justify-center transition-all shrink-0 text-xs font-bold',
+                                                    inscStep === i ? 'text-white shadow-lg' :
+                                                    i < inscStep ? 'bg-emerald-500 text-white' : 'bg-white/[0.06] text-slate-500'
+                                                )} style={inscStep === i ? { background: `linear-gradient(135deg,${bc},${bc}bb)` } : {}}>
+                                                    {i < inscStep ? <CheckCircle2 className="w-4 h-4" /> : <step.icon className="w-3.5 h-3.5" />}
+                                                </div>
+                                                {i < 2 && <div className={cn('flex-1 h-0.5 transition-all', i < inscStep ? 'opacity-100' : 'opacity-20')} style={{ background: bc }} />}
+                                            </div>
+                                            <span className={cn('text-[10px] font-semibold mt-1', inscStep === i ? 'text-white' : i < inscStep ? 'text-emerald-400' : 'text-slate-600')}>{step.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Form Steps Body */}
+                            <div className="p-6">
+                                {inscStep === 0 && (
+                                    <div className="space-y-4">
+                                        <p className="text-xs text-slate-400">Sélectionnez la classe ou la filière d&apos;admission :</p>
+                                        {classrooms.length > 0 ? (
+                                            <div className="space-y-3">
+                                                <select
+                                                    value={selectedClassroom?.id || ''}
+                                                    onChange={e => {
+                                                        const cls = classrooms.find((c: any) => c.id === e.target.value) || null;
+                                                        setSelectedClassroom(cls);
+                                                    }}
+                                                    className="w-full h-12 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm focus:outline-none [color-scheme:dark]"
+                                                >
+                                                    <option value="" className="bg-[#111]">— Sélectionner une classe —</option>
+                                                    {classrooms.map((c: any) => (
+                                                        <option key={c.id} value={c.id} className="bg-[#111]">
+                                                            {c.name}{c.cycle ? ` (${c.cycle})` : ''}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                {classrooms.length <= 8 && (
+                                                    <div className="flex flex-wrap gap-2 pt-1">
+                                                        {classrooms.map((c: any) => (
+                                                            <button key={c.id} type="button"
+                                                                onClick={() => setSelectedClassroom(c)}
+                                                                className={cn(
+                                                                    'px-3 py-1.5 rounded-xl text-xs font-semibold border transition',
+                                                                    selectedClassroom?.id === c.id ? 'text-white border-transparent' : 'bg-white/5 border-white/10 text-slate-300'
+                                                                )}
+                                                                style={selectedClassroom?.id === c.id ? { background: bc } : {}}>
+                                                                {c.name}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : filieres.length > 0 ? (
+                                            <div className="grid sm:grid-cols-2 gap-2">
+                                                {filieres.map((f: any) => {
+                                                    const sel = selectedClassroom?.filiere_id === f.id;
+                                                    return (
+                                                        <button key={f.id} type="button"
+                                                            onClick={() => setSelectedClassroom({ id: null, name: f.nom, filiere_id: f.id })}
+                                                            className={cn('p-3 rounded-xl border text-xs font-semibold text-left flex items-center justify-between',
+                                                                sel ? 'text-white border-transparent' : 'bg-white/5 border-white/10 text-slate-300'
+                                                            )}
+                                                            style={sel ? { background: `${bc}25`, borderColor: bc } : {}}>
+                                                            <span>{f.nom}</span>
+                                                            {sel && <CheckCircle2 className="w-4 h-4" style={{ color: bc }} />}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <input
+                                                value={selectedClassroom?.name || ''}
+                                                onChange={e => setSelectedClassroom({ id: null, name: e.target.value })}
+                                                placeholder="Indiquez la formation souhaitée"
+                                                className="w-full h-11 bg-white/5 border border-white/10 rounded-xl px-4 text-sm text-white"
+                                            />
+                                        )}
+
+                                        <div className="pt-4 flex justify-end">
+                                            <Button onClick={() => {
+                                                if (!selectedClassroom) { toast.error('Veuillez sélectionner une classe ou filière'); return; }
+                                                setInscStep(1);
+                                            }} className="rounded-xl px-7 font-bold text-white" style={{ background: bc }}>
+                                                Continuer <ArrowRight className="w-4 h-4 ml-2" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {inscStep === 1 && (
+                                    <div className="space-y-3">
+                                        <div className="grid sm:grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="text-xs text-slate-400 mb-1 block">Prénom *</label>
+                                                <input value={inscForm.first_name} onChange={e => setInscForm(f => ({ ...f, first_name: e.target.value }))}
+                                                    placeholder="Prénom" className="w-full h-10 bg-white/5 border border-white/10 text-white rounded-xl px-3 text-sm" />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs text-slate-400 mb-1 block">Nom *</label>
+                                                <input value={inscForm.last_name} onChange={e => setInscForm(f => ({ ...f, last_name: e.target.value }))}
+                                                    placeholder="Nom de famille" className="w-full h-10 bg-white/5 border border-white/10 text-white rounded-xl px-3 text-sm" />
+                                            </div>
+                                        </div>
+                                        <div className="grid sm:grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="text-xs text-slate-400 mb-1 block">Téléphone (WhatsApp) *</label>
+                                                <input value={inscForm.phone} onChange={e => setInscForm(f => ({ ...f, phone: e.target.value }))}
+                                                    placeholder="+237 6XX XXX XXX" className="w-full h-10 bg-white/5 border border-white/10 text-white rounded-xl px-3 text-sm" />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs text-slate-400 mb-1 block">Email</label>
+                                                <input value={inscForm.email} onChange={e => setInscForm(f => ({ ...f, email: e.target.value }))}
+                                                    placeholder="email@exemple.com" className="w-full h-10 bg-white/5 border border-white/10 text-white rounded-xl px-3 text-sm" />
+                                            </div>
+                                        </div>
+                                        <div className="grid sm:grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="text-xs text-slate-400 mb-1 block">Quartier / Ville</label>
+                                                <input value={inscForm.address} onChange={e => setInscForm(f => ({ ...f, address: e.target.value }))}
+                                                    placeholder="Ex: Akwa, Douala" className="w-full h-10 bg-white/5 border border-white/10 text-white rounded-xl px-3 text-sm" />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs text-slate-400 mb-1 block">Tuteur / Contact d&apos;urgence</label>
+                                                <input value={inscForm.guardian_phone} onChange={e => setInscForm(f => ({ ...f, guardian_phone: e.target.value }))}
+                                                    placeholder="Numéro du tuteur" className="w-full h-10 bg-white/5 border border-white/10 text-white rounded-xl px-3 text-sm" />
+                                            </div>
+                                        </div>
+                                        <div className="pt-3 flex justify-between">
+                                            <Button variant="outline" onClick={() => setInscStep(0)} className="rounded-xl text-xs">← Retour</Button>
+                                            <Button onClick={() => {
+                                                if (!inscForm.first_name || !inscForm.last_name || !inscForm.phone) {
+                                                    toast.error('Prénom, nom et téléphone requis'); return;
+                                                }
+                                                setInscStep(2);
+                                            }} className="rounded-xl px-7 font-bold text-white text-xs" style={{ background: bc }}>
+                                                Étape suivante <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {inscStep === 2 && (
+                                    <div className="space-y-4">
+                                        <div className="text-center space-y-1">
+                                            <h4 className="text-sm font-bold text-white">Créez votre Code PIN de Connexion</h4>
+                                            <p className="text-xs text-slate-400">Choisissez 4 chiffres pour vous connecter à votre espace étudiant</p>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <div className="flex gap-2 justify-center">
+                                                {inscPin.map((d, i) => (
+                                                    <input key={i} id={`mpin-${i}`} type="password" inputMode="numeric" maxLength={1}
+                                                        value={d}
+                                                        onChange={e => {
+                                                            const val = e.target.value.replace(/\D/g, '').slice(0, 1);
+                                                            const next = [...inscPin]; next[i] = val; setInscPin(next);
+                                                            if (val && i < 3) document.getElementById(`mpin-${i + 1}`)?.focus();
+                                                        }}
+                                                        className="w-12 h-12 text-center text-xl font-bold bg-white/10 border border-white/15 rounded-xl text-white focus:outline-none"
+                                                    />
+                                                ))}
+                                            </div>
+                                            <p className="text-[10px] text-center text-slate-500">Confirmez votre PIN :</p>
+                                            <div className="flex gap-2 justify-center">
+                                                {inscPinConfirm.map((d, i) => (
+                                                    <input key={i} id={`mcpin-${i}`} type="password" inputMode="numeric" maxLength={1}
+                                                        value={d}
+                                                        onChange={e => {
+                                                            const val = e.target.value.replace(/\D/g, '').slice(0, 1);
+                                                            const next = [...inscPinConfirm]; next[i] = val; setInscPinConfirm(next);
+                                                            if (val && i < 3) document.getElementById(`mcpin-${i + 1}`)?.focus();
+                                                        }}
+                                                        className="w-12 h-12 text-center text-xl font-bold bg-white/10 border border-white/15 rounded-xl text-white focus:outline-none"
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="pt-3 flex justify-between">
+                                            <Button variant="outline" onClick={() => setInscStep(1)} className="rounded-xl text-xs">← Retour</Button>
+                                            <Button onClick={handleInscription} disabled={inscSubmitting}
+                                                className="rounded-xl px-7 font-black text-white text-xs shadow-lg"
+                                                style={{ background: bc }}>
+                                                {inscSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Valider mon Inscription'}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* ═══ MODAL CONSERVEZ VOS ACCÈS ═════════════════════════ */}
             <AnimatePresence>
