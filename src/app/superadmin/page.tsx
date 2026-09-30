@@ -1139,6 +1139,11 @@ export default function SuperAdminPage() {
                                     orgs={orgs as any}
                                     loading={dataLoading}
                                     onRefresh={loadAllData}
+                                    onOrgUpdated={(updatedOrg) => {
+                                        setOrgs(prev => prev.map(o =>
+                                            o.id === updatedOrg.id ? { ...o, ...updatedOrg } : o
+                                        ));
+                                    }}
                                     onToggleActive={toggleOrg as any}
                                     onVerifyDomain={verifyDomain as any}
                                     onDeleteOrg={setDeleteConfirm as any}

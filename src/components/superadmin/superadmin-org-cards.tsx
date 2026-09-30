@@ -51,6 +51,7 @@ interface SuperadminOrgCardsProps {
     orgs: OrgCardItem[];
     loading: boolean;
     onRefresh: () => void;
+    onOrgUpdated?: (updatedOrg: OrgCardItem) => void;
     onToggleActive: (org: OrgCardItem) => Promise<void>;
     onVerifyDomain: (org: OrgCardItem) => Promise<void>;
     onDeleteOrg: (org: OrgCardItem) => void;
@@ -60,6 +61,7 @@ export function SuperadminOrgCards({
     orgs,
     loading,
     onRefresh,
+    onOrgUpdated,
     onToggleActive,
     onVerifyDomain,
     onDeleteOrg
@@ -386,15 +388,18 @@ export function SuperadminOrgCards({
                 throw new Error(lastError || 'Erreur lors de la mise à jour de l\'établissement');
             }
 
-            // Mise à jour optimiste immédiate en mémoire
-            editOrg.name = newName;
-            editOrg.slug = newSlug;
-            editOrg.school_type = editType;
-            editOrg.city = editCity.trim();
-            editOrg.country = editCountry.trim();
-            editOrg.phone = editPhone.trim();
-            editOrg.email = editEmail.trim();
-            editOrg.custom_domain = editCustomDomain.trim() || null;
+            // Construire l'objet mis à jour pour la propagation immédiate
+            const updatedOrg: OrgCardItem = {
+                ...editOrg,
+                name: newName,
+                slug: newSlug,
+                school_type: editType,
+                city: editCity.trim(),
+                country: editCountry.trim(),
+                phone: editPhone.trim(),
+                email: editEmail.trim(),
+                custom_domain: editCustomDomain.trim() || null,
+            };
 
             // Sync localStorage cache for immediate reflection
             if (typeof window !== 'undefined') {
@@ -409,7 +414,13 @@ export function SuperadminOrgCards({
 
             toast.success(`Établissement "${newName}" mis à jour avec succès !`);
             setEditOrg(null);
-            onRefresh();
+
+            // Mise à jour optimiste immédiate dans le state parent (évite que loadAllData écrase les changements)
+            if (onOrgUpdated) {
+                onOrgUpdated(updatedOrg);
+            }
+            // Refresh différé pour synchroniser depuis la DB (200ms de délai pour laisser l'écriture se propager)
+            setTimeout(() => onRefresh(), 800);
         } catch (err: any) {
             toast.error('Erreur: ' + err.message);
         } finally {
