@@ -59,14 +59,24 @@ export function SchoolTypeBanner({ org, config, onTypeChanged }: SchoolTypeBanne
     const handleChangeType = async (typeId: string) => {
         setUpdating(true);
         try {
+            const DB_TYPE_MAP: Record<string, string> = {
+                centre_formation: 'centre_formation',
+                formateur_independant: 'centre_formation',
+                academie_en_ligne: 'centre_formation',
+                lycee: 'lycee',
+                college: 'college',
+                universite: 'universite',
+            };
+            const mappedType = DB_TYPE_MAP[typeId] || 'autre';
+
             const { error } = await supabase
                 .from('organizations')
-                .update({ school_type: typeId })
+                .update({ school_type: typeId, type: mappedType })
                 .eq('id', org.id);
 
             if (error) throw error;
 
-            toast.success(`Mode mis à jour : ${typeId}`);
+            toast.success(`Mode mis à jour avec succès !`);
             onTypeChanged(typeId);
             setShowModal(false);
         } catch (e: any) {

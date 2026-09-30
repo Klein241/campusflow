@@ -10,6 +10,7 @@ import {
 const LEADS_STORAGE_KEY = 'iziteach_superadmin_leads';
 const CAMPAIGNS_STORAGE_KEY = 'iziteach_superadmin_campaigns';
 const CREATIVES_STORAGE_KEY = 'iziteach_superadmin_creatives';
+const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || 'https://campusflow-worker.kleintaptue1.workers.dev';
 
 // Initial sample data for instant richness
 const DEFAULT_LEADS: MarketingLead[] = [
@@ -254,7 +255,33 @@ export const marketingService = {
         const targetType = query.target_type || 'ecoles_privees';
         const keywords = query.keywords || 'Directeur, Proviseur, Formation';
 
-        // Base de données de prospection ciblée par pays
+        // 1. Appel API DeepSeek V4 Flash / Workers AI via Cloudflare Worker
+        try {
+            const res = await fetch(`${WORKER_URL}/api/marketing/ai-deep-research`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    country: rawCountry,
+                    city: rawCity,
+                    target_type: targetType,
+                    keywords,
+                    sources: query.sources,
+                    count: 6,
+                })
+            });
+            const data = await res.json() as any;
+            if (res.ok && data.success && Array.isArray(data.leads) && data.leads.length > 0) {
+                const generatedLeads: MarketingLead[] = data.leads;
+                const current = this.getLeads();
+                const merged = [...generatedLeads, ...current.filter(c => !generatedLeads.some(g => g.organization_name === c.organization_name))];
+                this.saveLeads(merged);
+                return generatedLeads;
+            }
+        } catch (apiErr) {
+            console.warn('[MarketingService] AI Deep Research endpoint fallback:', apiErr);
+        }
+
+        // 2. Base de données locale de secours si offline
         const countryDatabases: Record<string, {
             name: string;
             tld: string;
@@ -486,14 +513,33 @@ export const marketingService = {
         localStorage.setItem(CREATIVES_STORAGE_KEY, JSON.stringify(creatives));
     },
 
-    generateAdCreative(payload: {
+    async generateAdCreative(payload: {
         product: string;
         target_audience: string;
         tone: string;
         format: MarketingCreative['format'];
         reference_image_url?: string;
         custom_instructions?: string;
-    }): MarketingCreative {
+    }): Promise<MarketingCreative> {
+        // 1. Appel API DeepSeek V4 Flash / Workers AI via Cloudflare Worker
+        try {
+            const res = await fetch(`${WORKER_URL}/api/marketing/ai-generate-creatives`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json() as any;
+            if (res.ok && data.success && data.creative) {
+                const creatives = this.getCreatives();
+                creatives.unshift(data.creative);
+                this.saveCreatives(creatives);
+                return data.creative;
+            }
+        } catch (apiErr) {
+            console.warn('[MarketingService] AI creative generation fallback:', apiErr);
+        }
+
+        // 2. Modèle de secours
         const formatHeadlines: Record<string, string> = {
             email_banner: `La Solution IA tout-en-un pour votre Établissement`,
             social_post: `🚀 Dites adieu aux bulletins manuels et aux retards administratifs !`,
@@ -520,6 +566,38 @@ export const marketingService = {
         this.saveCreatives(creatives);
 
         return newCreative;
+    },
+
+    // ── SMART REPLY & IA CLOSER ──────────────────────────────
+    async smartReply(payload: { lead_name: string; lead_role?: string; org_name: string; message: string; context?: string }): Promise<string> {
+        try {
+            const res = await fetch(`${WORKER_URL}/api/marketing/ai-smart-reply`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json() as any;
+            if (res.ok && data.success && data.reply) {
+                return data.reply;
+            }
+        } catch {}
+        return `Bonjour ${payload.lead_name},\n\nMerci beaucoup pour votre intérêt pour notre suite scolaire IziTeach Pro au sein de ${payload.org_name}.\n\nNotre solution s'adapte parfaitement à vos besoins : déploiement en 24h, formation incluse et support prioritaire 7j/7.\n\nSeriez-vous disponible cette semaine pour planifier un créneau de démonstration en direct de 15 minutes ?\n\nExcellente journée,\nL'équipe IziTeach Pro`;
+    },
+
+    // ── SÉQUENCE DRIP IA ─────────────────────────────────────
+    async generateSequence(payload: { campaign_name?: string; target_type?: string; goal?: string }): Promise<any[]> {
+        try {
+            const res = await fetch(`${WORKER_URL}/api/marketing/ai-generate-sequence`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json() as any;
+            if (res.ok && data.success && Array.isArray(data.sequence)) {
+                return data.sequence;
+            }
+        } catch {}
+        return [];
     },
 
     // ── STATS & KPIS ─────────────────────────────────────────

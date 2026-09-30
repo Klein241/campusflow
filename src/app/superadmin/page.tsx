@@ -48,6 +48,8 @@ interface Stats {
     new_orgs_week: number;
 }
 
+const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || 'https://campusflow-worker.kleintaptue1.workers.dev';
+
 // OrgItem is now imported as OrgCardItem from superadmin-org-cards
 type OrgItem = OrgCardItem;
 
@@ -384,13 +386,25 @@ export default function SuperAdminPage() {
     const handleDeleteOrg = async () => {
         if (!deleteConfirm) return;
         setDeleting(true);
-        const { error } = await supabase.rpc('superadmin_delete_org', { p_org_id: deleteConfirm.id });
-        if (error) { toast.error(error.message); setDeleting(false); return; }
-        setOrgs(prev => prev.filter(o => o.id !== deleteConfirm.id));
-        toast.success(`🗑️ Organisation "${deleteConfirm.name}" supprimée`);
-        setDeleteConfirm(null);
-        setDeleting(false);
-        loadAllData(); // refresh stats
+        try {
+            const res = await fetch(`${WORKER_URL}/api/superadmin/org/delete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ org_id: deleteConfirm.id }),
+            });
+            const data = await res.json() as any;
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || 'Erreur lors de la suppression');
+            }
+            setOrgs(prev => prev.filter(o => o.id !== deleteConfirm.id));
+            toast.success(`🗑️ Organisation "${deleteConfirm.name}" supprimée définitivement`);
+            setDeleteConfirm(null);
+            loadAllData();
+        } catch (err: any) {
+            toast.error(err.message || 'Erreur suppression');
+        } finally {
+            setDeleting(false);
+        }
     };
 
     // ─── Announcements Handlers ──────────────────────────────────

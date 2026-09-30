@@ -41,10 +41,16 @@ import {
 import { handleEmailSend, handleEmailStatus, handleInscription } from './services/email';
 import { handleR2Upload, handleR2Delete, handleR2List, handleR2Serve } from './services/r2';
 import { handleMcpGateway } from './mcp/gateway';
-import { syncToSupabase } from './mcp/tools';
+import { syncToSupabase, fetchSupabaseRest, fetchSupabaseRestOrThrow } from './mcp/tools';
 import { handleSkyAgentChat, handleSkyAgentClearSession } from './services/sky-agent';
 import { triggerDailyExecutiveReport } from './services/autonomous-report';
 import { createAutopilotSchool, interactWithAutopilotAdmin, runAutopilotCampusPulse } from './services/autopilot-school';
+import {
+    handleAiDeepResearch,
+    handleAiGenerateCreatives,
+    handleAiSmartReply,
+    handleAiGenerateSequence
+} from './services/marketing-ai';
 import { handleCron, handleAgentWebhook } from './cron';
 import { translateTextWithAi, IZITEACH_SUPPORTED_LANGUAGES } from './services/ai';
 
@@ -267,6 +273,142 @@ export default {
 
             // ── Inscription (bypass RLS) ──
             if (pathname === '/api/inscription' && method === 'POST') return handleInscription(request, env);
+
+            // ── Superadmin : Modification Fiable d'Organisation (Bypass RLS) ──
+            if (pathname === '/api/superadmin/org/update' && method === 'POST') {
+                try {
+                    const body = await request.json() as any;
+                    const { org_id, name, slug, type, school_type, city, country, phone, email, custom_domain } = body;
+                    if (!org_id) return jsonResponse({ error: 'org_id requis' }, 400);
+
+                    // ── Normalise le type affiché → valeur enum DB ──
+                    const TYPE_MAP: Record<string, string> = {
+                        'Lycée': 'lycee', 'lycee': 'lycee', 'lycée': 'lycee',
+                        'Collège': 'college', 'college': 'college', 'collège': 'college',
+                        'Université': 'universite', 'universite': 'universite', 'université': 'universite',
+                        'Centre de formation': 'centre_formation', 'centre_formation': 'centre_formation',
+                        'Institut': 'institut', 'institut': 'institut',
+                        'Autre': 'autre', 'autre': 'autre',
+                        // Pro types passés tels quels
+                        'academie_en_ligne': 'centre_formation',
+                        'k12_school': 'lycee',
+                    };
+                    const normalizeType = (t: string | undefined): string | undefined => {
+                        if (!t) return undefined;
+                        return TYPE_MAP[t] || TYPE_MAP[t.toLowerCase()] || t.toLowerCase();
+                    };
+
+                    const updatePayload: Record<string, any> = {};
+                    if (name !== undefined) updatePayload.name = name.trim();
+                    if (slug !== undefined) updatePayload.slug = slug.trim().toLowerCase();
+                    // type (DB enum) est normalisé ; school_type (texte libre) est conservé tel quel
+                    if (type !== undefined) updatePayload.type = normalizeType(type);
+                    if (school_type !== undefined) updatePayload.school_type = school_type;
+                    if (city !== undefined) updatePayload.city = city.trim();
+                    if (country !== undefined) updatePayload.country = country.trim();
+                    if (phone !== undefined) updatePayload.phone = phone.trim();
+                    if (email !== undefined) updatePayload.email = email.trim();
+                    if (custom_domain !== undefined) updatePayload.custom_domain = custom_domain ? custom_domain.trim() : null;
+
+                    const updated = await fetchSupabaseRestOrThrow(env, `organizations?id=eq.${encodeURIComponent(org_id)}`, {
+                        method: 'PATCH',
+                        body: updatePayload,
+                    });
+
+                    // Cascade si le slug a changé
+                    if (slug) {
+                        const newSlug = slug.trim().toLowerCase();
+                        await Promise.allSettled([
+                            fetchSupabaseRest(env, `student_profiles?organization_id=eq.${encodeURIComponent(org_id)}`, { method: 'PATCH', body: { org_slug: newSlug } }),
+                            fetchSupabaseRest(env, `teacher_profiles?organization_id=eq.${encodeURIComponent(org_id)}`, { method: 'PATCH', body: { org_slug: newSlug } }),
+                            fetchSupabaseRest(env, `student_pending_registrations?organization_id=eq.${encodeURIComponent(org_id)}`, { method: 'PATCH', body: { org_slug: newSlug } }),
+                            fetchSupabaseRest(env, `admin_recovery_requests?org_id=eq.${encodeURIComponent(org_id)}`, { method: 'PATCH', body: { org_slug: newSlug } }),
+                        ]);
+                    }
+
+                    return jsonResponse({ success: true, org: updated?.[0] || updatePayload });
+                } catch (e: any) {
+                    return jsonResponse({ error: e.message || 'Erreur mise à jour organisation' }, 500);
+                }
+            }
+
+            // ── Superadmin : Suppression Définitive d'Organisation en Cascade ──
+            if (pathname === '/api/superadmin/org/delete' && method === 'POST') {
+                try {
+                    const body = await request.json() as any;
+                    const { org_id } = body;
+                    if (!org_id) return jsonResponse({ error: 'org_id requis' }, 400);
+
+                    console.log(`[SuperadminDelete] 🗑️ Suppression définitive en cascade de l'organisation : ${org_id}`);
+
+                    const tablesToClean = [
+                        'grades',
+                        'evaluations',
+                        'attendance',
+                        'timetable_slots',
+                        'student_profiles',
+                        'teacher_profiles',
+                        'inscription_requests',
+                        'student_pending_registrations',
+                        'exercise_submissions',
+                        'exercises',
+                        'lessons',
+                        'chapters',
+                        'subjects',
+                        'classrooms',
+                        'announcements',
+                        'admin_notifications',
+                        'admin_recovery_requests',
+                        'marketplace_orders',
+                        'marketplace_products',
+                        'library_items',
+                        'ai_agent_logs',
+                        'ai_pending_actions',
+                        'dame_sky_config',
+                        'sky_point_requests',
+                        'filieres',
+                    ];
+
+                    for (const table of tablesToClean) {
+                        try {
+                            const col = (table === 'admin_recovery_requests' || table === 'filieres') ? 'org_id' : 'organization_id';
+                            await fetchSupabaseRest(env, `${table}?${col}=eq.${encodeURIComponent(org_id)}`, {
+                                method: 'DELETE',
+                            });
+                        } catch {}
+                    }
+
+                    // Suppression finale de la ligne organisation
+                    await fetchSupabaseRest(env, `organizations?id=eq.${encodeURIComponent(org_id)}`, {
+                        method: 'DELETE',
+                    });
+
+                    return jsonResponse({
+                        success: true,
+                        deleted_id: org_id,
+                        message: 'Établissement et toutes ses données supprimés définitivement avec succès.'
+                    });
+                } catch (e: any) {
+                    return jsonResponse({ error: e.message || 'Erreur suppression définitive' }, 500);
+                }
+            }
+
+            // ── Marketing & IA (DeepSeek V4 Flash / Workers AI en Production) ──
+            if (pathname === '/api/marketing/ai-deep-research' && method === 'POST') {
+                return handleAiDeepResearch(request, env);
+            }
+
+            if (pathname === '/api/marketing/ai-generate-creatives' && method === 'POST') {
+                return handleAiGenerateCreatives(request, env);
+            }
+
+            if (pathname === '/api/marketing/ai-smart-reply' && method === 'POST') {
+                return handleAiSmartReply(request, env);
+            }
+
+            if (pathname === '/api/marketing/ai-generate-sequence' && method === 'POST') {
+                return handleAiGenerateSequence(request, env);
+            }
 
             // ── Marketing Email Tracking (Pixel 1x1 & Click Redirect) ──
             if (pathname.startsWith('/api/marketing/track-open/') || pathname.startsWith('/track-open/')) {

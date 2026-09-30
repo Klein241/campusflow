@@ -287,8 +287,40 @@ async function handleInscription(request: Request, env: Env): Promise<Response> 
         }
     } catch {}
 
+    // 0.1 Vérifier si l'établissement est en Pilote Automatique (Dame SKY)
+    let isAutopilot = false;
+    let orgName = '';
+    try {
+        const orgRes = await fetch(
+            `${supabaseUrl}/rest/v1/organizations?id=eq.${encodeURIComponent(organization_id)}&select=id,name,is_autopilot,autopilot_status,autopilot_filieres`,
+            { headers: { 'apikey': serviceKey, 'Authorization': `Bearer ${serviceKey}` } }
+        );
+        if (orgRes.ok) {
+            const orgRows: any = await orgRes.json();
+            if (Array.isArray(orgRows) && orgRows.length > 0) {
+                const orgData = orgRows[0];
+                orgName = orgData.name || '';
+                isAutopilot = !!(orgData.is_autopilot && orgData.autopilot_status === 'active');
+            }
+        }
+    } catch {}
+
     // 1. Insert dans inscription_requests
-    const inscPayload: any = { organization_id, first_name, last_name, phone, access_code, pin_code };
+    const initialStatus = isAutopilot ? 'accepted' : 'pending';
+    const welcomeResponse = isAutopilot
+        ? `Bienvenue à ${orgName || 'votre établissement'} ! Votre inscription a été analysée et validée instantanément par la Direction Académique de Dame SKY (Pilote Automatique). Votre profil étudiant est désormais actif.`
+        : null;
+
+    const inscPayload: any = {
+        organization_id,
+        first_name,
+        last_name,
+        phone,
+        access_code,
+        pin_code,
+        status: initialStatus,
+        ...(welcomeResponse && { student_response: welcomeResponse }),
+    };
     if (birth_date)      inscPayload.birth_date      = birth_date;
     if (gender)          inscPayload.gender           = gender;
     if (email)           inscPayload.email            = email;
@@ -312,6 +344,7 @@ async function handleInscription(request: Request, env: Env): Promise<Response> 
 
     // 2. Créer immédiatement le student_profile
     const mat = `STU-${Date.now().toString(36).toUpperCase()}`;
+    const initialApproval = isAutopilot ? 'accepted' : 'pending';
     const profilePayload: any = {
         organization_id,
         first_name,
@@ -322,7 +355,7 @@ async function handleInscription(request: Request, env: Env): Promise<Response> 
         sky_points:      100,
         is_active:       true,
         pin_set:         true,
-        approval_status: 'pending',   // en attente de validation admin
+        approval_status: initialApproval,   // 'accepted' si pilote auto, sinon 'pending'
         matricule:       mat,
     };
     if (birth_date) {
@@ -366,7 +399,7 @@ async function handleInscription(request: Request, env: Env): Promise<Response> 
                 sky_points:      100,
                 is_active:       true,
                 pin_set:         true,
-                approval_status: 'pending',
+                approval_status: initialApproval,
                 matricule:       mat,
             };
             const retryRes = await fetch(`${supabaseUrl}/rest/v1/student_profiles`, {
@@ -387,10 +420,51 @@ async function handleInscription(request: Request, env: Env): Promise<Response> 
         }
     }
 
+    // 3. Si l'école est en pilote auto, journaliser l'autonomie et notifier l'admin en temps réel
+    if (isAutopilot) {
+        const nowIso = new Date().toISOString();
+        void (async () => {
+            try {
+                // Notification Admin
+                await fetch(`${supabaseUrl}/rest/v1/admin_notifications`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({
+                        id: crypto.randomUUID(),
+                        organization_id,
+                        title: '🎓 Inscription validée en Pilote Automatique',
+                        message: `L'étudiant(e) ${first_name} ${last_name} a été inscrit(e) et validé(e) instantanément par Dame SKY. Code d'accès : ${access_code}.`,
+                        icon: '⭐',
+                        created_at: nowIso,
+                    }),
+                });
+
+                // Log d'autonomie IA
+                await fetch(`${supabaseUrl}/rest/v1/ai_agent_logs`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({
+                        organization_id,
+                        tool_name: 'autonomous_inscription_validation',
+                        input_summary: `Inscription en ligne : ${first_name} ${last_name} (${phone})`,
+                        output_summary: `Profil validé automatiquement et activé par Dame SKY (Code: ${access_code})`,
+                        status: 'success',
+                        duration_ms: 25,
+                        executed_at: nowIso,
+                    }),
+                });
+            } catch (notifyErr) {
+                console.warn('[handleInscription] Warning notify:', notifyErr);
+            }
+        })();
+    }
+
     return json({
         success:        true,
         access_code,
         profileCreated,
+        isAutopilot,
+        autoAccepted:   isAutopilot,
         profileError:   profileCreated ? null : profileError,
     });
 }

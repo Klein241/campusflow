@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { marketingService } from './marketing-service';
 
 interface ProspectMessage {
     id: string;
@@ -53,6 +54,7 @@ export function ProspectInboxView() {
     const [selectedMessage, setSelectedMessage] = useState<ProspectMessage | null>(messages[0]);
     const [replyText, setReplyText] = useState(messages[0]?.suggested_reply || '');
     const [isSending, setIsSending] = useState(false);
+    const [isGeneratingReply, setIsGeneratingReply] = useState(false);
 
     const handleSelectMessage = (msg: ProspectMessage) => {
         setSelectedMessage(msg);
@@ -73,12 +75,22 @@ export function ProspectInboxView() {
         }
     };
 
-    const handleGenerateAiReply = () => {
+    const handleGenerateAiReply = async () => {
         if (!selectedMessage) return;
-        setReplyText(
-            `Bonjour ${selectedMessage.contact_name},\n\nMerci beaucoup pour votre retour d'intérêt pour IziTeach School Suite au sein de ${selectedMessage.organization_name}.\n\nNotre solution répond parfaitement à votre besoin : déploiement en 24h, formation incluse et support prioritaire 7j/7.\n\nJe reste à votre entière disposition pour planifier un créneau de démo selon vos disponibilités.\n\nExcellente journée,\nL'équipe IziTeach Pro`
-        );
-        toast.success('✨ Réponse IA optimisée générée !');
+        setIsGeneratingReply(true);
+        try {
+            const reply = await marketingService.smartReply({
+                lead_name: selectedMessage.contact_name,
+                org_name: selectedMessage.organization_name,
+                message: selectedMessage.message_text,
+            });
+            setReplyText(reply);
+            toast.success('✨ Réponse IA générée en temps réel avec DeepSeek !');
+        } catch {
+            toast.error('Erreur lors de la génération de la réponse IA');
+        } finally {
+            setIsGeneratingReply(false);
+        }
     };
 
     return (
@@ -169,9 +181,11 @@ export function ProspectInboxView() {
                                     </label>
                                     <button
                                         onClick={handleGenerateAiReply}
-                                        className="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1"
+                                        disabled={isGeneratingReply}
+                                        className="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 disabled:opacity-50"
                                     >
-                                        <Sparkles className="w-3.5 h-3.5" /> Régénérer la réponse
+                                        <Sparkles className={`w-3.5 h-3.5 ${isGeneratingReply ? 'animate-spin' : ''}`} />
+                                        {isGeneratingReply ? 'Génération DeepSeek...' : 'Régénérer avec l\'IA'}
                                     </button>
                                 </div>
 

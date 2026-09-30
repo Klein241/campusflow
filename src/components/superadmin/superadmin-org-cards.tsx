@@ -23,6 +23,7 @@ export interface OrgCardItem {
     name: string;
     slug: string;
     school_type: string;
+    type?: string;
     city: string;
     country: string;
     custom_domain: string | null;
@@ -72,6 +73,12 @@ export function SuperadminOrgCards({
     const [pointsModalOrg, setPointsModalOrg] = useState<OrgCardItem | null>(null);
     const [pointsDelta, setPointsDelta] = useState(1000);
     const [savingPoints, setSavingPoints] = useState(false);
+
+    // ═══ DELETE MODAL STATE & WORKER URL ═══
+    const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || 'https://campusflow-worker.kleintaptue1.workers.dev';
+    const [deleteModalOrg, setDeleteModalOrg] = useState<OrgCardItem | null>(null);
+    const [deletingOrg, setDeletingOrg] = useState(false);
+    const [confirmOrgName, setConfirmOrgName] = useState('');
 
     // Badge modal
     const [badgeModalOrg, setBadgeModalOrg] = useState<OrgCardItem | null>(null);
@@ -211,7 +218,15 @@ export function SuperadminOrgCards({
         setEditOrg(org);
         setEditName(org.name || '');
         setEditSlug(org.slug || '');
-        setEditType(org.school_type || 'Lycée');
+        const rawType = (org.school_type || org.type || 'lycee').toLowerCase();
+        let initialType = 'lycee';
+        if (rawType.includes('coll')) initialType = 'college';
+        else if (rawType.includes('univ')) initialType = 'universite';
+        else if (rawType.includes('form') || rawType.includes('acad') || rawType.includes('centr')) initialType = 'centre_formation';
+        else if (rawType.includes('inst')) initialType = 'institut';
+        else if (rawType.includes('autre')) initialType = 'autre';
+        else if (rawType.includes('lyc')) initialType = 'lycee';
+        setEditType(initialType);
         setEditCity(org.city || '');
         setEditCountry(org.country || '');
         setEditPhone(org.phone || '');
@@ -259,36 +274,127 @@ export function SuperadminOrgCards({
                 }
             }
 
-            const { error } = await supabase
-                .from('organizations')
-                .update({
-                    name: newName,
-                    slug: newSlug,
-                    type: editType,
-                    school_type: editType,
-                    city: editCity.trim(),
-                    country: editCountry.trim(),
-                    phone: editPhone.trim(),
-                    email: editEmail.trim(),
-                    custom_domain: editCustomDomain.trim() || null
-                })
-                .eq('id', editOrg.id);
+            // Normalisation stricte pour la DB enum : 'college','lycee','universite','centre_formation','institut','autre'
+            const TYPE_MAP: Record<string, string> = {
+                'lycee': 'lycee', 'lycée': 'lycee', 'Lycée': 'lycee',
+                'college': 'college', 'collège': 'college', 'Collège': 'college',
+                'universite': 'universite', 'université': 'universite', 'Université': 'universite',
+                'centre_formation': 'centre_formation', 'Centre de formation': 'centre_formation',
+                'institut': 'institut', 'Institut': 'institut',
+                'autre': 'autre', 'Autre': 'autre',
+                'academie_en_ligne': 'centre_formation',
+                'formateur_independant': 'centre_formation',
+                'k12_school': 'lycee',
+            };
+            const dbType = TYPE_MAP[editType] || TYPE_MAP[editType.toLowerCase()] || 'autre';
 
-            if (error) throw error;
+            let savedSuccessfully = false;
+            let lastError = '';
 
-            // Cascade updates to all related tables if slug changed
-            if (oldSlug !== newSlug) {
+            // NIVEAU 1 : Appel direct via RPC Supabase Security Definer (Priorité absolue & Bypass RLS garanti)
+            try {
+                const { data: rpcData, error: rpcErr } = await supabase.rpc('superadmin_update_org', {
+                    p_org_id: editOrg.id,
+                    p_name: newName,
+                    p_slug: newSlug,
+                    p_type: dbType,
+                    p_school_type: editType,
+                    p_city: editCity.trim(),
+                    p_country: editCountry.trim(),
+                    p_phone: editPhone.trim(),
+                    p_email: editEmail.trim(),
+                    p_custom_domain: editCustomDomain.trim() || null
+                });
+                if (!rpcErr && rpcData?.success) {
+                    savedSuccessfully = true;
+                } else if (rpcErr) {
+                    lastError = rpcErr.message;
+                }
+            } catch (rpcEx: any) {
+                lastError = rpcEx?.message || '';
+            }
+
+            // NIVEAU 2 : Mise à jour directe Supabase avec politique RLS superadmin
+            if (!savedSuccessfully) {
                 try {
-                    await Promise.allSettled([
-                        supabase.from('student_profiles').update({ org_slug: newSlug }).eq('organization_id', editOrg.id),
-                        supabase.from('teacher_profiles').update({ org_slug: newSlug }).eq('organization_id', editOrg.id),
-                        supabase.from('student_pending_registrations').update({ org_slug: newSlug }).eq('organization_id', editOrg.id),
-                        supabase.from('admin_recovery_requests').update({ org_slug: newSlug }).eq('org_id', editOrg.id),
-                    ]);
-                } catch (cascadeErr) {
-                    console.warn('Cascade update warning:', cascadeErr);
+                    const { error: directErr } = await supabase
+                        .from('organizations')
+                        .update({
+                            name: newName,
+                            slug: newSlug,
+                            type: dbType,
+                            school_type: editType,
+                            city: editCity.trim(),
+                            country: editCountry.trim(),
+                            phone: editPhone.trim(),
+                            email: editEmail.trim(),
+                            custom_domain: editCustomDomain.trim() || null,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', editOrg.id);
+
+                    if (!directErr) {
+                        savedSuccessfully = true;
+                        // Cascade manuelle du slug
+                        if (newSlug !== oldSlug) {
+                            await Promise.allSettled([
+                                supabase.from('student_profiles').update({ org_slug: newSlug }).eq('organization_id', editOrg.id),
+                                supabase.from('teacher_profiles').update({ org_slug: newSlug }).eq('organization_id', editOrg.id),
+                                supabase.from('student_pending_registrations').update({ org_slug: newSlug }).eq('organization_id', editOrg.id),
+                                supabase.from('admin_recovery_requests').update({ org_slug: newSlug }).eq('org_id', editOrg.id),
+                            ]);
+                        }
+                    } else {
+                        lastError = directErr.message;
+                    }
+                } catch (dirEx: any) {
+                    lastError = dirEx?.message || lastError;
                 }
             }
+
+            // NIVEAU 3 : Repli via Worker Cloudflare (Bypass RLS via Service Key)
+            if (!savedSuccessfully) {
+                try {
+                    const res = await fetch(`${WORKER_URL}/api/superadmin/org/update`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            org_id: editOrg.id,
+                            name: newName,
+                            slug: newSlug,
+                            type: dbType,
+                            school_type: editType,
+                            city: editCity.trim(),
+                            country: editCountry.trim(),
+                            phone: editPhone.trim(),
+                            email: editEmail.trim(),
+                            custom_domain: editCustomDomain.trim() || null
+                        })
+                    });
+                    const data = await res.json() as any;
+                    if (res.ok && data.success) {
+                        savedSuccessfully = true;
+                    } else {
+                        lastError = data.error || lastError || 'Erreur worker';
+                    }
+                } catch (wErr: any) {
+                    lastError = wErr?.message || lastError;
+                }
+            }
+
+            if (!savedSuccessfully) {
+                throw new Error(lastError || 'Erreur lors de la mise à jour de l\'établissement');
+            }
+
+            // Mise à jour optimiste immédiate en mémoire
+            editOrg.name = newName;
+            editOrg.slug = newSlug;
+            editOrg.school_type = editType;
+            editOrg.city = editCity.trim();
+            editOrg.country = editCountry.trim();
+            editOrg.phone = editPhone.trim();
+            editOrg.email = editEmail.trim();
+            editOrg.custom_domain = editCustomDomain.trim() || null;
 
             // Sync localStorage cache for immediate reflection
             if (typeof window !== 'undefined') {
@@ -308,6 +414,31 @@ export function SuperadminOrgCards({
             toast.error('Erreur: ' + err.message);
         } finally {
             setSavingEdit(false);
+        }
+    };
+
+    // ═══ GESTIONNAIRE DE SUPPRESSION DÉFINITIVE D'ORGANISATION ═══
+    const handleExecuteDeleteOrg = async () => {
+        if (!deleteModalOrg) return;
+        setDeletingOrg(true);
+        try {
+            const res = await fetch(`${WORKER_URL}/api/superadmin/org/delete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ org_id: deleteModalOrg.id })
+            });
+            const data = await res.json() as any;
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || 'Erreur lors de la suppression');
+            }
+            toast.success(`🗑️ L'établissement "${deleteModalOrg.name}" et toutes ses données ont été supprimés définitivement.`);
+            setDeleteModalOrg(null);
+            setConfirmOrgName('');
+            onRefresh();
+        } catch (e: any) {
+            toast.error('Erreur suppression : ' + (e.message || 'Inconnue'));
+        } finally {
+            setDeletingOrg(false);
         }
     };
 
@@ -1000,9 +1131,13 @@ export function SuperadminOrgCards({
                                         <Button
                                             size="sm"
                                             variant="ghost"
-                                            onClick={() => onDeleteOrg(org)}
+                                            onClick={() => {
+                                                setDeleteModalOrg(org);
+                                                setConfirmOrgName('');
+                                                onDeleteOrg(org);
+                                            }}
                                             className="h-7 px-2 text-[10px] text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg"
-                                            title="Supprimer définitivement"
+                                            title="Supprimer définitivement cet établissement"
                                         >
                                             <Trash2 className="w-3 h-3" />
                                         </Button>
@@ -1013,6 +1148,90 @@ export function SuperadminOrgCards({
                     })}
                 </div>
             )}
+
+            {/* ═══ MODALE SUPPRESSION DÉFINITIVE D'ORGANISATION ═══ */}
+            <AnimatePresence>
+                {deleteModalOrg && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.92 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.92 }}
+                            className="w-full max-w-md bg-[#0E121B] border border-rose-500/30 rounded-3xl p-6 shadow-2xl space-y-5"
+                        >
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                                        <Trash2 className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-base font-bold text-white">Suppression Définitive</h3>
+                                        <p className="text-xs text-rose-400 font-medium">Action irréversible & cascade</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setDeleteModalOrg(null)}
+                                    className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-200 space-y-2">
+                                <p className="font-semibold text-rose-300 flex items-center gap-1.5">
+                                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                                    Vous êtes sur le point de supprimer :
+                                </p>
+                                <p className="text-sm font-bold text-white">{deleteModalOrg.name}</p>
+                                <p className="text-[11px] text-rose-300/80 leading-relaxed">
+                                    Cette opération va détruire définitivement l&apos;ensemble des données associées : profils élèves ({deleteModalOrg.student_count || 0}), enseignants ({deleteModalOrg.teacher_count || 0}), classes, matières, notes, devoirs, bulletins et requêtes.
+                                </p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-xs text-slate-400">
+                                    Pour confirmer, tapez le nom exact de l&apos;école : <span className="text-white font-mono font-bold">{deleteModalOrg.name}</span>
+                                </Label>
+                                <Input
+                                    value={confirmOrgName}
+                                    onChange={e => setConfirmOrgName(e.target.value)}
+                                    placeholder={deleteModalOrg.name}
+                                    className="bg-white/5 border-white/15 text-white h-10 rounded-xl text-xs font-mono"
+                                />
+                            </div>
+
+                            <div className="flex gap-3 pt-2">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => setDeleteModalOrg(null)}
+                                    className="flex-1 bg-white/5 hover:bg-white/10 text-white rounded-xl h-10 text-xs"
+                                >
+                                    Annuler
+                                </Button>
+                                <Button
+                                    type="button"
+                                    disabled={deletingOrg || (confirmOrgName.trim().toLowerCase() !== deleteModalOrg.name.trim().toLowerCase())}
+                                    onClick={handleExecuteDeleteOrg}
+                                    className="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl h-10 text-xs gap-1.5 disabled:opacity-50"
+                                >
+                                    {deletingOrg ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            Suppression...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Trash2 className="w-4 h-4" />
+                                            Supprimer Définitivement
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             {/* ═══ MODALE ATTRIBUTION BADGE CERTIFICATION ═══ */}
             <AnimatePresence>
@@ -1448,12 +1667,12 @@ export function SuperadminOrgCards({
                                             onChange={e => setEditType(e.target.value)}
                                             className="w-full h-10 bg-white/5 border border-white/10 rounded-xl text-white text-xs px-3 focus:outline-none"
                                         >
-                                            <option value="Lycée" className="bg-[#111]">Lycée</option>
-                                            <option value="Collège" className="bg-[#111]">Collège</option>
-                                            <option value="Université" className="bg-[#111]">Université</option>
-                                            <option value="Centre de formation" className="bg-[#111]">Centre de formation</option>
-                                            <option value="Institut" className="bg-[#111]">Institut</option>
-                                            <option value="Autre" className="bg-[#111]">Autre</option>
+                                            <option value="lycee" className="bg-[#111]">Lycée</option>
+                                            <option value="college" className="bg-[#111]">Collège</option>
+                                            <option value="universite" className="bg-[#111]">Université</option>
+                                            <option value="centre_formation" className="bg-[#111]">Centre de formation</option>
+                                            <option value="institut" className="bg-[#111]">Institut</option>
+                                            <option value="autre" className="bg-[#111]">Autre</option>
                                         </select>
                                     </div>
                                 </div>

@@ -8,7 +8,7 @@ import {
     AlertCircle, RefreshCw, Loader2, ShieldCheck, Zap, X, Sliders,
     BookOpen, Users, UserCheck, Calendar, Search, FileText, ChevronRight,
     BarChart3, Bell, Check, UserPlus, Eye, Filter, ArrowUpRight, Award,
-    CheckCircle, AlertTriangle, Layers, Settings, HelpCircle, LayoutDashboard
+    CheckCircle, AlertTriangle, Layers, Settings, HelpCircle, LayoutDashboard, Trash2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -99,6 +99,57 @@ export function SuperadminAutopilotManager() {
     const [interacting, setInteracting] = useState(false);
     const [dialogHistory, setDialogHistory] = useState<DialogMessage[]>([]);
     const chatEndRef = useRef<HTMLDivElement>(null);
+
+    // ── Persistance de l'historique de chat Dame SKY par établissement ──
+    const getChatStorageKey = (orgId: string) => `campusflow_autopilot_chat_${orgId}`;
+
+    const loadSchoolChatHistory = (school: AutopilotSchool, fallbackPrompt?: string): DialogMessage[] => {
+        if (typeof window !== 'undefined') {
+            try {
+                const raw = localStorage.getItem(getChatStorageKey(school.id));
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                }
+            } catch {}
+        }
+        return [
+            {
+                sender: 'admin',
+                text: fallbackPrompt || `Bonjour Superviseur. Je suis Dame SKY aux commandes de "${school.name}". Mes actions s'exécutent en direct en base de données. Donnez-moi vos directives.`
+            }
+        ];
+    };
+
+    const saveSchoolChatHistory = (orgId: string, history: DialogMessage[]) => {
+        if (typeof window === 'undefined') return;
+        try {
+            localStorage.setItem(getChatStorageKey(orgId), JSON.stringify(history));
+        } catch {}
+    };
+
+    const clearSchoolChatHistory = (school: AutopilotSchool) => {
+        if (typeof window !== 'undefined') {
+            try {
+                localStorage.removeItem(getChatStorageKey(school.id));
+            } catch {}
+        }
+        const defaultMsg: DialogMessage[] = [
+            {
+                sender: 'admin',
+                text: `Bonjour Superviseur. L'historique de discussion pour "${school.name}" a été réinitialisé. Quelles sont vos nouvelles directives pour cette académie ?`
+            }
+        ];
+        setDialogHistory(defaultMsg);
+        saveSchoolChatHistory(school.id, defaultMsg);
+        toast.success(`Historique de discussion pour "${school.name}" effacé.`);
+    };
+
+    const openInteractModal = (school: AutopilotSchool, fallbackPrompt?: string) => {
+        setInteractOrg(school);
+        const history = loadSchoolChatHistory(school, fallbackPrompt);
+        setDialogHistory(history);
+    };
 
     // Modal Cursus Rapide
     const [selectedSchoolDetails, setSelectedSchoolDetails] = useState<{
@@ -545,6 +596,24 @@ export function SuperadminAutopilotManager() {
             notifications: notifications || [],
             logs: logs || [],
         });
+
+        // ── Détection proactive : si l'école est en pilote auto et a des inscriptions en attente, les valider immédiatement ──
+        const targetSchool = schools.find(s => s.id === orgId);
+        if (targetSchool?.is_autopilot && targetSchool.autopilot_status === 'active' && (inscriptions || []).some(i => i.status === 'pending')) {
+            void (async () => {
+                try {
+                    const pulseRes = await fetch(`${WORKER_URL}/api/sky-agent/autopilot-pulse`, { method: 'POST' }).then(r => r.json()) as any;
+                    if (pulseRes && pulseRes.actionsCount > 0) {
+                        toast.success(`⚡ Dame SKY a validé ${pulseRes.actionsCount} inscription(s) en pilote automatique !`);
+                        const { data: updatedInsc } = await supabase.from('inscription_requests').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(50);
+                        const { data: updatedLogs } = await supabase.from('ai_agent_logs').select('*').eq('organization_id', orgId).order('executed_at', { ascending: false }).limit(30);
+                        if (updatedInsc) {
+                            setAdminData(curr => curr ? { ...curr, inscriptions: updatedInsc, logs: updatedLogs || curr.logs } : curr);
+                        }
+                    }
+                } catch {}
+            })();
+        }
     };
 
     // Valider une demande d'inscription
@@ -638,7 +707,9 @@ export function SuperadminAutopilotManager() {
         const textToSend = (overrideText || instruction).trim();
         if (!interactOrg || !textToSend || interacting) return;
 
-        setDialogHistory(prev => [...prev, { sender: 'user', text: textToSend }]);
+        const updatedWithUser: DialogMessage[] = [...dialogHistory, { sender: 'user', text: textToSend }];
+        setDialogHistory(updatedWithUser);
+        saveSchoolChatHistory(interactOrg.id, updatedWithUser);
         setInstruction('');
         setInteracting(true);
 
@@ -657,24 +728,28 @@ export function SuperadminAutopilotManager() {
                 throw new Error(data.error || 'Erreur de communication avec l\'administrateur');
             }
 
-            setDialogHistory(prev => [
-                ...prev,
+            const updatedWithAdmin: DialogMessage[] = [
+                ...updatedWithUser,
                 {
                     sender: 'admin',
                     text: data.reply,
                     executed: Array.isArray(data.executed) && data.executed.length > 0 ? data.executed : undefined,
                 }
-            ]);
+            ];
+            setDialogHistory(updatedWithAdmin);
+            saveSchoolChatHistory(interactOrg.id, updatedWithAdmin);
 
             // Rafraîchir les données de l'espace admin si ouvert
             if (selectedAdminSchool && selectedAdminSchool.id === interactOrg.id) {
                 handleOpenAdminDashboard(selectedAdminSchool);
             }
         } catch (err: any) {
-            setDialogHistory(prev => [
-                ...prev,
+            const updatedWithError: DialogMessage[] = [
+                ...updatedWithUser,
                 { sender: 'admin', text: `⚠️ Impossible d'exécuter l'ordre : ${err.message}` }
-            ]);
+            ];
+            setDialogHistory(updatedWithError);
+            saveSchoolChatHistory(interactOrg.id, updatedWithError);
         } finally {
             setInteracting(false);
         }
@@ -1177,12 +1252,7 @@ export function SuperadminAutopilotManager() {
                                                 <>
                                                     <Button
                                                         size="sm"
-                                                        onClick={() => {
-                                                            setInteractOrg(school);
-                                                            setDialogHistory([
-                                                                { sender: 'admin', text: `Bonjour Superviseur. Je suis Dame SKY aux commandes de "${school.name}". Mes actions s'exécutent en direct en base de données. Donnez-moi vos directives.` }
-                                                            ]);
-                                                        }}
+                                                        onClick={() => openInteractModal(school)}
                                                         className="flex-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 text-xs border border-purple-500/30 h-8 font-semibold flex items-center justify-center gap-1.5"
                                                     >
                                                         <MessageSquare className="w-3.5 h-3.5 text-purple-400" />
@@ -1527,12 +1597,7 @@ export function SuperadminAutopilotManager() {
 
                                     <Button
                                         size="sm"
-                                        onClick={() => {
-                                            setInteractOrg(selectedAdminSchool);
-                                            setDialogHistory([
-                                                { sender: 'admin', text: `Directives pour "${selectedAdminSchool.name}" : je suis prêt. Que souhaitez-vous modifier ou créer ?` }
-                                            ]);
-                                        }}
+                                        onClick={() => openInteractModal(selectedAdminSchool)}
                                         className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs h-8 font-semibold"
                                     >
                                         <Bot className="w-3.5 h-3.5 mr-1.5" />
@@ -1961,12 +2026,7 @@ export function SuperadminAutopilotManager() {
                                                     </h3>
                                                     <Button
                                                         size="sm"
-                                                        onClick={() => {
-                                                            setInteractOrg(selectedAdminSchool);
-                                                            setDialogHistory([
-                                                                { sender: 'admin', text: 'Pour ajouter une classe ou une matière, vous pouvez me l\'ordonner ici. Exemple : "Ajoute une classe en Cybersécurité avec 3 matières clés".' }
-                                                            ]);
-                                                        }}
+                                                        onClick={() => openInteractModal(selectedAdminSchool, 'Pour ajouter une classe ou une matière, vous pouvez me l\'ordonner ici. Exemple : "Ajoute une classe en Cybersécurité avec 3 matières clés".')}
                                                         className="bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 text-xs h-7"
                                                     >
                                                         <Plus className="w-3 h-3 mr-1" />
@@ -2309,14 +2369,26 @@ export function SuperadminAutopilotManager() {
                                         </p>
                                     </div>
                                 </div>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => setInteractOrg(null)}
-                                    className="text-slate-400 hover:text-white"
-                                >
-                                    <X className="w-4 h-4" />
-                                </Button>
+                                <div className="flex items-center gap-1.5">
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => clearSchoolChatHistory(interactOrg)}
+                                        className="text-slate-400 hover:text-red-400 hover:bg-red-500/10 h-8 px-2.5 text-[11px] flex items-center gap-1 font-normal"
+                                        title="Effacer l'historique de discussion pour cette école"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        <span className="hidden sm:inline">Effacer</span>
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => setInteractOrg(null)}
+                                        className="text-slate-400 hover:text-white"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </Button>
+                                </div>
                             </div>
 
                             {/* Zone de discussion */}

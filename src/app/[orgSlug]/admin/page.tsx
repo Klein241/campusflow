@@ -2101,7 +2101,16 @@ ${bodyHtml}
                                 org={org}
                                 config={schoolConfig}
                                 onTypeChanged={(newType) => {
-                                    setOrg((p: any) => ({ ...p, school_type: newType }));
+                                    const DB_TYPE_MAP: Record<string, string> = {
+                                        centre_formation: 'centre_formation',
+                                        formateur_independant: 'centre_formation',
+                                        academie_en_ligne: 'centre_formation',
+                                        lycee: 'lycee',
+                                        college: 'college',
+                                        universite: 'universite',
+                                    };
+                                    const mappedType = DB_TYPE_MAP[newType] || 'autre';
+                                    setOrg((p: any) => ({ ...p, school_type: newType, type: mappedType }));
                                     toast.success('Adaptation du backoffice appliquée instantanément !');
                                 }}
                             />

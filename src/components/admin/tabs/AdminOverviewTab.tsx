@@ -41,9 +41,22 @@ export function AdminOverviewTab({
         { l: 'Étudiants', v: actualStudentsCount, c: 'from-purple-600 to-pink-600', shadow: 'shadow-purple-600/20' }
     ];
 
+    const TYPE_LABELS: Record<string, string> = {
+        'lycee': 'Lycée / Collège',
+        'college': 'Collège',
+        'universite': 'Université / Enseignement Supérieur',
+        'centre_formation': 'Centre de Formation Professionnelle',
+        'institut': 'Institut',
+        'formateur_independant': 'Formateur Indépendant & Coach',
+        'academie_en_ligne': 'Académie en Ligne & E-Learning',
+        'k12_school': 'Lycée / Collège',
+        'autre': 'Autre',
+    };
+    const displayType = TYPE_LABELS[org.school_type] || TYPE_LABELS[org.type] || org.school_type || org.type || 'Établissement';
+
     const infoFields = [
         ['Nom', org.name],
-        ['Type', org.type],
+        ['Type', displayType],
         ['Ville', `${org.city || ''}, ${org.country || ''}`],
         ['Tél', org.phone || '—'],
         ['Email', org.email || '—'],

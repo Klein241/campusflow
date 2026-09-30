@@ -62,6 +62,40 @@ async function fetchSupabaseRest(env: Env, path: string, options: { method?: str
     }
 }
 
+// Variante qui throw sur erreur (pour les endpoints critiques où un faux-succès est inacceptable)
+async function fetchSupabaseRestOrThrow(env: Env, path: string, options: { method?: string; body?: any; headers?: Record<string, string> } = {}): Promise<any> {
+    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) {
+        throw new Error('Configuration Supabase manquante sur le Worker.');
+    }
+    const url = `${env.SUPABASE_URL}/rest/v1/${path}`;
+    const res = await fetch(url, {
+        method: options.method || 'GET',
+        headers: {
+            'apikey': env.SUPABASE_SERVICE_KEY,
+            'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation',
+            ...(options.headers || {}),
+        },
+        body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+    if (!res.ok) {
+        let errText = '';
+        try { errText = await res.text(); } catch {}
+        // Essaie d'extraire le message Supabase (PostgREST JSON)
+        try {
+            const parsed = JSON.parse(errText);
+            throw new Error(parsed.message || parsed.hint || parsed.details || errText || `Erreur Supabase ${res.status}`);
+        } catch (jsonErr: any) {
+            if (jsonErr.message && !jsonErr.message.startsWith('JSON')) throw jsonErr;
+            throw new Error(errText || `Erreur Supabase ${res.status}`);
+        }
+    }
+    if (res.status === 204) return null;
+    return await res.json();
+}
+
+
 // ── Exécuteur direct Cloudflare D1 + Synchronisation Supabase Directe ──────────────────
 async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx: { agentKey: any; isSuperadmin: boolean; orgId: string | null; agentName: string; agentId: string }, env: Env): Promise<any> {
     const db = env.CAMPUSFLOW_DB;
@@ -2707,6 +2741,7 @@ function logMcpAction(env: Env, log: { agentKeyId: string; orgId: string | null;
 export {
     broadcastUpdatePush,
     fetchSupabaseRest,
+    fetchSupabaseRestOrThrow,
     executeMcpToolD1,
     syncToSupabase,
     logMcpAction,

@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { marketingService } from './marketing-service';
 
 interface SequenceStep {
     id: string;
@@ -63,11 +64,41 @@ const DEFAULT_SEQUENCE_STEPS: SequenceStep[] = [
 export function EmailSequenceBuilder() {
     const [steps, setSteps] = useState<SequenceStep[]>(DEFAULT_SEQUENCE_STEPS);
     const [isAutomationActive, setIsAutomationActive] = useState(true);
+    const [isGenerating, setIsGenerating] = useState(false);
     const [editingStep, setEditingStep] = useState<SequenceStep | null>(null);
 
     const toggleAutomation = () => {
         setIsAutomationActive(!isAutomationActive);
         toast.success(isAutomationActive ? '⏸️ Séquences automatisées mises en pause' : '▶️ Séquences automatisées activées avec succès !');
+    };
+
+    const handleGenerateAiSequence = async () => {
+        setIsGenerating(true);
+        try {
+            const generated = await marketingService.generateSequence({
+                campaign_name: 'Campagne Établissements Scolaires & Universités',
+                target_type: 'Directeurs d\'établissements',
+                goal: 'Prise de rendez-vous pour démo IziTeach Pro',
+            });
+            if (generated && generated.length > 0) {
+                setSteps(generated.map((s: any, idx: number) => ({
+                    id: `step_${idx + 1}`,
+                    day_offset: typeof s.day_offset === 'number' ? s.day_offset : idx * 3,
+                    title: s.title || `Étape ${idx + 1}`,
+                    subject: s.subject || '',
+                    condition: s.condition || 'always',
+                    body_snippet: s.body_snippet || s.body || '',
+                    is_active: true,
+                })));
+                toast.success('✨ Séquence générée en direct avec DeepSeek V4 Flash !');
+            } else {
+                toast.info('Séquence générée avec succès');
+            }
+        } catch {
+            toast.error('Erreur lors de la génération IA de la séquence');
+        } finally {
+            setIsGenerating(false);
+        }
     };
 
     const handleSaveStep = () => {
@@ -98,24 +129,34 @@ export function EmailSequenceBuilder() {
                     </div>
                 </div>
 
-                <Button
-                    onClick={toggleAutomation}
-                    className={`h-10 px-4 rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg ${isAutomationActive
-                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
-                        : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
-                >
-                    {isAutomationActive ? (
-                        <>
-                            <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                            Séquences Actives (En cours)
-                        </>
-                    ) : (
-                        <>
-                            <Play className="w-4 h-4" />
-                            Activer l'Automatisation
-                        </>
-                    )}
-                </Button>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <Button
+                        onClick={handleGenerateAiSequence}
+                        disabled={isGenerating}
+                        className="h-10 px-4 rounded-xl font-bold text-xs flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white shadow-lg shadow-orange-500/20 disabled:opacity-50"
+                    >
+                        <Sparkles className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
+                        {isGenerating ? 'Génération DeepSeek...' : 'Générer Séquence IA'}
+                    </Button>
+                    <Button
+                        onClick={toggleAutomation}
+                        className={`h-10 px-4 rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg ${isAutomationActive
+                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
+                            : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
+                    >
+                        {isAutomationActive ? (
+                            <>
+                                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                                Séquences Actives (En cours)
+                            </>
+                        ) : (
+                            <>
+                                <Play className="w-4 h-4" />
+                                Activer l'Automatisation
+                            </>
+                        )}
+                    </Button>
+                </div>
             </div>
 
             {/* Sequence Steps Timeline */}

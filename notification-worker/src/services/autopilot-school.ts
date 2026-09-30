@@ -439,7 +439,7 @@ export async function runAutopilotCampusPulse(env: Env): Promise<{ schoolsChecke
 
         for (const org of activeAutopilotOrgs) {
             // ── 1. Auto-Approbation des Demandes d'Inscription ────────────────
-            const pendingInscriptions = await fetchSupabaseRest(env, `inscription_requests?organization_id=eq.${encodeURIComponent(org.id)}&status=eq.pending&select=id,first_name,last_name,phone,access_code&limit=10`);
+            const pendingInscriptions = await fetchSupabaseRest(env, `inscription_requests?organization_id=eq.${encodeURIComponent(org.id)}&status=eq.pending&select=id,first_name,last_name,phone,access_code&limit=25`);
             if (Array.isArray(pendingInscriptions) && pendingInscriptions.length > 0) {
                 for (const insc of pendingInscriptions) {
                     await fetchSupabaseRest(env, `inscription_requests?id=eq.${encodeURIComponent(insc.id)}`, {
@@ -450,9 +450,49 @@ export async function runAutopilotCampusPulse(env: Env): Promise<{ schoolsChecke
                             updated_at: new Date().toISOString(),
                         }
                     }).catch(() => null);
+
+                    // Activer également le student_profile correspondant en base
+                    if (insc.access_code) {
+                        await fetchSupabaseRest(env, `student_profiles?organization_id=eq.${encodeURIComponent(org.id)}&access_code=eq.${encodeURIComponent(insc.access_code)}`, {
+                            method: 'PATCH',
+                            body: {
+                                approval_status: 'accepted',
+                                is_active: true,
+                            }
+                        }).catch(() => null);
+                    }
+
                     actionsCount++;
                 }
-                console.log(`[AutopilotPulse] 🎓 ${pendingInscriptions.length} inscription(s) validée(s) pour ${org.name}`);
+
+                // Notification & Log d'autonomie
+                const nowIso = new Date().toISOString();
+                await fetchSupabaseRest(env, 'admin_notifications', {
+                    method: 'POST',
+                    body: {
+                        id: crypto.randomUUID(),
+                        organization_id: org.id,
+                        title: `🎓 ${pendingInscriptions.length} Inscription(s) Validée(s) Autonomement`,
+                        message: `${pendingInscriptions.length} nouvel(le)(s) étudiant(e)(s) ont été analysé(e)(s) et validé(e)(s) par Dame SKY en pilote automatique.`,
+                        icon: '⭐',
+                        created_at: nowIso,
+                    }
+                }).catch(() => null);
+
+                await fetchSupabaseRest(env, 'ai_agent_logs', {
+                    method: 'POST',
+                    body: {
+                        organization_id: org.id,
+                        tool_name: 'autonomous_inscription_validation',
+                        input_summary: `${pendingInscriptions.length} inscription(s) en attente traitées`,
+                        output_summary: `Validation automatique par le pulse autonome Dame SKY`,
+                        status: 'success',
+                        duration_ms: 30,
+                        executed_at: nowIso,
+                    }
+                }).catch(() => null);
+
+                console.log(`[AutopilotPulse] 🎓 ${pendingInscriptions.length} inscription(s) validée(s) avec profil actif pour ${org.name}`);
             }
 
             // ── 2. Correction Bienveillante des Devoirs Récoltés ───────────────

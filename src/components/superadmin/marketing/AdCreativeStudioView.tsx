@@ -38,9 +38,7 @@ export function AdCreativeStudioView() {
     const handleGenerateCreative = async () => {
         setIsGenerating(true);
         try {
-            await new Promise(r => setTimeout(r, 1200)); // AI Generation simulation
-
-            const newCrea = marketingService.generateAdCreative({
+            const newCrea = await marketingService.generateAdCreative({
                 product,
                 target_audience: targetAudience,
                 tone,
@@ -50,7 +48,7 @@ export function AdCreativeStudioView() {
 
             setCreatives(marketingService.getCreatives());
             setSelectedCreative(newCrea);
-            toast.success('✨ Visuel & Texte publicitaire générés avec succès !');
+            toast.success('✨ Visuel & Texte publicitaire générés avec succès par l\'IA !');
         } catch {
             toast.error('Erreur lors de la génération de la créa');
         } finally {
