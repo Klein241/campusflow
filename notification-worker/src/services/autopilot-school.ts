@@ -74,7 +74,7 @@ export async function createAutopilotSchool(
         // Champs NOT NULL requis par le schéma (valeurs fictives pour campus pilote automatique)
         phone: '+00000000000',
         email: `admin@${uniqueSlug}.iziteach.com`,
-        motto: `Établissement d'Élite piloté par Dame SKY · Pôle ${params.filieres.join(', ')}`,
+        motto: params.filieres && params.filieres.length > 0 ? `Pôle d'excellence académique · ${params.filieres.join(', ')}` : "Excellence académique et insertion professionnelle",
         is_active: true,
         landing_layout: 'bento_grid',
         hero_template: 'split',

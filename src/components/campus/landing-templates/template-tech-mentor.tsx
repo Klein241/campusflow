@@ -10,6 +10,7 @@ import {
 import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-modal';
+import { cleanMotto } from '@/lib/clean-motto';
 
 interface TemplateProps {
     org: any;
@@ -45,8 +46,8 @@ export function TemplateTechMentor({
     const [formEmail, setFormEmail] = useState('');
 
     const trainerName     = cfg.trainer_name    || org.name       || 'Jenna Ortega';
-    const trainerTitle1   = cfg.trainer_title   || org.motto      || 'FORMATRICE TECH';
-    const trainerSubtitle = cfg.trainer_subtitle || org.hero_subtitle || 'Experte en développement web, design UI/UX et accompagnement digital pour les professionnels de demain.';
+    const trainerTitle1   = cleanMotto(cfg.trainer_title || org.motto, 'FORMATRICE TECH');
+    const trainerSubtitle = cleanMotto(cfg.trainer_subtitle || org.hero_subtitle, 'Experte en développement web, design UI/UX et accompagnement digital pour les professionnels de demain.');
     const aboutTitle      = cfg.about_title     || 'JE SUIS DISPONIBLE POUR UN PROJET UI/UX DESIGN & FORMATIONS';
     const aboutText       = cfg.trainer_bio     || org.about_text || 'Chaque projet est une opportunité unique de créer une expérience exceptionnelle. Mon approche combine expertise technique et sensibilité créative pour des résultats qui dépassent les attentes.';
     const pressLogos      = (cfg.press_logos_text || 'logoipsum, LOGOIPSUM, logoipsum, LOGO IPSUM, logoipsum').split(',').map(s => s.trim());
@@ -227,25 +228,26 @@ export function TemplateTechMentor({
                     {/* Texte gauche */}
                     <div className="space-y-6">
                         <div className="space-y-1">
-                            <p className="text-xs font-bold tracking-widest uppercase" style={{ color: ACCENT }}>
+                            <p data-editable-field="trainer_name" className="text-xs font-bold tracking-widest uppercase cursor-pointer" style={{ color: ACCENT }}>
                                 {trainerName}
                             </p>
                             <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black leading-[1.0] tracking-tighter">
                                 HAY! JE SUIS<br />
-                                <span style={{ color: ACCENT }}>{trainerName.split(' ')[0].toUpperCase()}</span><br />
-                                <span className="text-white">{trainerTitle1} |</span>
+                                <span data-editable-field="trainer_name" className="cursor-pointer" style={{ color: ACCENT }}>{trainerName.split(' ')[0].toUpperCase()}</span><br />
+                                <span data-editable-field="trainer_title" className="text-white cursor-pointer">{trainerTitle1} |</span>
                             </h1>
                         </div>
 
-                        <p className="text-sm text-gray-400 leading-relaxed max-w-md">{trainerSubtitle}</p>
+                        <p data-editable-field="trainer_subtitle" className="text-sm text-gray-400 leading-relaxed max-w-md cursor-pointer">{trainerSubtitle}</p>
 
                         <div className="flex items-center gap-4 flex-wrap">
                             <button
+                                data-editable-field="primary_cta_text"
                                 onClick={onOpenInscription || (() => scrollToSection('contact'))}
-                                className="inline-flex items-center gap-2 font-black text-xs rounded-full px-7 h-12 transition-all shadow-lg hover:scale-105"
+                                className="inline-flex items-center gap-2 font-black text-xs rounded-full px-7 h-12 transition-all shadow-lg hover:scale-105 cursor-pointer"
                                 style={{ background: ACCENT, color: '#000', boxShadow: `0 8px 30px ${ACCENT}30` }}
                             >
-                                PRENDRE CONTACT →
+                                {cfg.primary_cta_text || 'PRENDRE CONTACT →'}
                             </button>
                             {whatsappLink && (
                                 <a

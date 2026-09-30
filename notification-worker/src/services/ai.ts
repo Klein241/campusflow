@@ -257,3 +257,87 @@ Rules:
     };
 }
 
+/**
+ * Synthèse Vocale Text-To-Speech (TTS) via Cloudflare Workers AI
+ * Utilise MeloTTS (@cf/myshell-ai/melotts) avec fallback Deepgram
+ */
+export async function generateSpeechAudio(
+    env: Env,
+    text: string,
+    lang: string = 'fr'
+): Promise<{ audioBytes: ArrayBuffer; mimeType: string }> {
+    if (!env.AI || typeof env.AI.run !== 'function') {
+        throw new Error('Cloudflare Workers AI non disponible dans cet environnement');
+    }
+
+    const cleanText = text
+        .replace(/<think>[\s\S]*?<\/think>/g, '')
+        .replace(/<[^>]*>/g, '')
+        .replace(/```[\s\S]*?```/g, '')
+        .replace(/\[REWARD_POINT:[^\]]+\]/g, '')
+        .trim();
+
+    if (!cleanText) {
+        throw new Error('Le texte fourni est vide après nettoyage');
+    }
+
+    const truncatedText = cleanText.slice(0, 3000);
+    const targetLang = (lang || 'fr').toLowerCase().trim();
+    const meloLang = ['fr', 'en', 'es', 'zh', 'ja', 'ko'].includes(targetLang) ? targetLang : 'fr';
+
+    let rawOutput: any;
+    try {
+        rawOutput = await env.AI.run('@cf/myshell-ai/melotts' as any, {
+            text: truncatedText,
+            lang: meloLang,
+        });
+    } catch (err: any) {
+        console.warn('[TTS] MeloTTS failed, trying Deepgram Aura fallback:', err?.message);
+        try {
+            rawOutput = await env.AI.run('@cf/deepgram/aura-1' as any, {
+                text: truncatedText,
+            });
+        } catch (err2: any) {
+            throw new Error(`Échec de la synthèse vocale Cloudflare AI: ${err?.message || err2?.message}`);
+        }
+    }
+
+    let audioBytes: ArrayBuffer;
+    if (rawOutput instanceof ArrayBuffer) {
+        audioBytes = rawOutput;
+    } else if (rawOutput instanceof Uint8Array) {
+        audioBytes = rawOutput.buffer as ArrayBuffer;
+    } else if (rawOutput?.audio) {
+        if (typeof rawOutput.audio === 'string') {
+            const binStr = atob(rawOutput.audio);
+            const bytes = new Uint8Array(binStr.length);
+            for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+            audioBytes = bytes.buffer as ArrayBuffer;
+        } else if (rawOutput.audio instanceof ArrayBuffer) {
+            audioBytes = rawOutput.audio;
+        } else {
+            throw new Error('Format de données audio inconnu retourné par le modèle AI');
+        }
+    } else if (typeof rawOutput?.getReader === 'function' || rawOutput instanceof ReadableStream) {
+        const reader = (rawOutput as ReadableStream).getReader();
+        const chunks: Uint8Array[] = [];
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value) chunks.push(value);
+        }
+        const total = chunks.reduce((acc, c) => acc + c.length, 0);
+        const merged = new Uint8Array(total);
+        let pos = 0;
+        for (const c of chunks) {
+            merged.set(c, pos);
+            pos += c.length;
+        }
+        audioBytes = merged.buffer;
+    } else {
+        throw new Error('Réponse audio vide ou invalide de Cloudflare AI');
+    }
+
+    return { audioBytes, mimeType: 'audio/mpeg' };
+}
+

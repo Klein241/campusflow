@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
+import { cleanMotto } from '@/lib/clean-motto';
 
 interface TemplateProps {
     org: any;
@@ -64,7 +65,7 @@ export function TemplateHubOnglets({
                             {org.type?.toUpperCase() || 'ÉTABLISSEMENT'} • {org.city || 'Cameroun'}
                         </div>
                         <h1 className="text-2xl sm:text-4xl font-black text-white truncate">{org.name}</h1>
-                        <p className="text-sm text-slate-400 mt-1 max-w-xl">{org.motto || org.hero_subtitle || 'Portail officiel d\'admission et de vie académique.'}</p>
+                        <p className="text-sm text-slate-400 mt-1 max-w-xl">{cleanMotto(org.motto || org.hero_subtitle, 'Portail officiel d\'admission et de vie académique.')}</p>
                     </div>
                     <div className="flex flex-col gap-2 shrink-0 w-full sm:w-auto">
                         <a href="#inscription" onClick={onOpenInscription}>

@@ -9,6 +9,7 @@ import {
 import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-modal';
+import { cleanMotto } from '@/lib/clean-motto';
 
 interface TemplateProps {
     org: any;
@@ -41,8 +42,8 @@ export function TemplateCreativeStudio({
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     const trainerName     = cfg.trainer_name    || org.name       || 'Mariana Napolitani';
-    const trainerTitle    = cfg.trainer_title   || org.motto      || 'Designer & Créatrice Visuelle';
-    const trainerSubtitle = cfg.trainer_subtitle || org.hero_subtitle || 'Je crée des expériences numériques ludiques, premium et intentionnelles qui connectent les marques aux personnes.';
+    const trainerTitle    = cleanMotto(cfg.trainer_title || org.motto, 'Designer & Créatrice Visuelle');
+    const trainerSubtitle = cleanMotto(cfg.trainer_subtitle || org.hero_subtitle, 'Je crée des expériences numériques ludiques, premium et intentionnelles qui connectent les marques aux personnes.');
     const trainerBio      = cfg.trainer_bio     || org.about_text || 'Je crée des expériences premium qui connectent les marques aux personnes.';
     const heroImage       = cfg.trainer_photo_url || org.hero_image_url || (gallery?.[0]) || 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=800&auto=format&fit=crop&q=80';
     const availableTag    = cfg.available_text   || 'DISPONIBLE POUR DES PROJETS';
@@ -228,30 +229,32 @@ export function TemplateCreativeStudio({
                     <div className="space-y-6">
                         <div>
                             <p className="text-sm font-bold mb-1" style={{ color: ACCENT }}>Bonjour, Je suis</p>
-                            <h1 className="text-4xl sm:text-6xl font-black leading-[1.05] tracking-tighter text-[#0D1C19]">
+                            <h1 data-editable-field="trainer_name" className="text-4xl sm:text-6xl font-black leading-[1.05] tracking-tighter text-[#0D1C19] cursor-pointer">
                                 {trainerName.split(' ').map((word: string, i: number) => (
                                     <span key={i}>{word} </span>
                                 ))}
                             </h1>
-                            <p className="text-base font-bold mt-2" style={{ color: ACCENT }}>{trainerTitle}</p>
+                            <p data-editable-field="trainer_title" className="text-base font-bold mt-2 cursor-pointer" style={{ color: ACCENT }}>{trainerTitle}</p>
                         </div>
 
-                        <p className="text-sm text-gray-700 leading-relaxed max-w-sm">{trainerSubtitle}</p>
+                        <p data-editable-field="trainer_subtitle" className="text-sm text-gray-700 leading-relaxed max-w-sm cursor-pointer">{trainerSubtitle}</p>
 
                         <div className="flex items-center gap-3 pt-2 flex-wrap">
                             <button
+                                data-editable-field="primary_cta_text"
                                 onClick={() => scrollToSection('travaux')}
-                                className="inline-flex items-center gap-2 text-white font-bold text-xs rounded-full px-6 h-12 transition-all shadow-md hover:scale-105"
+                                className="inline-flex items-center gap-2 text-white font-bold text-xs rounded-full px-6 h-12 transition-all shadow-md hover:scale-105 cursor-pointer"
                                 style={{ background: ACCENT }}
                             >
-                                Voir les Travaux <ArrowUpRight className="w-3.5 h-3.5" />
+                                {cfg.primary_cta_text || 'Voir les Travaux'} <ArrowUpRight className="w-3.5 h-3.5" />
                             </button>
                             <button
+                                data-editable-field="secondary_cta_text"
                                 onClick={() => scrollToSection('services')}
-                                className="inline-flex items-center gap-2 text-xs rounded-full px-6 h-12 transition-all font-bold border hover:bg-white/40"
+                                className="inline-flex items-center gap-2 text-xs rounded-full px-6 h-12 transition-all font-bold border hover:bg-white/40 cursor-pointer"
                                 style={{ borderColor: ACCENT, color: ACCENT }}
                             >
-                                À Propos & Services <ArrowUpRight className="w-3.5 h-3.5" />
+                                {cfg.secondary_cta_text || 'À Propos & Services'} <ArrowUpRight className="w-3.5 h-3.5" />
                             </button>
                             {whatsappLink && (
                                 <a

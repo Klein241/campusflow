@@ -304,19 +304,16 @@ export async function purchaseAndUnlockStyle({
         const currentUnlocked: string[] = Array.isArray(org.unlocked_styles) ? org.unlocked_styles : [];
         const nextUnlocked = Array.from(new Set([...currentUnlocked, styleId]));
 
-        if (typeof window !== 'undefined') {
-            localStorage.setItem(`campusflow_unlocked_styles_${org.id}`, JSON.stringify(nextUnlocked));
-            localStorage.setItem(`campusflow_unlocked_styles_${org.slug}`, JSON.stringify(nextUnlocked));
-        }
+        // Mettre à jour l'organisation (Supabase direct + fallback Worker Service Role)
+        const { saveOrgStyle } = await import('@/lib/api-org-style');
+        const saveRes = await saveOrgStyle(org.id, org.slug, {
+            sky_points: newBalance,
+            unlocked_styles: nextUnlocked
+        });
 
-        // Mettre à jour l'organisation dans Supabase
-        await supabase
-            .from('organizations')
-            .update({
-                sky_points: newBalance,
-                unlocked_styles: nextUnlocked
-            })
-            .eq('id', org.id);
+        if (!saveRes.success) {
+            console.warn('[purchaseAndUnlockStyle] Avertissement persistance distante:', saveRes.error);
+        }
 
         onSuccess(newBalance);
         return true;

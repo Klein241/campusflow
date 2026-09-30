@@ -9,6 +9,7 @@ import {
 import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-modal';
+import { cleanMotto } from '@/lib/clean-motto';
 
 interface TemplateProps {
     org: any;
@@ -39,8 +40,8 @@ export function TemplateCoachPastelle({
     const [activeSection, setActiveSection] = useState('hero');
 
     const trainerName     = cfg.trainer_name    || org.name       || 'Julie Solomon';
-    const trainerTitle    = cfg.trainer_title   || org.motto      || 'Auteur, Conférencier, Accélérateur de Marques & Coach';
-    const trainerSubtitle = cfg.trainer_subtitle || org.hero_subtitle || 'Et si vous pouviez obtenir exactement ce que vous voulez ?';
+    const trainerTitle    = cleanMotto(cfg.trainer_title || org.motto, 'Auteur, Conférencier, Accélérateur de Marques & Coach');
+    const trainerSubtitle = cleanMotto(cfg.trainer_subtitle || org.hero_subtitle, 'Et si vous pouviez obtenir exactement ce que vous voulez ?');
     const trainerBio      = cfg.trainer_bio     || org.about_text || 'Vous le pouvez — et je vais vous montrer le chemin grâce à nos programmes. Passez de l\'Invisible à l\'Irrésistible.';
     const bookCta         = cfg.book_cta        || 'Rejoignez nos programmes certifiants aujourd\'hui !';
     const podcastTitle    = cfg.podcast_title   || 'Le Podcast Influenceur & Mentorat';
@@ -190,11 +191,11 @@ export function TemplateCoachPastelle({
             {/* ══ BANDEAU TITRE + LOGOS PRESSE ══ */}
             <section className="bg-white py-8 border-b border-gray-100">
                 <div className="max-w-6xl mx-auto px-6">
-                    <p className="text-center font-serif italic text-lg text-[#1E293B] mb-6 font-bold">
+                    <p data-editable-field="trainer_title" className="text-center font-serif italic text-lg text-[#1E293B] mb-6 font-bold cursor-pointer">
                         {trainerTitle}
                     </p>
 
-                    <div className="flex items-center justify-center gap-8 flex-wrap">
+                    <div data-editable-field="press_logos_text" className="flex items-center justify-center gap-8 flex-wrap cursor-pointer">
                         {pressLogos.map((logo, i) => (
                             <span key={i} className="font-black text-xs tracking-widest text-gray-400 uppercase">
                                 {logo}
@@ -212,23 +213,24 @@ export function TemplateCoachPastelle({
                             <span>⭐ L'un des programmes les plus plébiscités de la saison</span>
                         </div>
 
-                        <h2 className="text-3xl sm:text-4xl font-serif font-black text-[#1E293B] leading-tight">
+                        <h2 data-editable-field="flagship_title" className="text-3xl sm:text-4xl font-serif font-black text-[#1E293B] leading-tight cursor-pointer">
                             {trainerSubtitle}
                         </h2>
 
-                        <p className="text-sm text-gray-600 leading-relaxed">
+                        <p data-editable-field="flagship_description" className="text-sm text-gray-600 leading-relaxed cursor-pointer">
                             {trainerBio}
                         </p>
 
-                        <p className="font-bold text-sm text-[#1E293B]">{bookCta}</p>
+                        <p data-editable-field="book_cta" className="font-bold text-sm text-[#1E293B] cursor-pointer">{bookCta}</p>
 
                         <div className="flex items-center gap-4 flex-wrap">
                             <button
+                                data-editable-field="flagship_cta_text"
                                 onClick={onOpenInscription}
-                                className="inline-flex items-center gap-2 bg-[#1E293B] hover:bg-gray-800 text-white font-bold text-xs rounded-full px-7 h-12 transition-all shadow-lg hover:scale-105"
+                                className="inline-flex items-center gap-2 bg-[#1E293B] hover:bg-gray-800 text-white font-bold text-xs rounded-full px-7 h-12 transition-all shadow-lg hover:scale-105 cursor-pointer"
                             >
                                 <ShoppingCart className="w-4 h-4" />
-                                Commander Maintenant
+                                {cfg.flagship_cta_text || 'Commander Maintenant'}
                             </button>
                             {whatsappLink && (
                                 <a

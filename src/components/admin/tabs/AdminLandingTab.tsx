@@ -16,6 +16,8 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { cleanMotto } from '@/lib/clean-motto';
+import { saveOrgStyle } from '@/lib/api-org-style';
 
 interface AdminLandingTabProps {
     org: any;
@@ -143,10 +145,8 @@ export function AdminLandingTab({
                 show_register_btn: lShowRegisterBtn
             };
 
-            const { error } = await supabase.from('organizations').update(payload).eq('id', org.id);
-            if (error) throw error;
-
-            const updatedOrg = { ...org, ...payload };
+            const saveRes = await saveOrgStyle(org.id, org.slug || orgSlug, payload);
+            const updatedOrg = saveRes.org || { ...org, ...payload };
             onUpdateOrg(updatedOrg);
             toast.success('Page d\'accueil mise à jour avec succès ! 🎉');
         } catch (err: any) {
@@ -319,7 +319,7 @@ export function AdminLandingTab({
                                 <Input
                                     value={lHeroSubtitle}
                                     onChange={e => setLHeroSubtitle(e.target.value)}
-                                    placeholder={org.motto || 'Bienvenue sur notre portail officiel'}
+                                    placeholder={cleanMotto(org.motto, 'Bienvenue sur notre portail officiel')}
                                     className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-xs mt-1"
                                 />
                             </div>
@@ -580,7 +580,7 @@ export function AdminLandingTab({
                                             {lHeroTitle || org.name}
                                         </h2>
                                         <p className="text-[11px] text-slate-300 mt-1 line-clamp-2">
-                                            {lHeroSubtitle || org.motto || 'Excellence académique et insertion professionnelle'}
+                                            {lHeroSubtitle || cleanMotto(org.motto, 'Excellence académique et insertion professionnelle')}
                                         </p>
                                         <div className="flex gap-2 mt-3 justify-center sm:justify-start">
                                             <span className="px-3 py-1 rounded-xl text-white text-[10px] font-bold shadow" style={{ background: brandColor }}>

@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
+import { cleanMotto } from '@/lib/clean-motto';
 
 interface TemplateProps {
     org: any;
@@ -105,7 +106,7 @@ export function TemplateSegmentedHub({
                         )}
                         <div>
                             <h2 className="text-sm sm:text-base font-black tracking-wide text-white uppercase truncate max-w-[200px] sm:max-w-none">{org.name}</h2>
-                            <p className="text-[10px] text-amber-400/80 font-medium tracking-wider uppercase">{org.motto || 'Excellence • Rigueur • Réussite'}</p>
+                            <p className="text-[10px] text-amber-400/80 font-medium tracking-wider uppercase">{cleanMotto(org.motto, 'Excellence • Rigueur • Réussite')}</p>
                         </div>
                     </div>
 

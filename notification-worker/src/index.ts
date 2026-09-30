@@ -278,8 +278,23 @@ export default {
             if (pathname === '/api/superadmin/org/update' && method === 'POST') {
                 try {
                     const body = await request.json() as any;
-                    const { org_id, name, slug, type, school_type, city, country, phone, email, custom_domain } = body;
+                    const {
+                        org_id, name, slug, type, school_type, city, country, phone, email, custom_domain,
+                        hero_template, landing_layout, template_config, unlocked_styles, sky_points,
+                        gallery_images, motto, hero_title, hero_subtitle, brand_color, about_text, footer_text
+                    } = body;
                     if (!org_id) return jsonResponse({ error: 'org_id requis' }, 400);
+
+                    const sanitizeMotto = (text: string | null | undefined): string | null => {
+                        if (!text || typeof text !== 'string') return text || null;
+                        let c = text
+                            .replace(/Établissement d['’]Élite piloté par Dame SKY\s*[·•-]?\s*/gi, '')
+                            .replace(/Établissement d['’]Élite\s*[·•-]?\s*/gi, '')
+                            .replace(/piloté par Dame SKY\s*[·•-]?\s*/gi, '')
+                            .replace(/Dame SKY\s*[·•-]?\s*/gi, '')
+                            .trim();
+                        return c.replace(/^[·•\-\s|]+/, '').replace(/[·•\-\s|]+$/, '').trim() || null;
+                    };
 
                     // ── Normalise le type affiché → valeur enum DB ──
                     const TYPE_MAP: Record<string, string> = {
@@ -309,6 +324,18 @@ export default {
                     if (phone !== undefined) updatePayload.phone = phone.trim();
                     if (email !== undefined) updatePayload.email = email.trim();
                     if (custom_domain !== undefined) updatePayload.custom_domain = custom_domain ? custom_domain.trim() : null;
+                    if (hero_template !== undefined) updatePayload.hero_template = hero_template;
+                    if (landing_layout !== undefined) updatePayload.landing_layout = landing_layout;
+                    if (template_config !== undefined) updatePayload.template_config = template_config;
+                    if (unlocked_styles !== undefined) updatePayload.unlocked_styles = unlocked_styles;
+                    if (sky_points !== undefined) updatePayload.sky_points = sky_points;
+                    if (gallery_images !== undefined) updatePayload.gallery_images = gallery_images;
+                    if (motto !== undefined) updatePayload.motto = sanitizeMotto(motto);
+                    if (hero_title !== undefined) updatePayload.hero_title = hero_title;
+                    if (hero_subtitle !== undefined) updatePayload.hero_subtitle = sanitizeMotto(hero_subtitle);
+                    if (brand_color !== undefined) updatePayload.brand_color = brand_color;
+                    if (about_text !== undefined) updatePayload.about_text = about_text;
+                    if (footer_text !== undefined) updatePayload.footer_text = footer_text;
 
                     const updated = await fetchSupabaseRestOrThrow(env, `organizations?id=eq.${encodeURIComponent(org_id)}`, {
                         method: 'PATCH',
@@ -329,6 +356,55 @@ export default {
                     return jsonResponse({ success: true, org: updated?.[0] || updatePayload });
                 } catch (e: any) {
                     return jsonResponse({ error: e.message || 'Erreur mise à jour organisation' }, 500);
+                }
+            }
+
+            // ── Mise à Jour Fiable du Style & Personnalisation (Bypass RLS) ──
+            if (pathname === '/api/org/update-style' && method === 'POST') {
+                try {
+                    const body = await request.json() as any;
+                    const {
+                        org_id, hero_template, landing_layout, template_config,
+                        unlocked_styles, sky_points, gallery_images, motto,
+                        hero_title, hero_subtitle, brand_color, about_text, footer_text
+                    } = body;
+                    if (!org_id) return jsonResponse({ error: 'org_id requis' }, 400);
+
+                    const sanitizeMotto = (text: string | null | undefined): string | null => {
+                        if (!text || typeof text !== 'string') return text || null;
+                        let c = text
+                            .replace(/Établissement d['’]Élite piloté par Dame SKY\s*[·•-]?\s*/gi, '')
+                            .replace(/Établissement d['’]Élite\s*[·•-]?\s*/gi, '')
+                            .replace(/piloté par Dame SKY\s*[·•-]?\s*/gi, '')
+                            .replace(/Dame SKY\s*[·•-]?\s*/gi, '')
+                            .trim();
+                        return c.replace(/^[·•\-\s|]+/, '').replace(/[·•\-\s|]+$/, '').trim() || null;
+                    };
+
+                    const updatePayload: Record<string, any> = {
+                        updated_at: new Date().toISOString()
+                    };
+                    if (hero_template !== undefined) updatePayload.hero_template = hero_template;
+                    if (landing_layout !== undefined) updatePayload.landing_layout = landing_layout;
+                    if (template_config !== undefined) updatePayload.template_config = template_config;
+                    if (unlocked_styles !== undefined) updatePayload.unlocked_styles = unlocked_styles;
+                    if (sky_points !== undefined) updatePayload.sky_points = sky_points;
+                    if (gallery_images !== undefined) updatePayload.gallery_images = gallery_images;
+                    if (motto !== undefined) updatePayload.motto = sanitizeMotto(motto);
+                    if (hero_title !== undefined) updatePayload.hero_title = hero_title;
+                    if (hero_subtitle !== undefined) updatePayload.hero_subtitle = sanitizeMotto(hero_subtitle);
+                    if (brand_color !== undefined) updatePayload.brand_color = brand_color;
+                    if (about_text !== undefined) updatePayload.about_text = about_text;
+                    if (footer_text !== undefined) updatePayload.footer_text = footer_text;
+
+                    const updated = await fetchSupabaseRestOrThrow(env, `organizations?id=eq.${encodeURIComponent(org_id)}`, {
+                        method: 'PATCH',
+                        body: updatePayload,
+                    });
+
+                    return jsonResponse({ success: true, org: updated?.[0] || { id: org_id, ...updatePayload } });
+                } catch (e: any) {
+                    return jsonResponse({ error: e.message || 'Erreur mise à jour style' }, 500);
                 }
             }
 

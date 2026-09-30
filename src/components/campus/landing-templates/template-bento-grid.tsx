@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
+import { cleanMotto } from '@/lib/clean-motto';
 
 interface TemplateProps {
     org: any;
@@ -37,6 +38,7 @@ export function TemplateBentoGrid({
     bc,
     onOpenInscription
 }: TemplateProps) {
+    const cfg = org.template_config || {};
     const [activeTab, setActiveTab] = useState<'bento' | 'programs' | 'about' | 'gallery' | 'portal'>('bento');
 
     const defaultPhotos = [
@@ -100,21 +102,24 @@ export function TemplateBentoGrid({
                         {org.type ? `${org.type.toUpperCase()} D'EXCELLENCE` : 'ÉTABLISSEMENT D\'EXCELLENCE'} • {org.city || 'CAMPUS CONNECTÉ'}
                     </p>
                     <h1 className="text-3xl sm:text-5xl font-black text-white leading-tight">
-                        Une Éducation d'Excellence <br />
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
-                            avec une Vision d'Avenir
+                        <span data-editable-field="trainer_name" className="inline-block">
+                            {cfg.trainer_name || org.hero_title || 'Une Éducation d\'Excellence'}
+                        </span>{' '}
+                        <br />
+                        <span data-editable-field="trainer_title" className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300 inline-block">
+                            {cfg.trainer_title || 'avec une Vision d\'Avenir'}
                         </span>
                     </h1>
-                    <p className="text-xs sm:text-sm text-slate-400 max-w-xl mx-auto leading-relaxed">
-                        {org.motto || org.hero_subtitle || 'Portail officiel d\'admission, de formation et de suivi académique pour les étudiants et enseignants.'}
+                    <p data-editable-field="trainer_subtitle" className="text-xs sm:text-sm text-slate-400 max-w-xl mx-auto leading-relaxed">
+                        {cleanMotto(cfg.trainer_subtitle || org.hero_subtitle || org.motto, 'Portail officiel d\'admission, de formation et de suivi académique pour les étudiants et enseignants.')}
                     </p>
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-3">
-                        <Button onClick={onOpenInscription} className="h-11 px-7 rounded-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 w-full sm:w-auto">
+                        <Button data-editable-field="primary_cta_text" onClick={onOpenInscription} className="h-11 px-7 rounded-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 w-full sm:w-auto">
                             <FileText className="w-4 h-4" />
-                            S'inscrire Maintenant
+                            {cfg.primary_cta_text || 'S\'inscrire Maintenant'}
                         </Button>
-                        <Button onClick={() => setActiveTab('programs')} variant="outline" className="h-11 px-7 rounded-full border-white/15 text-white hover:bg-white/5 font-bold text-xs w-full sm:w-auto">
-                            Découvrir les Formations
+                        <Button data-editable-field="secondary_cta_text" onClick={() => setActiveTab('programs')} variant="outline" className="h-11 px-7 rounded-full border-white/15 text-white hover:bg-white/5 font-bold text-xs w-full sm:w-auto">
+                            {cfg.secondary_cta_text || 'Découvrir les Formations'}
                         </Button>
                     </div>
                 </div>
@@ -451,16 +456,16 @@ export function TemplateBentoGrid({
                                     </div>
                                 )}
                                 <div className="space-y-1 text-center sm:text-left">
-                                    <h2 className="text-2xl font-black text-white">{org.name}</h2>
+                                    <h2 data-editable-field="trainer_name" className="text-2xl font-black text-white">{cfg.trainer_name || org.name}</h2>
                                     <p className="text-xs text-emerald-400 font-bold uppercase">{org.type || 'Établissement'} • {org.city || 'Cameroun'}</p>
-                                    <p className="text-xs text-slate-400 max-w-xl">{org.motto || 'Un cadre propice à l\'apprentissage et au développement des compétences.'}</p>
+                                    <p data-editable-field="trainer_subtitle" className="text-xs text-slate-400 max-w-xl">{cleanMotto(cfg.trainer_title || org.motto, 'Un cadre propice à l\'apprentissage et au développement des compétences.')}</p>
                                 </div>
                             </div>
 
                             <div className="pt-4 border-t border-white/5 space-y-3">
                                 <h3 className="text-sm font-bold text-white uppercase tracking-wider">Présentation</h3>
-                                <p className="text-xs text-slate-300 leading-relaxed">
-                                    {org.about_text || `${org.name} est un établissement moderne dédié à l'enseignement de haute qualité. Notre plateforme numérique intégrée permet un suivi rigoureux des élèves, des cours en direct et des évaluations régulières pour garantir l'excellence.`}
+                                <p data-editable-field="trainer_bio" className="text-xs text-slate-300 leading-relaxed">
+                                    {cfg.trainer_bio || org.about_text || `${org.name} est un établissement moderne dédié à l'enseignement de haute qualité. Notre plateforme numérique intégrée permet un suivi rigoureux des élèves, des cours en direct et des évaluations régulières pour garantir l'excellence.`}
                                 </p>
                             </div>
 

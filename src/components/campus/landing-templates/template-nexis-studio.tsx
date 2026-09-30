@@ -6,6 +6,7 @@ import { ArrowRight, ArrowUpRight, Star, Send, Menu, X, MessageSquare, Phone, Ma
 import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-modal';
+import { cleanMotto } from '@/lib/clean-motto';
 
 interface TemplateProps {
     org: any;
@@ -41,7 +42,7 @@ export function TemplateNexisStudio({
     const [formMsg, setFormMsg] = useState('');
 
     const orgName      = cfg.trainer_name    || org.name   || 'Nexis Studio';
-    const tagline      = cfg.trainer_title   || org.motto  || 'Construire des Solutions Logicielles de Classe Mondiale.';
+    const tagline      = cleanMotto(cfg.trainer_title || org.motto, 'Construire des Solutions Logicielles de Classe Mondiale.');
     const heroDesc     = cfg.trainer_bio     || org.about_text || 'Notre équipe d\'experts combine la technologie de pointe avec des solutions innovantes pour vous aider à rationaliser vos opérations, améliorer l\'engagement client et stimuler une croissance durable.';
     const heroImage    = cfg.trainer_photo_url || org.hero_image_url || (gallery?.[0]) || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&auto=format&fit=crop&q=80';
     const stat1Val     = cfg.stat1_value || '2000+'; const stat1Lab = cfg.stat1_label || 'Partenaires';
@@ -244,23 +245,25 @@ export function TemplateNexisStudio({
                         <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">
                             Services de développement & formations logicielles
                         </p>
-                        <h1 className="text-4xl sm:text-6xl font-black leading-[1.05] tracking-tighter text-black">
+                        <h1 data-editable-field="trainer_title" className="text-4xl sm:text-6xl font-black leading-[1.05] tracking-tighter text-black cursor-pointer">
                             {tagline}
                         </h1>
-                        <p className="text-sm text-gray-600 leading-relaxed max-w-md">{heroDesc}</p>
+                        <p data-editable-field="trainer_bio" className="text-sm text-gray-600 leading-relaxed max-w-md cursor-pointer">{heroDesc}</p>
                         <div className="flex items-center gap-3 flex-wrap">
                             <button
+                                data-editable-field="primary_cta_text"
                                 onClick={onOpenInscription || (() => scrollToSection('contact'))}
-                                className="inline-flex items-center gap-2 text-black font-black text-xs rounded-full px-7 h-12 transition-all shadow-md hover:scale-105"
+                                className="inline-flex items-center gap-2 text-black font-black text-xs rounded-full px-7 h-12 transition-all shadow-md hover:scale-105 cursor-pointer"
                                 style={{ background: YELLOW }}
                             >
-                                Commencer <ArrowRight className="w-4 h-4" />
+                                {cfg.primary_cta_text || 'Commencer'} <ArrowRight className="w-4 h-4" />
                             </button>
                             <button
+                                data-editable-field="secondary_cta_text"
                                 onClick={() => scrollToSection('projets')}
-                                className="inline-flex items-center gap-2 border border-gray-300 hover:border-gray-900 text-gray-900 font-bold text-xs rounded-full px-7 h-12 transition-colors"
+                                className="inline-flex items-center gap-2 border border-gray-300 hover:border-gray-900 text-gray-900 font-bold text-xs rounded-full px-7 h-12 transition-colors cursor-pointer"
                             >
-                                Voir Nos Travaux
+                                {cfg.secondary_cta_text || 'Voir les Projets'}
                             </button>
                             {whatsappLink && (
                                 <a

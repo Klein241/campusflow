@@ -32,6 +32,7 @@ import { TemplateNexisStudio } from '@/components/campus/landing-templates/templ
 import { SchoolReviewsSection } from '@/components/campus/school-reviews';
 import { SkyAgentBubble } from '@/components/sky-agent/SkyAgentBubble';
 import { SchoolJsonLd } from '@/components/seo/SchoolJsonLd';
+import { cleanMotto } from '@/lib/clean-motto';
 
 // ═══════════════════════════════════════════════════════════════════════
 // TYPES
@@ -137,6 +138,8 @@ export default function SchoolLandingPage() {
         async function load() {
             const { data } = await supabase.from('organizations').select('*').eq('slug', orgSlug).single();
             if (data) {
+                if (data.motto) data.motto = cleanMotto(data.motto);
+                if (data.hero_subtitle) data.hero_subtitle = cleanMotto(data.hero_subtitle);
                 setOrg(data);
                 const [clsRes, filRes, tRes, sRes] = await Promise.all([
                     supabase.from('classrooms').select('*').eq('organization_id', data.id).eq('is_active', true),
@@ -320,7 +323,7 @@ export default function SchoolLandingPage() {
 
     const bc   = org.brand_color || '#14b8a6';
     const hero = org.hero_title || org.name;
-    const sub  = org.hero_subtitle || org.motto || `Bienvenue sur le portail officiel de ${org.name}`;
+    const sub  = cleanMotto(org.hero_subtitle) || cleanMotto(org.motto) || `Bienvenue sur le portail officiel de ${org.name}`;
     const heroTemplate = org.hero_template || (typeof window !== 'undefined' ? (localStorage.getItem(`campusflow_hero_template_${org.id}`) || localStorage.getItem(`campusflow_hero_template_${org.slug}`)) : null) || 'split';
     const landingLayout = org.landing_layout || (typeof window !== 'undefined' ? (localStorage.getItem(`campusflow_landing_layout_${org.id}`) || localStorage.getItem(`campusflow_landing_layout_${org.slug}`)) : null) || 'bento_grid';
     const gallery = org.gallery_images || [];

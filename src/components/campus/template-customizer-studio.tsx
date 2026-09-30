@@ -19,6 +19,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { uploadToR2 } from '@/lib/r2';
 import { orgPath } from '@/lib/custom-domain';
+import { cleanMotto } from '@/lib/clean-motto';
+import { saveOrgStyle } from '@/lib/api-org-style';
 import {
     LANDING_LAYOUT_TEMPLATES,
     type LandingLayoutTemplate
@@ -172,12 +174,21 @@ export function TemplateCustomizerStudio({
     const [saving, setSaving] = useState(false);
     const [uploadingField, setUploadingField] = useState<string | null>(null);
 
+    // ── État d'Édition Directe Interactive depuis le Canevas Live ──
+    const [directEditField, setDirectEditField] = useState<{
+        key: string;
+        label: string;
+        tab: string;
+        isMultiline: boolean;
+    } | null>(null);
+    const [activeHighlightedField, setActiveHighlightedField] = useState<string | null>(null);
+
     // Initialisation du formulaire complet avec nouveaux champs CTA et Médias
     const [form, setForm] = useState<TemplateCustomConfig>({
         // Profil & Hero
         trainer_name: rawConfig.trainer_name || org.name || '',
-        trainer_title: rawConfig.trainer_title || org.motto || 'Product Designer & Mentor Senior',
-        trainer_subtitle: rawConfig.trainer_subtitle || org.hero_subtitle || 'Des produits numériques remarquables conçus avec intention et précision.',
+        trainer_title: rawConfig.trainer_title || cleanMotto(org.motto) || 'Product Designer & Mentor Senior',
+        trainer_subtitle: rawConfig.trainer_subtitle || cleanMotto(org.hero_subtitle) || 'Des produits numériques remarquables conçus avec intention et précision.',
         trainer_bio: rawConfig.trainer_bio || org.about_text || 'Accompagnement d\'élite pour futurs créateurs et professionnels à fort impact.',
         trainer_quote: rawConfig.trainer_quote || '"Chaque pixel, chaque interaction — tout raconte une histoire."',
         trainer_photo_url: rawConfig.trainer_photo_url || org.hero_image_url || '',
@@ -272,8 +283,8 @@ export function TemplateCustomizerStudio({
     const liveOrg = {
         ...org,
         name: form.trainer_name || org.name,
-        motto: form.trainer_title || org.motto,
-        hero_subtitle: form.trainer_subtitle || org.hero_subtitle,
+        motto: cleanMotto(form.trainer_title || org.motto),
+        hero_subtitle: cleanMotto(form.trainer_subtitle || org.hero_subtitle),
         about_text: form.trainer_bio || org.about_text,
         hero_image_url: form.trainer_photo_url || org.hero_image_url,
         template_config: form,
@@ -331,41 +342,177 @@ export function TemplateCustomizerStudio({
         toast.info('Image retirée de la galerie');
     };
 
+    // ── Table de Correspondance Complète pour l'Inspection Directe ──
+    const FIELD_METADATA: Record<string, { label: string; tab: string; isMultiline?: boolean }> = {
+        trainer_name: { label: "Nom de l'Établissement / Formateur", tab: 'profile' },
+        trainer_title: { label: "Titre / Titulature Principale", tab: 'profile' },
+        trainer_subtitle: { label: "Sous-titre / Slogan Hero", tab: 'profile', isMultiline: true },
+        trainer_bio: { label: "Présentation / Biographie", tab: 'profile', isMultiline: true },
+        trainer_quote: { label: "Citation Inspirante", tab: 'profile', isMultiline: true },
+        years_experience_value: { label: "Années d'Expérience", tab: 'profile' },
+        availability_badge: { label: "Badge Disponibilité", tab: 'profile' },
+        primary_cta_text: { label: "Bouton d'Action Principal", tab: 'buttons' },
+        primary_cta_url: { label: "Lien Bouton Principal", tab: 'buttons' },
+        secondary_cta_text: { label: "Bouton d'Action Secondaire", tab: 'buttons' },
+        secondary_cta_url: { label: "Lien Bouton Secondaire", tab: 'buttons' },
+        gallery_title: { label: "Titre de la Galerie", tab: 'media_gallery' },
+        gallery_subtitle: { label: "Sous-titre de la Galerie", tab: 'media_gallery' },
+        flagship_title: { label: "Titre Offre Phare / Livre / Formation", tab: 'flagship' },
+        flagship_subtitle: { label: "Sous-titre Offre Phare", tab: 'flagship' },
+        flagship_description: { label: "Description Offre Phare", tab: 'flagship', isMultiline: true },
+        flagship_price: { label: "Tarif Offre Phare", tab: 'flagship' },
+        flagship_cta_text: { label: "Bouton Offre Phare", tab: 'flagship' },
+        book_cta: { label: "Bouton Commande Livre", tab: 'flagship' },
+        podcast_title: { label: "Titre Podcast / Médias", tab: 'media' },
+        podcast_description: { label: "Description Podcast", tab: 'media', isMultiline: true },
+        podcast_cta_text: { label: "Bouton Podcast", tab: 'media' },
+        podcast_episodes_count: { label: "Nombre d'Épisodes Podcast", tab: 'media' },
+        press_logos_text: { label: "Logos Partenaires & Presse", tab: 'media' },
+        stat1_value: { label: "Statistique 1 (Chiffre)", tab: 'stats' },
+        stat1_label: { label: "Statistique 1 (Libellé)", tab: 'stats' },
+        stat2_value: { label: "Statistique 2 (Chiffre)", tab: 'stats' },
+        stat2_label: { label: "Statistique 2 (Libellé)", tab: 'stats' },
+        stat3_value: { label: "Statistique 3 (Chiffre)", tab: 'stats' },
+        stat3_label: { label: "Statistique 3 (Libellé)", tab: 'stats' },
+        stat4_value: { label: "Statistique 4 (Chiffre)", tab: 'stats' },
+        stat4_label: { label: "Statistique 4 (Libellé)", tab: 'stats' },
+        rating_score_value: { label: "Note & Satisfaction", tab: 'stats' },
+        review_count: { label: "Nombre d'Avis", tab: 'stats' },
+        testimonial_text: { label: "Témoignage Client", tab: 'testimonials', isMultiline: true },
+        testimonial_author: { label: "Auteur du Témoignage", tab: 'testimonials' },
+        testimonial_role: { label: "Rôle de l'Auteur", tab: 'testimonials' },
+        available_text: { label: "Badge Disponibilité / Projets", tab: 'navigation' },
+        turning_ideas_text: { label: "Accroche Idées Créatives", tab: 'navigation' },
+        nav_links_text: { label: "Liens du Menu (séparés par virgules)", tab: 'navigation' },
+        contact_email: { label: "Email Public de Contact", tab: 'navigation' },
+        website_text: { label: "Site Web Public", tab: 'navigation' },
+        about_title: { label: "Titre Section À Propos", tab: 'navigation' },
+    };
+
+    // Détection intelligente du champ cliqué sur le Canvas
+    const detectFieldFromElement = (target: HTMLElement, text: string): string | null => {
+        if (!text && !target) return null;
+        const lower = text.toLowerCase();
+
+        // 1. Correspondance avec une valeur courante du formulaire
+        for (const [k, v] of Object.entries(form)) {
+            if (typeof v === 'string' && v.trim().length > 1) {
+                if (text === v.trim() || valMatches(text, v.trim())) {
+                    return k;
+                }
+            }
+        }
+
+        // 2. Nom d'organisation
+        if (org.name && (text.includes(org.name) || org.name.includes(text))) {
+            return 'trainer_name';
+        }
+
+        // 3. Détection par type de balise HTML et contexte
+        const tag = target.tagName.toLowerCase();
+        const isBtn = tag === 'button' || tag === 'a' || !!target.closest('button') || !!target.closest('a');
+
+        if (isBtn) {
+            if (lower.includes('inscri') || lower.includes('commen') || lower.includes('contact') || lower.includes('projet')) {
+                return 'primary_cta_text';
+            }
+            return 'secondary_cta_text';
+        }
+
+        if (tag === 'h1' || tag === 'h2' || tag === 'h3') {
+            if (target.closest('header') || target.closest('nav')) return 'trainer_name';
+            if (lower.includes('propos') || lower.includes('présentation')) return 'about_title';
+            if (lower.includes('podcast') || lower.includes('média')) return 'podcast_title';
+            if (lower.includes('bestseller') || lower.includes('livre') || lower.includes('offre') || lower.includes('programme')) return 'flagship_title';
+            return 'trainer_name';
+        }
+
+        if (tag === 'p') {
+            if (target.closest('#about') || lower.includes('méthodologie') || lower.includes('dédié')) return 'trainer_bio';
+            return 'trainer_subtitle';
+        }
+
+        if (text.match(/^\+?\d+[%★kKmM+]?$/)) {
+            return 'stat1_value';
+        }
+
+        return 'trainer_subtitle';
+    };
+
+    function valMatches(t: string, f: string): boolean {
+        return t.includes(f) || f.includes(t);
+    }
+
+    // Gestion du clic direct sur n'importe quel élément du Canvas
+    const handleCanvasClick = (e: React.MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('.studio-quick-edit-popover')) return;
+
+        // Empêcher la navigation de liens réels dans l'aperçu du studio
+        e.preventDefault();
+        e.stopPropagation();
+
+        // 1. Détection via data-editable-field
+        const explicitEl = target.closest('[data-editable-field]');
+        let fieldKey = explicitEl?.getAttribute('data-editable-field');
+
+        // 2. Détection intelligente automatique
+        if (!fieldKey) {
+            const text = (target.innerText || target.textContent || '').trim();
+            fieldKey = detectFieldFromElement(target, text);
+        }
+
+        if (fieldKey && FIELD_METADATA[fieldKey]) {
+            const meta = FIELD_METADATA[fieldKey];
+            setDirectEditField({
+                key: fieldKey,
+                label: meta.label,
+                tab: meta.tab,
+                isMultiline: meta.isMultiline || false,
+            });
+
+            // "Voir directement sur le côté"
+            setActiveSidebarTab(meta.tab as any);
+            setActiveHighlightedField(fieldKey);
+            setTimeout(() => {
+                const el = document.getElementById(`studio_field_${fieldKey}`);
+                if (el) {
+                    el.focus();
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 120);
+
+            toast.info(`✏️ "${meta.label}" sélectionné. Modifiez directement ci-dessous ou sur le côté.`, { duration: 2500 });
+        }
+    };
+
     const handleSaveAndPublish = async () => {
         setSaving(true);
         try {
-            // Sauvegarde dans Supabase
-            const { error } = await supabase
-                .from('organizations')
-                .update({
-                    template_config: form,
-                    landing_layout: selectedLayoutId,
-                    gallery_images: form.gallery_images || org.gallery_images,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', org.id);
+            // Sauvegarde infaillible (Supabase direct + fallback Cloudflare Worker Service Role)
+            const res = await saveOrgStyle(org.id, org.slug || orgSlug, {
+                template_config: form,
+                landing_layout: selectedLayoutId,
+                gallery_images: form.gallery_images || org.gallery_images,
+                motto: form.trainer_title || org.motto,
+                hero_subtitle: form.trainer_subtitle || org.hero_subtitle,
+                hero_title: form.trainer_name || org.hero_title,
+                about_text: form.trainer_bio || org.about_text,
+            });
 
-            if (error) {
-                console.warn('[Studio] Supabase update warning:', error);
-            }
-
-            // Sauvegarde locale instantanée
-            if (typeof window !== 'undefined') {
-                localStorage.setItem(`campusflow_template_config_${org.id}`, JSON.stringify(form));
-                localStorage.setItem(`campusflow_template_config_${org.slug}`, JSON.stringify(form));
-                localStorage.setItem(`campusflow_landing_layout_${org.id}`, selectedLayoutId);
-                localStorage.setItem(`campusflow_landing_layout_${org.slug}`, selectedLayoutId);
-            }
-
-            const updatedOrg = {
+            const updatedOrg = res.org || {
                 ...org,
                 template_config: form,
                 landing_layout: selectedLayoutId,
                 gallery_images: form.gallery_images || org.gallery_images,
+                motto: cleanMotto(form.trainer_title || org.motto),
+                hero_subtitle: cleanMotto(form.trainer_subtitle || org.hero_subtitle),
+                hero_title: form.trainer_name || org.hero_title,
+                about_text: form.trainer_bio || org.about_text,
             };
 
             onSaveSuccess(updatedOrg);
-            toast.success('🚀 Page d\'accueil personnalisée et publiée avec succès !');
+            toast.success('🚀 Page d\'accueil personnalisée et enregistrée avec succès !');
         } catch (e: any) {
             toast.error(e.message || 'Erreur lors de l\'enregistrement');
         } finally {
@@ -715,10 +862,11 @@ export function TemplateCustomizerStudio({
                                             Nom du Formateur / Nom de l'Établissement
                                         </label>
                                         <Input
+                                            id="studio_field_trainer_name"
                                             value={form.trainer_name || ''}
                                             onChange={e => setForm({ ...form, trainer_name: e.target.value })}
                                             placeholder="Ex: Vladi, Mariana Napolitani, Julie Solomon..."
-                                            className="bg-white/5 border-white/10 text-white rounded-xl h-10"
+                                            className={`bg-white/5 border-white/10 text-white rounded-xl h-10 transition-all duration-300 ${activeHighlightedField === 'trainer_name' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                         />
                                     </div>
 
@@ -727,10 +875,11 @@ export function TemplateCustomizerStudio({
                                             Titre Professionnel / Rôle
                                         </label>
                                         <Input
+                                            id="studio_field_trainer_title"
                                             value={form.trainer_title || ''}
                                             onChange={e => setForm({ ...form, trainer_title: e.target.value })}
                                             placeholder="Ex: Product Designer & Mentor Senior, Auteur & Coach..."
-                                            className="bg-white/5 border-white/10 text-white rounded-xl h-10"
+                                            className={`bg-white/5 border-white/10 text-white rounded-xl h-10 transition-all duration-300 ${activeHighlightedField === 'trainer_title' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                         />
                                     </div>
 
@@ -739,10 +888,11 @@ export function TemplateCustomizerStudio({
                                             Sous-titre / Accroche Principale (Hero Headline)
                                         </label>
                                         <Textarea
+                                            id="studio_field_trainer_subtitle"
                                             value={form.trainer_subtitle || ''}
                                             onChange={e => setForm({ ...form, trainer_subtitle: e.target.value })}
                                             placeholder="Ex: Des produits numériques remarquables conçus avec intention et précision."
-                                            className="bg-white/5 border-white/10 text-white rounded-xl min-h-[70px]"
+                                            className={`bg-white/5 border-white/10 text-white rounded-xl min-h-[70px] transition-all duration-300 ${activeHighlightedField === 'trainer_subtitle' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                         />
                                     </div>
 
@@ -751,10 +901,11 @@ export function TemplateCustomizerStudio({
                                             Biographie / Présentation Pédagogique
                                         </label>
                                         <Textarea
+                                            id="studio_field_trainer_bio"
                                             value={form.trainer_bio || ''}
                                             onChange={e => setForm({ ...form, trainer_bio: e.target.value })}
                                             placeholder="Ex: Accompagnement sur-mesure pour futurs créateurs à fort impact..."
-                                            className="bg-white/5 border-white/10 text-white rounded-xl min-h-[85px]"
+                                            className={`bg-white/5 border-white/10 text-white rounded-xl min-h-[85px] transition-all duration-300 ${activeHighlightedField === 'trainer_bio' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                         />
                                     </div>
 
@@ -763,10 +914,11 @@ export function TemplateCustomizerStudio({
                                             Citation Inspirante / Motto
                                         </label>
                                         <Input
+                                            id="studio_field_trainer_quote"
                                             value={form.trainer_quote || ''}
                                             onChange={e => setForm({ ...form, trainer_quote: e.target.value })}
                                             placeholder='Ex: "Chaque pixel, chaque interaction — tout raconte une histoire."'
-                                            className="bg-white/5 border-white/10 text-white rounded-xl h-10"
+                                            className={`bg-white/5 border-white/10 text-white rounded-xl h-10 transition-all duration-300 ${activeHighlightedField === 'trainer_quote' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                         />
                                     </div>
                                 </div>
@@ -1007,20 +1159,22 @@ export function TemplateCustomizerStudio({
                                     <div>
                                         <label className="text-[10px] text-slate-400 block mb-1">Texte du Bouton Principal</label>
                                         <Input
+                                            id="studio_field_primary_cta_text"
                                             value={form.primary_cta_text || ''}
                                             onChange={e => setForm({ ...form, primary_cta_text: e.target.value })}
                                             placeholder="Ex: S'inscrire / Commencer la formation, Travailler Avec Moi..."
-                                            className="bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs"
+                                            className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs transition-all duration-300 ${activeHighlightedField === 'primary_cta_text' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                         />
                                     </div>
 
                                     <div>
                                         <label className="text-[10px] text-slate-400 block mb-1">Action ou Lien de Destination</label>
                                         <Input
+                                            id="studio_field_primary_cta_url"
                                             value={form.primary_cta_url || ''}
                                             onChange={e => setForm({ ...form, primary_cta_url: e.target.value })}
                                             placeholder="Ex: #inscription, https://wa.me/237..., /campus/cursus"
-                                            className="bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs"
+                                            className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs transition-all duration-300 ${activeHighlightedField === 'primary_cta_url' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                         />
                                         <p className="text-[9px] text-slate-500 mt-1">Laissez #inscription pour ouvrir le formulaire officiel d'inscription du campus.</p>
                                     </div>
@@ -1044,20 +1198,22 @@ export function TemplateCustomizerStudio({
                                     <div>
                                         <label className="text-[10px] text-slate-400 block mb-1">Texte du Bouton Secondaire</label>
                                         <Input
+                                            id="studio_field_secondary_cta_text"
                                             value={form.secondary_cta_text || ''}
                                             onChange={e => setForm({ ...form, secondary_cta_text: e.target.value })}
                                             placeholder="Ex: Découvrir le Portfolio, Voir les Formations..."
-                                            className="bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs"
+                                            className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs transition-all duration-300 ${activeHighlightedField === 'secondary_cta_text' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                         />
                                     </div>
 
                                     <div>
                                         <label className="text-[10px] text-slate-400 block mb-1">Lien de Destination</label>
                                         <Input
+                                            id="studio_field_secondary_cta_url"
                                             value={form.secondary_cta_url || ''}
                                             onChange={e => setForm({ ...form, secondary_cta_url: e.target.value })}
                                             placeholder="Ex: #programmes, /login, #temoignages"
-                                            className="bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs"
+                                            className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs transition-all duration-300 ${activeHighlightedField === 'secondary_cta_url' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                         />
                                     </div>
                                 </div>
@@ -1200,30 +1356,33 @@ export function TemplateCustomizerStudio({
                                     <div>
                                         <label className="font-bold text-slate-200 block mb-1">Titre de l'Offre / du Livre</label>
                                         <Input
+                                            id="studio_field_flagship_title"
                                             value={form.flagship_title || ''}
                                             onChange={e => setForm({ ...form, flagship_title: e.target.value })}
                                             placeholder="Ex: Et si vous pouviez obtenir exactement ce que vous voulez ?"
-                                            className="bg-white/5 border-white/10 text-white rounded-xl h-10"
+                                            className={`bg-white/5 border-white/10 text-white rounded-xl h-10 transition-all duration-300 ${activeHighlightedField === 'flagship_title' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                         />
                                     </div>
 
                                     <div>
                                         <label className="font-bold text-slate-200 block mb-1">Sous-titre / Badge d'Excellence</label>
                                         <Input
+                                            id="studio_field_flagship_subtitle"
                                             value={form.flagship_subtitle || ''}
                                             onChange={e => setForm({ ...form, flagship_subtitle: e.target.value })}
                                             placeholder="Ex: Formation & Méthodologie N°1 Recommandée"
-                                            className="bg-white/5 border-white/10 text-white rounded-xl h-10"
+                                            className={`bg-white/5 border-white/10 text-white rounded-xl h-10 transition-all duration-300 ${activeHighlightedField === 'flagship_subtitle' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                         />
                                     </div>
 
                                     <div>
                                         <label className="font-bold text-slate-200 block mb-1">Description Détaillée</label>
                                         <Textarea
+                                            id="studio_field_flagship_description"
                                             value={form.flagship_description || ''}
                                             onChange={e => setForm({ ...form, flagship_description: e.target.value })}
                                             placeholder="Ex: Un accompagnement structuré, des ateliers pratiques et un accès direct..."
-                                            className="bg-white/5 border-white/10 text-white rounded-xl min-h-[80px]"
+                                            className={`bg-white/5 border-white/10 text-white rounded-xl min-h-[80px] transition-all duration-300 ${activeHighlightedField === 'flagship_description' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                         />
                                     </div>
 
@@ -1231,19 +1390,21 @@ export function TemplateCustomizerStudio({
                                         <div>
                                             <label className="font-bold text-slate-200 block mb-1">Tarif Affiché</label>
                                             <Input
+                                                id="studio_field_flagship_price"
                                                 value={form.flagship_price || ''}
                                                 onChange={e => setForm({ ...form, flagship_price: e.target.value })}
                                                 placeholder="Ex: 250 000 FCFA"
-                                                className="bg-white/5 border-white/10 text-white rounded-xl h-10"
+                                                className={`bg-white/5 border-white/10 text-white rounded-xl h-10 transition-all duration-300 ${activeHighlightedField === 'flagship_price' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                             />
                                         </div>
                                         <div>
                                             <label className="font-bold text-slate-200 block mb-1">Texte du Bouton CTA</label>
                                             <Input
+                                                id="studio_field_flagship_cta_text"
                                                 value={form.flagship_cta_text || ''}
                                                 onChange={e => setForm({ ...form, flagship_cta_text: e.target.value })}
                                                 placeholder="Ex: Commander / Réserver"
-                                                className="bg-white/5 border-white/10 text-white rounded-xl h-10"
+                                                className={`bg-white/5 border-white/10 text-white rounded-xl h-10 transition-all duration-300 ${activeHighlightedField === 'flagship_cta_text' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                             />
                                         </div>
                                     </div>
@@ -1251,10 +1412,11 @@ export function TemplateCustomizerStudio({
                                     <div>
                                         <label className="font-bold text-slate-200 block mb-1">Accroche Finale du Livre</label>
                                         <Input
+                                            id="studio_field_book_cta"
                                             value={form.book_cta || ''}
                                             onChange={e => setForm({ ...form, book_cta: e.target.value })}
                                             placeholder="Ex: Commandez mon bestseller aujourd'hui !"
-                                            className="bg-white/5 border-white/10 text-white rounded-xl h-10"
+                                            className={`bg-white/5 border-white/10 text-white rounded-xl h-10 transition-all duration-300 ${activeHighlightedField === 'book_cta' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                         />
                                     </div>
                                 </div>
@@ -1735,12 +1897,120 @@ export function TemplateCustomizerStudio({
                                 </div>
                             )}
 
-                            {/* Render Template */}
-                            <div className="w-full">
+                            {/* Render Template with Interactive Direct Click-to-Edit */}
+                            <div
+                                className="w-full relative cursor-pointer group/canvas"
+                                onClickCapture={handleCanvasClick}
+                            >
                                 {renderLiveTemplate()}
                             </div>
                         </div>
                     </div>
+
+                    {/* ─── POP-UP D'ÉDITION DIRECTE FLOTTANTE (DOCKÉE EN BAS DU CANEVAS) ─── */}
+                    <AnimatePresence>
+                        {directEditField && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                                transition={{ duration: 0.2 }}
+                                className="studio-quick-edit-popover absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-lg z-50 bg-[#0D121D]/95 backdrop-blur-2xl border border-amber-500/50 rounded-2xl shadow-2xl shadow-amber-500/20 p-4 text-white"
+                            >
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                                            <Sparkles className="w-3.5 h-3.5" />
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block leading-none">
+                                                Édition Directe Rapide
+                                            </span>
+                                            <span className="text-xs font-black text-white">
+                                                {directEditField.label}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setActiveSidebarTab(directEditField.tab as any);
+                                                setActiveHighlightedField(directEditField.key);
+                                                const el = document.getElementById(`studio_field_${directEditField.key}`);
+                                                if (el) {
+                                                    el.focus();
+                                                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                }
+                                            }}
+                                            className="text-[10px] font-bold text-slate-400 hover:text-amber-300 transition flex items-center gap-1 bg-white/5 hover:bg-white/10 px-2 py-1 rounded-lg"
+                                        >
+                                            Voir sur le côté →
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setDirectEditField(null);
+                                                setActiveHighlightedField(null);
+                                            }}
+                                            className="p-1 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition"
+                                            title="Fermer l'édition rapide"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3 pt-1">
+                                    {directEditField.isMultiline ? (
+                                        <Textarea
+                                            value={(form as any)[directEditField.key] || ''}
+                                            onChange={e => setForm(prev => ({ ...prev, [directEditField.key]: e.target.value }))}
+                                            className="bg-black/70 border-amber-500/40 text-white rounded-xl min-h-[75px] text-xs focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+                                            placeholder={`Modifier ${directEditField.label}...`}
+                                            autoFocus
+                                        />
+                                    ) : (
+                                        <Input
+                                            value={(form as any)[directEditField.key] || ''}
+                                            onChange={e => setForm(prev => ({ ...prev, [directEditField.key]: e.target.value }))}
+                                            className="bg-black/70 border-amber-500/40 text-white rounded-xl h-10 text-xs focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+                                            placeholder={`Modifier ${directEditField.label}...`}
+                                            autoFocus
+                                        />
+                                    )}
+
+                                    <div className="flex items-center justify-between pt-1">
+                                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                            Aperçu instantané en direct
+                                        </span>
+                                        <Button
+                                            size="sm"
+                                            onClick={handleSaveAndPublish}
+                                            disabled={saving}
+                                            className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs h-8 px-4 rounded-xl shadow-lg shadow-amber-500/20 flex items-center gap-1.5"
+                                        >
+                                            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                                            <span>Enregistrer</span>
+                                        </Button>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* Styles pour le hover dynamique des zones éditables */}
+                    <style jsx global>{`
+                        [data-editable-field] {
+                            transition: outline 0.15s ease-in-out, background-color 0.15s ease-in-out !important;
+                        }
+                        [data-editable-field]:hover {
+                            outline: 2px dashed #f59e0b !important;
+                            outline-offset: 4px !important;
+                            cursor: pointer !important;
+                        }
+                    `}</style>
                 </main>
             </div>
         </div>

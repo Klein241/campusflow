@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { cleanMotto } from '@/lib/clean-motto';
 
 interface SchoolJsonLdProps {
     org: {
@@ -30,7 +31,7 @@ export function SchoolJsonLd({ org }: SchoolJsonLdProps) {
             : `${window.location.origin}/${org.slug}`;
 
         const pageTitle = `${org.name} — Portail Officiel & Formations | IziTeach`;
-        const pageDesc = org.hero_subtitle || org.motto || org.about_text?.slice(0, 160) || `Découvrez ${org.name}, les programmes de cours, les inscriptions et l'espace numérique éducatif.`;
+        const pageDesc = cleanMotto(org.hero_subtitle) || cleanMotto(org.motto) || org.about_text?.slice(0, 160) || `Découvrez ${org.name}, les programmes de cours, les inscriptions et l'espace numérique éducatif.`;
         const pageImage = org.logo_url || `${window.location.origin}/og-image.png`;
 
         // Update document metadata for browser tab and SEO crawlers
@@ -76,7 +77,7 @@ export function SchoolJsonLd({ org }: SchoolJsonLdProps) {
         '@context': 'https://schema.org',
         '@type': 'EducationalOrganization',
         name: org.name,
-        description: org.about_text || org.hero_subtitle || org.motto || `Portail éducatif officiel de ${org.name}`,
+        description: org.about_text || cleanMotto(org.hero_subtitle) || cleanMotto(org.motto) || `Portail éducatif officiel de ${org.name}`,
         url: orgUrl,
         logo: org.logo_url || undefined,
         image: org.logo_url || undefined,

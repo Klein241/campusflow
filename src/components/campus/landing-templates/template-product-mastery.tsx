@@ -11,6 +11,7 @@ import {
 import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-modal';
+import { cleanMotto } from '@/lib/clean-motto';
 import { cn } from '@/lib/utils';
 
 interface TemplateProps {
@@ -40,7 +41,7 @@ export function TemplateProductMastery({
     const [activeSection, setActiveSection] = useState('hero');
 
     const trainerName    = cfg.trainer_name    || org.name       || 'Vladi Studio';
-    const trainerTitle   = cfg.trainer_title   || org.motto      || 'Product Designer & Formateur';
+    const trainerTitle   = cleanMotto(cfg.trainer_title || org.motto, 'Product Designer & Formateur');
     const trainerBio     = cfg.trainer_bio     || org.about_text || 'Nous créons des expériences digitales mémorables et formons les leaders de la tech et du design de demain. Une pédagogie axée 100% sur la pratique et l\'excellence.';
     const trainerQuote   = cfg.trainer_quote   || '"L\'excellence du design et de la formation transforme les idées en réussites concrètes."';
     const yearsExp       = cfg.years_experience_value || '14';
@@ -212,7 +213,8 @@ export function TemplateProductMastery({
                         <motion.div
                             initial={{ opacity: 0, y: 15 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-orange-50 border border-orange-200/60 shadow-sm"
+                            data-editable-field="availability_badge"
+                            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-orange-50 border border-orange-200/60 shadow-sm cursor-pointer"
                         >
                             <span className="w-2 h-2 rounded-full bg-[#FF6B00] animate-pulse" />
                             <span className="text-[11px] font-extrabold tracking-wider text-[#FF6B00] uppercase">
@@ -227,7 +229,7 @@ export function TemplateProductMastery({
                             transition={{ delay: 0.1 }}
                             className="space-y-3"
                         >
-                            <h1 className="text-4xl sm:text-6xl xl:text-7xl font-black leading-[1.05] tracking-tight text-[#0D0D0D]">
+                            <h1 data-editable-field="trainer_name" className="text-4xl sm:text-6xl xl:text-7xl font-black leading-[1.05] tracking-tight text-[#0D0D0D]">
                                 {trainerName.length > 22 ? (
                                     <>
                                         Bienvenue sur <span className="bg-gradient-to-r from-[#FF6B00] to-[#FFA149] bg-clip-text text-transparent">{trainerName}</span>
@@ -238,7 +240,7 @@ export function TemplateProductMastery({
                                     </>
                                 )}
                             </h1>
-                            <p className="text-lg sm:text-xl font-bold text-gray-600 max-w-xl">
+                            <p data-editable-field="trainer_title" className="text-lg sm:text-xl font-bold text-gray-600 max-w-xl">
                                 {trainerTitle}
                             </p>
                         </motion.div>
@@ -248,6 +250,7 @@ export function TemplateProductMastery({
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.2 }}
+                            data-editable-field="trainer_bio"
                             className="p-5 rounded-2xl bg-gray-50/80 border border-gray-200/70 relative max-w-xl"
                         >
                             <p className="text-xs sm:text-sm text-gray-600 leading-relaxed italic">
@@ -272,12 +275,12 @@ export function TemplateProductMastery({
                                 <p className="text-[10px] text-gray-400 mt-0.5">Avis certifiés</p>
                             </div>
 
-                            <div className="p-3.5 rounded-2xl border border-gray-100 bg-white shadow-sm">
+                            <div data-editable-field="years_experience_value" className="p-3.5 rounded-2xl border border-gray-100 bg-white shadow-sm cursor-pointer">
                                 <p className="text-xl sm:text-2xl font-black text-[#FF6B00]">{yearsExp}+ Ans</p>
                                 <p className="text-[10px] font-bold text-gray-400 mt-0.5">D&apos;Expertise & Succès</p>
                             </div>
 
-                            <div className="col-span-2 sm:col-span-1 p-3.5 rounded-2xl border border-gray-100 bg-white shadow-sm">
+                            <div data-editable-field="student_count_override" className="col-span-2 sm:col-span-1 p-3.5 rounded-2xl border border-gray-100 bg-white shadow-sm cursor-pointer">
                                 <p className="text-xl sm:text-2xl font-black text-gray-900">{studentCount > 0 ? `+${studentCount}` : '+500'}</p>
                                 <p className="text-[10px] font-bold text-gray-400 mt-0.5">Étudiants Diplômés</p>
                             </div>
@@ -291,20 +294,22 @@ export function TemplateProductMastery({
                             className="flex flex-wrap items-center gap-3.5 pt-2"
                         >
                             <button
+                                data-editable-field="primary_cta_text"
                                 onClick={() => scrollToSection('services')}
-                                className="inline-flex items-center gap-2 bg-[#FF6B00] hover:bg-[#E05E00] text-white font-black text-sm rounded-full px-8 h-13 transition-all shadow-xl shadow-orange-500/25 active:scale-95"
+                                className="inline-flex items-center gap-2 bg-[#FF6B00] hover:bg-[#E05E00] text-white font-black text-sm rounded-full px-8 h-13 transition-all shadow-xl shadow-orange-500/25 active:scale-95 cursor-pointer"
                             >
                                 <BookOpen className="w-4 h-4" />
-                                <span>Explorer les Formations</span>
+                                <span>{cfg.primary_cta_text || 'Explorer les Formations'}</span>
                                 <ArrowRight className="w-4 h-4 ml-1" />
                             </button>
 
                             <button
+                                data-editable-field="secondary_cta_text"
                                 onClick={() => scrollToSection('portfolio')}
-                                className="inline-flex items-center gap-2 bg-gray-900 hover:bg-black text-white font-bold text-sm rounded-full px-7 h-13 transition-all active:scale-95 shadow-md"
+                                className="inline-flex items-center gap-2 bg-gray-900 hover:bg-black text-white font-bold text-sm rounded-full px-7 h-13 transition-all active:scale-95 shadow-md cursor-pointer"
                             >
                                 <Palette className="w-4 h-4" />
-                                <span>Voir le Portfolio</span>
+                                <span>{cfg.secondary_cta_text || 'Voir le Portfolio'}</span>
                             </button>
                         </motion.div>
                     </div>

@@ -19,6 +19,7 @@ import {
     type LandingLayoutTemplate
 } from '@/lib/premium-styles-config';
 import { TemplateCustomizerStudio } from '@/components/campus/template-customizer-studio';
+import { saveOrgStyle } from '@/lib/api-org-style';
 
 interface AdminPremiumStylesProps {
     org: any;
@@ -360,13 +361,10 @@ export function AdminPremiumStyles({
         }
 
         setSelectedBanner(banner.id);
-        if (typeof window !== 'undefined') {
-            localStorage.setItem(`campusflow_hero_template_${org.id}`, banner.id);
-            localStorage.setItem(`campusflow_hero_template_${org.slug}`, banner.id);
-        }
-        try { await supabase.from('organizations').update({ hero_template: banner.id }).eq('id', org.id); } catch {}
-        onUpdateOrg({ ...org, hero_template: banner.id });
-        toast.success(`Bannière "${banner.name}" appliquée !`);
+        const res = await saveOrgStyle(org.id, org.slug || orgSlug, { hero_template: banner.id });
+        const updated = res.org || { ...org, hero_template: banner.id };
+        onUpdateOrg(updated);
+        toast.success(`Bannière "${banner.name}" appliquée au compte avec succès !`);
     };
 
     // — Appliquer/Débloquer layout —
@@ -390,13 +388,10 @@ export function AdminPremiumStyles({
         }
 
         setSelectedLayout(layout.id);
-        if (typeof window !== 'undefined') {
-            localStorage.setItem(`campusflow_landing_layout_${org.id}`, layout.id);
-            localStorage.setItem(`campusflow_landing_layout_${org.slug}`, layout.id);
-        }
-        try { await supabase.from('organizations').update({ landing_layout: layout.id }).eq('id', org.id); } catch {}
-        onUpdateOrg({ ...org, landing_layout: layout.id });
-        toast.success(`Layout "${layout.name}" activé !`);
+        const res = await saveOrgStyle(org.id, org.slug || orgSlug, { landing_layout: layout.id });
+        const updated = res.org || { ...org, landing_layout: layout.id };
+        onUpdateOrg(updated);
+        toast.success(`Modèle "${layout.name}" appliqué au compte avec succès !`);
     };
 
     return (

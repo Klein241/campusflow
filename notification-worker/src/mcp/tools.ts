@@ -3,7 +3,7 @@
  */
 import { Env } from '../types';
 import { sendPushDirect } from '../services/vapid';
-import { translateTextWithAi, IZITEACH_SUPPORTED_LANGUAGES, type SupportedLanguage } from '../services/ai';
+import { translateTextWithAi, generateSpeechAudio, IZITEACH_SUPPORTED_LANGUAGES, type SupportedLanguage } from '../services/ai';
 
 async function broadcastUpdatePush(
     env: Env,
@@ -427,6 +427,27 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 if (tr.note) langNotice = ` (${tr.note})`;
             }
 
+            // Support Audio direct R2 / URL externe dans les leçons
+            if (args.audio_url) {
+                let blocks: any[] = [];
+                try {
+                    const parsed = JSON.parse(finalContent);
+                    if (Array.isArray(parsed)) blocks = parsed;
+                    else blocks = [{ type: 'text', value: finalContent }];
+                } catch {
+                    blocks = [{ type: 'text', value: finalContent }];
+                }
+                if (!blocks.some(b => b.type === 'audio' && b.url === args.audio_url)) {
+                    blocks.push({
+                        type: 'audio',
+                        url: args.audio_url,
+                        caption: args.audio_caption || `Explication vocale : ${args.title}`,
+                        duration: Number(args.audio_duration) || undefined,
+                    });
+                }
+                finalContent = JSON.stringify(blocks);
+            }
+
             const payload: any = {
                 id,
                 organization_id: targetOrgId,
@@ -479,15 +500,20 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         case 'update_lesson': {
             if (!args.lesson_id) throw { code: -32602, message: 'lesson_id requis' };
             let lesOrgId: string | null = null;
+            let currentContent: string = '';
             if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
-                const supLes = await fetchSupabaseRest(env, `lessons?id=eq.${encodeURIComponent(args.lesson_id)}&select=id,organization_id`);
+                const supLes = await fetchSupabaseRest(env, `lessons?id=eq.${encodeURIComponent(args.lesson_id)}&select=id,organization_id,content`);
                 if (supLes && supLes.length > 0) {
                     lesOrgId = supLes[0].organization_id;
+                    currentContent = supLes[0].content || '';
                 }
             }
             if (!lesOrgId) {
-                const les: any = await db.prepare(`SELECT organization_id FROM lessons WHERE id = ?1`).bind(args.lesson_id).first().catch(() => null);
-                if (les) lesOrgId = les.organization_id;
+                const les: any = await db.prepare(`SELECT organization_id, content FROM lessons WHERE id = ?1`).bind(args.lesson_id).first().catch(() => null);
+                if (les) {
+                    lesOrgId = les.organization_id;
+                    currentContent = les.content || '';
+                }
             }
             if (!lesOrgId && !ctx.isSuperadmin && !ctx.orgId) throw { code: -32602, message: 'Leçon introuvable' };
             if (lesOrgId && !ctx.isSuperadmin && ctx.orgId && lesOrgId !== ctx.orgId) throw { code: -32003, message: 'Accès refusé' };
@@ -502,17 +528,190 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             }
             if (args.position !== undefined) updatePayload.position = Number(args.position);
 
+            // Si audio_url est fourni lors de la mise à jour
+            if (args.audio_url) {
+                const baseText = updatePayload.content !== undefined ? updatePayload.content : currentContent;
+                let blocks: any[] = [];
+                try {
+                    const parsed = JSON.parse(baseText);
+                    if (Array.isArray(parsed)) blocks = parsed;
+                    else if (baseText) blocks = [{ type: 'text', value: baseText }];
+                } catch {
+                    if (baseText) blocks = [{ type: 'text', value: baseText }];
+                }
+                const audioBlock = {
+                    type: 'audio',
+                    url: args.audio_url,
+                    caption: args.audio_caption || 'Explication audio de la leçon',
+                };
+                const existingIdx = blocks.findIndex(b => b.type === 'audio');
+                if (existingIdx >= 0) {
+                    blocks[existingIdx] = audioBlock;
+                } else {
+                    blocks.push(audioBlock);
+                }
+                updatePayload.content = JSON.stringify(blocks);
+            }
+
             if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
                 await fetchSupabaseRest(env, `lessons?id=eq.${encodeURIComponent(args.lesson_id)}`, { method: 'PATCH', body: updatePayload });
             }
 
+            const dbContent = updatePayload.content !== undefined ? updatePayload.content : null;
             await db.prepare(`UPDATE lessons SET title = COALESCE(?1, title), content = COALESCE(?2, content), estimated_minutes = COALESCE(?3, estimated_minutes), position = COALESCE(?4, position) WHERE id = ?5`)
-                .bind(args.title || null, args.content || null, args.duration_minutes || null, args.position || null, args.lesson_id).run().catch(() => {});
+                .bind(args.title || null, dbContent, args.duration_minutes || null, args.position || null, args.lesson_id).run().catch(() => {});
 
             // 📢 NOTIFICATION PUSH AUTOMATIQUE
             broadcastUpdatePush(env, db, lesOrgId || targetOrgId || '', `📝 Mise à jour de la leçon : ${args.title || 'Contenu modifié'}`, `Le contenu de la leçon a été mis à jour.`, '📝', '/campus/cursus');
 
             return { success: true, message: `✅ Leçon mise à jour avec succès` };
+        }
+
+        // ── ADD AUDIO TO LESSON (ATTACH EXISTING R2/URL AUDIO) ──
+        case 'add_audio_to_lesson': {
+            if (!args.lesson_id) throw { code: -32602, message: 'lesson_id requis' };
+            if (!args.audio_url) throw { code: -32602, message: 'audio_url requis' };
+
+            let existingLesson: any = null;
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const lessons = await fetchSupabaseRest(env, `lessons?id=eq.${encodeURIComponent(args.lesson_id)}&select=id,organization_id,title,content`);
+                if (lessons && lessons.length > 0) existingLesson = lessons[0];
+            }
+            if (!existingLesson) {
+                existingLesson = await db.prepare(`SELECT id, organization_id, title, content FROM lessons WHERE id = ?1`).bind(args.lesson_id).first().catch(() => null);
+            }
+            if (!existingLesson) {
+                throw { code: -32602, message: `Leçon introuvable (id: "${args.lesson_id}")` };
+            }
+
+            let blocks: any[] = [];
+            try {
+                const parsed = JSON.parse(existingLesson.content || '[]');
+                if (Array.isArray(parsed)) blocks = parsed;
+                else if (existingLesson.content) blocks = [{ type: 'text', value: existingLesson.content }];
+            } catch {
+                if (existingLesson.content) blocks = [{ type: 'text', value: existingLesson.content }];
+            }
+
+            const caption = args.caption || args.audio_caption || `Explication audio : ${existingLesson.title}`;
+            const duration = Number(args.duration || args.audio_duration) || undefined;
+
+            const existingIdx = blocks.findIndex(b => b.type === 'audio' && b.url === args.audio_url);
+            if (existingIdx >= 0) {
+                blocks[existingIdx].caption = caption;
+                if (duration) blocks[existingIdx].duration = duration;
+            } else {
+                blocks.push({
+                    type: 'audio',
+                    url: args.audio_url,
+                    caption,
+                    duration,
+                });
+            }
+
+            const newContent = JSON.stringify(blocks);
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `lessons?id=eq.${encodeURIComponent(args.lesson_id)}`, {
+                    method: 'PATCH',
+                    body: { content: newContent },
+                });
+            }
+            await db.prepare(`UPDATE lessons SET content = ?1 WHERE id = ?2`).bind(newContent, args.lesson_id).run().catch(() => {});
+
+            return {
+                success: true,
+                lesson_id: args.lesson_id,
+                audio_url: args.audio_url,
+                caption,
+                blocks_count: blocks.length,
+                message: `🎵 Audio attaché avec succès à la leçon "${existingLesson.title}"`,
+            };
+        }
+
+        // ── GENERATE LESSON AUDIO (TTS VIA CLOUDFLARE AI + R2) ──
+        case 'generate_lesson_audio': {
+            if (!args.text || typeof args.text !== 'string' || !args.text.trim()) {
+                throw { code: -32602, message: 'text requis pour générer la synthèse vocale' };
+            }
+
+            const lang = (args.language || 'fr').toLowerCase().trim();
+            const caption = args.caption || 'Synthèse vocale de la leçon';
+
+            const { audioBytes, mimeType } = await generateSpeechAudio(env, args.text, lang);
+
+            const timestamp = Date.now();
+            const safeId = args.lesson_id ? String(args.lesson_id).replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) : 'tts';
+            const r2Key = `lesson-audio/${timestamp}_${safeId}.mp3`;
+
+            await env.LIBRARY_BUCKET.put(r2Key, audioBytes, {
+                httpMetadata: {
+                    contentType: mimeType,
+                    cacheControl: 'public, max-age=31536000',
+                },
+                customMetadata: {
+                    generatedBy: 'Cloudflare_MeloTTS',
+                    lang,
+                    caption,
+                    uploadedAt: new Date().toISOString(),
+                },
+            });
+
+            const audioUrl = `https://campusflow-worker.kleintaptue1.workers.dev/r2/${r2Key}`;
+
+            let attached = false;
+            let lessonTitle = '';
+
+            if (args.lesson_id) {
+                let existingLesson: any = null;
+                if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                    const lessons = await fetchSupabaseRest(env, `lessons?id=eq.${encodeURIComponent(args.lesson_id)}&select=id,title,content`);
+                    if (lessons && lessons.length > 0) existingLesson = lessons[0];
+                }
+                if (!existingLesson) {
+                    existingLesson = await db.prepare(`SELECT id, title, content FROM lessons WHERE id = ?1`).bind(args.lesson_id).first().catch(() => null);
+                }
+
+                if (existingLesson) {
+                    lessonTitle = existingLesson.title;
+                    let blocks: any[] = [];
+                    try {
+                        const parsed = JSON.parse(existingLesson.content || '[]');
+                        if (Array.isArray(parsed)) blocks = parsed;
+                        else if (existingLesson.content) blocks = [{ type: 'text', value: existingLesson.content }];
+                    } catch {
+                        if (existingLesson.content) blocks = [{ type: 'text', value: existingLesson.content }];
+                    }
+
+                    blocks.push({
+                        type: 'audio',
+                        url: audioUrl,
+                        caption,
+                    });
+
+                    const newContent = JSON.stringify(blocks);
+                    if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                        await fetchSupabaseRest(env, `lessons?id=eq.${encodeURIComponent(args.lesson_id)}`, {
+                            method: 'PATCH',
+                            body: { content: newContent },
+                        });
+                    }
+                    await db.prepare(`UPDATE lessons SET content = ?1 WHERE id = ?2`).bind(newContent, args.lesson_id).run().catch(() => {});
+                    attached = true;
+                }
+            }
+
+            return {
+                success: true,
+                audio_url: audioUrl,
+                r2_key: r2Key,
+                size_bytes: audioBytes.byteLength,
+                attached_to_lesson: attached,
+                lesson_id: args.lesson_id || null,
+                message: attached
+                    ? `🎙️ Synthèse vocale générée et attachée avec succès à la leçon "${lessonTitle}"`
+                    : `🎙️ Synthèse vocale générée avec succès dans R2 : ${audioUrl}`,
+            };
         }
 
         // ── DELETE LESSON ──

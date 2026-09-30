@@ -227,35 +227,70 @@ const MCP_TOOLS = [
     },
     {
         name: 'create_lesson',
-        description: 'Créer une leçon dans un chapitre',
+        description: 'Créer une leçon dans un chapitre (supporte le texte, markdown, JSON de blocs avec images et note vocale audio R2)',
         permission: 'write:curriculum',
         inputSchema: {
             type: 'object',
             properties: {
                 chapter_id: { type: 'string', description: 'UUID du chapitre' },
                 title: { type: 'string', description: 'Titre de la leçon' },
-                content: { type: 'string', description: 'Contenu de la leçon (markdown supporté)' },
+                content: { type: 'string', description: 'Contenu de la leçon (markdown ou JSON de ContentBlock[])' },
                 order_index: { type: 'number', description: 'Position dans le chapitre' },
                 position: { type: 'number', description: 'Position dans le chapitre' },
                 duration_minutes: { type: 'number', description: 'Durée estimée en minutes' },
+                audio_url: { type: 'string', description: 'URL publique d\'un fichier audio (Cloudflare R2 ou externe) à attacher comme note vocale' },
+                audio_caption: { type: 'string', description: 'Légende ou titre de la note vocale (ex: Explication orale du cours)' },
+                audio_duration: { type: 'number', description: 'Durée en secondes (optionnel)' },
             },
             required: ['chapter_id', 'title', 'content'],
         },
     },
     {
         name: 'update_lesson',
-        description: 'Modifier une leçon existante',
+        description: 'Modifier une leçon existante (titre, contenu markdown/JSON, durée, position ou note vocale audio)',
         permission: 'write:curriculum',
         inputSchema: {
             type: 'object',
             properties: {
                 lesson_id: { type: 'string', description: 'UUID de la leçon' },
                 title: { type: 'string', description: 'Nouveau titre' },
-                content: { type: 'string', description: 'Nouveau contenu markdown' },
+                content: { type: 'string', description: 'Nouveau contenu markdown ou JSON' },
                 duration_minutes: { type: 'number', description: 'Nouvelle durée' },
                 position: { type: 'number', description: 'Nouvelle position' },
+                audio_url: { type: 'string', description: 'URL audio R2 à attacher ou remplacer dans la leçon' },
+                audio_caption: { type: 'string', description: 'Légende ou titre de la note vocale' },
             },
             required: ['lesson_id'],
+        },
+    },
+    {
+        name: 'add_audio_to_lesson',
+        description: 'Ajouter ou attacher un fichier audio (note vocale R2 ou externe) directement à une leçon existante pour le lecteur interactif',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                lesson_id: { type: 'string', description: 'UUID de la leçon cible' },
+                audio_url: { type: 'string', description: 'URL publique du fichier audio (Cloudflare R2 ou URL web)' },
+                caption: { type: 'string', description: 'Légende ou titre de l\'audio (défaut: Explication audio de la leçon)' },
+                duration: { type: 'number', description: 'Durée en secondes (optionnel)' },
+            },
+            required: ['lesson_id', 'audio_url'],
+        },
+    },
+    {
+        name: 'generate_lesson_audio',
+        description: 'Générer une synthèse vocale (TTS) IA à partir d\'un texte de cours, la stocker sur Cloudflare R2 et l\'attacher optionnellement à une leçon',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                text: { type: 'string', description: 'Texte pédagogique ou résumé à synthétiser en voix audio' },
+                lesson_id: { type: 'string', description: 'UUID optionnel de la leçon à laquelle attacher immédiatement l\'audio' },
+                caption: { type: 'string', description: 'Titre ou légende de la note vocale (ex: Résumé vocal de la leçon)' },
+                language: { type: 'string', description: 'Code de langue de synthèse (fr, en, es - défaut: fr)' },
+            },
+            required: ['text'],
         },
     },
     {
@@ -1396,13 +1431,34 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
                 orderIndex = (count || 0) + 1;
             }
 
+            let finalContent = String(args.content);
+            if (args.audio_url) {
+                let blocks: any[] = [];
+                try {
+                    const parsed = JSON.parse(finalContent);
+                    if (Array.isArray(parsed)) blocks = parsed;
+                    else blocks = [{ type: 'text', value: finalContent }];
+                } catch {
+                    blocks = [{ type: 'text', value: finalContent }];
+                }
+                if (!blocks.some(b => b.type === 'audio' && b.url === args.audio_url)) {
+                    blocks.push({
+                        type: 'audio',
+                        url: args.audio_url,
+                        caption: args.audio_caption || `Explication audio : ${args.title}`,
+                        duration: Number(args.audio_duration) || undefined,
+                    });
+                }
+                finalContent = JSON.stringify(blocks);
+            }
+
             const { data, error } = await supabase
                 .from('lessons')
                 .insert({
                     chapter_id:        args.chapter_id,
                     organization_id:   targetOrgId,
                     title:             args.title,
-                    content:           args.content,
+                    content:           finalContent,
                     position:          orderIndex,
                     estimated_minutes: args.duration_minutes || null,
                     status:            'published',
@@ -1428,6 +1484,34 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             if (args.duration_minutes !== undefined) updatePayload.estimated_minutes = args.duration_minutes;
             if (args.position !== undefined) updatePayload.position = args.position;
 
+            if (args.audio_url) {
+                let baseContent = updatePayload.content;
+                if (baseContent === undefined) {
+                    const { data: cur } = await supabase.from('lessons').select('content').eq('id', args.lesson_id as string).maybeSingle();
+                    if (cur) baseContent = cur.content;
+                }
+                let blocks: any[] = [];
+                try {
+                    const parsed = JSON.parse(String(baseContent || '[]'));
+                    if (Array.isArray(parsed)) blocks = parsed;
+                    else if (baseContent) blocks = [{ type: 'text', value: String(baseContent) }];
+                } catch {
+                    if (baseContent) blocks = [{ type: 'text', value: String(baseContent) }];
+                }
+                const audioBlock = {
+                    type: 'audio',
+                    url: args.audio_url,
+                    caption: args.audio_caption || 'Explication audio de la leçon',
+                };
+                const existingIdx = blocks.findIndex(b => b.type === 'audio');
+                if (existingIdx >= 0) {
+                    blocks[existingIdx] = audioBlock;
+                } else {
+                    blocks.push(audioBlock);
+                }
+                updatePayload.content = JSON.stringify(blocks);
+            }
+
             const { data, error } = await supabase
                 .from('lessons')
                 .update(updatePayload)
@@ -1436,6 +1520,95 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
                 .single();
             if (error) throw { code: -32002, message: error.message };
             return { success: true, lesson: data, message: `✅ Leçon mise à jour` };
+        }
+
+        // ── ADD AUDIO TO LESSON ──────────────────────────────────────────────
+        case 'add_audio_to_lesson': {
+            if (!args.lesson_id) throw { code: -32602, message: 'lesson_id requis' };
+            if (!args.audio_url) throw { code: -32602, message: 'audio_url requis' };
+
+            const { data: lesson, error: fetchErr } = await supabase
+                .from('lessons')
+                .select('id, title, content')
+                .eq('id', args.lesson_id as string)
+                .maybeSingle();
+
+            if (fetchErr || !lesson) {
+                throw { code: -32602, message: `Leçon introuvable (id: "${args.lesson_id}")` };
+            }
+
+            let blocks: any[] = [];
+            try {
+                const parsed = JSON.parse(lesson.content || '[]');
+                if (Array.isArray(parsed)) blocks = parsed;
+                else if (lesson.content) blocks = [{ type: 'text', value: lesson.content }];
+            } catch {
+                if (lesson.content) blocks = [{ type: 'text', value: lesson.content }];
+            }
+
+            const caption = args.caption || args.audio_caption || `Explication audio : ${lesson.title}`;
+            const duration = Number(args.duration || args.audio_duration) || undefined;
+
+            const existingIdx = blocks.findIndex(b => b.type === 'audio' && b.url === args.audio_url);
+            if (existingIdx >= 0) {
+                blocks[existingIdx].caption = caption;
+                if (duration) blocks[existingIdx].duration = duration;
+            } else {
+                blocks.push({
+                    type: 'audio',
+                    url: args.audio_url,
+                    caption,
+                    duration,
+                });
+            }
+
+            const newContent = JSON.stringify(blocks);
+            const { error: updateErr } = await supabase
+                .from('lessons')
+                .update({ content: newContent })
+                .eq('id', args.lesson_id as string);
+
+            if (updateErr) throw { code: -32002, message: updateErr.message };
+
+            return {
+                success: true,
+                lesson_id: args.lesson_id,
+                audio_url: args.audio_url,
+                caption,
+                blocks_count: blocks.length,
+                message: `🎵 Audio attaché avec succès à la leçon "${lesson.title}"`,
+            };
+        }
+
+        // ── GENERATE LESSON AUDIO (TTS DÉLÉGUÉ AU WORKER) ────────────────────
+        case 'generate_lesson_audio': {
+            if (!args.text || typeof args.text !== 'string' || !args.text.trim()) {
+                throw { code: -32602, message: 'text requis pour générer la synthèse vocale' };
+            }
+
+            const workerUrl = 'https://campusflow-worker.kleintaptue1.workers.dev';
+            const mcpRes = await fetch(`${workerUrl}/api/mcp`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: Date.now(),
+                    method: 'tools/call',
+                    params: {
+                        name: 'generate_lesson_audio',
+                        arguments: args,
+                    },
+                }),
+            });
+
+            if (!mcpRes.ok) {
+                const errText = await mcpRes.text();
+                throw { code: -32002, message: `Erreur génération audio worker: ${errText}` };
+            }
+
+            const json = await mcpRes.json();
+            if (json.error) throw json.error;
+            return json.result;
         }
 
         // ── DELETE LESSON ────────────────────────────────────────────────────
