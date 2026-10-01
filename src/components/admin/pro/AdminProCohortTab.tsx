@@ -108,7 +108,10 @@ export function AdminProCohortTab({
 
         setSaving(true);
         try {
-            const cycleFormatted = `${sessionDurationLabel} • ${sessionRhythm}`;
+            const finalDuration = sessionDuration === 'custom'
+                ? (sessionDurationLabel.trim() || 'Formation Personnalisée')
+                : sessionDurationLabel;
+            const cycleFormatted = `${finalDuration} • ${sessionRhythm}`;
             const { data: newCls, error: clsError } = await supabase
                 .from('classrooms')
                 .insert({
@@ -969,6 +972,34 @@ export function AdminProCohortTab({
                                             {dur.label}
                                         </button>
                                     ))}
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSessionDuration('custom');
+                                            if (!sessionDurationLabel || sessionDuration !== 'custom') {
+                                                setSessionDurationLabel('');
+                                            }
+                                        }}
+                                        className={cn(
+                                            "p-2.5 rounded-xl border text-left text-xs font-semibold transition-all",
+                                            sessionDuration === 'custom'
+                                                ? "bg-emerald-500/20 border-emerald-500 text-emerald-300"
+                                                : "bg-white/[0.03] border-white/10 text-slate-400 hover:text-white"
+                                        )}
+                                    >
+                                        ✏️ Personnalisé...
+                                    </button>
+                                    {sessionDuration === 'custom' && (
+                                        <div className="col-span-2 pt-1">
+                                            <Input
+                                                value={sessionDurationLabel}
+                                                onChange={e => setSessionDurationLabel(e.target.value)}
+                                                placeholder="Précisez la durée (ex: 4 Mois, 18 Mois, 80 Heures...)"
+                                                className="bg-white/5 border-emerald-500/50 focus:border-emerald-400 text-white rounded-xl h-9 text-xs"
+                                                autoFocus
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

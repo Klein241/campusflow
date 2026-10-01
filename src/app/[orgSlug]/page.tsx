@@ -133,6 +133,16 @@ export default function SchoolLandingPage() {
         }
     };
 
+    // Détection automatique de l'ancre #inscription dans l'URL
+    useEffect(() => {
+        if (typeof window !== 'undefined' && window.location.hash === '#inscription') {
+            const timer = setTimeout(() => {
+                scrollToInscription();
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+    }, [orgSlug]);
+
     // Data fetch
     useEffect(() => {
         async function load() {

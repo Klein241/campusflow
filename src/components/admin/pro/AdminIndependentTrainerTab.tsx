@@ -46,7 +46,8 @@ export function AdminIndependentTrainerTab({
     // Modal offre de formation rapide (Création)
     const [showAddOffer, setShowAddOffer] = useState(false);
     const [offerTitle, setOfferTitle] = useState('');
-    const [offerFormat, setOfferFormat] = useState('Bootcamp 1 Mois (Live + Suivi)');
+    const [offerFormat, setOfferFormat] = useState('1 Mois (Bootcamp Live)');
+    const [customFormat, setCustomFormat] = useState('');
     const [offerPrice, setOfferPrice] = useState('50 000 FCFA');
     const [creatingOffer, setCreatingOffer] = useState(false);
 
@@ -112,7 +113,11 @@ export function AdminIndependentTrainerTab({
 
         setCreatingOffer(true);
         try {
-            const cycleText = `${offerFormat} • ${offerPrice}`;
+            const finalFormat = offerFormat === 'custom'
+                ? (customFormat.trim() || 'Formation Personnalisée')
+                : offerFormat;
+            const finalPrice = offerPrice.trim() || 'Tarif sur demande';
+            const cycleText = `${finalFormat} • ${finalPrice}`;
             const { data, error } = await supabase.from('classrooms').insert({
                 organization_id: org.id,
                 name: offerTitle.trim(),
@@ -126,6 +131,7 @@ export function AdminIndependentTrainerTab({
             toast.success(`🎉 Formation "${offerTitle}" créée !`);
             setShowAddOffer(false);
             setOfferTitle('');
+            setCustomFormat('');
             onRefresh();
         } catch (e: any) {
             toast.error('Erreur : ' + e.message);
@@ -284,7 +290,7 @@ export function AdminIndependentTrainerTab({
     };
 
     const handleCopyEnrollLink = (className?: string) => {
-        const url = `${window.location.origin}/${org.slug}/inscription`;
+        const url = `${window.location.origin}/${org.slug}/#inscription`;
         navigator.clipboard.writeText(url);
         toast.success('🔗 Lien d\'inscription directe copié dans le presse-papier !');
     };
@@ -772,13 +778,19 @@ export function AdminIndependentTrainerTab({
                                     <select
                                         value={offerFormat}
                                         onChange={e => setOfferFormat(e.target.value)}
-                                        className="w-full h-10 rounded-xl bg-slate-900 border border-white/10 text-white px-2.5 text-xs"
+                                        className="w-full h-10 rounded-xl bg-slate-900 border border-white/10 text-white px-2.5 text-xs focus:border-amber-400 outline-none"
                                     >
                                         <option value="1 Semaine (Intensif)">1 Semaine (Intensif)</option>
+                                        <option value="2 Semaines (Accéléré)">2 Semaines (Accéléré)</option>
                                         <option value="1 Mois (Bootcamp Live)">1 Mois (Bootcamp Live)</option>
-                                        <option value="3 Mois (Accompagnement Complet)">3 Mois (Accompagnement)</option>
-                                        <option value="Coaching Individuel (1-on-1)">Coaching Individuel</option>
-                                        <option value="Accès Vidéo & Support">Accès VOD & Support</option>
+                                        <option value="2 Mois (Spécialisation)">2 Mois (Spécialisation)</option>
+                                        <option value="3 Mois (Accompagnement)">3 Mois (Accompagnement)</option>
+                                        <option value="6 Mois (Cycle Professionnel)">6 Mois (Cycle Professionnel)</option>
+                                        <option value="9 Mois (Cursus Complet)">9 Mois (Cursus Complet)</option>
+                                        <option value="1 An (Formation Certifiante)">1 An (Formation Certifiante)</option>
+                                        <option value="Coaching Individuel">Coaching Individuel</option>
+                                        <option value="Accès VOD & Support">Accès VOD & Support</option>
+                                        <option value="custom">✏️ Personnalisé (Saisie libre...)</option>
                                     </select>
                                 </div>
                                 <div>
@@ -791,6 +803,29 @@ export function AdminIndependentTrainerTab({
                                     />
                                 </div>
                             </div>
+
+                            {offerFormat === 'custom' && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -4 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-1.5"
+                                >
+                                    <label className="text-xs font-bold text-amber-300 flex items-center justify-between">
+                                        <span>✏️ Précisez la durée ou le format personnalisé</span>
+                                        <span className="text-red-400">*</span>
+                                    </label>
+                                    <Input
+                                        value={customFormat}
+                                        onChange={e => setCustomFormat(e.target.value)}
+                                        placeholder="Ex: 4 Mois (Immersion), 18 Mois, 45 Heures, À la demande..."
+                                        className="bg-slate-900 border-amber-500/40 focus:border-amber-400 text-white rounded-xl h-10 text-xs"
+                                        autoFocus
+                                    />
+                                    <p className="text-[10px] text-amber-200/70">
+                                        L'intitulé exact de cette durée personnalisée sera affiché sur votre page d'inscription et attestations.
+                                    </p>
+                                </motion.div>
+                            )}
 
                             <div className="flex gap-2 pt-2 border-t border-white/10">
                                 <Button
