@@ -144,6 +144,8 @@ export function AdminIndependentTrainerTab({
                 registration_fee: regFeeNum,
                 frais_inscription: regFeeNum,
                 training_duration: finalFormat,
+                description: offerDescription.trim() || null,
+                prix_barre: origPriceNum,
                 schedule_config: scheduleConfig,
                 competencies_list: offerDescription.trim() ? offerDescription.trim().split(/\r?\n/).filter(Boolean) : []
             }).select().single();
@@ -192,6 +194,8 @@ export function AdminIndependentTrainerTab({
                     frais_scolarite: priceNum,
                     registration_fee: regFeeNum,
                     frais_inscription: regFeeNum,
+                    description: desc || null,
+                    prix_barre: origPriceNum,
                     schedule_config: scheduleConfig,
                     competencies_list: desc ? desc.split(/\r?\n/).filter(Boolean) : []
                 })
