@@ -49,6 +49,9 @@ export function AdminIndependentTrainerTab({
     const [offerFormat, setOfferFormat] = useState('1 Mois (Bootcamp Live)');
     const [customFormat, setCustomFormat] = useState('');
     const [offerPrice, setOfferPrice] = useState('50 000 FCFA');
+    const [offerOriginalPrice, setOfferOriginalPrice] = useState('');
+    const [offerRegistrationFee, setOfferRegistrationFee] = useState('');
+    const [offerDescription, setOfferDescription] = useState('');
     const [creatingOffer, setCreatingOffer] = useState(false);
 
     // Modal édition d'offre existante
@@ -118,19 +121,41 @@ export function AdminIndependentTrainerTab({
                 : offerFormat;
             const finalPrice = offerPrice.trim() || 'Tarif sur demande';
             const cycleText = `${finalFormat} • ${finalPrice}`;
+
+            const priceNum = parseInt(offerPrice.replace(/[^0-9]/g, ''), 10) || 0;
+            const origPriceNum = offerOriginalPrice.trim() ? (parseInt(offerOriginalPrice.replace(/[^0-9]/g, ''), 10) || null) : null;
+            const regFeeNum = offerRegistrationFee.trim() ? (parseInt(offerRegistrationFee.replace(/[^0-9]/g, ''), 10) || 0) : 0;
+
+            const scheduleConfig = {
+                description: offerDescription.trim(),
+                prix_barre: origPriceNum,
+                original_price: offerOriginalPrice.trim(),
+                duration_text: finalFormat
+            };
+
             const { data, error } = await supabase.from('classrooms').insert({
                 organization_id: org.id,
                 name: offerTitle.trim(),
                 cycle: cycleText,
                 level: 1,
-                capacity: 100
+                capacity: 100,
+                tuition_fee: priceNum,
+                frais_scolarite: priceNum,
+                registration_fee: regFeeNum,
+                frais_inscription: regFeeNum,
+                training_duration: finalFormat,
+                schedule_config: scheduleConfig,
+                competencies_list: offerDescription.trim() ? offerDescription.trim().split(/\r?\n/).filter(Boolean) : []
             }).select().single();
 
             if (error) throw error;
 
-            toast.success(`🎉 Formation "${offerTitle}" créée !`);
+            toast.success(`🎉 Formation "${offerTitle}" créée avec son programme complet !`);
             setShowAddOffer(false);
             setOfferTitle('');
+            setOfferDescription('');
+            setOfferOriginalPrice('');
+            setOfferRegistrationFee('');
             setCustomFormat('');
             onRefresh();
         } catch (e: any) {
@@ -145,16 +170,35 @@ export function AdminIndependentTrainerTab({
         if (!editingOffer || !editingOffer.name.trim()) return;
         setSavingEditOffer(true);
         try {
+            const finalPrice = editingOffer.editPrice?.trim() || '';
+            const priceNum = finalPrice ? (parseInt(finalPrice.replace(/[^0-9]/g, ''), 10) || 0) : (editingOffer.frais_scolarite || editingOffer.tuition_fee || 0);
+            const origPriceNum = editingOffer.editOriginalPrice?.trim() ? (parseInt(editingOffer.editOriginalPrice.replace(/[^0-9]/g, ''), 10) || null) : (editingOffer.prix_barre || null);
+            const regFeeNum = editingOffer.editRegistrationFee?.trim() ? (parseInt(editingOffer.editRegistrationFee.replace(/[^0-9]/g, ''), 10) || 0) : (editingOffer.frais_inscription || 0);
+            const desc = (editingOffer.editDescription !== undefined ? editingOffer.editDescription : (editingOffer.description || editingOffer.schedule_config?.description || '')).trim();
+
+            const scheduleConfig = {
+                ...(editingOffer.schedule_config || {}),
+                description: desc,
+                prix_barre: origPriceNum,
+                original_price: editingOffer.editOriginalPrice?.trim() || '',
+            };
+
             const { error } = await supabase
                 .from('classrooms')
                 .update({
                     name: editingOffer.name.trim(),
-                    cycle: editingOffer.cycle
+                    cycle: editingOffer.cycle,
+                    tuition_fee: priceNum,
+                    frais_scolarite: priceNum,
+                    registration_fee: regFeeNum,
+                    frais_inscription: regFeeNum,
+                    schedule_config: scheduleConfig,
+                    competencies_list: desc ? desc.split(/\r?\n/).filter(Boolean) : []
                 })
                 .eq('id', editingOffer.id);
 
             if (error) throw error;
-            toast.success('Offre mise à jour !');
+            toast.success('Formation et programme mis à jour !');
             setEditingOffer(null);
             onRefresh();
         } catch (e: any) {
@@ -401,15 +445,36 @@ export function AdminIndependentTrainerTab({
                                                         {enrolled.length} inscrit{enrolled.length > 1 ? 's' : ''}
                                                     </span>
                                                     <button
-                                                        onClick={() => setEditingOffer({ ...item })}
-                                                        className="opacity-0 group-hover:opacity-100 p-1 rounded-md bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition"
+                                                        onClick={() => {
+                                                            const desc = item.description 
+                                                                || item.schedule_config?.description 
+                                                                || (Array.isArray(item.competencies_list) ? item.competencies_list.join('\n') : '') 
+                                                                || '';
+                                                            const origPrice = item.prix_barre 
+                                                                || item.schedule_config?.prix_barre 
+                                                                || item.schedule_config?.original_price 
+                                                                || '';
+                                                            const currentPrice = item.frais_scolarite 
+                                                                || item.tuition_fee 
+                                                                || (item.cycle?.split('•')?.[1]?.trim()) 
+                                                                || '';
+                                                            const regFee = item.frais_inscription || item.registration_fee || '';
+                                                            setEditingOffer({
+                                                                ...item,
+                                                                editDescription: desc,
+                                                                editPrice: currentPrice ? (String(currentPrice).includes('FCFA') ? String(currentPrice) : `${currentPrice} FCFA`) : '',
+                                                                editOriginalPrice: origPrice ? (String(origPrice).includes('FCFA') ? String(origPrice) : `${origPrice} FCFA`) : '',
+                                                                editRegistrationFee: regFee ? (String(regFee).includes('FCFA') ? String(regFee) : `${regFee} FCFA`) : ''
+                                                            });
+                                                        }}
+                                                        className="opacity-0 group-hover:opacity-100 p-1 rounded-md bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition cursor-pointer"
                                                         title="Modifier l'offre"
                                                     >
                                                         <Edit3 className="w-3 h-3" />
                                                     </button>
                                                     <button
                                                         onClick={() => handleDeleteOffer(item.id, item.name)}
-                                                        className="opacity-0 group-hover:opacity-100 p-1 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-400 transition"
+                                                        className="opacity-0 group-hover:opacity-100 p-1 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-400 transition cursor-pointer"
                                                         title="Supprimer l'offre"
                                                     >
                                                         <Trash2 className="w-3 h-3" />
@@ -424,7 +489,7 @@ export function AdminIndependentTrainerTab({
                                         <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between text-xs flex-wrap gap-2">
                                             <button
                                                 onClick={() => setSelectedOfferForStudents(item)}
-                                                className="text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 text-[11px]"
+                                                className="text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 text-[11px] cursor-pointer"
                                             >
                                                 <Users className="w-3 h-3" />
                                                 Voir les {enrolled.length} apprenant{enrolled.length > 1 ? 's' : ''}
@@ -433,7 +498,7 @@ export function AdminIndependentTrainerTab({
                                             <div className="flex items-center gap-2">
                                                 <button
                                                     onClick={() => setPaymentModalOffer(item)}
-                                                    className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 text-[11px] bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20"
+                                                    className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 text-[11px] bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20 cursor-pointer"
                                                     title="Générer un lien de paiement Mobile Money"
                                                 >
                                                     <DollarSign className="w-3 h-3" />
@@ -442,7 +507,7 @@ export function AdminIndependentTrainerTab({
 
                                                 <button
                                                     onClick={() => handleCopyEnrollLink(item.name)}
-                                                    className="text-slate-400 hover:text-white font-semibold flex items-center gap-1 text-[10px]"
+                                                    className="text-slate-400 hover:text-white font-semibold flex items-center gap-1 text-[10px] cursor-pointer"
                                                 >
                                                     <Copy className="w-2.5 h-2.5" />
                                                     Lien
@@ -508,7 +573,7 @@ export function AdminIndependentTrainerTab({
                     <Button
                         onClick={handleSaveProfile}
                         disabled={savingProfile}
-                        className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black rounded-xl text-xs h-9"
+                        className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black rounded-xl text-xs h-9 cursor-pointer"
                     >
                         {savingProfile ? 'Enregistrement...' : 'Mettre à jour mon profil'}
                     </Button>
@@ -534,7 +599,7 @@ export function AdminIndependentTrainerTab({
                                         {selectedOfferForStudents.cycle}
                                     </p>
                                 </div>
-                                <button onClick={() => setSelectedOfferForStudents(null)} className="text-slate-400 hover:text-white">✕</button>
+                                <button onClick={() => setSelectedOfferForStudents(null)} className="text-slate-400 hover:text-white cursor-pointer">✕</button>
                             </div>
 
                             <div className="flex items-center justify-between">
@@ -543,7 +608,7 @@ export function AdminIndependentTrainerTab({
                                 </span>
                                 <Button
                                     onClick={() => setShowEnrollModal(true)}
-                                    className="bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl h-8 px-3"
+                                    className="bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl h-8 px-3 cursor-pointer"
                                 >
                                     <UserPlus className="w-3.5 h-3.5 mr-1" />
                                     Inscrire un apprenant
@@ -555,7 +620,7 @@ export function AdminIndependentTrainerTab({
                                     <p className="text-xs text-slate-400">Aucun apprenant inscrit à cette offre pour le moment.</p>
                                     <Button
                                         onClick={() => setShowEnrollModal(true)}
-                                        className="bg-white/10 hover:bg-white/20 text-white text-xs rounded-xl"
+                                        className="bg-white/10 hover:bg-white/20 text-white text-xs rounded-xl cursor-pointer"
                                     >
                                         Inscrire un premier apprenant
                                     </Button>
@@ -584,7 +649,7 @@ export function AdminIndependentTrainerTab({
                                                         href={`https://wa.me/${st.phone.replace(/[^0-9]/g, '')}`}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="p-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold flex items-center gap-1 transition"
+                                                        className="p-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
                                                         title="Envoyer message WhatsApp"
                                                     >
                                                         <Phone className="w-3.5 h-3.5" />
@@ -592,7 +657,7 @@ export function AdminIndependentTrainerTab({
                                                 )}
                                                 <Button
                                                     onClick={() => setCertModalStudent(st)}
-                                                    className="bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl h-8 px-3 shadow-md shadow-amber-500/20"
+                                                    className="bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl h-8 px-3 shadow-md shadow-amber-500/20 cursor-pointer"
                                                 >
                                                     <Award className="w-3.5 h-3.5 mr-1" />
                                                     Délivrer Attestation
@@ -621,7 +686,7 @@ export function AdminIndependentTrainerTab({
                                 <h3 className="text-base font-black text-white">
                                     Inscrire un Apprenant dans {selectedOfferForStudents.name}
                                 </h3>
-                                <button onClick={() => setShowEnrollModal(false)} className="text-slate-400 hover:text-white">✕</button>
+                                <button onClick={() => setShowEnrollModal(false)} className="text-slate-400 hover:text-white cursor-pointer">✕</button>
                             </div>
 
                             <div className="grid grid-cols-2 gap-2">
@@ -668,14 +733,14 @@ export function AdminIndependentTrainerTab({
                             <div className="flex gap-2 pt-2 border-t border-white/10">
                                 <Button
                                     onClick={() => setShowEnrollModal(false)}
-                                    className="flex-1 bg-white/5 hover:bg-white/10 text-slate-300 text-xs rounded-xl"
+                                    className="flex-1 bg-white/5 hover:bg-white/10 text-slate-300 text-xs rounded-xl cursor-pointer"
                                 >
                                     Annuler
                                 </Button>
                                 <Button
                                     onClick={() => handleEnrollStudent(selectedOfferForStudents.id)}
                                     disabled={enrolling}
-                                    className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl"
+                                    className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl cursor-pointer"
                                 >
                                     {enrolling ? 'Inscription...' : 'Valider l\'inscription'}
                                 </Button>
@@ -700,7 +765,7 @@ export function AdminIndependentTrainerTab({
                                     <Award className="w-5 h-5 text-amber-400" />
                                     <h3 className="text-base font-black text-white">Attestation de Formation Certifiante</h3>
                                 </div>
-                                <button onClick={() => setCertModalStudent(null)} className="text-slate-400 hover:text-white">✕</button>
+                                <button onClick={() => setCertModalStudent(null)} className="text-slate-400 hover:text-white cursor-pointer">✕</button>
                             </div>
 
                             <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-1">
@@ -726,13 +791,13 @@ export function AdminIndependentTrainerTab({
                             <div className="flex gap-2 pt-2 border-t border-white/10">
                                 <Button
                                     onClick={() => setCertModalStudent(null)}
-                                    className="flex-1 bg-white/5 hover:bg-white/10 text-slate-300 text-xs rounded-xl"
+                                    className="flex-1 bg-white/5 hover:bg-white/10 text-slate-300 text-xs rounded-xl cursor-pointer"
                                 >
                                     Annuler
                                 </Button>
                                 <Button
                                     onClick={() => handleGenerateTrainerCertificate(certModalStudent, selectedOfferForStudents)}
-                                    className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl shadow-lg shadow-amber-500/20"
+                                    className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 cursor-pointer"
                                 >
                                     <Download className="w-3.5 h-3.5 mr-1" />
                                     Télécharger le PDF
@@ -743,7 +808,7 @@ export function AdminIndependentTrainerTab({
                 )}
             </AnimatePresence>
 
-            {/* ═══ MODAL : CRÉATION D'UNE OFFRE ═══ */}
+            {/* ═══ MODAL : CRÉATION D'UNE OFFRE COMPLÈTE AVEC PROGRAMME ═══ */}
             <AnimatePresence>
                 {showAddOffer && (
                     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -751,13 +816,19 @@ export function AdminIndependentTrainerTab({
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
-                            className="w-full max-w-md bg-[#0E131F] border border-amber-500/30 rounded-3xl p-6 shadow-2xl space-y-4"
+                            className="w-full max-w-lg bg-[#0E131F] border border-amber-500/30 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto"
                         >
                             <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                                <h3 className="text-base font-black text-white">
-                                    Nouvelle Offre de Formation
-                                </h3>
-                                <button onClick={() => setShowAddOffer(false)} className="text-slate-400 hover:text-white">✕</button>
+                                <div>
+                                    <h3 className="text-base font-black text-white flex items-center gap-2">
+                                        <Sparkles className="w-4 h-4 text-amber-400" />
+                                        <span>Nouvelle Offre de Formation</span>
+                                    </h3>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                        Configurez le programme, les objectifs et la tarification de votre formation.
+                                    </p>
+                                </div>
+                                <button onClick={() => setShowAddOffer(false)} className="text-slate-400 hover:text-white cursor-pointer">✕</button>
                             </div>
 
                             <div>
@@ -767,9 +838,26 @@ export function AdminIndependentTrainerTab({
                                 <Input
                                     value={offerTitle}
                                     onChange={e => setOfferTitle(e.target.value)}
-                                    placeholder="Ex: Masterclass Marketing Digital & IA"
+                                    placeholder="Ex: Formation Certifiante en Stratégie Digitale"
                                     className="bg-white/5 border-white/10 text-white rounded-xl h-10 text-sm"
                                 />
+                            </div>
+
+                            {/* Description & Programme pédagogique */}
+                            <div>
+                                <label className="text-xs font-bold text-slate-300 block mb-1">
+                                    Présentation, Objectifs & Modules Pédagogiques
+                                </label>
+                                <textarea
+                                    value={offerDescription}
+                                    onChange={e => setOfferDescription(e.target.value)}
+                                    rows={4}
+                                    placeholder="Décrivez les objectifs clés et les modules (ex:&#10;Module 1 : Fondamentaux & Analyse&#10;Module 2 : Pratique, Ateliers & Mises en situation&#10;Module 3 : Projet & Certification)"
+                                    className="w-full bg-white/5 border border-white/10 text-white rounded-xl p-3 text-xs focus:outline-none focus:border-amber-400 resize-none font-sans leading-relaxed"
+                                />
+                                <p className="text-[10px] text-slate-400 mt-1">
+                                    💡 Chaque ligne ou tiret sera automatiquement structuré en modules dans la modale de votre landing page.
+                                </p>
                             </div>
 
                             <div className="grid grid-cols-2 gap-2">
@@ -794,12 +882,33 @@ export function AdminIndependentTrainerTab({
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="text-xs font-bold text-slate-300 block mb-1">Tarif / Prix</label>
+                                    <label className="text-xs font-bold text-slate-300 block mb-1">Tarif officiel / Prix</label>
                                     <Input
                                         value={offerPrice}
                                         onChange={e => setOfferPrice(e.target.value)}
-                                        placeholder="Ex: 50 000 FCFA"
-                                        className="bg-white/5 border-white/10 text-white rounded-xl h-10 text-xs"
+                                        placeholder="Ex: 90 000 FCFA"
+                                        className="bg-white/5 border-white/10 text-white rounded-xl h-10 text-xs font-mono"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="text-xs font-bold text-slate-300 block mb-1">Prix initial barré (Réduction)</label>
+                                    <Input
+                                        value={offerOriginalPrice}
+                                        onChange={e => setOfferOriginalPrice(e.target.value)}
+                                        placeholder="Ex: 150 000 FCFA"
+                                        className="bg-white/5 border-white/10 text-white rounded-xl h-10 text-xs font-mono"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-300 block mb-1">Frais d'inscription (Optionnel)</label>
+                                    <Input
+                                        value={offerRegistrationFee}
+                                        onChange={e => setOfferRegistrationFee(e.target.value)}
+                                        placeholder="Ex: 15 000 FCFA"
+                                        className="bg-white/5 border-white/10 text-white rounded-xl h-10 text-xs font-mono"
                                     />
                                 </div>
                             </div>
@@ -830,14 +939,14 @@ export function AdminIndependentTrainerTab({
                             <div className="flex gap-2 pt-2 border-t border-white/10">
                                 <Button
                                     onClick={() => setShowAddOffer(false)}
-                                    className="flex-1 bg-white/5 hover:bg-white/10 text-slate-300 text-xs rounded-xl"
+                                    className="flex-1 bg-white/5 hover:bg-white/10 text-slate-300 text-xs rounded-xl cursor-pointer"
                                 >
                                     Annuler
                                 </Button>
                                 <Button
                                     onClick={handleCreateOffer}
                                     disabled={creatingOffer}
-                                    className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl"
+                                    className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl cursor-pointer"
                                 >
                                     {creatingOffer ? 'Création...' : 'Créer l\'offre'}
                                 </Button>
@@ -847,7 +956,7 @@ export function AdminIndependentTrainerTab({
                 )}
             </AnimatePresence>
 
-            {/* ═══ MODAL : MODIFICATION D'UNE OFFRE ═══ */}
+            {/* ═══ MODAL : MODIFICATION D'UNE OFFRE AVEC PROGRAMME & TARIFS ═══ */}
             <AnimatePresence>
                 {editingOffer && (
                     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -855,17 +964,23 @@ export function AdminIndependentTrainerTab({
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
-                            className="w-full max-w-md bg-[#0E131F] border border-amber-500/30 rounded-3xl p-6 shadow-2xl space-y-4"
+                            className="w-full max-w-lg bg-[#0E131F] border border-amber-500/30 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto"
                         >
                             <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                                <h3 className="text-base font-black text-white">
-                                    Modifier l'Offre de Formation
-                                </h3>
-                                <button onClick={() => setEditingOffer(null)} className="text-slate-400 hover:text-white">✕</button>
+                                <div>
+                                    <h3 className="text-base font-black text-white flex items-center gap-2">
+                                        <Sparkles className="w-4 h-4 text-amber-400" />
+                                        <span>Modifier l'Offre de Formation</span>
+                                    </h3>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                        Mettez à jour le titre, les objectifs, les modules et les tarifs.
+                                    </p>
+                                </div>
+                                <button onClick={() => setEditingOffer(null)} className="text-slate-400 hover:text-white cursor-pointer">✕</button>
                             </div>
 
                             <div>
-                                <label className="text-xs font-bold text-slate-300 block mb-1">Intitulé</label>
+                                <label className="text-xs font-bold text-slate-300 block mb-1">Intitulé de la formation</label>
                                 <Input
                                     value={editingOffer.name}
                                     onChange={e => setEditingOffer({ ...editingOffer, name: e.target.value })}
@@ -873,29 +988,77 @@ export function AdminIndependentTrainerTab({
                                 />
                             </div>
 
+                            {/* Description & Programme pédagogique */}
                             <div>
-                                <label className="text-xs font-bold text-slate-300 block mb-1">Format, Durée & Prix</label>
+                                <label className="text-xs font-bold text-slate-300 block mb-1">
+                                    Présentation, Objectifs & Modules Pédagogiques
+                                </label>
+                                <textarea
+                                    value={editingOffer.editDescription ?? ''}
+                                    onChange={e => setEditingOffer({ ...editingOffer, editDescription: e.target.value })}
+                                    rows={4}
+                                    placeholder="Décrivez les objectifs clés et les modules..."
+                                    className="w-full bg-white/5 border border-white/10 text-white rounded-xl p-3 text-xs focus:outline-none focus:border-amber-400 resize-none font-sans leading-relaxed"
+                                />
+                                <p className="text-[10px] text-slate-400 mt-1">
+                                    💡 Chaque ligne ou tiret sera automatiquement structuré en modules dans la modale de votre landing page.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-bold text-slate-300 block mb-1">Format & Durée affichée</label>
                                 <Input
                                     value={editingOffer.cycle}
                                     onChange={e => setEditingOffer({ ...editingOffer, cycle: e.target.value })}
-                                    placeholder="Ex: 3 Mois (Accompagnement) • 75 000 FCFA"
+                                    placeholder="Ex: 6 Mois (Cycle Professionnel) • 90 000 FCFA"
                                     className="bg-white/5 border-white/10 text-white rounded-xl h-10 text-xs"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="text-xs font-bold text-slate-300 block mb-1">Tarif officiel</label>
+                                    <Input
+                                        value={editingOffer.editPrice ?? ''}
+                                        onChange={e => setEditingOffer({ ...editingOffer, editPrice: e.target.value })}
+                                        placeholder="Ex: 90 000 FCFA"
+                                        className="bg-white/5 border-white/10 text-white rounded-xl h-10 text-xs font-mono"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-300 block mb-1">Prix initial barré (Réduction)</label>
+                                    <Input
+                                        value={editingOffer.editOriginalPrice ?? ''}
+                                        onChange={e => setEditingOffer({ ...editingOffer, editOriginalPrice: e.target.value })}
+                                        placeholder="Ex: 150 000 FCFA"
+                                        className="bg-white/5 border-white/10 text-white rounded-xl h-10 text-xs font-mono"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-bold text-slate-300 block mb-1">Frais d'inscription (Optionnel)</label>
+                                <Input
+                                    value={editingOffer.editRegistrationFee ?? ''}
+                                    onChange={e => setEditingOffer({ ...editingOffer, editRegistrationFee: e.target.value })}
+                                    placeholder="Ex: 15 000 FCFA"
+                                    className="bg-white/5 border-white/10 text-white rounded-xl h-10 text-xs font-mono"
                                 />
                             </div>
 
                             <div className="flex gap-2 pt-2 border-t border-white/10">
                                 <Button
                                     onClick={() => setEditingOffer(null)}
-                                    className="flex-1 bg-white/5 hover:bg-white/10 text-slate-300 text-xs rounded-xl"
+                                    className="flex-1 bg-white/5 hover:bg-white/10 text-slate-300 text-xs rounded-xl cursor-pointer"
                                 >
                                     Annuler
                                 </Button>
                                 <Button
                                     onClick={handleSaveEditOffer}
                                     disabled={savingEditOffer}
-                                    className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl"
+                                    className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl cursor-pointer"
                                 >
-                                    {savingEditOffer ? 'Enregistrement...' : 'Enregistrer'}
+                                    {savingEditOffer ? 'Enregistrement...' : 'Enregistrer les modifications'}
                                 </Button>
                             </div>
                         </motion.div>

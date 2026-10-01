@@ -746,7 +746,7 @@ function AdminPageContent() {
                 }
                 const { data: c } = await supabase.from('classrooms').select('*').eq('organization_id', o.id).order('name');
                 if (cancelled) return;
-                setCls((c || []).map((x: any) => ({ id: x.id, name: x.name, cycle: x.cycle || '', filiere_id: x.filiere_id, level: x.level || 1, capacity: x.capacity || 50 })));
+                setCls((c || []).map((x: any) => ({ ...x, cycle: x.cycle || '', level: x.level || 1, capacity: x.capacity || 50 })));
                 const { data: s } = await supabase.from('subjects').select('*').eq('organization_id', o.id).order('name');
                 if (cancelled) return;
                 setSubs((s || []).map((x: any) => ({ id: x.id, name: x.name, code: x.code || '', coefficient: x.coefficient || 1, classroom_id: x.classroom_id, teacher_id: x.teacher_id })));
@@ -2228,7 +2228,7 @@ ${bodyHtml}
                                 onRefresh={() => {
                                     void (async () => {
                                         const { data: c } = await supabase.from('classrooms').select('*').eq('organization_id', org.id).order('name');
-                                        setCls((c || []).map((x: any) => ({ id: x.id, name: x.name, cycle: x.cycle || '', filiere_id: x.filiere_id, level: x.level || 1, capacity: x.capacity || 50 })));
+                                        setCls((c || []).map((x: any) => ({ ...x, cycle: x.cycle || '', level: x.level || 1, capacity: x.capacity || 50 })));
                                     })();
                                 }}
                             />
@@ -2243,7 +2243,7 @@ ${bodyHtml}
                                 onRefresh={() => {
                                     void (async () => {
                                         const { data: c } = await supabase.from('classrooms').select('*').eq('organization_id', org.id).order('name');
-                                        setCls((c || []).map((x: any) => ({ id: x.id, name: x.name, cycle: x.cycle || '', filiere_id: x.filiere_id, level: x.level || 1, capacity: x.capacity || 50 })));
+                                        setCls((c || []).map((x: any) => ({ ...x, cycle: x.cycle || '', level: x.level || 1, capacity: x.capacity || 50 })));
                                         const { data: s } = await supabase.from('subjects').select('*').eq('organization_id', org.id).order('name');
                                         setSubs((s || []).map((x: any) => ({ id: x.id, name: x.name, code: x.code || '', coefficient: x.coefficient || 1, classroom_id: x.classroom_id, teacher_id: x.teacher_id })));
                                     })();
@@ -2291,7 +2291,7 @@ ${bodyHtml}
                                 onRefresh={() => {
                                     void (async () => {
                                         const { data: c } = await supabase.from('classrooms').select('*').eq('organization_id', org.id).order('name');
-                                        setCls((c || []).map((x: any) => ({ id: x.id, name: x.name, cycle: x.cycle || '', filiere_id: x.filiere_id, level: x.level || 1, capacity: x.capacity || 50 })));
+                                        setCls((c || []).map((x: any) => ({ ...x, cycle: x.cycle || '', level: x.level || 1, capacity: x.capacity || 50 })));
                                         const { data: s } = await supabase.from('students').select('*').eq('organization_id', org.id).order('last_name');
                                         setStudents(s || []);
                                     })();
@@ -2350,7 +2350,7 @@ ${bodyHtml}
                                 onRefresh={() => {
                                     void (async () => {
                                         const { data: c } = await supabase.from('classrooms').select('*').eq('organization_id', org.id).order('name');
-                                        setCls((c || []).map((x: any) => ({ id: x.id, name: x.name, cycle: x.cycle || '', filiere_id: x.filiere_id, level: x.level || 1, capacity: x.capacity || 50 })));
+                                        setCls((c || []).map((x: any) => ({ ...x, cycle: x.cycle || '', level: x.level || 1, capacity: x.capacity || 50 })));
                                     })();
                                 }}
                             />

@@ -133,27 +133,68 @@ export function TemplateSegmentedHub({
             rawItem: f,
         }))
         : (classrooms && classrooms.length > 0)
-            ? classrooms.map((c: any, i: number) => ({
-                id: c.id || `c_${i}`,
-                nom: c.name,
-                code: c.code || `LVL-${i + 1}`,
-                duree_mois: c.academic_year ? 12 : 9,
-                description: c.description || `Classe et programme académique officiel niveau ${c.level || 'Général'}.`,
-                frais_scolarite: Number(c.frais_scolarite || 0),
-                frais_inscription: Number(c.frais_inscription || 0),
-                prix_barre: c.prix_barre || null,
-                echeances: c.echeances || [],
-                category: c.level ? `Niveau ${c.level}` : 'Programme Académique',
-                icon: i % 2 === 0 ? Briefcase : Cpu,
-                rawItem: c,
-            }))
+            ? classrooms.map((c: any, i: number) => {
+                // 1. Description réelle de la formation
+                const desc = c.description
+                    || (c.schedule_config && typeof c.schedule_config === 'object' && c.schedule_config.description)
+                    || (Array.isArray(c.competencies_list) && c.competencies_list.length > 0 ? c.competencies_list.join('\n') : '')
+                    || (typeof c.competencies_list === 'string' && c.competencies_list)
+                    || `Programme complet dispensé par ${org.name}. Apprentissage structuré avec ateliers pratiques et suivi personnalisé.`;
+
+                // 2. Frais de scolarité / Tarif réel
+                let priceNum = Number(c.frais_scolarite || c.tuition_fee || 0);
+                if (!priceNum && c.cycle) {
+                    const match = String(c.cycle).match(/(\d[\d\s]*)\s*(FCFA|XAF|EUR|USD|\$|€)/i);
+                    if (match) {
+                        priceNum = parseInt(match[1].replace(/\s/g, ''), 10);
+                    }
+                }
+
+                // 3. Prix initial barré / Promotion
+                const prixBarre = c.prix_barre
+                    || (c.schedule_config && typeof c.schedule_config === 'object' && (c.schedule_config.prix_barre || c.schedule_config.original_price))
+                    || null;
+
+                // 4. Frais d'inscription
+                const regFee = Number(c.frais_inscription || c.registration_fee || 0);
+
+                // 5. Durée en mois
+                let durationMonths: number | null = c.duree_mois || null;
+                if (!durationMonths && c.training_duration) {
+                    const m = String(c.training_duration).match(/(\d+)\s*mois/i);
+                    if (m) durationMonths = parseInt(m[1], 10);
+                }
+                if (!durationMonths && c.cycle) {
+                    const m = String(c.cycle).match(/(\d+)\s*mois/i);
+                    if (m) durationMonths = parseInt(m[1], 10);
+                    else if (String(c.cycle).toLowerCase().includes('semaine')) durationMonths = 1;
+                    else if (String(c.cycle).toLowerCase().includes('an')) durationMonths = 12;
+                }
+                if (!durationMonths) durationMonths = c.academic_year ? 12 : 6;
+
+                return {
+                    id: c.id || `c_${i}`,
+                    nom: c.name,
+                    code: c.code || `PRO-${i + 1}`,
+                    duree_mois: durationMonths,
+                    description: desc,
+                    frais_scolarite: priceNum,
+                    frais_inscription: regFee,
+                    prix_barre: prixBarre,
+                    echeances: c.echeances || [],
+                    category: c.cycle?.split('•')?.[0]?.trim() || (c.level ? `Niveau ${c.level}` : 'Formation Certifiante'),
+                    icon: i % 2 === 0 ? Briefcase : Cpu,
+                    rawItem: c,
+                };
+            })
             : [
+                // Fallback 100% universel et neutre (non hardcodé pour un seul type d'école !)
                 {
                     id: '1',
-                    nom: `Niveau 1 — Initiation à l'Écriture et à l'Auteur`,
+                    nom: `Niveau 1 — Fondamentaux & Pratique Professionnelle`,
                     code: 'NIV-1',
                     duree_mois: 6,
-                    description: `De l'idée au projet de livre : trouver, affirmer et structurer votre idée.\nConstruire l'architecture solide de son livre.\nApprendre à écrire avec un style affirmé.\nRédiger son livre et transformer ses idées en manuscrit.\nRéécrire et améliorer son manuscrit.\nDevenir auteur et préparer son livre pour la publication.`,
+                    description: `Maîtriser les bases et compétences indispensables du métier.\nAteliers pratiques et mises en situation concrètes.\nAccompagnement par des formateurs certifiés.\nValidation des acquis et évaluations continues.\nPréparation active au passage au niveau supérieur.`,
                     frais_scolarite: 90000,
                     frais_inscription: 15000,
                     prix_barre: 150000,
@@ -167,10 +208,10 @@ export function TemplateSegmentedHub({
                 },
                 {
                     id: '2',
-                    nom: `Niveau 2 — Perfectionnement & Style de l'Auteur`,
+                    nom: `Niveau 2 — Perfectionnement & Compétences Avancées`,
                     code: 'NIV-2',
                     duree_mois: 6,
-                    description: `Analyse et amélioration du manuscrit : structure et pertinence.\nStyle et voix d'auteur : affirmer votre signature littéraire.\nÉdition et mise en page professionnelle.\nCouverture et présentation percutante.\nStratégies de publication et distribution.\nMarketing du livre et conquête de vos premiers lecteurs.`,
+                    description: `Approfondissement technique et méthodologique.\nÉtudes de cas réels et projets supervisés.\nPerfectionnement des outils professionnels.\nDéveloppement de l'autonomie et de la rigueur métier.\nCertification de compétences intermédiaire.`,
                     frais_scolarite: 120000,
                     frais_inscription: 15000,
                     prix_barre: 190000,
@@ -180,10 +221,10 @@ export function TemplateSegmentedHub({
                 },
                 {
                     id: '3',
-                    nom: `Niveau 3 — Professionnalisation & Carrière d'Auteur`,
+                    nom: `Niveau 3 — Expertise, Leadership & Insertion Métier`,
                     code: 'NIV-3',
                     duree_mois: 6,
-                    description: `Marque et positionnement d'auteur reconnu.\nCréation et animation de votre communauté de lecteurs.\nMarketing digital et vente multicanale.\nPartenariats, conférences et diversification des revenus.\nDroits d'auteur et aspects juridiques.\nTraduction et rayonnement international.`,
+                    description: `Maîtrise complète et posture d'expert autonome.\nConduite de projets d'envergure et soutenance finale.\nStratégies de valorisation et positionnement sur le marché.\nRéseau d'anciens et opportunités professionnelles.\nDélivrance du diplôme / certificat d'excellence.`,
                     frais_scolarite: 150000,
                     frais_inscription: 20000,
                     prix_barre: 250000,
