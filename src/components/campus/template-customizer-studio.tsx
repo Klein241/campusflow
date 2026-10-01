@@ -76,6 +76,12 @@ export interface TemplateCustomConfig {
     flagship_price?: string;
     book_cta?: string;
 
+    // 🏷️ Tarifs, Réductions & Formations Marketing
+    filiere_discount_pct?: string;
+    filiere_original_price?: string;
+    filiere_promo_badge?: string;
+    show_filiere_pricing?: boolean;
+
     // 🎙️ Podcast, Médias & Presse
     podcast_title?: string;
     podcast_description?: string;
@@ -240,6 +246,12 @@ export function TemplateCustomizerStudio({
         flagship_price: rawConfig.flagship_price || '250 000 FCFA',
         book_cta: rawConfig.book_cta || 'Commandez mon bestseller aujourd\'hui !',
 
+        // 🏷️ Tarifs & Réductions des Filières
+        filiere_discount_pct: rawConfig.filiere_discount_pct || '',
+        filiere_original_price: rawConfig.filiere_original_price || '',
+        filiere_promo_badge: rawConfig.filiere_promo_badge || 'Offre Rentrée',
+        show_filiere_pricing: rawConfig.show_filiere_pricing !== false,
+
         // Podcast & Médias
         podcast_title: rawConfig.podcast_title || 'Le Podcast Influenceur & Masterclass',
         podcast_description: rawConfig.podcast_description || 'Des centaines d\'épisodes et d\'ateliers en direct pour comprendre les rouages du succès et de la transformation.',
@@ -398,6 +410,9 @@ export function TemplateCustomizerStudio({
         book_title: { label: "Titre Livre / Manuel / E-Book", tab: 'flagship' },
         book_desc: { label: "Description Livre / E-Book", tab: 'flagship', isMultiline: true },
         book_cta: { label: "Bouton Commande Livre", tab: 'flagship' },
+        filiere_discount_pct: { label: "Taux de Réduction Promotionnelle (ex: -40%)", tab: 'flagship' },
+        filiere_original_price: { label: "Prix Initial Barré de Référence", tab: 'flagship' },
+        filiere_promo_badge: { label: "Badge Promotionnel (ex: Offre Rentrée)", tab: 'flagship' },
 
         // Médias
         podcast_title: { label: "Titre Podcast / Médias", tab: 'media' },
@@ -1614,6 +1629,57 @@ export function TemplateCustomizerStudio({
                                             placeholder="Ex: Places limitées pour la prochaine promotion !"
                                             className={`bg-white/5 border-white/10 text-white rounded-xl h-10 transition-all duration-300 ${activeHighlightedField === 'book_cta' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                         />
+                                    </div>
+
+                                    {/* 🏷️ Tarifs, Réductions & Présentation Marketing des Formations */}
+                                    <div className="pt-4 border-t border-white/10 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <h4 className="text-xs font-black text-amber-400 uppercase tracking-wider">🏷️ Tarifs & Réductions Marketing</h4>
+                                                <p className="text-[10px] text-slate-400">Affichez un prix initial barré et un badge promotionnel sur vos filières.</p>
+                                            </div>
+                                            <input
+                                                type="checkbox"
+                                                checked={form.show_filiere_pricing !== false}
+                                                onChange={e => setForm({ ...form, show_filiere_pricing: e.target.checked })}
+                                                className="w-4 h-4 rounded accent-amber-500 cursor-pointer"
+                                                title="Activer l'affichage des tarifs"
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="font-bold text-slate-200 block mb-1 text-xs">Taux de Réduction (ex: -40%)</label>
+                                                <Input
+                                                    id="studio_field_filiere_discount_pct"
+                                                    value={form.filiere_discount_pct || ''}
+                                                    onChange={e => setForm({ ...form, filiere_discount_pct: e.target.value })}
+                                                    placeholder="Ex: -40% ou 30%"
+                                                    className="bg-white/5 border-white/10 text-white rounded-xl h-10 text-xs"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="font-bold text-slate-200 block mb-1 text-xs">Prix Initial Barré</label>
+                                                <Input
+                                                    id="studio_field_filiere_original_price"
+                                                    value={form.filiere_original_price || ''}
+                                                    onChange={e => setForm({ ...form, filiere_original_price: e.target.value })}
+                                                    placeholder="Ex: 150 000 FCFA"
+                                                    className="bg-white/5 border-white/10 text-white rounded-xl h-10 text-xs"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="font-bold text-slate-200 block mb-1 text-xs">Badge Promotionnel</label>
+                                            <Input
+                                                id="studio_field_filiere_promo_badge"
+                                                value={form.filiere_promo_badge || ''}
+                                                onChange={e => setForm({ ...form, filiere_promo_badge: e.target.value })}
+                                                placeholder="Ex: Offre Rentrée • Places Limitées"
+                                                className="bg-white/5 border-white/10 text-white rounded-xl h-10 text-xs"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
 
