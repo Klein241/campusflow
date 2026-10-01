@@ -448,8 +448,12 @@ export function TemplateBentoBox({
             <div className="fixed bottom-0 inset-x-0 z-40 bg-[#0A0E17]/95 backdrop-blur-2xl border-t border-cyan-500/25 p-3 sm:p-3.5 px-4 sm:px-6 shadow-2xl">
                 <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
                     <div>
-                        <p className="text-xs font-black text-white uppercase tracking-wide">Commencez votre avenir</p>
-                        <p className="text-[10px] text-slate-400">Inscriptions ouvertes pour l'année académique</p>
+                        <p data-editable-field="session_title" className="text-xs font-black text-white uppercase tracking-wide cursor-pointer hover:text-cyan-400 transition-colors">
+                            {cfg.session_title || 'Commencez votre avenir'}
+                        </p>
+                        <p data-editable-field="session_subtitle" className="text-[10px] text-slate-400 cursor-pointer">
+                            {cfg.session_subtitle || "Inscriptions ouvertes pour l'année académique"}
+                        </p>
                     </div>
                     <Button data-editable-field="primary_cta_text" onClick={onOpenInscription} className="h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-black text-xs shadow-lg shadow-cyan-500/25 gap-2 w-full sm:w-auto justify-center">
                         <FileText className="w-4 h-4" />

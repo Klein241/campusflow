@@ -381,9 +381,11 @@ export function TemplateCreativeStudio({
 
                         {/* Services grid */}
                         <div>
-                            <span className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">Services Proposés</span>
-                            <h2 className="font-black text-2xl text-[#0D1C19] flex items-center gap-2 mb-8">
-                                Ce Que Je Fais <Sparkles className="w-5 h-5 text-yellow-500" />
+                            <span data-editable-field="flagship_subtitle" className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1 cursor-pointer">
+                                {cfg.flagship_subtitle || "Services Proposés"}
+                            </span>
+                            <h2 data-editable-field="flagship_title" className="font-black text-2xl text-[#0D1C19] flex items-center gap-2 mb-8 cursor-pointer">
+                                {cfg.flagship_title || "Ce Que Je Fais"} <Sparkles className="w-5 h-5 text-yellow-500" />
                             </h2>
                             <div className="grid grid-cols-2 gap-6">
                                 {whatIDo.map((item, i) => {
@@ -412,7 +414,7 @@ export function TemplateCreativeStudio({
                         {/* Témoignage */}
                         <div className="space-y-4">
                             <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block">Confiance & Rigueur</span>
-                            <p className="text-base italic text-gray-700 leading-relaxed">
+                            <p data-editable-field="testimonial_text" className="text-base italic text-gray-700 leading-relaxed cursor-pointer">
                                 {testimonialText}
                             </p>
                             <div className="flex items-center gap-3">
@@ -423,8 +425,8 @@ export function TemplateCreativeStudio({
                                     }
                                 </div>
                                 <div>
-                                    <p className="font-black text-xs text-[#0D1C19]">{testimonialAuthor}</p>
-                                    <p className="text-xs text-gray-500">{testimonialRole}</p>
+                                    <p data-editable-field="testimonial_author" className="font-black text-xs text-[#0D1C19] cursor-pointer">{testimonialAuthor}</p>
+                                    <p data-editable-field="testimonial_role" className="text-xs text-gray-500 cursor-pointer">{testimonialRole}</p>
                                 </div>
                             </div>
                         </div>
@@ -432,12 +434,12 @@ export function TemplateCreativeStudio({
                         {/* Stats */}
                         <div className="flex items-center gap-8 justify-center lg:justify-end">
                             {[
-                                { value: projectsCount, label: 'Projets Réalisés' },
-                                { value: clientsCount,  label: 'Clients Heureux' },
-                                { value: yearsExp,      label: "Ans d'Expérience" },
+                                { key: 'projects_count', value: projectsCount, label: 'Projets Réalisés' },
+                                { key: 'clients_count', value: clientsCount,  label: 'Clients Heureux' },
+                                { key: 'years_experience_value', value: yearsExp, label: "Ans d'Expérience" },
                             ].map((stat, i) => (
                                 <div key={i} className="text-center">
-                                    <p className="text-4xl font-black" style={{ color: ACCENT }}>{stat.value}</p>
+                                    <p data-editable-field={stat.key} className="text-4xl font-black cursor-pointer" style={{ color: ACCENT }}>{stat.value}</p>
                                     <p className="text-xs text-gray-500 mt-0.5">{stat.label}</p>
                                 </div>
                             ))}

@@ -172,9 +172,11 @@ export function TemplateHubOnglets({
                             </div>
                         ) : (
                             <div className="p-8 rounded-2xl bg-white/[0.02] border border-white/5 text-center space-y-2">
-                                <p className="text-white font-bold text-base">Inscriptions ouvertes pour {org.name}</p>
-                                <p className="text-slate-400 text-xs max-w-md mx-auto">
-                                    Déposez dès maintenant votre demande d'admission pour intégrer la prochaine session académique.
+                                <p data-editable-field="session_title" className="text-white font-bold text-base cursor-pointer hover:text-cyan-400 transition-colors">
+                                    {cfg.session_title || `Inscriptions ouvertes pour ${org.name}`}
+                                </p>
+                                <p data-editable-field="session_subtitle" className="text-slate-400 text-xs max-w-md mx-auto cursor-pointer">
+                                    {cfg.session_subtitle || "Déposez dès maintenant votre demande d'admission pour intégrer la prochaine session académique."}
                                 </p>
                             </div>
                         )}

@@ -10,7 +10,7 @@ import {
     ExternalLink, ZoomIn, ZoomOut, Maximize2, Wand2, Trash2, X,
     ChevronRight, Globe, Mail, MapPin, Award, Star, ShieldCheck,
     Check, Phone, CheckSquare, MousePointerClick, Image as ImageIcon,
-    AlignLeft, AlignCenter, AlignRight, LayoutGrid, Info, Plus, ChevronDown, ChevronUp
+    AlignLeft, AlignCenter, AlignRight, LayoutGrid, Info, Plus, ChevronDown, ChevronUp, Calendar
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -144,6 +144,8 @@ export interface TemplateCustomConfig {
     review1_author?: string;
     review2_text?: string;
     review2_author?: string;
+    session_title?: string;
+    session_subtitle?: string;
 }
 
 interface TemplateCustomizerStudioProps {
@@ -217,6 +219,10 @@ export function TemplateCustomizerStudio({
         cta_style: rawConfig.cta_style || 'gradient',
         show_cta_buttons: rawConfig.show_cta_buttons !== false,
         show_secondary_cta: rawConfig.show_secondary_cta !== false,
+
+        // 📅 Sessions d'Admission & Inscriptions
+        session_title: rawConfig.session_title || "Sessions d'Admissions 2025/2026",
+        session_subtitle: rawConfig.session_subtitle || "Inscriptions ouvertes pour la prochaine promotion académique. Places limitées.",
 
         // 🖼️ Galerie & Visuels
         show_gallery_section: rawConfig.show_gallery_section !== false,
@@ -359,27 +365,50 @@ export function TemplateCustomizerStudio({
         trainer_name: { label: "Nom de l'Établissement / Formateur", tab: 'profile' },
         trainer_title: { label: "Titre / Titulature Principale", tab: 'profile' },
         trainer_subtitle: { label: "Sous-titre / Slogan Hero", tab: 'profile', isMultiline: true },
-        trainer_bio: { label: "Présentation / Biographie", tab: 'profile', isMultiline: true },
+        trainer_bio: { label: "Présentation / Histoire", tab: 'profile', isMultiline: true },
         trainer_quote: { label: "Citation Inspirante", tab: 'profile', isMultiline: true },
+        trainer_photo_url: { label: "Photo de Profil / Campus HD", tab: 'profile' },
+        trainer_photo_secondary_url: { label: "Photo Secondaire HD", tab: 'profile' },
+        hero_banner_url: { label: "Bannière d'Arrière-Plan Hero", tab: 'profile' },
+        hero_image_url: { label: "Photo Principale Hero HD", tab: 'profile' },
+        about_text: { label: "Texte Présentation / Histoire", tab: 'profile', isMultiline: true },
+        about_image_url: { label: "Photo Section À Propos", tab: 'profile' },
         years_experience_value: { label: "Années d'Expérience", tab: 'profile' },
         availability_badge: { label: "Badge Disponibilité", tab: 'profile' },
+
+        // Boutons & Sessions
         primary_cta_text: { label: "Bouton d'Action Principal", tab: 'buttons' },
         primary_cta_url: { label: "Lien Bouton Principal", tab: 'buttons' },
         secondary_cta_text: { label: "Bouton d'Action Secondaire", tab: 'buttons' },
         secondary_cta_url: { label: "Lien Bouton Secondaire", tab: 'buttons' },
+        session_title: { label: "Titre de la Session / Rentrée", tab: 'buttons' },
+        session_subtitle: { label: "Détails / Modalités Session", tab: 'buttons', isMultiline: true },
+
+        // Galerie
         gallery_title: { label: "Titre de la Galerie", tab: 'media_gallery' },
         gallery_subtitle: { label: "Sous-titre de la Galerie", tab: 'media_gallery' },
-        flagship_title: { label: "Titre Offre Phare / Livre / Formation", tab: 'flagship' },
-        flagship_subtitle: { label: "Sous-titre Offre Phare", tab: 'flagship' },
-        flagship_description: { label: "Description Offre Phare", tab: 'flagship', isMultiline: true },
-        flagship_price: { label: "Tarif Offre Phare", tab: 'flagship' },
-        flagship_cta_text: { label: "Bouton Offre Phare", tab: 'flagship' },
+
+        // Offres, Diplômes & Livres
+        flagship_title: { label: "Titre Offre Phare / Filière / Manuel", tab: 'flagship' },
+        flagship_subtitle: { label: "Sous-titre Offre Phare / Filière", tab: 'flagship' },
+        flagship_description: { label: "Description Offre Phare / Filière", tab: 'flagship', isMultiline: true },
+        flagship_price: { label: "Tarif Offre Phare / Cursus", tab: 'flagship' },
+        flagship_cta_text: { label: "Bouton Candidature / Achat", tab: 'flagship' },
+        flagship_image_url: { label: "Image Visuel Offre Phare", tab: 'flagship' },
+        book_title: { label: "Titre Livre / Manuel / E-Book", tab: 'flagship' },
+        book_desc: { label: "Description Livre / E-Book", tab: 'flagship', isMultiline: true },
         book_cta: { label: "Bouton Commande Livre", tab: 'flagship' },
+
+        // Médias
         podcast_title: { label: "Titre Podcast / Médias", tab: 'media' },
         podcast_description: { label: "Description Podcast", tab: 'media', isMultiline: true },
-        podcast_cta_text: { label: "Bouton Podcast", tab: 'media' },
+        podcast_desc: { label: "Description Podcast", tab: 'media', isMultiline: true },
+        podcast_desc2: { label: "Description Détaillée Podcast", tab: 'media', isMultiline: true },
+        podcast_cta_text: { label: "Bouton Écoute Podcast", tab: 'media' },
         podcast_episodes_count: { label: "Nombre d'Épisodes Podcast", tab: 'media' },
         press_logos_text: { label: "Logos Partenaires & Presse", tab: 'media' },
+
+        // Chiffres & Stats
         stat1_value: { label: "Statistique 1 (Chiffre)", tab: 'stats' },
         stat1_label: { label: "Statistique 1 (Libellé)", tab: 'stats' },
         stat2_value: { label: "Statistique 2 (Chiffre)", tab: 'stats' },
@@ -390,9 +419,23 @@ export function TemplateCustomizerStudio({
         stat4_label: { label: "Statistique 4 (Libellé)", tab: 'stats' },
         rating_score_value: { label: "Note & Satisfaction", tab: 'stats' },
         review_count: { label: "Nombre d'Avis", tab: 'stats' },
-        testimonial_text: { label: "Témoignage Client", tab: 'testimonials', isMultiline: true },
-        testimonial_author: { label: "Auteur du Témoignage", tab: 'testimonials' },
-        testimonial_role: { label: "Rôle de l'Auteur", tab: 'testimonials' },
+
+        // Témoignages
+        testimonial_text: { label: "Témoignage Étudiant / Alumni", tab: 'testimonials', isMultiline: true },
+        testimonial_author: { label: "Auteur Témoignage 1", tab: 'testimonials' },
+        testimonial_role: { label: "Rôle Témoignage 1", tab: 'testimonials' },
+        review1_text: { label: "Témoignage Étudiant / Alumni", tab: 'testimonials', isMultiline: true },
+        review1_author: { label: "Auteur Témoignage 1", tab: 'testimonials' },
+        review2_text: { label: "Témoignage Parent / Partenaire", tab: 'testimonials', isMultiline: true },
+        review2_author: { label: "Auteur Témoignage 2", tab: 'testimonials' },
+        testimonial1_text: { label: "Témoignage Parent / Partenaire", tab: 'testimonials', isMultiline: true },
+        testimonial1_author: { label: "Auteur Témoignage 2", tab: 'testimonials' },
+        testimonial1_role: { label: "Rôle Témoignage 2", tab: 'testimonials' },
+        testimonial2_text: { label: "Témoignage 3", tab: 'testimonials', isMultiline: true },
+        testimonial2_author: { label: "Auteur Témoignage 3", tab: 'testimonials' },
+        testimonial2_role: { label: "Rôle Témoignage 3", tab: 'testimonials' },
+
+        // Navigation
         available_text: { label: "Badge Disponibilité / Projets", tab: 'navigation' },
         turning_ideas_text: { label: "Accroche Idées Créatives", tab: 'navigation' },
         nav_links_text: { label: "Liens du Menu (séparés par virgules)", tab: 'navigation' },
@@ -403,57 +446,74 @@ export function TemplateCustomizerStudio({
 
     // Détection intelligente du champ cliqué sur le Canvas
     const detectFieldFromElement = (target: HTMLElement, text: string): string | null => {
-        if (!text && !target) return null;
-        const lower = text.toLowerCase();
+        if (!target) return null;
+        const lower = (text || target.innerText || target.textContent || '').toLowerCase().trim();
 
-        // 1. Correspondance avec une valeur courante du formulaire
+        // 1. Si clic direct sur une image
+        if (target.tagName.toLowerCase() === 'img') {
+            const parent = target.closest('[data-editable-field]');
+            if (parent) return parent.getAttribute('data-editable-field');
+            if (target.closest('#about') || target.closest('.about-section')) return 'about_image_url';
+            if (target.closest('#livre') || target.closest('#flagship')) return 'flagship_image_url';
+            return 'trainer_photo_url';
+        }
+
+        // 2. Détection prioritaire par mots-clés "session / admission / inscription / rentrée"
+        if (lower.includes('session') || lower.includes('admission') || lower.includes('rentrée') || lower.includes('candidat') || lower.includes('inscri')) {
+            const tag = target.tagName.toLowerCase();
+            const isHeading = tag === 'h1' || tag === 'h2' || tag === 'h3' || tag === 'h4' || tag === 'strong' || tag === 'b';
+            const isBtn = tag === 'button' || tag === 'a' || !!target.closest('button') || !!target.closest('a');
+            if (isBtn) return 'primary_cta_text';
+            if (isHeading) return 'session_title';
+            return 'session_subtitle';
+        }
+
+        // 3. Correspondance avec une valeur courante du formulaire
         for (const [k, v] of Object.entries(form)) {
-            if (typeof v === 'string' && v.trim().length > 1) {
-                if (text === v.trim() || valMatches(text, v.trim())) {
+            if (typeof v === 'string' && v.trim().length > 2) {
+                if (lower === v.toLowerCase().trim() || lower.includes(v.toLowerCase().trim()) || v.toLowerCase().trim().includes(lower)) {
                     return k;
                 }
             }
         }
 
-        // 2. Nom d'organisation
-        if (org.name && (text.includes(org.name) || org.name.includes(text))) {
+        // 4. Nom d'organisation
+        if (org.name && (lower.includes(org.name.toLowerCase()) || org.name.toLowerCase().includes(lower))) {
             return 'trainer_name';
         }
 
-        // 3. Détection par type de balise HTML et contexte
+        // 5. Détection par type de balise HTML et contexte
         const tag = target.tagName.toLowerCase();
         const isBtn = tag === 'button' || tag === 'a' || !!target.closest('button') || !!target.closest('a');
 
         if (isBtn) {
-            if (lower.includes('inscri') || lower.includes('commen') || lower.includes('contact') || lower.includes('projet')) {
+            if (lower.includes('inscri') || lower.includes('commen') || lower.includes('contact') || lower.includes('projet') || lower.includes('admission')) {
                 return 'primary_cta_text';
             }
             return 'secondary_cta_text';
         }
 
-        if (tag === 'h1' || tag === 'h2' || tag === 'h3') {
+        if (tag === 'h1' || tag === 'h2' || tag === 'h3' || tag === 'h4') {
             if (target.closest('header') || target.closest('nav')) return 'trainer_name';
-            if (lower.includes('propos') || lower.includes('présentation')) return 'about_title';
-            if (lower.includes('podcast') || lower.includes('média')) return 'podcast_title';
-            if (lower.includes('bestseller') || lower.includes('livre') || lower.includes('offre') || lower.includes('programme')) return 'flagship_title';
-            return 'trainer_name';
+            if (lower.includes('propos') || lower.includes('présentation') || lower.includes('histoire') || lower.includes('vision')) return 'about_title';
+            if (lower.includes('podcast') || lower.includes('média') || lower.includes('interview')) return 'podcast_title';
+            if (lower.includes('livre') || lower.includes('manuel') || lower.includes('bibliothèque') || lower.includes('ressource') || lower.includes('bestseller')) return 'book_title';
+            if (lower.includes('filière') || lower.includes('formation') || lower.includes('programme') || lower.includes('cursus') || lower.includes('offre') || lower.includes('diplôme')) return 'flagship_title';
+            if (lower.includes('avis') || lower.includes('témoignage') || lower.includes('alumni') || lower.includes('étudiant')) return 'testimonial_author';
+            return 'trainer_title';
         }
 
-        if (tag === 'p') {
-            if (target.closest('#about') || lower.includes('méthodologie') || lower.includes('dédié')) return 'trainer_bio';
+        if (tag === 'p' || tag === 'span' || tag === 'div') {
+            if (lower.includes('livre') || lower.includes('manuel') || lower.includes('ouvrage') || lower.includes('bibliothèque')) return 'book_desc';
+            if (lower.includes('podcast') || lower.includes('épisode')) return 'podcast_description';
+            if (lower.includes('avis') || lower.includes('témoignage') || lower.includes('"') || lower.includes('«') || lower.includes('élève') || lower.includes('recommande')) return 'testimonial_text';
+            if (target.closest('#about') || lower.includes('méthodologie') || lower.includes('fondé') || lower.includes('excellence')) return 'trainer_bio';
+            if (lower.match(/^\+?\d+[%★kkm+]?$/)) return 'stat1_value';
             return 'trainer_subtitle';
-        }
-
-        if (text.match(/^\+?\d+[%★kKmM+]?$/)) {
-            return 'stat1_value';
         }
 
         return 'trainer_subtitle';
     };
-
-    function valMatches(t: string, f: string): boolean {
-        return t.includes(f) || f.includes(t);
-    }
 
     // Gestion du clic direct sur n'importe quel élément du Canvas
     const handleCanvasClick = (e: React.MouseEvent) => {
@@ -464,8 +524,8 @@ export function TemplateCustomizerStudio({
         e.preventDefault();
         e.stopPropagation();
 
-        // 1. Détection via data-editable-field
-        const explicitEl = target.closest('[data-editable-field]');
+        // 1. Détection via data-editable-field (sur l'élément ou un enfant/parent direct)
+        const explicitEl = target.closest('[data-editable-field]') || target.querySelector('[data-editable-field]');
         let fieldKey = explicitEl?.getAttribute('data-editable-field');
 
         // 2. Détection intelligente automatique
@@ -474,8 +534,19 @@ export function TemplateCustomizerStudio({
             fieldKey = detectFieldFromElement(target, text);
         }
 
-        if (fieldKey && FIELD_METADATA[fieldKey]) {
-            const meta = FIELD_METADATA[fieldKey];
+        if (fieldKey) {
+            const meta = FIELD_METADATA[fieldKey] || {
+                label: fieldKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                tab: fieldKey.includes('session') || fieldKey.includes('cta') ? 'buttons' :
+                     fieldKey.includes('stat') || fieldKey.includes('score') ? 'stats' :
+                     fieldKey.includes('testim') || fieldKey.includes('review') ? 'testimonials' :
+                     fieldKey.includes('book') || fieldKey.includes('flagship') ? 'flagship' :
+                     fieldKey.includes('podcast') ? 'media' :
+                     fieldKey.includes('gallery') ? 'media_gallery' :
+                     fieldKey.includes('nav') || fieldKey.includes('contact') ? 'navigation' : 'profile',
+                isMultiline: fieldKey.includes('text') || fieldKey.includes('bio') || fieldKey.includes('desc') || fieldKey.includes('subtitle')
+            };
+
             setDirectEditField({
                 key: fieldKey,
                 label: meta.label,
@@ -483,7 +554,7 @@ export function TemplateCustomizerStudio({
                 isMultiline: meta.isMultiline || false,
             });
 
-            // "Voir directement sur le côté"
+            // Basculer l'onglet latéral et cibler le champ
             setActiveSidebarTab(meta.tab as any);
             setActiveHighlightedField(fieldKey);
             setTimeout(() => {
@@ -1310,6 +1381,38 @@ export function TemplateCustomizerStudio({
                                         />
                                     </div>
                                 </div>
+
+                                {/* Sessions & Périodes d'Admissions */}
+                                <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-bold text-amber-400 text-xs flex items-center gap-1.5">
+                                            <Calendar className="w-3.5 h-3.5" />
+                                            Sessions d'Admissions & Prochaine Rentrée
+                                        </span>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] text-slate-400 block mb-1">Titre de la Session</label>
+                                        <Input
+                                            id="studio_field_session_title"
+                                            value={form.session_title || ''}
+                                            onChange={e => setForm({ ...form, session_title: e.target.value })}
+                                            placeholder="Ex: Sessions d'Admissions 2025/2026, Rejoindre la prochaine session..."
+                                            className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs transition-all duration-300 ${activeHighlightedField === 'session_title' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] text-slate-400 block mb-1">Détails / Places / Date de rentrée</label>
+                                        <Textarea
+                                            id="studio_field_session_subtitle"
+                                            value={form.session_subtitle || ''}
+                                            onChange={e => setForm({ ...form, session_subtitle: e.target.value })}
+                                            placeholder="Ex: Inscriptions ouvertes en ligne • Places limitées par promotion afin de garantir un encadrement d'excellence."
+                                            className={`bg-white/5 border-white/10 text-white rounded-xl min-h-[60px] text-xs transition-all duration-300 ${activeHighlightedField === 'session_subtitle' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         )}
 
@@ -2102,7 +2205,41 @@ export function TemplateCustomizerStudio({
                                 </div>
 
                                 <div className="space-y-3 pt-1">
-                                    {directEditField.isMultiline ? (
+                                    {directEditField.key.includes('photo') || directEditField.key.includes('image') || directEditField.key.includes('banner') ? (
+                                        <div className="space-y-2">
+                                            {(form as any)[directEditField.key] && (
+                                                <div className="w-full h-24 rounded-xl overflow-hidden bg-black/50 border border-white/10 relative">
+                                                    <img src={(form as any)[directEditField.key]} alt="Preview" className="w-full h-full object-cover" />
+                                                </div>
+                                            )}
+                                            <label className="flex items-center justify-center gap-2 w-full p-2.5 rounded-xl border border-dashed border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-bold cursor-pointer text-xs transition">
+                                                <UploadCloud className="w-4 h-4" />
+                                                <span>Choisir une photo HD sur mon appareil</span>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    className="hidden"
+                                                    onChange={async (e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (!file) return;
+                                                        try {
+                                                            const res = await uploadToR2(file, `templates/${org.id}/${directEditField.key}`, file.name);
+                                                            setForm(prev => ({ ...prev, [directEditField.key]: res.url }));
+                                                            toast.success('✨ Photo appliquée en direct !');
+                                                        } catch (err: any) {
+                                                            toast.error(err.message);
+                                                        }
+                                                    }}
+                                                />
+                                            </label>
+                                            <Input
+                                                value={(form as any)[directEditField.key] || ''}
+                                                onChange={e => setForm(prev => ({ ...prev, [directEditField.key]: e.target.value }))}
+                                                className="bg-black/70 border-amber-500/40 text-white rounded-xl h-9 text-xs"
+                                                placeholder="Ou collez l'URL d'une image..."
+                                            />
+                                        </div>
+                                    ) : directEditField.isMultiline ? (
                                         <Textarea
                                             value={(form as any)[directEditField.key] || ''}
                                             onChange={e => setForm(prev => ({ ...prev, [directEditField.key]: e.target.value }))}

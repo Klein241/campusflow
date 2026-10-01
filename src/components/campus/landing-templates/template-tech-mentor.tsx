@@ -274,8 +274,11 @@ export function TemplateTechMentor({
                             style={{ background: ACCENT }} />
 
                         {/* Photo */}
-                        <div className="relative w-72 sm:w-80 h-96 rounded-3xl overflow-hidden shadow-2xl"
-                            style={{ border: `1px solid ${ACCENT}30` }}>
+                        <div
+                            data-editable-field="trainer_photo_url"
+                            className="relative w-72 sm:w-80 h-96 rounded-3xl overflow-hidden shadow-2xl cursor-pointer"
+                            style={{ border: `1px solid ${ACCENT}30` }}
+                        >
                             <img
                                 src={heroImage}
                                 alt={trainerName}
@@ -288,7 +291,7 @@ export function TemplateTechMentor({
             </section>
 
             {/* ══ BANDEAU LOGOS PARTENAIRES ══ */}
-            <div className="border-y py-5 overflow-hidden" style={{ borderColor: '#ffffff10', background: CARD }}>
+            <div data-editable-field="press_logos_text" className="border-y py-5 overflow-hidden cursor-pointer" style={{ borderColor: '#ffffff10', background: CARD }}>
                 <div className="flex items-center gap-16 whitespace-nowrap px-8 flex-wrap justify-center">
                     {[...pressLogos, ...pressLogos].map((logo, i) => (
                         <span key={i} className="text-xs font-bold tracking-widest text-gray-500 uppercase shrink-0">
@@ -302,7 +305,7 @@ export function TemplateTechMentor({
             <section id="about" className="py-20" style={{ background: CARD }}>
                 <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center">
                     {/* Portrait */}
-                    <div className="relative hidden lg:flex justify-center">
+                    <div data-editable-field="about_image_url" className="relative hidden lg:flex justify-center cursor-pointer">
                         <div className="w-80 h-96 rounded-3xl overflow-hidden shadow-2xl">
                             <img
                                 src={aboutImage}
@@ -321,22 +324,22 @@ export function TemplateTechMentor({
                             <p className="text-xs font-bold tracking-widest uppercase mb-2" style={{ color: ACCENT }}>
                                 À PROPOS
                             </p>
-                            <h2 className="text-2xl sm:text-3xl font-black leading-tight">
+                            <h2 data-editable-field="about_title" className="text-2xl sm:text-3xl font-black leading-tight cursor-pointer">
                                 {aboutTitle}
                             </h2>
                         </div>
 
-                        <p className="text-sm text-gray-400 leading-relaxed">{aboutText}</p>
+                        <p data-editable-field="trainer_bio" className="text-sm text-gray-400 leading-relaxed cursor-pointer">{aboutText}</p>
 
                         {/* Stats */}
                         <div className="grid grid-cols-3 gap-4">
                             {[
-                                { val: reviewCount, label: 'Avis Reçus' },
-                                { val: yearsExp,    label: "Ans d'Expérience" },
-                                { val: awardsCount, label: 'Projets Menés' },
+                                { key: 'review_count', val: reviewCount, label: 'Avis Reçus' },
+                                { key: 'years_experience_value', val: yearsExp,    label: "Ans d'Expérience" },
+                                { key: 'awards_count', val: awardsCount, label: 'Projets Menés' },
                             ].map((stat, i) => (
                                 <div key={i} className="text-center p-4 rounded-2xl" style={{ background: BG }}>
-                                    <p className="text-2xl font-black" style={{ color: ACCENT }}>{stat.val}</p>
+                                    <p data-editable-field={stat.key} className="text-2xl font-black cursor-pointer" style={{ color: ACCENT }}>{stat.val}</p>
                                     <p className="text-xs text-gray-500 mt-1">{stat.label}</p>
                                 </div>
                             ))}

@@ -82,21 +82,36 @@ export function TemplateSegmentedHub({
     const accordionItems = [
         {
             id: 'mission',
+            fieldKey: 'about_title',
+            contentFieldKey: 'trainer_bio',
             title: cfg.about_title || '🎯 Notre Mission & Vision Académique',
             content: aboutText
         },
         {
+            id: 'session',
+            fieldKey: 'session_title',
+            contentFieldKey: 'session_subtitle',
+            title: cfg.session_title || '📅 Prochaine Rentrée & Sessions d\'Admissions',
+            content: cfg.session_subtitle || 'Inscriptions ouvertes pour la prochaine session académique. Places limitées par promotion pour assurer un encadrement d\'élite.'
+        },
+        {
             id: 'faculty',
+            fieldKey: 'stat2_label',
+            contentFieldKey: 'stat2_value',
             title: '👨‍🏫 Corps Professoral & Encadrement d\'Excellence',
             content: `Plus de ${cfg.stat2_value || teacherCount || 30} enseignants certifiés et experts de l'industrie accompagnent chaque apprenant vers la réussite et l'insertion professionnelle.`
         },
         {
             id: 'research',
+            fieldKey: 'stat3_label',
+            contentFieldKey: 'stat3_value',
             title: '🔬 Infrastructures & Salles Spécialisées',
             content: cfg.stat3_label ? `${cfg.stat3_value || '100%'} ${cfg.stat3_label}` : 'Des salles modernes, une bibliothèque connectée et des équipements pratiques pour un apprentissage concret et orienté compétences.'
         },
         {
             id: 'legacy',
+            fieldKey: 'testimonial_author',
+            contentFieldKey: 'testimonial_text',
             title: '🌐 Réseau des Diplômés & Perspectives',
             content: cfg.testimonial_text ? cfg.testimonial_text.replace(/^"|"$/g, '') : 'Rejoignez un réseau dynamique d\'étudiants et diplômés insérés dans les secteurs clés d\'activité et les organisations internationales.'
         },
@@ -280,7 +295,7 @@ export function TemplateSegmentedHub({
                                         onClick={() => setOpenAccordion(openAccordion === item.id ? '' : item.id)}
                                         className="w-full flex items-center justify-between p-4 text-left font-bold text-xs text-white hover:bg-white/5 transition"
                                     >
-                                        <span>{item.title}</span>
+                                        <span data-editable-field={item.fieldKey} className="cursor-pointer">{item.title}</span>
                                         {openAccordion === item.id ? <ChevronUp className="w-4 h-4 text-amber-400" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
                                     </button>
                                     <AnimatePresence>
@@ -289,7 +304,7 @@ export function TemplateSegmentedHub({
                                                 initial={{ height: 0, opacity: 0 }}
                                                 animate={{ height: 'auto', opacity: 1 }}
                                                 exit={{ height: 0, opacity: 0 }}
-                                                data-editable-field={item.id === 'mission' ? 'trainer_bio' : undefined}
+                                                data-editable-field={item.contentFieldKey}
                                                 className="px-4 pb-4 pt-1 text-[11px] text-slate-300 leading-relaxed border-t border-white/5 cursor-pointer"
                                             >
                                                 {item.content}

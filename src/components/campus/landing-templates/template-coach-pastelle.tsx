@@ -264,7 +264,10 @@ export function TemplateCoachPastelle({
             <section id="podcast" className="py-20 bg-gray-50">
                 <div className="max-w-6xl mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center">
                     <div className="relative hidden lg:block">
-                        <div className="w-full h-96 rounded-3xl overflow-hidden shadow-xl">
+                        <div
+                            data-editable-field="trainer_photo_secondary_url"
+                            className="w-full h-96 rounded-3xl overflow-hidden shadow-xl cursor-pointer"
+                        >
                             <img
                                 src={secondaryImage}
                                 alt={trainerName + ' podcast'}
@@ -280,12 +283,12 @@ export function TemplateCoachPastelle({
                             </div>
                             <div>
                                 <p className="text-xs text-gray-500 italic font-serif">Le</p>
-                                <h2 className="font-serif font-black text-xl text-[#1E293B]">{podcastTitle}</h2>
+                                <h2 data-editable-field="podcast_title" className="font-serif font-black text-xl text-[#1E293B] cursor-pointer">{podcastTitle}</h2>
                             </div>
                         </div>
 
-                        <p className="text-sm text-gray-600 leading-relaxed">{podcastDesc}</p>
-                        <p className="text-sm text-gray-600 leading-relaxed">{podcastDesc2}</p>
+                        <p data-editable-field="podcast_description" className="text-sm text-gray-600 leading-relaxed cursor-pointer">{podcastDesc}</p>
+                        <p data-editable-field="podcast_desc2" className="text-sm text-gray-600 leading-relaxed cursor-pointer">{podcastDesc2}</p>
 
                         <button
                             onClick={onOpenInscription}
@@ -301,9 +304,11 @@ export function TemplateCoachPastelle({
             <section id="programmes" className="py-20 bg-white">
                 <div className="max-w-6xl mx-auto px-6">
                     <div className="text-center max-w-xl mx-auto mb-12">
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Cursus d'Excellence</span>
-                        <h2 className="font-serif font-black text-3xl text-[#1E293B]">
-                            Programmes & Formations
+                        <span data-editable-field="session_subtitle" className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1 cursor-pointer">
+                            {cfg.session_subtitle || "Cursus d'Excellence & Prochaine Session"}
+                        </span>
+                        <h2 data-editable-field="session_title" className="font-serif font-black text-3xl text-[#1E293B] cursor-pointer">
+                            {cfg.session_title || "Programmes & Formations"}
                         </h2>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">

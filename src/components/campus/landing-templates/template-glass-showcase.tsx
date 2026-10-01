@@ -283,12 +283,12 @@ export function TemplateGlassShowcase({
                                 <span>📖</span>
                                 <span>[📖 Bibliothèque Numérique]</span>
                             </div>
-                            <div>
-                                <h3 className="text-sm font-black text-white group-hover:text-emerald-300 transition-colors leading-snug">
-                                    Ressources Mondiales
+                            <div data-editable-field="book_title">
+                                <h3 className="text-sm font-black text-white group-hover:text-emerald-300 transition-colors leading-snug cursor-pointer">
+                                    {cfg.book_title || 'Ressources & Bibliothèque'}
                                 </h3>
-                                <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">
-                                    Accès cours, annales & bibliothèque
+                                <p data-editable-field="book_desc" className="text-[11px] text-slate-400 mt-1 line-clamp-2 cursor-pointer">
+                                    {cfg.book_desc || 'Accès cours, annales & bibliothèque en ligne'}
                                 </p>
                             </div>
                         </div>

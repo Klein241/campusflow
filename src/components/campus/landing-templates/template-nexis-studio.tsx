@@ -281,8 +281,11 @@ export function TemplateNexisStudio({
 
                     {/* Photo formateur sur fond jaune */}
                     <div className="relative flex justify-center lg:justify-end">
-                        <div className="relative w-72 sm:w-80 h-96 rounded-3xl overflow-hidden shadow-xl"
-                            style={{ background: YELLOW }}>
+                        <div
+                            data-editable-field="trainer_photo_url"
+                            className="relative w-72 sm:w-80 h-96 rounded-3xl overflow-hidden shadow-xl cursor-pointer"
+                            style={{ background: YELLOW }}
+                        >
                             <img
                                 src={heroImage}
                                 alt={orgName}
@@ -297,14 +300,14 @@ export function TemplateNexisStudio({
             <section className="bg-black py-10">
                 <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 sm:grid-cols-4 gap-6 text-center">
                     {[
-                        { val: stat1Val, label: stat1Lab },
-                        { val: stat2Val, label: stat2Lab },
-                        { val: stat3Val, label: stat3Lab },
-                        { val: stat4Val, label: stat4Lab },
+                        { keyVal: 'stat1_value', keyLab: 'stat1_label', val: stat1Val, label: stat1Lab },
+                        { keyVal: 'stat2_value', keyLab: 'stat2_label', val: stat2Val, label: stat2Lab },
+                        { keyVal: 'stat3_value', keyLab: 'stat3_label', val: stat3Val, label: stat3Lab },
+                        { keyVal: 'stat4_value', keyLab: 'stat4_label', val: stat4Val, label: stat4Lab },
                     ].map((stat, i) => (
-                        <div key={i}>
-                            <p className="text-3xl sm:text-4xl font-black text-white">{stat.val}</p>
-                            <p className="text-xs text-gray-400 mt-1">{stat.label}</p>
+                        <div key={i} className="cursor-pointer">
+                            <p data-editable-field={stat.keyVal} className="text-3xl sm:text-4xl font-black text-white hover:text-amber-300 transition-colors">{stat.val}</p>
+                            <p data-editable-field={stat.keyLab} className="text-xs text-gray-400 mt-1">{stat.label}</p>
                         </div>
                     ))}
                 </div>
@@ -315,8 +318,12 @@ export function TemplateNexisStudio({
                 <div className="max-w-7xl mx-auto px-6">
                     <div className="grid lg:grid-cols-2 gap-12 items-center mb-14">
                         <div>
-                            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-2">Notre Expertise</span>
-                            <h2 className="text-3xl sm:text-4xl font-black leading-tight">Nos Plans & Formations Complets</h2>
+                            <span data-editable-field="flagship_subtitle" className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-2 cursor-pointer">
+                                {cfg.flagship_subtitle || "Notre Expertise"}
+                            </span>
+                            <h2 data-editable-field="flagship_title" className="text-3xl sm:text-4xl font-black leading-tight cursor-pointer">
+                                {cfg.flagship_title || "Nos Plans & Formations Complets"}
+                            </h2>
                         </div>
                         <p className="text-sm text-gray-600 leading-relaxed">{heroDesc}</p>
                     </div>

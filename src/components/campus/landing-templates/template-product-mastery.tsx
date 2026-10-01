@@ -620,8 +620,12 @@ export function TemplateProductMastery({
 
                         {/* Actions Rapides */}
                         <div className="p-6 rounded-3xl bg-white/[0.05] border border-white/10 backdrop-blur-md space-y-4">
-                            <h3 className="font-extrabold text-base text-white">Rejoindre la prochaine session</h3>
-                            <p className="text-xs text-slate-400">Places limitées par promotion afin de garantir un encadrement d&apos;excellence.</p>
+                            <h3 data-editable-field="session_title" className="font-extrabold text-base text-white cursor-pointer hover:text-orange-400 transition-colors">
+                                {cfg.session_title || 'Rejoindre la prochaine session'}
+                            </h3>
+                            <p data-editable-field="session_subtitle" className="text-xs text-slate-400 cursor-pointer">
+                                {cfg.session_subtitle || 'Places limitées par promotion afin de garantir un encadrement d\'excellence.'}
+                            </p>
 
                             <button
                                 onClick={onOpenInscription}

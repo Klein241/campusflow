@@ -355,15 +355,23 @@ export function TemplateBentoGrid({
                                 <div className="space-y-2">
                                     <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between text-xs">
                                         <div>
-                                            <p className="font-bold text-white text-[11px]">Sessions d'Admissions 2025/2026</p>
-                                            <p className="text-[9px] text-slate-400">Inscriptions ouvertes en ligne</p>
+                                            <p data-editable-field="session_title" className="font-bold text-white text-[11px] cursor-pointer hover:text-emerald-400 transition-colors">
+                                                {cfg.session_title || "Sessions d'Admissions 2025/2026"}
+                                            </p>
+                                            <p data-editable-field="session_subtitle" className="text-[9px] text-slate-400 cursor-pointer">
+                                                {cfg.session_subtitle || "Inscriptions ouvertes en ligne"}
+                                            </p>
                                         </div>
                                         <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">En cours</span>
                                     </div>
                                     <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between text-xs">
                                         <div>
-                                            <p className="font-bold text-white text-[11px]">Évaluations & Examens</p>
-                                            <p className="text-[9px] text-slate-400">Calendrier des devoirs et partiels</p>
+                                            <p data-editable-field="flagship_title" className="font-bold text-white text-[11px] cursor-pointer hover:text-teal-400 transition-colors">
+                                                {cfg.flagship_title || "Évaluations & Examens"}
+                                            </p>
+                                            <p data-editable-field="flagship_subtitle" className="text-[9px] text-slate-400 cursor-pointer">
+                                                {cfg.flagship_subtitle || "Calendrier des devoirs et partiels"}
+                                            </p>
                                         </div>
                                         <span className="px-2 py-0.5 rounded-md bg-teal-500/20 text-teal-300 text-[10px] font-bold">Plannings</span>
                                     </div>
