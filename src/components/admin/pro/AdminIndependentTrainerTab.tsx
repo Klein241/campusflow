@@ -133,6 +133,7 @@ export function AdminIndependentTrainerTab({
                 duration_text: finalFormat
             };
 
+            let classroomData = null;
             const { data, error } = await supabase.from('classrooms').insert({
                 organization_id: org.id,
                 name: offerTitle.trim(),
@@ -150,7 +151,31 @@ export function AdminIndependentTrainerTab({
                 competencies_list: offerDescription.trim() ? offerDescription.trim().split(/\r?\n/).filter(Boolean) : []
             }).select().single();
 
-            if (error) throw error;
+            if (error) {
+                console.warn('Insert classrooms direct bloqué par RLS, tentative de secours via create_classroom_secure:', error);
+                const { data: rpcData, error: rpcError } = await (supabase.rpc as any)('create_classroom_secure', {
+                    p_org_id: org.id,
+                    p_name: offerTitle.trim(),
+                    p_cycle: cycleText,
+                    p_level: 1,
+                    p_capacity: 100,
+                    p_tuition_fee: priceNum,
+                    p_registration_fee: regFeeNum,
+                    p_training_duration: finalFormat,
+                    p_description: offerDescription.trim() || null,
+                    p_prix_barre: origPriceNum,
+                    p_schedule_config: scheduleConfig,
+                    p_competencies_list: offerDescription.trim() ? offerDescription.trim().split(/\r?\n/).filter(Boolean) : []
+                });
+
+                if (rpcError) {
+                    console.error('Erreur create_classroom_secure:', rpcError);
+                    throw error;
+                }
+                classroomData = rpcData?.classroom;
+            } else {
+                classroomData = data;
+            }
 
             toast.success(`🎉 Formation "${offerTitle}" créée avec son programme complet !`);
             setShowAddOffer(false);

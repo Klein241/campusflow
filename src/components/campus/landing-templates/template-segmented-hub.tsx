@@ -117,16 +117,49 @@ export function TemplateSegmentedHub({
     };
 
     // Construction et enrichissement des cartes de formations / filières
-    const programCards = (filieres && filieres.length > 0)
+    // 0. Si des cursus personnalisés ont été saisis directement dans le Studio
+    const programCards = (cfg.custom_programs && Array.isArray(cfg.custom_programs) && cfg.custom_programs.length > 0)
+        ? cfg.custom_programs.map((cp: any, i: number) => {
+                const priceNum = typeof cp.frais_scolarite === 'number'
+                    ? cp.frais_scolarite
+                    : (parseInt(String(cp.frais_scolarite || '').replace(/[^0-9]/g, ''), 10) || 0);
+                const origPrice = cp.prix_barre || cp.original_price || null;
+                const durNum = typeof cp.duree_mois === 'number'
+                    ? cp.duree_mois
+                    : (parseInt(String(cp.duree_mois || '').replace(/[^0-9]/g, ''), 10) || 6);
+
+                return {
+                    id: cp.id || `cp_${i}`,
+                    nom: cp.nom || cp.title || `Programme ${i + 1}`,
+                    code: cp.code || `PRO-${i + 1}`,
+                    duree_mois: durNum,
+                    duree_texte: typeof cp.duree_mois === 'string' && cp.duree_mois.includes(' ') ? cp.duree_mois : `${durNum} mois`,
+                    description: cp.description || '',
+                    frais_scolarite: priceNum,
+                    frais_inscription: Number(cp.frais_inscription || 0),
+                    prix_barre: origPrice,
+                    promo_badge: cp.promo_badge || null,
+                    certification_label: cp.certification_label || 'Certification PRO',
+                    cta_text: cp.cta_text || 'Postuler',
+                    echeances: cp.echeances || [],
+                    category: cp.category || 'Formation Certifiante',
+                    icon: i % 2 === 0 ? Briefcase : Cpu,
+                    rawItem: cp,
+                };
+            })
+        : (filieres && filieres.length > 0)
         ? filieres.map((f: any, i: number) => ({
             id: f.id,
-            nom: f.nom || f.name,
-            code: f.code || `F-${i + 1}`,
-            duree_mois: f.duree_mois || f.duration || 6,
-            description: f.description || `Programme d'excellence académique à ${org.name}.`,
+            nom: f.nom,
+            code: f.code || `FIL-${i + 1}`,
+            duree_mois: f.duree_mois || 12,
+            duree_texte: `${f.duree_mois || 12} mois`,
+            description: f.description || `Programme d'excellence académique en ${f.nom}. Enseignements théoriques et pratiques intensifs.`,
             frais_scolarite: Number(f.frais_scolarite || 0),
             frais_inscription: Number(f.frais_inscription || 0),
             prix_barre: f.prix_barre || null,
+            certification_label: 'Certification PRO',
+            cta_text: 'Postuler',
             echeances: f.echeances || [],
             category: 'Filière Spécialisée',
             icon: Briefcase,
@@ -160,27 +193,34 @@ export function TemplateSegmentedHub({
 
                 // 5. Durée en mois
                 let durationMonths: number | null = c.duree_mois || null;
+                let durationText = '6 mois';
                 if (!durationMonths && c.training_duration) {
+                    durationText = c.training_duration;
                     const m = String(c.training_duration).match(/(\d+)\s*mois/i);
                     if (m) durationMonths = parseInt(m[1], 10);
                 }
                 if (!durationMonths && c.cycle) {
+                    durationText = c.cycle.split('•')?.[0]?.trim() || c.cycle;
                     const m = String(c.cycle).match(/(\d+)\s*mois/i);
                     if (m) durationMonths = parseInt(m[1], 10);
                     else if (String(c.cycle).toLowerCase().includes('semaine')) durationMonths = 1;
                     else if (String(c.cycle).toLowerCase().includes('an')) durationMonths = 12;
                 }
                 if (!durationMonths) durationMonths = c.academic_year ? 12 : 6;
+                if (!durationText || durationText.includes('•')) durationText = `${durationMonths} mois`;
 
                 return {
                     id: c.id || `c_${i}`,
                     nom: c.name,
                     code: c.code || `PRO-${i + 1}`,
                     duree_mois: durationMonths,
+                    duree_texte: durationText,
                     description: desc,
                     frais_scolarite: priceNum,
                     frais_inscription: regFee,
                     prix_barre: prixBarre,
+                    certification_label: 'Certification PRO',
+                    cta_text: 'Postuler',
                     echeances: c.echeances || [],
                     category: c.cycle?.split('•')?.[0]?.trim() || (c.level ? `Niveau ${c.level}` : 'Formation Certifiante'),
                     icon: i % 2 === 0 ? Briefcase : Cpu,
@@ -188,16 +228,20 @@ export function TemplateSegmentedHub({
                 };
             })
             : [
-                // Fallback 100% universel et neutre (non hardcodé pour un seul type d'école !)
+                // Fallback universel neutre (100% personnalisable via Studio)
                 {
                     id: '1',
                     nom: `Niveau 1 — Fondamentaux & Pratique Professionnelle`,
                     code: 'NIV-1',
                     duree_mois: 6,
-                    description: `Maîtriser les bases et compétences indispensables du métier.\nAteliers pratiques et mises en situation concrètes.\nAccompagnement par des formateurs certifiés.\nValidation des acquis et évaluations continues.\nPréparation active au passage au niveau supérieur.`,
+                    duree_texte: '6 mois',
+                    description: `Maîtriser les bases et compétences indispensables du métier. Ateliers pratiques et mises en situation concrètes. Accompagnement par des formateurs certifiés.`,
                     frais_scolarite: 90000,
                     frais_inscription: 15000,
                     prix_barre: 150000,
+                    promo_badge: '-40%',
+                    certification_label: 'Certification PRO',
+                    cta_text: 'Postuler',
                     echeances: [
                         { tranche: 1, nom: '1ère tranche (Acompte)', montant: 40000 },
                         { tranche: 2, nom: '2ème tranche', montant: 25000 },
@@ -211,10 +255,14 @@ export function TemplateSegmentedHub({
                     nom: `Niveau 2 — Perfectionnement & Compétences Avancées`,
                     code: 'NIV-2',
                     duree_mois: 6,
-                    description: `Approfondissement technique et méthodologique.\nÉtudes de cas réels et projets supervisés.\nPerfectionnement des outils professionnels.\nDéveloppement de l'autonomie et de la rigueur métier.\nCertification de compétences intermédiaire.`,
+                    duree_texte: '6 mois',
+                    description: `Approfondissement technique et méthodologique. Études de cas réels et projets supervisés. Perfectionnement des outils professionnels.`,
                     frais_scolarite: 120000,
                     frais_inscription: 15000,
                     prix_barre: 190000,
+                    promo_badge: '-37%',
+                    certification_label: 'Certification PRO',
+                    cta_text: 'Postuler',
                     echeances: [],
                     category: 'Perfectionnement Pro',
                     icon: Cpu
@@ -224,10 +272,14 @@ export function TemplateSegmentedHub({
                     nom: `Niveau 3 — Expertise, Leadership & Insertion Métier`,
                     code: 'NIV-3',
                     duree_mois: 6,
-                    description: `Maîtrise complète et posture d'expert autonome.\nConduite de projets d'envergure et soutenance finale.\nStratégies de valorisation et positionnement sur le marché.\nRéseau d'anciens et opportunités professionnelles.\nDélivrance du diplôme / certificat d'excellence.`,
+                    duree_texte: '6 mois',
+                    description: `Maîtrise complète et posture d'expert autonome. Conduite de projets d'envergure et soutenance finale. Stratégies de valorisation et réseau d'alumni.`,
                     frais_scolarite: 150000,
                     frais_inscription: 20000,
                     prix_barre: 250000,
+                    promo_badge: '-40%',
+                    certification_label: 'Certification PRO',
+                    cta_text: 'Postuler',
                     echeances: [],
                     category: 'Mastery & Carrière',
                     icon: Award
@@ -285,24 +337,42 @@ export function TemplateSegmentedHub({
         };
     };
 
-    // Helper pour parser les modules/leçons d'une formation à partir de sa description
-    const parseCurriculum = (text: string) => {
-        if (!text) return [];
+    // Helper pour extraire séparément l'introduction/présentation et les modules réels
+    const extractContentAndCurriculum = (text: string) => {
+        if (!text) return { intro: '', modules: [] as { num: number; title: string }[] };
         const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-        const items: { num: number; title: string }[] = [];
+        const introLines: string[] = [];
+        const modules: { num: number; title: string }[] = [];
+        let inModuleSection = false;
 
         for (const line of lines) {
+            if (line.match(/^(programme|modules|ateliers|étapes|cursus)\s*[:\-]/i)) {
+                inModuleSection = true;
+                continue;
+            }
+
             const matchNumbered = line.match(/^(\d+)[\.\-\)]\s*(.+)/);
+            const matchModule = line.match(/^(?:module|atelier|partie|étape|semaine)\s*(\d+)?\s*[:\-]?\s*(.+)/i);
             const matchBullet = line.match(/^[\•\*\-]\s*(.+)/);
-            if (matchNumbered) {
-                items.push({ num: parseInt(matchNumbered[1]), title: matchNumbered[2] });
-            } else if (matchBullet) {
-                items.push({ num: items.length + 1, title: matchBullet[1] });
-            } else if (line.length > 5 && line.length < 140 && items.length < 12) {
-                items.push({ num: items.length + 1, title: line });
+
+            if (matchModule) {
+                const num = matchModule[1] ? parseInt(matchModule[1], 10) : modules.length + 1;
+                modules.push({ num, title: matchModule[2] || line });
+                inModuleSection = true;
+            } else if (matchNumbered) {
+                modules.push({ num: parseInt(matchNumbered[1], 10), title: matchNumbered[2] });
+                inModuleSection = true;
+            } else if (matchBullet && (inModuleSection || lines.length > 2)) {
+                modules.push({ num: modules.length + 1, title: matchBullet[1] });
+            } else if (inModuleSection) {
+                modules.push({ num: modules.length + 1, title: line });
+            } else {
+                introLines.push(line);
             }
         }
-        return items;
+
+        const intro = introLines.length > 0 ? introLines.join('\n') : (modules.length === 0 ? text : '');
+        return { intro, modules };
     };
 
     const accordionItems = [
@@ -398,56 +468,45 @@ export function TemplateSegmentedHub({
                         </button>
                     </div>
 
-                    {/* Présentation Pédagogique & Description */}
+                    {/* Contenu défilable : Présentation, Modules, Tarifs */}
                     <div className="space-y-5 flex-1">
-                        <div>
-                            <h4 className="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5 mb-2">
-                                <Sparkles className="w-4 h-4" /> Présentation & Objectifs de la Formation
-                            </h4>
-                            <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-light whitespace-pre-line bg-white/[0.02] p-4 rounded-2xl border border-white/5">
-                                {activeModalProgram.description || `Cette formation complète dispensée par ${org.name} est conçue pour vous apporter toutes les clés pratiques, techniques et stratégiques de votre domaine.`}
-                            </p>
-                        </div>
-
-                        {/* Programme des Modules / Ateliers (si détecté dans la description) */}
+                        {/* Présentation Pédagogique & Description */}
                         {(() => {
-                            const curriculum = parseCurriculum(activeModalProgram.description);
-                            if (curriculum.length > 0) {
-                                return (
-                                    <div>
-                                        <h4 className="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5 mb-2.5">
-                                            <Layers className="w-4 h-4" /> Programme des Modules & Compétences
-                                        </h4>
-                                        <div className="grid sm:grid-cols-2 gap-2">
-                                            {curriculum.map((m, idx) => (
-                                                <div key={idx} className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/10 hover:border-amber-500/30 transition">
-                                                    <span className="w-6 h-6 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-black flex items-center justify-center shrink-0">
-                                                        {m.num}
-                                                    </span>
-                                                    <span className="text-xs font-semibold text-white leading-snug">
-                                                        {m.title}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                );
-                            }
+                            const parsed = extractContentAndCurriculum(activeModalProgram.description);
+                            const introText = parsed.intro || activeModalProgram.description || `Cette formation dispensée par ${org.name} est conçue pour vous apporter toutes les clés pratiques, techniques et stratégiques de votre domaine.`;
+
                             return (
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-center">
-                                    <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/10">
-                                        <div className="text-base font-black text-amber-300">100% Pratique</div>
-                                        <div className="text-[11px] text-slate-400 mt-0.5">Ateliers & cas concrets</div>
+                                <>
+                                    <div>
+                                        <h4 className="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5 mb-2">
+                                            <Sparkles className="w-4 h-4" /> Présentation & Objectifs de la Formation
+                                        </h4>
+                                        <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-light whitespace-pre-line bg-white/[0.02] p-4 rounded-2xl border border-white/5">
+                                            {introText}
+                                        </p>
                                     </div>
-                                    <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/10">
-                                        <div className="text-base font-black text-emerald-300">Certification</div>
-                                        <div className="text-[11px] text-slate-400 mt-0.5">Attestation officielle</div>
-                                    </div>
-                                    <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/10">
-                                        <div className="text-base font-black text-amber-300">Suivi Personnalisé</div>
-                                        <div className="text-[11px] text-slate-400 mt-0.5">Mentorat direct</div>
-                                    </div>
-                                </div>
+
+                                    {/* Programme des Modules / Ateliers : UNIQUEMENT SI DES MODULES ONT ÉTÉ EXPLICITEMENT DÉFINIS */}
+                                    {parsed.modules.length > 0 && (
+                                        <div>
+                                            <h4 className="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5 mb-2.5">
+                                                <Layers className="w-4 h-4" /> Programme des Modules & Compétences
+                                            </h4>
+                                            <div className="grid sm:grid-cols-2 gap-2">
+                                                {parsed.modules.map((m, idx) => (
+                                                    <div key={idx} className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/10 hover:border-amber-500/30 transition">
+                                                        <span className="w-6 h-6 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-black flex items-center justify-center shrink-0">
+                                                            {m.num}
+                                                        </span>
+                                                        <span className="text-xs font-semibold text-white leading-snug">
+                                                            {m.title}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
                             );
                         })()}
 
@@ -767,10 +826,12 @@ export function TemplateSegmentedHub({
                     {/* LEFT (Col 7): PROGRAMS & CAMPUS WITH MARKETING PRICING */}
                     <div className="lg:col-span-7 space-y-4">
                         <div className="flex items-center justify-between">
-                            <h3 data-editable-field="flagship_title" className="text-xs font-black uppercase text-amber-400 tracking-widest flex items-center gap-2 cursor-pointer">
-                                <BookOpen className="w-4 h-4" /> {flagshipTitle}
+                            <h3 data-editable-field="programs_section_title" className="text-xs font-black uppercase text-amber-400 tracking-widest flex items-center gap-2 cursor-pointer">
+                                <BookOpen className="w-4 h-4" /> {cfg.programs_section_title || flagshipTitle}
                             </h3>
-                            <span className="text-xs text-slate-400 font-bold">{programCards.length} Cursus Actifs</span>
+                            <span data-editable-field="programs_section_badge" className="text-xs text-slate-400 font-bold cursor-pointer">
+                                {cfg.programs_section_badge || `${programCards.length} Cursus Actifs`}
+                            </span>
                         </div>
 
                         <div className="grid sm:grid-cols-2 gap-4">
@@ -798,11 +859,11 @@ export function TemplateSegmentedHub({
                                                     <p.icon className="w-5 h-5" />
                                                 </div>
                                                 <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                                                    <span className="text-[10px] font-bold text-amber-300/90 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20">
-                                                        {p.duree_mois ? `${p.duree_mois} mois` : 'Cursus complet'}
+                                                    <span data-editable-field={`program_${idx}_duree`} className="text-[10px] font-bold text-amber-300/90 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 cursor-pointer">
+                                                        {p.duree_texte || (p.duree_mois ? `${p.duree_mois} mois` : 'Cursus complet')}
                                                     </span>
                                                     {pricing.promoBadge && (
-                                                        <span className="text-[9px] font-black text-emerald-300 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40">
+                                                        <span data-editable-field={`program_${idx}_promo`} className="text-[9px] font-black text-emerald-300 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 cursor-pointer">
                                                             {pricing.promoBadge}
                                                         </span>
                                                     )}
@@ -811,10 +872,10 @@ export function TemplateSegmentedHub({
 
                                             {/* Titre & Description */}
                                             <div>
-                                                <h4 className="font-black text-sm text-white group-hover:text-amber-300 transition-colors leading-snug">
+                                                <h4 data-editable-field={`program_${idx}_nom`} className="font-black text-sm text-white group-hover:text-amber-300 transition-colors leading-snug cursor-pointer">
                                                     {p.nom}
                                                 </h4>
-                                                <p className="text-[11px] text-slate-400 line-clamp-2 mt-1 leading-relaxed font-light">
+                                                <p data-editable-field={`program_${idx}_description`} className="text-[11px] text-slate-400 line-clamp-2 mt-1 leading-relaxed font-light cursor-pointer">
                                                     {p.description || 'Cursus certifié avec suivi pédagogique complet.'}
                                                 </p>
                                             </div>
@@ -827,11 +888,11 @@ export function TemplateSegmentedHub({
                                                     </span>
                                                     <div className="flex items-baseline gap-1.5 mt-0.5">
                                                         {pricing.originalPriceStr && (
-                                                            <span className="text-[11px] text-slate-500 line-through font-mono">
+                                                            <span data-editable-field={`program_${idx}_prix_barre`} className="text-[11px] text-slate-500 line-through font-mono cursor-pointer">
                                                                 {pricing.originalPriceStr}
                                                             </span>
                                                         )}
-                                                        <span className="text-sm font-black text-amber-300 font-mono">
+                                                        <span data-editable-field={`program_${idx}_frais_scolarite`} className="text-sm font-black text-amber-300 font-mono cursor-pointer">
                                                             {pricing.currentPriceStr}
                                                         </span>
                                                     </div>
@@ -845,17 +906,18 @@ export function TemplateSegmentedHub({
 
                                         {/* Pied de carte avec action */}
                                         <div className="flex items-center justify-between pt-3 mt-2 border-t border-white/5 text-xs">
-                                            <span className="text-[11px] text-slate-400 font-medium">
-                                                Certification PRO
+                                            <span data-editable-field={`program_${idx}_certification`} className="text-[11px] text-slate-400 font-medium cursor-pointer">
+                                                {p.certification_label || 'Certification PRO'}
                                             </span>
                                             <button
+                                                data-editable-field={`program_${idx}_cta`}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     onOpenInscription?.();
                                                 }}
                                                 className="text-[11px] font-bold text-amber-300 hover:text-white flex items-center gap-1 cursor-pointer"
                                             >
-                                                Postuler <ArrowRight className="w-3.5 h-3.5" />
+                                                {p.cta_text || 'Postuler'} <ArrowRight className="w-3.5 h-3.5" />
                                             </button>
                                         </div>
                                     </motion.div>

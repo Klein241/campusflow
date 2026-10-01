@@ -76,6 +76,23 @@ export interface TemplateCustomConfig {
     flagship_price?: string;
     book_cta?: string;
 
+    // 🎓 Offres & Formations Personnalisables section par section
+    programs_section_title?: string;
+    programs_section_badge?: string;
+    custom_programs?: Array<{
+        id?: string;
+        nom: string;
+        duree_mois?: number | string;
+        description: string;
+        frais_scolarite: number | string;
+        prix_barre?: number | string | null;
+        promo_badge?: string;
+        frais_inscription?: number | string;
+        category?: string;
+        certification_label?: string;
+        cta_text?: string;
+    }>;
+
     // 🏷️ Tarifs, Réductions & Formations Marketing
     filiere_discount_pct?: string;
     filiere_original_price?: string;
@@ -246,6 +263,59 @@ export function TemplateCustomizerStudio({
         flagship_price: rawConfig.flagship_price || '250 000 FCFA',
         book_cta: rawConfig.book_cta || 'Commandez mon bestseller aujourd\'hui !',
 
+        // 🎓 Formations & Cursus section par section
+        programs_section_title: rawConfig.programs_section_title || rawConfig.flagship_title || 'GET WHAT YOU WANT — LE BESTSELLER',
+        programs_section_badge: rawConfig.programs_section_badge || '3 Cursus Actifs',
+        custom_programs: Array.isArray(rawConfig.custom_programs) && rawConfig.custom_programs.length > 0
+            ? rawConfig.custom_programs
+            : (classrooms && classrooms.length > 0)
+                ? classrooms.map((c: any, i: number) => ({
+                    id: c.id || `cp_${i}`,
+                    nom: c.name,
+                    duree_mois: c.duree_mois ? `${c.duree_mois} mois` : (c.cycle?.split('•')?.[0]?.trim() || '6 mois'),
+                    description: c.description || (c.schedule_config && typeof c.schedule_config === 'object' && c.schedule_config.description) || '',
+                    frais_scolarite: c.frais_scolarite ? `${new Intl.NumberFormat('fr-FR').format(c.frais_scolarite)} FCFA` : (c.cycle?.split('•')?.[1]?.trim() || '90 000 FCFA'),
+                    prix_barre: c.prix_barre ? `${new Intl.NumberFormat('fr-FR').format(c.prix_barre)} FCFA` : null,
+                    promo_badge: c.prix_barre && c.frais_scolarite ? `-${Math.round(((c.prix_barre - c.frais_scolarite) / c.prix_barre) * 100)}%` : null,
+                    certification_label: 'Certification PRO',
+                    cta_text: 'Postuler'
+                }))
+                : [
+                    {
+                        id: '1',
+                        nom: 'Niveau 1 — Fondamentaux & Pratique Professionnelle',
+                        duree_mois: '6 mois',
+                        description: 'Maîtriser les bases et compétences indispensables du métier. Ateliers pratiques et mises en situation concrètes.',
+                        frais_scolarite: '90 000 FCFA',
+                        prix_barre: '150 000 FCFA',
+                        promo_badge: '-40%',
+                        certification_label: 'Certification PRO',
+                        cta_text: 'Postuler'
+                    },
+                    {
+                        id: '2',
+                        nom: 'Niveau 2 — Perfectionnement & Compétences Avancées',
+                        duree_mois: '6 mois',
+                        description: 'Approfondissement technique et méthodologique. Études de cas réels et projets supervisés.',
+                        frais_scolarite: '120 000 FCFA',
+                        prix_barre: '190 000 FCFA',
+                        promo_badge: '-37%',
+                        certification_label: 'Certification PRO',
+                        cta_text: 'Postuler'
+                    },
+                    {
+                        id: '3',
+                        nom: 'Niveau 3 — Expertise, Leadership & Insertion Métier',
+                        duree_mois: '6 mois',
+                        description: 'Maîtrise complète et posture d’expert autonome. Conduite de projets d’envergure et soutenance finale.',
+                        frais_scolarite: '150 000 FCFA',
+                        prix_barre: '250 000 FCFA',
+                        promo_badge: '-40%',
+                        certification_label: 'Certification PRO',
+                        cta_text: 'Postuler'
+                    }
+                ],
+
         // 🏷️ Tarifs & Réductions des Filières
         filiere_discount_pct: rawConfig.filiere_discount_pct || '',
         filiere_original_price: rawConfig.filiere_original_price || '',
@@ -400,6 +470,10 @@ export function TemplateCustomizerStudio({
         gallery_title: { label: "Titre de la Galerie", tab: 'media_gallery' },
         gallery_subtitle: { label: "Sous-titre de la Galerie", tab: 'media_gallery' },
 
+        // 🎓 Formations & Cursus
+        programs_section_title: { label: "Titre de la Section Formations", tab: 'courses' },
+        programs_section_badge: { label: "Badge / Sous-titre Section Formations", tab: 'courses' },
+
         // Offres, Diplômes & Livres
         flagship_title: { label: "Titre Offre Phare / Filière / Manuel", tab: 'flagship' },
         flagship_subtitle: { label: "Sous-titre Offre Phare / Filière", tab: 'flagship' },
@@ -551,8 +625,17 @@ export function TemplateCustomizerStudio({
 
         if (fieldKey) {
             const meta = FIELD_METADATA[fieldKey] || {
-                label: fieldKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                tab: fieldKey.includes('session') || fieldKey.includes('cta') ? 'buttons' :
+                label: fieldKey.startsWith('program_')
+                    ? (fieldKey.includes('nom') ? "Intitulé de la formation" :
+                       fieldKey.includes('duree') ? "Durée de la formation" :
+                       fieldKey.includes('prix_barre') ? "Prix initial barré" :
+                       fieldKey.includes('frais_scolarite') ? "Tarif officiel" :
+                       fieldKey.includes('description') ? "Résumé de la formation" :
+                       fieldKey.includes('certification') ? "Label de certification" :
+                       fieldKey.includes('promo') ? "Badge réduction" : "Bouton d'action")
+                    : fieldKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                tab: fieldKey.includes('program') ? 'courses' :
+                     fieldKey.includes('session') || fieldKey.includes('cta') ? 'buttons' :
                      fieldKey.includes('stat') || fieldKey.includes('score') ? 'stats' :
                      fieldKey.includes('testim') || fieldKey.includes('review') ? 'testimonials' :
                      fieldKey.includes('book') || fieldKey.includes('flagship') ? 'flagship' :
@@ -794,9 +877,10 @@ export function TemplateCustomizerStudio({
 
     const sidebarTabs = [
         { id: 'profile', label: 'Identité & Hero', icon: User },
+        { id: 'courses', label: 'Formations & Cursus', icon: BookOpen },
         { id: 'buttons', label: 'Boutons CTA & Action', icon: MousePointerClick },
         { id: 'media_gallery', label: 'Galerie & Visuels', icon: ImageIcon },
-        { id: 'flagship', label: 'Offre Signature / Livre', icon: BookOpen },
+        { id: 'flagship', label: 'Offre Signature / Livre', icon: Award },
         { id: 'media', label: 'Podcasts & Médias', icon: Headphones },
         { id: 'stats', label: 'Chiffres & Indicateurs', icon: BarChart3 },
         { id: 'testimonials', label: 'Avis & Témoignages', icon: MessageSquare },
@@ -1246,7 +1330,239 @@ export function TemplateCustomizerStudio({
                             </div>
                         )}
 
-                        {/* ═══ TAB 2 : BOUTONS CTA & ACTIONS ═══ */}
+                        {/* ═══ TAB 2 : FORMATIONS & CURSUS MODIFIABLES SECTION PAR SECTION ═══ */}
+                        {activeSidebarTab === 'courses' && (
+                            <div className="space-y-5">
+                                <div>
+                                    <h3 className="text-sm font-black text-white flex items-center gap-2">
+                                        <BookOpen className="w-4 h-4 text-amber-400" />
+                                        Formations, Cursus & Tarifs Promotionnels
+                                    </h3>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                        Modifiez chaque carte de formation section par section : intitulé, durée, prix officiel, prix barré promotionnel, résumé et badge de certification.
+                                    </p>
+                                </div>
+
+                                {/* En-tête de la section */}
+                                <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
+                                    <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                                        <span>📌</span> En-tête de la section des formations
+                                    </h4>
+                                    <div>
+                                        <label className="font-bold text-slate-200 block mb-1">Titre de la section</label>
+                                        <Input
+                                            id="studio_field_programs_section_title"
+                                            value={form.programs_section_title || ''}
+                                            onChange={e => setForm({ ...form, programs_section_title: e.target.value })}
+                                            placeholder="Ex: GET WHAT YOU WANT — LE BESTSELLER ou Nos Formations Certifiantes"
+                                            className={`bg-white/5 border-white/10 text-white rounded-xl h-10 ${activeHighlightedField === 'programs_section_title' ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="font-bold text-slate-200 block mb-1">Sous-titre / Badge d'en-tête</label>
+                                        <Input
+                                            id="studio_field_programs_section_badge"
+                                            value={form.programs_section_badge || ''}
+                                            onChange={e => setForm({ ...form, programs_section_badge: e.target.value })}
+                                            placeholder="Ex: 3 Cursus Actifs ou Promotions en cours"
+                                            className={`bg-white/5 border-white/10 text-white rounded-xl h-10 ${activeHighlightedField === 'programs_section_badge' ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Liste des Cartes de Formation */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <h4 className="text-xs font-black text-white uppercase tracking-wider">
+                                            Cartes de Formations ({form.custom_programs?.length || 0})
+                                        </h4>
+                                        <Button
+                                            size="sm"
+                                            onClick={() => {
+                                                const newProg = {
+                                                    id: `cp_${Date.now()}`,
+                                                    nom: `Nouveau Cursus ${(form.custom_programs?.length || 0) + 1}`,
+                                                    duree_mois: '6 mois',
+                                                    frais_scolarite: '100 000 FCFA',
+                                                    prix_barre: '150 000 FCFA',
+                                                    promo_badge: '-33%',
+                                                    description: 'Description du programme et compétences clés acquises.',
+                                                    certification_label: 'Certification PRO',
+                                                    cta_text: 'Postuler'
+                                                };
+                                                setForm(prev => ({
+                                                    ...prev,
+                                                    custom_programs: [...(prev.custom_programs || []), newProg]
+                                                }));
+                                                toast.success('Nouvelle carte de formation ajoutée !');
+                                            }}
+                                            className="bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl h-8 px-3 cursor-pointer"
+                                        >
+                                            <Plus className="w-3.5 h-3.5 mr-1" />
+                                            Ajouter une formation
+                                        </Button>
+                                    </div>
+
+                                    {(form.custom_programs || []).map((prog: any, idx: number) => (
+                                        <div
+                                            key={prog.id || idx}
+                                            id={`studio_card_program_${idx}`}
+                                            className="p-4 rounded-2xl bg-[#0E131F] border border-white/10 hover:border-amber-500/30 transition space-y-3"
+                                        >
+                                            <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                                                <span className="text-xs font-black text-amber-400 flex items-center gap-1.5">
+                                                    <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 flex items-center justify-center text-[10px]">
+                                                        {idx + 1}
+                                                    </span>
+                                                    Carte {idx + 1} : {prog.nom}
+                                                </span>
+                                                {(form.custom_programs || []).length > 1 && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setForm(prev => ({
+                                                                ...prev,
+                                                                custom_programs: (prev.custom_programs || []).filter((_, i) => i !== idx)
+                                                            }));
+                                                            toast.info('Formation retirée');
+                                                        }}
+                                                        className="text-red-400 hover:text-red-300 text-xs p-1 cursor-pointer"
+                                                        title="Supprimer cette formation"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            <div>
+                                                <label className="text-[11px] font-bold text-slate-300 block mb-1">Intitulé / Nom de la formation</label>
+                                                <Input
+                                                    id={`studio_field_program_${idx}_nom`}
+                                                    value={prog.nom || ''}
+                                                    onChange={e => {
+                                                        const updated = [...(form.custom_programs || [])];
+                                                        updated[idx] = { ...updated[idx], nom: e.target.value };
+                                                        setForm({ ...form, custom_programs: updated });
+                                                    }}
+                                                    placeholder="Ex: Niveau 1 — Fondamentaux & Pratique"
+                                                    className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs ${activeHighlightedField === `program_${idx}_nom` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
+                                                />
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Durée / Format affiché</label>
+                                                    <Input
+                                                        id={`studio_field_program_${idx}_duree`}
+                                                        value={prog.duree_mois || ''}
+                                                        onChange={e => {
+                                                            const updated = [...(form.custom_programs || [])];
+                                                            updated[idx] = { ...updated[idx], duree_mois: e.target.value };
+                                                            setForm({ ...form, custom_programs: updated });
+                                                        }}
+                                                        placeholder="Ex: 6 mois, 12 semaines"
+                                                        className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs ${activeHighlightedField === `program_${idx}_duree` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Badge Réduction (Optionnel)</label>
+                                                    <Input
+                                                        id={`studio_field_program_${idx}_promo`}
+                                                        value={prog.promo_badge || ''}
+                                                        onChange={e => {
+                                                            const updated = [...(form.custom_programs || [])];
+                                                            updated[idx] = { ...updated[idx], promo_badge: e.target.value };
+                                                            setForm({ ...form, custom_programs: updated });
+                                                        }}
+                                                        placeholder="Ex: -40%, Spécial"
+                                                        className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs ${activeHighlightedField === `program_${idx}_promo` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Prix Officiel (Vente)</label>
+                                                    <Input
+                                                        id={`studio_field_program_${idx}_frais_scolarite`}
+                                                        value={prog.frais_scolarite || ''}
+                                                        onChange={e => {
+                                                            const updated = [...(form.custom_programs || [])];
+                                                            updated[idx] = { ...updated[idx], frais_scolarite: e.target.value };
+                                                            setForm({ ...form, custom_programs: updated });
+                                                        }}
+                                                        placeholder="Ex: 90 000 FCFA"
+                                                        className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs font-mono ${activeHighlightedField === `program_${idx}_frais_scolarite` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Prix Initial Barré</label>
+                                                    <Input
+                                                        id={`studio_field_program_${idx}_prix_barre`}
+                                                        value={prog.prix_barre || ''}
+                                                        onChange={e => {
+                                                            const updated = [...(form.custom_programs || [])];
+                                                            updated[idx] = { ...updated[idx], prix_barre: e.target.value };
+                                                            setForm({ ...form, custom_programs: updated });
+                                                        }}
+                                                        placeholder="Ex: 150 000 FCFA"
+                                                        className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs font-mono ${activeHighlightedField === `program_${idx}_prix_barre` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="text-[11px] font-bold text-slate-300 block mb-1">Résumé / Description de la formation</label>
+                                                <Textarea
+                                                    id={`studio_field_program_${idx}_description`}
+                                                    value={prog.description || ''}
+                                                    onChange={e => {
+                                                        const updated = [...(form.custom_programs || [])];
+                                                        updated[idx] = { ...updated[idx], description: e.target.value };
+                                                        setForm({ ...form, custom_programs: updated });
+                                                    }}
+                                                    rows={3}
+                                                    placeholder="Décrivez les objectifs et compétences clés..."
+                                                    className={`bg-white/5 border-white/10 text-white rounded-xl text-xs resize-none ${activeHighlightedField === `program_${idx}_description` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
+                                                />
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Mention Bas de Carte</label>
+                                                    <Input
+                                                        id={`studio_field_program_${idx}_certification`}
+                                                        value={prog.certification_label || ''}
+                                                        onChange={e => {
+                                                            const updated = [...(form.custom_programs || [])];
+                                                            updated[idx] = { ...updated[idx], certification_label: e.target.value };
+                                                            setForm({ ...form, custom_programs: updated });
+                                                        }}
+                                                        placeholder="Ex: Certification PRO"
+                                                        className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs ${activeHighlightedField === `program_${idx}_certification` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Bouton d'Action</label>
+                                                    <Input
+                                                        id={`studio_field_program_${idx}_cta`}
+                                                        value={prog.cta_text || ''}
+                                                        onChange={e => {
+                                                            const updated = [...(form.custom_programs || [])];
+                                                            updated[idx] = { ...updated[idx], cta_text: e.target.value };
+                                                            setForm({ ...form, custom_programs: updated });
+                                                        }}
+                                                        placeholder="Ex: Postuler"
+                                                        className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs ${activeHighlightedField === `program_${idx}_cta` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ═══ TAB 3 : BOUTONS CTA & ACTIONS ═══ */}
                         {activeSidebarTab === 'buttons' && (
                             <div className="space-y-4">
                                 <div>
