@@ -76,9 +76,18 @@ export function AdminOverviewTab({
                 <h2 className="text-xl font-black mb-4 text-gradient-primary">Informations</h2>
                 <div className="grid sm:grid-cols-2 gap-3 text-sm">
                     {infoFields.map(([k, v], i) => (
-                        <div key={i}>
+                        <div key={i} className="flex items-center flex-wrap gap-1.5">
                             <span className="text-slate-500">{k}:</span>
-                            <span className="ml-2 font-medium text-white">{v}</span>
+                            <span className="font-medium text-white">{v}</span>
+                            {k === 'Type' && (
+                                <button
+                                    onClick={() => window.dispatchEvent(new CustomEvent('open-school-type-modal'))}
+                                    className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-semibold transition cursor-pointer"
+                                    title="Changer le type et structure d'établissement"
+                                >
+                                    Modifier
+                                </button>
+                            )}
                         </div>
                     ))}
                 </div>
