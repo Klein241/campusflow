@@ -52,6 +52,7 @@ interface Org {
     footer_text?: string;
     is_active?: boolean;
     suspension_reason?: string;
+    template_config?: Record<string, any>;
 }
 
 const typeLabels: Record<string, string> = {
@@ -150,6 +151,24 @@ export default function SchoolLandingPage() {
             if (data) {
                 if (data.motto) data.motto = cleanMotto(data.motto);
                 if (data.hero_subtitle) data.hero_subtitle = cleanMotto(data.hero_subtitle);
+
+                // Récupération instantanée du cache LocalStorage si disponible
+                if (typeof window !== 'undefined') {
+                    try {
+                        const cachedTpl = localStorage.getItem(`campusflow_template_config_${data.id}`) || localStorage.getItem(`campusflow_template_config_${orgSlug}`);
+                        if (cachedTpl) {
+                            const parsed = JSON.parse(cachedTpl);
+                            data.template_config = { ...(parsed || {}), ...(data.template_config || {}) };
+                        }
+                        const cachedLayout = localStorage.getItem(`campusflow_landing_layout_${data.id}`) || localStorage.getItem(`campusflow_landing_layout_${orgSlug}`);
+                        if (cachedLayout && !data.landing_layout) {
+                            data.landing_layout = cachedLayout;
+                        }
+                    } catch (e) {
+                        // ignore
+                    }
+                }
+
                 setOrg(data);
                 const [clsRes, filRes, tRes, sRes] = await Promise.all([
                     supabase.from('classrooms').select('*').eq('organization_id', data.id).eq('is_active', true),
@@ -331,9 +350,35 @@ export default function SchoolLandingPage() {
         </div>
     );
 
+    // Récupération instantanée du cache LocalStorage pour template_config
+    const cachedTemplateConfig = typeof window !== 'undefined' ? (() => {
+        try {
+            const raw = localStorage.getItem(`campusflow_template_config_${org.id}`) || localStorage.getItem(`campusflow_template_config_${org.slug}`);
+            return raw ? JSON.parse(raw) : null;
+        } catch {
+            return null;
+        }
+    })() : null;
+
+    const effectiveTemplateConfig = {
+        ...(cachedTemplateConfig || {}),
+        ...(org.template_config || {})
+    };
+
+    const effectiveOrg = {
+        ...org,
+        template_config: effectiveTemplateConfig,
+        name: effectiveTemplateConfig?.trainer_name || org.name,
+        motto: cleanMotto(effectiveTemplateConfig?.trainer_title || org.motto),
+        hero_subtitle: cleanMotto(effectiveTemplateConfig?.trainer_subtitle || org.hero_subtitle),
+        hero_title: effectiveTemplateConfig?.trainer_name || org.hero_title,
+        about_text: effectiveTemplateConfig?.trainer_bio || org.about_text,
+        hero_image_url: effectiveTemplateConfig?.trainer_photo_url || org.hero_image_url,
+    };
+
     const bc   = org.brand_color || '#14b8a6';
-    const hero = org.hero_title || org.name;
-    const sub  = cleanMotto(org.hero_subtitle) || cleanMotto(org.motto) || `Bienvenue sur le portail officiel de ${org.name}`;
+    const hero = effectiveOrg.hero_title || effectiveOrg.name;
+    const sub  = cleanMotto(effectiveOrg.hero_subtitle) || cleanMotto(effectiveOrg.motto) || `Bienvenue sur le portail officiel de ${effectiveOrg.name}`;
     const heroTemplate = org.hero_template || (typeof window !== 'undefined' ? (localStorage.getItem(`campusflow_hero_template_${org.id}`) || localStorage.getItem(`campusflow_hero_template_${org.slug}`)) : null) || 'split';
     const landingLayout = org.landing_layout || (typeof window !== 'undefined' ? (localStorage.getItem(`campusflow_landing_layout_${org.id}`) || localStorage.getItem(`campusflow_landing_layout_${org.slug}`)) : null) || 'bento_grid';
     const gallery = org.gallery_images || [];
@@ -718,7 +763,7 @@ export default function SchoolLandingPage() {
             {/* ═══ TEMPLATES COMPLETS MODERNES (ZERO SCROLL) ═══ */}
             {landingLayout === 'hub_onglets' ? (
                 <TemplateHubOnglets
-                    org={org}
+                    org={effectiveOrg}
                     orgSlug={orgSlug}
                     classrooms={classrooms}
                     filieres={filieres}
@@ -730,7 +775,7 @@ export default function SchoolLandingPage() {
                 />
             ) : landingLayout === 'segmented_hub' ? (
                 <TemplateSegmentedHub
-                    org={org}
+                    org={effectiveOrg}
                     orgSlug={orgSlug}
                     classrooms={classrooms}
                     filieres={filieres}
@@ -742,7 +787,7 @@ export default function SchoolLandingPage() {
                 />
             ) : landingLayout === 'glass_showcase' ? (
                 <TemplateGlassShowcase
-                    org={org}
+                    org={effectiveOrg}
                     orgSlug={orgSlug}
                     classrooms={classrooms}
                     filieres={filieres}
@@ -754,7 +799,7 @@ export default function SchoolLandingPage() {
                 />
             ) : landingLayout === 'bento_grid' ? (
                 <TemplateBentoGrid
-                    org={org}
+                    org={effectiveOrg}
                     orgSlug={orgSlug}
                     classrooms={classrooms}
                     filieres={filieres}
@@ -766,7 +811,7 @@ export default function SchoolLandingPage() {
                 />
             ) : landingLayout === 'bento_box' ? (
                 <TemplateBentoBox
-                    org={org}
+                    org={effectiveOrg}
                     orgSlug={orgSlug}
                     classrooms={classrooms}
                     filieres={filieres}
@@ -778,7 +823,7 @@ export default function SchoolLandingPage() {
                 />
             ) : landingLayout === 'coach_pastelle' ? (
                 <TemplateCoachPastelle
-                    org={org}
+                    org={effectiveOrg}
                     orgSlug={orgSlug}
                     classrooms={classrooms}
                     filieres={filieres}
@@ -790,7 +835,7 @@ export default function SchoolLandingPage() {
                 />
             ) : landingLayout === 'creative_studio' ? (
                 <TemplateCreativeStudio
-                    org={org}
+                    org={effectiveOrg}
                     orgSlug={orgSlug}
                     classrooms={classrooms}
                     filieres={filieres}
@@ -802,7 +847,7 @@ export default function SchoolLandingPage() {
                 />
             ) : landingLayout === 'tech_mentor' ? (
                 <TemplateTechMentor
-                    org={org}
+                    org={effectiveOrg}
                     orgSlug={orgSlug}
                     classrooms={classrooms}
                     filieres={filieres}
@@ -814,7 +859,7 @@ export default function SchoolLandingPage() {
                 />
             ) : landingLayout === 'product_mastery' ? (
                 <TemplateProductMastery
-                    org={org}
+                    org={effectiveOrg}
                     orgSlug={orgSlug}
                     classrooms={classrooms}
                     filieres={filieres}
@@ -826,7 +871,7 @@ export default function SchoolLandingPage() {
                 />
             ) : landingLayout === 'nexis_studio' ? (
                 <TemplateNexisStudio
-                    org={org}
+                    org={effectiveOrg}
                     orgSlug={orgSlug}
                     classrooms={classrooms}
                     filieres={filieres}

@@ -132,6 +132,18 @@ export interface TemplateCustomConfig {
     show_services_grid?: boolean;
     show_social_links?: boolean;
     truncate_long_descriptions?: boolean;
+
+    // 🔗 Propriétés Étendues & Aliases Compatibilité Multi-Templates
+    hero_image_url?: string;
+    about_text?: string;
+    about_image_url?: string;
+    book_title?: string;
+    book_desc?: string;
+    podcast_desc?: string;
+    review1_text?: string;
+    review1_author?: string;
+    review2_text?: string;
+    review2_author?: string;
 }
 
 interface TemplateCustomizerStudioProps {
@@ -520,9 +532,73 @@ export function TemplateCustomizerStudio({
         }
     };
 
-    // Remplissage automatique avec des exemples stylés
-    const handleApplyPreset = (type: 'design' | 'coach' | 'tech' | 'corporate') => {
-        if (type === 'design') {
+    // Remplissage automatique avec des exemples stylés et réalistes selon le profil d'établissement
+    const handleApplyPreset = (type: 'training_center' | 'university' | 'tech' | 'coach' | 'corporate' | 'design') => {
+        if (type === 'training_center') {
+            setForm(prev => ({
+                ...prev,
+                trainer_name: org.name || 'Centre de Formation Professionnelle & Métiers',
+                trainer_title: 'Former aux Compétences d\'Avenir & Métiers Certifiants',
+                trainer_subtitle: 'Inscriptions ouvertes • Diplômes d\'État, certificats professionnels et suivi personnalisé.',
+                trainer_bio: 'Notre mission : accompagner chaque apprenant vers l\'excellence opérationnelle et l\'insertion rapide sur le marché de l\'emploi grâce à des équipements modernes et des ateliers pratiques.',
+                trainer_quote: '"La pratique et la rigueur sont les piliers de la réussite professionnelle."',
+                flagship_title: 'Programme Signature : Ingénierie & Métiers Pratiques',
+                flagship_subtitle: 'Cursus Certifié & Reconnu par les Entreprises',
+                flagship_description: 'Une formation complète combinant cours magistraux, projets en atelier et stages garantis en entreprise avec délivrance de diplôme officiel.',
+                flagship_price: 'Frais subventionnés',
+                flagship_cta_text: 'Déposer ma Candidature',
+                book_title: 'Bibliothèque des Manuels & Polycopiés',
+                book_desc: 'Accédez à toutes les ressources pédagogiques, fiches de révision et exercices pratiques.',
+                podcast_title: 'Le Podcast des Métiers & de l\'Insertion',
+                podcast_desc: 'Retours d\'expérience d\'anciens diplômés et conseils d\'experts pour réussir sa carrière.',
+                stat1_value: String(filieres.length || 8),
+                stat1_label: 'Filières Agréées',
+                stat2_value: '98%',
+                stat2_label: 'Taux de Réussite',
+                stat3_value: `${teacherCount || 15}+`,
+                stat3_label: 'Formateurs Experts',
+                stat4_value: `${studentCount || 450}+`,
+                stat4_label: 'Diplômés Actifs',
+                primary_cta_text: 'S\'inscrire Maintenant',
+                secondary_cta_text: 'Nos Filières',
+                available_text: 'INSCRIPTIONS OUVERTES POUR LA NOUVELLE SESSION',
+                turning_ideas_text: 'Accompagner chaque projet d\'apprentissage vers la maîtrise complète ♡',
+                hero_image_layout: 'right',
+            }));
+            setSelectedLayoutId('segmented_hub');
+        } else if (type === 'university') {
+            setForm(prev => ({
+                ...prev,
+                trainer_name: org.name || 'Institut Universitaire & Pédagogique',
+                trainer_title: 'Excellence Académique, Rigueur & Innovation',
+                trainer_subtitle: 'Portail officiel d\'admission et de vie académique pour l\'année universitaire.',
+                trainer_bio: 'Un campus d\'excellence doté d\'infrastructures connectées, de laboratoires d\'expérimentation et d\'un corps professoral hautement qualifié.',
+                trainer_quote: '"La connaissance libère le potentiel et éclaire l\'avenir."',
+                flagship_title: 'Licence & Master Professionnels',
+                flagship_subtitle: 'Accréditation Officielle & Équivalence Internationale',
+                flagship_description: 'Cursus complets d\'enseignement supérieur préparant aux concours et aux carrières internationales à haute responsabilité.',
+                flagship_price: 'Admission sur dossier',
+                flagship_cta_text: 'Candidater au Cursus',
+                book_title: 'Bibliothèque Universitaire Numérique',
+                book_desc: 'Consultez des milliers d\'ouvrages, thèses et publications scientifiques en libre accès.',
+                podcast_title: 'Conférences Magistrales & Débats',
+                podcast_desc: 'Enregistrements exclusifs des colloques et cours donnés par nos professeurs émérites.',
+                stat1_value: String(filieres.length || 12),
+                stat1_label: 'Facultés & Cursus',
+                stat2_value: '100%',
+                stat2_label: 'Conformité Nationale',
+                stat3_value: `${teacherCount || 25}+`,
+                stat3_label: 'Professeurs & Docteurs',
+                stat4_value: `${studentCount || 1200}+`,
+                stat4_label: 'Étudiants Inscrits',
+                primary_cta_text: 'Demande d\'Admission',
+                secondary_cta_text: 'Espace Étudiant',
+                available_text: 'CAMPUS OUVERT — CONCOURS D\'ENTRÉE EN COURS',
+                turning_ideas_text: 'Forger les leaders et scientifiques de demain ♡',
+                hero_image_layout: 'center',
+            }));
+            setSelectedLayoutId('glass_showcase');
+        } else if (type === 'design') {
             setForm(prev => ({
                 ...prev,
                 trainer_name: 'Vladi Studio',
@@ -634,10 +710,10 @@ export function TemplateCustomizerStudio({
         { id: 'profile', label: 'Identité & Hero', icon: User },
         { id: 'buttons', label: 'Boutons CTA & Action', icon: MousePointerClick },
         { id: 'media_gallery', label: 'Galerie & Visuels', icon: ImageIcon },
-        { id: 'flagship', label: 'Offre Phare / Livre', icon: BookOpen },
-        { id: 'media', label: 'Médias & Presse', icon: Headphones },
-        { id: 'stats', label: 'Chiffres & Stats', icon: BarChart3 },
-        { id: 'testimonials', label: 'Témoignages', icon: MessageSquare },
+        { id: 'flagship', label: 'Offre Signature / Livre', icon: BookOpen },
+        { id: 'media', label: 'Podcasts & Médias', icon: Headphones },
+        { id: 'stats', label: 'Chiffres & Indicateurs', icon: BarChart3 },
+        { id: 'testimonials', label: 'Avis & Témoignages', icon: MessageSquare },
         { id: 'toggles', label: 'Visibilité Blocs', icon: Layers },
         { id: 'navigation', label: 'Menu & Contact', icon: Globe },
     ];
@@ -807,36 +883,53 @@ export function TemplateCustomizerStudio({
                         })}
                     </div>
 
-                    {/* Presets rapides de remplissage */}
-                    <div className="px-4 py-2.5 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent border-b border-white/5 flex items-center justify-between gap-2">
-                        <span className="text-[10px] font-bold text-amber-400 flex items-center gap-1">
-                            <Wand2 className="w-3 h-3" />
-                            Générer un exemple :
+                    {/* Bannière explicative universelle */}
+                    <div className="px-4 py-3 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-transparent border-b border-amber-500/20 text-xs">
+                        <p className="font-black text-amber-300 text-[11px] flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Personnalisez le contenu de votre landing page en direct
+                        </p>
+                        <p className="text-[10px] text-slate-300 mt-0.5 leading-relaxed">
+                            Modifiez les textes, photos de profil HD, livres, podcasts, filières, avis clients et indicateurs de statistiques avec un aperçu interactif réactif (Bureau, Tablette, Mobile).
+                        </p>
+                    </div>
+
+                    {/* Presets rapides de remplissage selon le type d'établissement */}
+                    <div className="px-4 py-2 bg-white/[0.02] border-b border-white/5 flex items-center justify-between gap-1 overflow-x-auto scrollbar-none">
+                        <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1 shrink-0">
+                            <Wand2 className="w-3 h-3 text-amber-400" />
+                            Exemples :
                         </span>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 shrink-0">
                             <button
-                                onClick={() => handleApplyPreset('design')}
-                                className="text-[10px] px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/15 text-slate-300 font-semibold"
+                                onClick={() => handleApplyPreset('training_center')}
+                                className="text-[10px] px-2 py-0.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 font-bold"
                             >
-                                Vladi
+                                Centre Pro
                             </button>
                             <button
-                                onClick={() => handleApplyPreset('coach')}
+                                onClick={() => handleApplyPreset('university')}
                                 className="text-[10px] px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/15 text-slate-300 font-semibold"
                             >
-                                Julie
+                                Université
                             </button>
                             <button
                                 onClick={() => handleApplyPreset('tech')}
                                 className="text-[10px] px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/15 text-slate-300 font-semibold"
                             >
-                                Jenna
+                                Tech
+                            </button>
+                            <button
+                                onClick={() => handleApplyPreset('coach')}
+                                className="text-[10px] px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/15 text-slate-300 font-semibold"
+                            >
+                                Formateur
                             </button>
                             <button
                                 onClick={() => handleApplyPreset('corporate')}
                                 className="text-[10px] px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/15 text-slate-300 font-semibold"
                             >
-                                Nexis
+                                Entreprise
                             </button>
                         </div>
                     </div>
@@ -1340,26 +1433,26 @@ export function TemplateCustomizerStudio({
                             </div>
                         )}
 
-                        {/* ═══ TAB 4 : OFFRE PHARE & LIVRE ═══ */}
+                        {/* ═══ TAB 4 : OFFRE PHARE, FILIÈRE & LIVRE ═══ */}
                         {activeSidebarTab === 'flagship' && (
                             <div className="space-y-4">
                                 <div>
                                     <h3 className="text-sm font-black text-white flex items-center gap-2">
-                                        🏆 Offre Signature, Livre ou Masterclass
+                                        🎓 Offre Signature, Filière Phare ou Livre
                                     </h3>
                                     <p className="text-[11px] text-slate-400 mt-0.5">
-                                        Mettez en avant un programme d'élite ou un produit phare avec mockup 3D.
+                                        Mettez en avant votre filière d'excellence, formation certifiante, diplôme phare ou publication (livre/manuel) avec son visuel dédié.
                                     </p>
                                 </div>
 
                                 <div className="space-y-3">
                                     <div>
-                                        <label className="font-bold text-slate-200 block mb-1">Titre de l'Offre / du Livre</label>
+                                        <label className="font-bold text-slate-200 block mb-1">Titre de l'Offre / Filière Phare / Livre</label>
                                         <Input
                                             id="studio_field_flagship_title"
                                             value={form.flagship_title || ''}
                                             onChange={e => setForm({ ...form, flagship_title: e.target.value })}
-                                            placeholder="Ex: Et si vous pouviez obtenir exactement ce que vous voulez ?"
+                                            placeholder="Ex: Cursus Ingénierie & Métiers, Licence Pro, ou Livre Bestseller"
                                             className={`bg-white/5 border-white/10 text-white rounded-xl h-10 transition-all duration-300 ${activeHighlightedField === 'flagship_title' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                         />
                                     </div>
@@ -1370,7 +1463,7 @@ export function TemplateCustomizerStudio({
                                             id="studio_field_flagship_subtitle"
                                             value={form.flagship_subtitle || ''}
                                             onChange={e => setForm({ ...form, flagship_subtitle: e.target.value })}
-                                            placeholder="Ex: Formation & Méthodologie N°1 Recommandée"
+                                            placeholder="Ex: Formation Certifiée & Reconnue • Session 2026"
                                             className={`bg-white/5 border-white/10 text-white rounded-xl h-10 transition-all duration-300 ${activeHighlightedField === 'flagship_subtitle' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                         />
                                     </div>
@@ -1381,19 +1474,19 @@ export function TemplateCustomizerStudio({
                                             id="studio_field_flagship_description"
                                             value={form.flagship_description || ''}
                                             onChange={e => setForm({ ...form, flagship_description: e.target.value })}
-                                            placeholder="Ex: Un accompagnement structuré, des ateliers pratiques et un accès direct..."
+                                            placeholder="Ex: Un accompagnement structuré, des ateliers pratiques et un accès direct aux équipements de pointe..."
                                             className={`bg-white/5 border-white/10 text-white rounded-xl min-h-[80px] transition-all duration-300 ${activeHighlightedField === 'flagship_description' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                         />
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
-                                            <label className="font-bold text-slate-200 block mb-1">Tarif Affiché</label>
+                                            <label className="font-bold text-slate-200 block mb-1">Tarif / Frais de Scolarité</label>
                                             <Input
                                                 id="studio_field_flagship_price"
                                                 value={form.flagship_price || ''}
                                                 onChange={e => setForm({ ...form, flagship_price: e.target.value })}
-                                                placeholder="Ex: 250 000 FCFA"
+                                                placeholder="Ex: 250 000 FCFA / an ou Gratuit"
                                                 className={`bg-white/5 border-white/10 text-white rounded-xl h-10 transition-all duration-300 ${activeHighlightedField === 'flagship_price' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                             />
                                         </div>
@@ -1403,19 +1496,19 @@ export function TemplateCustomizerStudio({
                                                 id="studio_field_flagship_cta_text"
                                                 value={form.flagship_cta_text || ''}
                                                 onChange={e => setForm({ ...form, flagship_cta_text: e.target.value })}
-                                                placeholder="Ex: Commander / Réserver"
+                                                placeholder="Ex: S'inscrire / Postuler / Commander"
                                                 className={`bg-white/5 border-white/10 text-white rounded-xl h-10 transition-all duration-300 ${activeHighlightedField === 'flagship_cta_text' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                             />
                                         </div>
                                     </div>
 
                                     <div>
-                                        <label className="font-bold text-slate-200 block mb-1">Accroche Finale du Livre</label>
+                                        <label className="font-bold text-slate-200 block mb-1">Accroche Secondaire / Mention Spéciale</label>
                                         <Input
                                             id="studio_field_book_cta"
                                             value={form.book_cta || ''}
                                             onChange={e => setForm({ ...form, book_cta: e.target.value })}
-                                            placeholder="Ex: Commandez mon bestseller aujourd'hui !"
+                                            placeholder="Ex: Places limitées pour la prochaine promotion !"
                                             className={`bg-white/5 border-white/10 text-white rounded-xl h-10 transition-all duration-300 ${activeHighlightedField === 'book_cta' ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-lg shadow-amber-500/20' : ''}`}
                                         />
                                     </div>
@@ -1424,12 +1517,12 @@ export function TemplateCustomizerStudio({
                                 {/* Upload Image Livre / Mockup */}
                                 <div className="pt-3 border-t border-white/10 space-y-3">
                                     <label className="font-bold text-slate-200 block">
-                                        Image du Livre / Mockup 3D du Produit
+                                        Image de l'Offre / Filière Phare / Couverture
                                     </label>
                                     <div className="flex items-center gap-4">
                                         <div className="w-16 h-20 rounded-xl overflow-hidden bg-white/5 border border-white/10 shrink-0 relative flex items-center justify-center">
                                             {form.flagship_image_url ? (
-                                                <img src={form.flagship_image_url} alt="Livre" className="w-full h-full object-cover" />
+                                                <img src={form.flagship_image_url} alt="Offre" className="w-full h-full object-cover" />
                                             ) : (
                                                 <BookOpen className="w-6 h-6 text-slate-600" />
                                             )}
@@ -1448,7 +1541,7 @@ export function TemplateCustomizerStudio({
                                             />
                                             <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold cursor-pointer transition text-[11px]">
                                                 <UploadCloud className="w-3.5 h-3.5 text-amber-400" />
-                                                <span>Téléverser la couverture</span>
+                                                <span>Téléverser une image</span>
                                                 <input
                                                     type="file"
                                                     accept="image/*"
@@ -1462,25 +1555,25 @@ export function TemplateCustomizerStudio({
                             </div>
                         )}
 
-                        {/* ═══ TAB 3 : MÉDIAS & PRESSE ═══ */}
+                        {/* ═══ TAB 3 : MÉDIAS, PODCASTS & RESSOURCES ═══ */}
                         {activeSidebarTab === 'media' && (
                             <div className="space-y-4">
                                 <div>
                                     <h3 className="text-sm font-black text-white flex items-center gap-2">
-                                        🎙️ Podcast, Masterclass & Logos Presse
+                                        🎙️ Podcasts, Bibliothèque & Médias
                                     </h3>
                                     <p className="text-[11px] text-slate-400 mt-0.5">
-                                        Configurez la section podcast audio/vidéo et les logos des médias partenaires.
+                                        Présentez vos supports d'apprentissage : podcasts audio, bibliothèque numérique, chaîne vidéo et logos de partenaires.
                                     </p>
                                 </div>
 
                                 <div className="space-y-3">
                                     <div>
-                                        <label className="font-bold text-slate-200 block mb-1">Titre de la Masterclass / du Podcast</label>
+                                        <label className="font-bold text-slate-200 block mb-1">Titre de la Bibliothèque / Podcast / Médias</label>
                                         <Input
                                             value={form.podcast_title || ''}
                                             onChange={e => setForm({ ...form, podcast_title: e.target.value })}
-                                            placeholder="Ex: Le Podcast Influenceur, Masterclass Studio..."
+                                            placeholder="Ex: La Bibliothèque Numérique ou Le Podcast de l'École"
                                             className="bg-white/5 border-white/10 text-white rounded-xl h-10"
                                         />
                                     </div>
@@ -1490,7 +1583,7 @@ export function TemplateCustomizerStudio({
                                         <Textarea
                                             value={form.podcast_description || ''}
                                             onChange={e => setForm({ ...form, podcast_description: e.target.value })}
-                                            placeholder="Ex: Des centaines d'épisodes et d'ateliers en direct..."
+                                            placeholder="Ex: Des centaines de ressources pédagogiques, annales et documents téléchargeables..."
                                             className="bg-white/5 border-white/10 text-white rounded-xl min-h-[70px]"
                                         />
                                     </div>
@@ -1500,19 +1593,19 @@ export function TemplateCustomizerStudio({
                                         <Textarea
                                             value={form.podcast_desc2 || ''}
                                             onChange={e => setForm({ ...form, podcast_desc2: e.target.value })}
-                                            placeholder="Ex: Découvrez pourquoi des milliers de personnes..."
+                                            placeholder="Ex: Découvrez pourquoi nos étudiants plébiscitent nos supports de cours..."
                                             className="bg-white/5 border-white/10 text-white rounded-xl min-h-[70px]"
                                         />
                                     </div>
 
                                     <div>
                                         <label className="font-bold text-slate-200 block mb-1">
-                                            Logos Presse & Partenaires (séparés par des virgules)
+                                            Logos Partenaires, Entreprises & Médias (séparés par des virgules)
                                         </label>
                                         <Input
                                             value={form.press_logos_text || ''}
                                             onChange={e => setForm({ ...form, press_logos_text: e.target.value })}
-                                            placeholder="FORBES, SUCCESS, PEOPLE, HUFFPOST, YAHOO"
+                                            placeholder="MINESEC, CAMTEL, TOTAL, ORANGE, ECOBANK"
                                             className="bg-white/5 border-white/10 text-white rounded-xl h-10"
                                         />
                                         <p className="text-[10px] text-slate-500 mt-1">
@@ -1593,35 +1686,76 @@ export function TemplateCustomizerStudio({
                                 </div>
 
                                 <div className="pt-3 border-t border-white/10 space-y-3">
-                                    <h4 className="font-bold text-slate-200">Stats Modèle Corporate (Nexis)</h4>
+                                    <div>
+                                        <h4 className="font-bold text-slate-200">Indicateurs Principaux (Tous Modèles de Landing Page)</h4>
+                                        <p className="text-[10px] text-slate-400">Ces 4 statistiques s'affichent sur les bannières, hubs, glass showcase et bento grids.</p>
+                                    </div>
                                     <div className="grid grid-cols-2 gap-2.5">
-                                        <div>
-                                            <label className="text-[10px] text-slate-400 block mb-1">Stat 1 : Valeur & Label</label>
+                                        <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/10 space-y-1">
+                                            <label className="text-[10px] font-bold text-amber-400 block">Indicateur 1</label>
                                             <Input
+                                                id="studio_field_stat1_value"
                                                 value={form.stat1_value || ''}
                                                 onChange={e => setForm({ ...form, stat1_value: e.target.value })}
-                                                placeholder="2000+"
-                                                className="bg-white/5 border-white/10 text-white rounded-xl h-8 text-[11px] mb-1"
+                                                placeholder="Ex: 8 ou 98%"
+                                                className="bg-white/5 border-white/10 text-white rounded-xl h-8 text-[11px]"
                                             />
                                             <Input
+                                                id="studio_field_stat1_label"
                                                 value={form.stat1_label || ''}
                                                 onChange={e => setForm({ ...form, stat1_label: e.target.value })}
-                                                placeholder="Partenaires"
+                                                placeholder="Ex: Filières Agréées"
                                                 className="bg-white/5 border-white/10 text-white rounded-xl h-8 text-[11px]"
                                             />
                                         </div>
-                                        <div>
-                                            <label className="text-[10px] text-slate-400 block mb-1">Stat 2 : Valeur & Label</label>
+                                        <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/10 space-y-1">
+                                            <label className="text-[10px] font-bold text-cyan-400 block">Indicateur 2</label>
                                             <Input
+                                                id="studio_field_stat2_value"
                                                 value={form.stat2_value || ''}
                                                 onChange={e => setForm({ ...form, stat2_value: e.target.value })}
-                                                placeholder="10+"
-                                                className="bg-white/5 border-white/10 text-white rounded-xl h-8 text-[11px] mb-1"
+                                                placeholder="Ex: 500+ ou 10+"
+                                                className="bg-white/5 border-white/10 text-white rounded-xl h-8 text-[11px]"
                                             />
                                             <Input
+                                                id="studio_field_stat2_label"
                                                 value={form.stat2_label || ''}
                                                 onChange={e => setForm({ ...form, stat2_label: e.target.value })}
-                                                placeholder="Ans d'Expérience"
+                                                placeholder="Ex: Diplômés / Classes"
+                                                className="bg-white/5 border-white/10 text-white rounded-xl h-8 text-[11px]"
+                                            />
+                                        </div>
+                                        <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/10 space-y-1">
+                                            <label className="text-[10px] font-bold text-emerald-400 block">Indicateur 3</label>
+                                            <Input
+                                                id="studio_field_stat3_value"
+                                                value={form.stat3_value || ''}
+                                                onChange={e => setForm({ ...form, stat3_value: e.target.value })}
+                                                placeholder="Ex: 25+ ou 15+"
+                                                className="bg-white/5 border-white/10 text-white rounded-xl h-8 text-[11px]"
+                                            />
+                                            <Input
+                                                id="studio_field_stat3_label"
+                                                value={form.stat3_label || ''}
+                                                onChange={e => setForm({ ...form, stat3_label: e.target.value })}
+                                                placeholder="Ex: Enseignants / Formateurs"
+                                                className="bg-white/5 border-white/10 text-white rounded-xl h-8 text-[11px]"
+                                            />
+                                        </div>
+                                        <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/10 space-y-1">
+                                            <label className="text-[10px] font-bold text-teal-400 block">Indicateur 4</label>
+                                            <Input
+                                                id="studio_field_stat4_value"
+                                                value={form.stat4_value || ''}
+                                                onChange={e => setForm({ ...form, stat4_value: e.target.value })}
+                                                placeholder="Ex: 98% ou 1200+"
+                                                className="bg-white/5 border-white/10 text-white rounded-xl h-8 text-[11px]"
+                                            />
+                                            <Input
+                                                id="studio_field_stat4_label"
+                                                value={form.stat4_label || ''}
+                                                onChange={e => setForm({ ...form, stat4_label: e.target.value })}
+                                                placeholder="Ex: Taux de Réussite / Étudiants"
                                                 className="bg-white/5 border-white/10 text-white rounded-xl h-8 text-[11px]"
                                             />
                                         </div>
@@ -1630,62 +1764,68 @@ export function TemplateCustomizerStudio({
                             </div>
                         )}
 
-                        {/* ═══ TAB 5 : TÉMOIGNAGES ═══ */}
+                        {/* ═══ TAB 5 : TÉMOIGNAGES & AVIS ═══ */}
                         {activeSidebarTab === 'testimonials' && (
                             <div className="space-y-4">
                                 <div>
                                     <h3 className="text-sm font-black text-white flex items-center gap-2">
-                                        💬 Témoignages & Avis Clients
+                                        💬 Avis Étudiants, Parents & Partenaires
                                     </h3>
                                     <p className="text-[11px] text-slate-400 mt-0.5">
-                                        Personnalisez les avis authentiques de vos diplômés et clients.
+                                        Personnalisez les avis authentiques de votre communauté d'apprenants et partenaires.
                                     </p>
                                 </div>
 
                                 <div className="space-y-4">
                                     <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2.5">
-                                        <h4 className="font-bold text-amber-400 text-xs">Témoignage Principal</h4>
+                                        <h4 className="font-bold text-amber-400 text-xs">Témoignage 1 (Étudiant / Alumni)</h4>
                                         <Textarea
+                                            id="studio_field_testimonial_text"
                                             value={form.testimonial_text || ''}
-                                            onChange={e => setForm({ ...form, testimonial_text: e.target.value })}
-                                            placeholder="Texte du témoignage..."
+                                            onChange={e => setForm({ ...form, testimonial_text: e.target.value, review1_text: e.target.value })}
+                                            placeholder="Ex: Une pédagogie exceptionnelle, alliant rigueur et créativité..."
                                             className="bg-white/5 border-white/10 text-white rounded-xl min-h-[70px]"
                                         />
                                         <div className="grid grid-cols-2 gap-2">
                                             <Input
+                                                id="studio_field_testimonial_author"
                                                 value={form.testimonial_author || ''}
-                                                onChange={e => setForm({ ...form, testimonial_author: e.target.value })}
-                                                placeholder="Nom de l'auteur"
+                                                onChange={e => setForm({ ...form, testimonial_author: e.target.value, review1_author: e.target.value })}
+                                                placeholder="Nom de l'élève ou diplômé"
                                                 className="bg-white/5 border-white/10 text-white rounded-xl h-9"
                                             />
                                             <Input
+                                                id="studio_field_testimonial_role"
                                                 value={form.testimonial_role || ''}
                                                 onChange={e => setForm({ ...form, testimonial_role: e.target.value })}
-                                                placeholder="Rôle / Entreprise"
+                                                placeholder="Promotion / Rôle"
                                                 className="bg-white/5 border-white/10 text-white rounded-xl h-9"
                                             />
                                         </div>
                                     </div>
 
                                     <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2.5">
-                                        <h4 className="font-bold text-cyan-400 text-xs">Témoignage 2 (Corporate)</h4>
+                                        <h4 className="font-bold text-cyan-400 text-xs">Témoignage 2 (Parent / Entreprise Partenaire)</h4>
                                         <Textarea
+                                            id="studio_field_testimonial1_text"
                                             value={form.testimonial1_text || ''}
-                                            onChange={e => setForm({ ...form, testimonial1_text: e.target.value })}
-                                            placeholder="Texte du témoignage..."
+                                            onChange={e => setForm({ ...form, testimonial1_text: e.target.value, review2_text: e.target.value })}
+                                            placeholder="Ex: Encadrement rigoureux et professeurs très disponibles..."
                                             className="bg-white/5 border-white/10 text-white rounded-xl min-h-[70px]"
                                         />
                                         <div className="grid grid-cols-2 gap-2">
                                             <Input
+                                                id="studio_field_testimonial1_author"
                                                 value={form.testimonial1_author || ''}
-                                                onChange={e => setForm({ ...form, testimonial1_author: e.target.value })}
-                                                placeholder="Nom de l'auteur"
+                                                onChange={e => setForm({ ...form, testimonial1_author: e.target.value, review2_author: e.target.value })}
+                                                placeholder="Nom du parent / Entreprise"
                                                 className="bg-white/5 border-white/10 text-white rounded-xl h-9"
                                             />
                                             <Input
+                                                id="studio_field_testimonial1_role"
                                                 value={form.testimonial1_role || ''}
                                                 onChange={e => setForm({ ...form, testimonial1_role: e.target.value })}
-                                                placeholder="Rôle / Entreprise"
+                                                placeholder="Titre / Organisation"
                                                 className="bg-white/5 border-white/10 text-white rounded-xl h-9"
                                             />
                                         </div>

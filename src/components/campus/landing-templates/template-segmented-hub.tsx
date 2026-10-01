@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import { cleanMotto } from '@/lib/clean-motto';
+import type { TemplateCustomConfig } from '@/components/campus/template-customizer-studio';
 
 interface TemplateProps {
     org: any;
@@ -37,8 +38,25 @@ export function TemplateSegmentedHub({
     bc,
     onOpenInscription
 }: TemplateProps) {
+    const cfg: TemplateCustomConfig = org.template_config || {};
     const [selectedProgramIdx, setSelectedProgramIdx] = useState<number>(0);
     const [openAccordion, setOpenAccordion] = useState<string>('mission');
+
+    // Textes dynamiques personnalisables
+    const heroHeadline = cfg.trainer_title || org.motto || 'Révélez Votre Potentiel. Guidez l\'Avenir.';
+    const heroSubtitle = cleanMotto(
+        cfg.trainer_subtitle || org.hero_subtitle,
+        `Bénéficiez d'une éducation de haut niveau, de parcours certifiés et d'un encadrement rigoureux à ${org.name}.`
+    );
+    const heroImage = cfg.trainer_photo_url || org.about_image_url || org.hero_image_url || (gallery && gallery[0]) || 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=1000&auto=format&fit=crop&q=80';
+    const primaryCta = cfg.primary_cta_text || 'Demande d\'Admission';
+    const primaryUrl = cfg.primary_cta_url || '#inscription';
+    const secondaryCta = cfg.secondary_cta_text || 'Bibliothèque & Livres';
+    const secondaryUrl = cfg.secondary_cta_url || orgPath(orgSlug, 'library');
+    const statValue = cfg.stat1_value || '98%';
+    const statLabel = cfg.stat1_label || 'Taux de Réussite';
+    const flagshipTitle = cfg.flagship_title || 'Filières & Formations Disponibles';
+    const aboutText = cfg.trainer_bio || org.about_text || `${org.name} forme les bâtisseurs de demain à travers des programmes rigoureux, dispensés par un corps professoral hautement qualifié.`;
 
     const programCards = (filieres && filieres.length > 0)
         ? filieres.map((f: any) => ({
@@ -64,23 +82,23 @@ export function TemplateSegmentedHub({
     const accordionItems = [
         {
             id: 'mission',
-            title: '🎯 Notre Mission & Vision Académique',
-            content: org.about_text || `${org.name} forme les bâtisseurs de demain à travers des programmes rigoureux, dispensés par un corps professoral hautement qualifié.`
+            title: cfg.about_title || '🎯 Notre Mission & Vision Académique',
+            content: aboutText
         },
         {
             id: 'faculty',
             title: '👨‍🏫 Corps Professoral & Encadrement d\'Excellence',
-            content: `Plus de ${teacherCount || 30} enseignants certifiés et experts de l'industrie accompagnent chaque étudiant vers la réussite et l'insertion professionnelle.`
+            content: `Plus de ${cfg.stat2_value || teacherCount || 30} enseignants certifiés et experts de l'industrie accompagnent chaque apprenant vers la réussite et l'insertion professionnelle.`
         },
         {
             id: 'research',
             title: '🔬 Infrastructures & Salles Spécialisées',
-            content: 'Des salles modernes, une bibliothèque connectée et des équipements pratiques pour un apprentissage concret et orienté compétences.'
+            content: cfg.stat3_label ? `${cfg.stat3_value || '100%'} ${cfg.stat3_label}` : 'Des salles modernes, une bibliothèque connectée et des équipements pratiques pour un apprentissage concret et orienté compétences.'
         },
         {
             id: 'legacy',
             title: '🌐 Réseau des Diplômés & Perspectives',
-            content: 'Rejoignez un réseau dynamique d\'étudiants et diplômés insérés dans les secteurs clés d\'activité et les organisations internationales.'
+            content: cfg.testimonial_text ? cfg.testimonial_text.replace(/^"|"$/g, '') : 'Rejoignez un réseau dynamique d\'étudiants et diplômés insérés dans les secteurs clés d\'activité et les organisations internationales.'
         },
     ];
 
@@ -105,8 +123,12 @@ export function TemplateSegmentedHub({
                             </div>
                         )}
                         <div>
-                            <h2 className="text-sm sm:text-base font-black tracking-wide text-white uppercase truncate max-w-[200px] sm:max-w-none">{org.name}</h2>
-                            <p className="text-[10px] text-amber-400/80 font-medium tracking-wider uppercase">{cleanMotto(org.motto, 'Excellence • Rigueur • Réussite')}</p>
+                            <h2 data-editable-field="trainer_name" className="text-sm sm:text-base font-black tracking-wide text-white uppercase truncate max-w-[200px] sm:max-w-none">
+                                {cfg.trainer_name || org.name}
+                            </h2>
+                            <p data-editable-field="trainer_title" className="text-[10px] text-amber-400/80 font-medium tracking-wider uppercase">
+                                {cleanMotto(cfg.trainer_title || org.motto, 'Excellence • Rigueur • Réussite')}
+                            </p>
                         </div>
                     </div>
 
@@ -126,8 +148,8 @@ export function TemplateSegmentedHub({
                                 Connexion
                             </Button>
                         </Link>
-                        <Button size="sm" onClick={onOpenInscription} className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/25 h-9 px-4">
-                            S'inscrire
+                        <Button size="sm" onClick={onOpenInscription} data-editable-field="primary_cta_text" className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/25 h-9 px-4">
+                            {primaryCta}
                         </Button>
                     </div>
                 </div>
@@ -140,45 +162,65 @@ export function TemplateSegmentedHub({
                     {/* Left Column: Headline */}
                     <div className="lg:col-span-6 space-y-5">
                         <motion.h1
+                            data-editable-field="trainer_title"
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="text-3xl sm:text-5xl lg:text-6xl font-black text-amber-400 uppercase tracking-tight leading-[1.08]"
+                            className="text-3xl sm:text-5xl lg:text-6xl font-black text-amber-400 uppercase tracking-tight leading-[1.08] cursor-pointer"
                         >
-                            Révélez Votre Potentiel. <br />
-                            <span className="text-white">Guidez l'Avenir.</span>
+                            {heroHeadline}
                         </motion.h1>
-                        <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-lg font-light">
-                            Bénéficiez d'une éducation de haut niveau, de parcours certifiés et d'un encadrement rigoureux à <strong className="text-amber-300">{org.name}</strong>.
+                        <p
+                            data-editable-field="trainer_subtitle"
+                            className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-lg font-light cursor-pointer"
+                        >
+                            {heroSubtitle}
                         </p>
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
-                            <Button onClick={onOpenInscription} className="h-12 px-7 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-xl shadow-amber-500/30 gap-2 w-full sm:w-auto">
+                            <Button
+                                data-editable-field="primary_cta_text"
+                                onClick={() => {
+                                    if (primaryUrl === '#inscription') onOpenInscription?.();
+                                    else window.location.href = primaryUrl;
+                                }}
+                                className="h-12 px-7 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-xl shadow-amber-500/30 gap-2 w-full sm:w-auto"
+                            >
                                 <FileText className="w-4 h-4" />
-                                <span>Demande d'Admission</span>
+                                <span>{primaryCta}</span>
                                 <ArrowRight className="w-4 h-4" />
                             </Button>
-                            <Link href={orgPath(orgSlug, 'library')}>
-                                <Button variant="outline" className="h-12 px-6 rounded-xl border-amber-500/30 text-amber-300 hover:bg-amber-500/10 font-bold text-xs w-full sm:w-auto">
-                                    Bibliothèque & Livres
+                            <Link href={secondaryUrl}>
+                                <Button
+                                    data-editable-field="secondary_cta_text"
+                                    variant="outline"
+                                    className="h-12 px-6 rounded-xl border-amber-500/30 text-amber-300 hover:bg-amber-500/10 font-bold text-xs w-full sm:w-auto"
+                                >
+                                    {secondaryCta}
                                 </Button>
                             </Link>
                         </div>
                     </div>
 
-                    {/* Right Column: Campus Image + 98% Success Rate Badge */}
+                    {/* Right Column: Campus Image + Floating Stat Badge */}
                     <div className="lg:col-span-6 relative">
-                        <div className="rounded-3xl overflow-hidden border border-amber-500/30 shadow-2xl aspect-[16/10] bg-[#07190F]">
+                        <div
+                            data-editable-field="trainer_photo_url"
+                            className="rounded-3xl overflow-hidden border border-amber-500/30 shadow-2xl aspect-[16/10] bg-[#07190F]"
+                        >
                             <img
-                                src={org.about_image_url || (gallery && gallery[0]) || 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=1000&auto=format&fit=crop&q=80'}
-                                alt="Campus"
+                                src={heroImage}
+                                alt={org.name}
                                 className="w-full h-full object-cover"
                             />
                         </div>
 
-                        {/* Floating 98% SUCCESS RATE Badge */}
-                        <div className="absolute bottom-3 left-3 sm:top-1/2 sm:bottom-auto sm:left-6 sm:-translate-y-1/2 p-2.5 sm:p-3.5 px-4 sm:px-5 rounded-2xl bg-[#06180F]/90 backdrop-blur-2xl border border-amber-400/50 shadow-2xl flex items-center gap-3">
+                        {/* Floating SUCCESS RATE / STAT Badge */}
+                        <div
+                            data-editable-field="stat1_value"
+                            className="absolute bottom-3 left-3 sm:top-1/2 sm:bottom-auto sm:left-6 sm:-translate-y-1/2 p-2.5 sm:p-3.5 px-4 sm:px-5 rounded-2xl bg-[#06180F]/90 backdrop-blur-2xl border border-amber-400/50 shadow-2xl flex items-center gap-3 cursor-pointer"
+                        >
                             <div>
-                                <span className="text-xl sm:text-2xl font-black text-white tracking-tight">98%</span>
-                                <span className="text-[9px] sm:text-[10px] text-amber-400 block font-bold uppercase tracking-wider">Taux de Réussite</span>
+                                <span className="text-xl sm:text-2xl font-black text-white tracking-tight">{statValue}</span>
+                                <span className="text-[9px] sm:text-[10px] text-amber-400 block font-bold uppercase tracking-wider">{statLabel}</span>
                             </div>
                             <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400" />
                         </div>
@@ -190,8 +232,8 @@ export function TemplateSegmentedHub({
                     {/* LEFT (Col 7): PROGRAMS & CAMPUS */}
                     <div className="lg:col-span-7 space-y-4">
                         <div className="flex items-center justify-between">
-                            <h3 className="text-xs font-black uppercase text-amber-400 tracking-widest flex items-center gap-2">
-                                <BookOpen className="w-4 h-4" /> Filières & Formations Disponibles
+                            <h3 data-editable-field="flagship_title" className="text-xs font-black uppercase text-amber-400 tracking-widest flex items-center gap-2 cursor-pointer">
+                                <BookOpen className="w-4 h-4" /> {flagshipTitle}
                             </h3>
                             <span className="text-xs text-slate-400 font-bold">{programCards.length} Cursus Actifs</span>
                         </div>
@@ -247,7 +289,8 @@ export function TemplateSegmentedHub({
                                                 initial={{ height: 0, opacity: 0 }}
                                                 animate={{ height: 'auto', opacity: 1 }}
                                                 exit={{ height: 0, opacity: 0 }}
-                                                className="px-4 pb-4 pt-1 text-[11px] text-slate-300 leading-relaxed border-t border-white/5"
+                                                data-editable-field={item.id === 'mission' ? 'trainer_bio' : undefined}
+                                                className="px-4 pb-4 pt-1 text-[11px] text-slate-300 leading-relaxed border-t border-white/5 cursor-pointer"
                                             >
                                                 {item.content}
                                             </motion.div>
@@ -273,8 +316,12 @@ export function TemplateSegmentedHub({
                         <span>WhatsApp Direct</span>
                     </a>
 
-                    <Button onClick={onOpenInscription} className="h-10 px-6 rounded-full bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/30 gap-1.5">
-                        <span>INSCRIPTION EN LIGNE</span>
+                    <Button
+                        onClick={onOpenInscription}
+                        data-editable-field="primary_cta_text"
+                        className="h-10 px-6 rounded-full bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/30 gap-1.5"
+                    >
+                        <span>{primaryCta.toUpperCase()}</span>
                         <span>⭐</span>
                     </Button>
                 </div>

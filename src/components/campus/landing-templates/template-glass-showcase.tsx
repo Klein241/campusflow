@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import { cleanMotto } from '@/lib/clean-motto';
+import type { TemplateCustomConfig } from '@/components/campus/template-customizer-studio';
 
 interface TemplateProps {
     org: any;
@@ -39,6 +40,7 @@ export function TemplateGlassShowcase({
     bc,
     onOpenInscription
 }: TemplateProps) {
+    const cfg: TemplateCustomConfig = org.template_config || {};
     const [openCard, setOpenCard] = useState<ShowcaseCard>(null);
     const [activeDock, setActiveDock] = useState<string>('home');
     const [isPlaying, setIsPlaying] = useState(false);
@@ -85,8 +87,8 @@ export function TemplateGlassShowcase({
                             </div>
                         )}
                         <div>
-                            <h2 className="text-sm sm:text-base font-black tracking-wide text-white uppercase">{org.name}</h2>
-                            <p className="text-[10px] text-slate-400 font-medium tracking-wider uppercase">{cleanMotto(org.motto, 'Excellence • Intégrité • Innovation')}</p>
+                            <h2 data-editable-field="trainer_name" className="text-sm sm:text-base font-black tracking-wide text-white uppercase">{cfg.trainer_name || org.name}</h2>
+                            <p data-editable-field="trainer_title" className="text-[10px] text-slate-400 font-medium tracking-wider uppercase">{cleanMotto(cfg.trainer_title || org.motto, 'Excellence • Intégrité • Innovation')}</p>
                         </div>
                     </div>
 
@@ -115,21 +117,29 @@ export function TemplateGlassShowcase({
                 {/* ═══ Hero Centerpiece ═══ */}
                 <div className="text-center max-w-4xl mx-auto mb-12 space-y-4">
                     <motion.h1
+                        data-editable-field="trainer_title"
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="text-3xl sm:text-5xl lg:text-6xl font-black text-white uppercase tracking-tight leading-[1.1]"
+                        className="text-3xl sm:text-5xl lg:text-6xl font-black text-white uppercase tracking-tight leading-[1.1] cursor-pointer"
                     >
-                        Forger les Leaders de Demain.
+                        {cfg.trainer_title || org.hero_title || 'Forger les Leaders de Demain.'}
                     </motion.h1>
-                    <p className="text-sm sm:text-lg text-slate-300 font-light max-w-2xl mx-auto">
-                        Une éducation d&apos;exception, un avenir sans limites à <span className="text-cyan-400 font-medium">{org.name}</span>.
+                    <p data-editable-field="trainer_subtitle" className="text-sm sm:text-lg text-slate-300 font-light max-w-2xl mx-auto cursor-pointer">
+                        {cleanMotto(cfg.trainer_subtitle || org.hero_subtitle, `Une éducation d'exception, un avenir sans limites à ${cfg.trainer_name || org.name}.`)}
                     </p>
                     <div className="pt-2">
                         <Button
-                            onClick={() => setOpenCard('programs')}
+                            data-editable-field="primary_cta_text"
+                            onClick={() => {
+                                if (cfg.primary_cta_url && cfg.primary_cta_url !== '#inscription') {
+                                    window.location.href = cfg.primary_cta_url;
+                                } else {
+                                    setOpenCard('programs');
+                                }
+                            }}
                             className="h-11 px-8 rounded-full bg-cyan-950/60 hover:bg-cyan-900/60 text-cyan-300 font-bold text-xs uppercase tracking-wider border border-cyan-400/50 shadow-lg shadow-cyan-500/20 backdrop-blur-md transition-all hover:scale-105"
                         >
-                            Découvrir nos programmes
+                            {cfg.primary_cta_text || 'Découvrir nos programmes'}
                         </Button>
                     </div>
                 </div>
@@ -150,12 +160,12 @@ export function TemplateGlassShowcase({
                                 <span>📜</span>
                                 <span>[★ Vision & Histoire]</span>
                             </div>
-                            <div>
+                            <div data-editable-field="trainer_bio">
                                 <h3 className="text-sm font-black text-white group-hover:text-cyan-300 transition-colors leading-snug">
-                                    Notre Héritage & Ambition
+                                    {cfg.about_title || 'Notre Héritage & Ambition'}
                                 </h3>
                                 <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">
-                                    Une tradition d&apos;excellence académique...
+                                    {cfg.trainer_bio || org.about_text || 'Une tradition d\'excellence académique...'}
                                 </p>
                             </div>
                         </div>
@@ -184,12 +194,12 @@ export function TemplateGlassShowcase({
                                 <span>🎓</span>
                                 <span>[🎓 Formations Phares]</span>
                             </div>
-                            <div>
+                            <div data-editable-field="flagship_title">
                                 <h3 className="text-sm font-black text-white group-hover:text-teal-300 transition-colors leading-snug">
-                                    Cursus d&apos;Excellence
+                                    {cfg.flagship_title || 'Cursus d\'Excellence'}
                                 </h3>
                                 <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">
-                                    {filieres.length > 0 ? filieres.slice(0, 3).map((f: any) => f.nom).join(', ') : 'Bachelor, Master, MBA...'}
+                                    {cfg.flagship_subtitle || (filieres.length > 0 ? filieres.slice(0, 3).map((f: any) => f.nom).join(', ') : 'Bachelor, Master, MBA...')}
                                 </p>
                             </div>
                         </div>
@@ -312,28 +322,28 @@ export function TemplateGlassShowcase({
                                 <span>💬</span>
                                 <span>[💬 Témoignages & Réussite]</span>
                             </div>
-                            <div>
+                            <div data-editable-field="testimonial_text">
                                 <h3 className="text-sm font-black text-white group-hover:text-cyan-300 transition-colors leading-snug">
-                                    Alumni Inspiring
+                                    {cfg.stat1_label || 'Alumni & Réussite'}
                                 </h3>
-                                <p className="text-[11px] text-slate-300 italic mt-1.5">
-                                    &ldquo;L&apos;établissement a transformé mon avenir académique.&rdquo;
+                                <p className="text-[11px] text-slate-300 italic mt-1.5 line-clamp-2">
+                                    &ldquo;{cfg.testimonial_text ? cfg.testimonial_text.replace(/^"|"$/g, '') : "L'établissement a transformé mon avenir académique."}&rdquo;
                                 </p>
                             </div>
                         </div>
 
                         {/* Circular Portrait */}
-                        <div className="mt-4 flex flex-col items-center text-center space-y-1.5">
+                        <div data-editable-field="testimonial_author" className="mt-4 flex flex-col items-center text-center space-y-1.5 cursor-pointer">
                             <div className="w-14 h-14 rounded-full p-0.5 bg-gradient-to-tr from-cyan-400 to-emerald-400 shadow-lg shadow-cyan-500/20">
                                 <img
-                                    src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80"
+                                    src={cfg.trainer_photo_secondary_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80"}
                                     alt="Alumni"
                                     className="w-full h-full rounded-full object-cover"
                                 />
                             </div>
                             <div>
-                                <p className="text-[11px] font-bold text-white">Sarah Ndombe</p>
-                                <p className="text-[9px] text-cyan-400 font-medium">Diplômée Promotion 2025</p>
+                                <p className="text-[11px] font-bold text-white">{cfg.testimonial_author || 'Sarah Ndombe'}</p>
+                                <p className="text-[9px] text-cyan-400 font-medium">{cfg.testimonial_role || 'Diplômée Promotion 2025'}</p>
                             </div>
                         </div>
                     </motion.div>
@@ -373,11 +383,12 @@ export function TemplateGlassShowcase({
                     <div className="h-6 w-px bg-white/10 mx-1" />
 
                     {/* S'INSCRIRE MAINTENANT CTA */}
-                    <a href="#inscription" onClick={onOpenInscription}>
+                    <a href={cfg.primary_cta_url || "#inscription"} onClick={onOpenInscription}>
                         <Button
+                            data-editable-field="primary_cta_text"
                             className="h-10 px-5 rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-slate-950 font-black text-xs shadow-lg shadow-cyan-500/25 gap-1.5 transition-all hover:scale-105"
                         >
-                            <span>S&apos;INSCRIRE MAINTENANT</span>
+                            <span>{(cfg.primary_cta_text || 'S\'INSCRIRE MAINTENANT').toUpperCase()}</span>
                             <span>⭐</span>
                         </Button>
                     </a>

@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
+import type { TemplateCustomConfig } from '@/components/campus/template-customizer-studio';
 
 interface TemplateProps {
     org: any;
@@ -43,6 +44,34 @@ export function TemplateBentoBox({
     const [openAbout, setOpenAbout] = useState<boolean>(true);
     const [openContact, setOpenContact] = useState<boolean>(false);
 
+    const cfg: TemplateCustomConfig = org.template_config || {};
+
+    const brandName = cfg.trainer_name || org.name;
+    const heroHeadline = cfg.trainer_title || org.name;
+    const heroSubtitle = cfg.trainer_subtitle || org.hero_subtitle || org.motto || 'Bienvenue sur le portail officiel';
+    const primaryCta = cfg.primary_cta_text || 'S\'INSCRIRE MAINTENANT';
+    const secondaryCta = cfg.secondary_cta_text || 'Espace élève';
+    const avatarUrl = cfg.hero_image_url || org.logo_url;
+
+    const stat1Val = cfg.stat1_value || String(filieres.length || classrooms.length);
+    const stat1Lbl = cfg.stat1_label || 'Filières';
+    const stat2Val = cfg.stat2_value || (teacherCount > 0 ? `${teacherCount}+` : '15+');
+    const stat2Lbl = cfg.stat2_label || 'Professeurs';
+    const stat3Val = cfg.stat3_value || (studentCount > 0 ? `${studentCount}+` : '500+');
+    const stat3Lbl = cfg.stat3_label || 'Étudiants';
+    const stat4Val = cfg.stat4_value || '98%';
+    const stat4Lbl = cfg.stat4_label || 'Réussite';
+
+    const aboutText = cfg.about_text || org.about_text || `${brandName} s'engage à offrir une formation de référence basée sur l'excellence académique, la rigueur et la préparation aux métiers d'avenir.`;
+    const bookTitle = cfg.book_title || 'Livres, Manuels Scolaires & Polycopiés';
+    const bookDesc = cfg.book_desc || 'Accédez aux ouvrages recommandés par les professeurs, achetez des manuels officiels ou consultez des e-books directement sur la plateforme.';
+    const review1Text = cfg.review1_text || cfg.testimonial_text || 'L\'accès direct aux bulletins, relevés et cours en ligne a grandement facilité mon suivi scolaire.';
+    const review1Author = cfg.review1_author || cfg.testimonial_author || 'Élève en Terminale';
+    const review2Text = cfg.review2_text || 'Encadrement rigoureux et professeurs très disponibles. Très satisfait de l\'institution.';
+    const review2Author = cfg.review2_author || 'Parent d\'élève';
+    const diplomaTitle = cfg.flagship_title || 'Diplômes & Titres Délivrés';
+    const diplomaDesc = cfg.flagship_subtitle || 'Certifié & Reconnu';
+
     const defaultPhotos = [
         'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=800&auto=format&fit=crop&q=80',
         'https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=800&auto=format&fit=crop&q=80',
@@ -66,24 +95,29 @@ export function TemplateBentoBox({
             <header className="relative z-20 max-w-4xl mx-auto px-4 pt-6 pb-4">
                 <div className="flex items-center justify-between p-3.5 px-5 rounded-2xl bg-[#0D131F]/90 backdrop-blur-2xl border border-cyan-500/25 shadow-xl">
                     <div className="flex items-center gap-3">
-                        {org.logo_url ? (
-                            <img src={org.logo_url} alt={org.name} className="w-10 h-10 rounded-xl object-contain bg-white/10 p-1 border border-cyan-400/30 shrink-0" />
+                        {avatarUrl ? (
+                            <img
+                                src={avatarUrl}
+                                alt={brandName}
+                                data-editable-field="hero_image_url"
+                                className="w-10 h-10 rounded-xl object-cover bg-white/10 p-0.5 border border-cyan-400/30 shrink-0"
+                            />
                         ) : (
                             <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-300 font-black shadow-md shrink-0">
                                 <School className="w-5 h-5" />
                             </div>
                         )}
                         <div>
-                            <h2 className="text-sm font-black tracking-wider text-white uppercase truncate max-w-[200px] sm:max-w-none">{org.name}</h2>
+                            <h2 data-editable-field="trainer_name" className="text-sm font-black tracking-wider text-white uppercase truncate max-w-[200px] sm:max-w-none">{brandName}</h2>
                             <p className="text-[10px] text-cyan-400 font-bold uppercase">{org.city || 'Campus Connecté'}</p>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-2">
                         <Link href={orgPath(orgSlug, 'login')}>
-                            <Button size="sm" className="h-9 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-md shadow-cyan-500/20 flex items-center gap-1.5">
+                            <Button data-editable-field="secondary_cta_text" size="sm" className="h-9 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-md shadow-cyan-500/20 flex items-center gap-1.5">
                                 <LogIn className="w-3.5 h-3.5" />
-                                Espace élève
+                                {secondaryCta}
                             </Button>
                         </Link>
                     </div>
@@ -122,8 +156,8 @@ export function TemplateBentoBox({
 
                 {/* ═══ Banner Text ═══ */}
                 <div className="text-center space-y-1">
-                    <p className="text-[11px] font-bold text-cyan-400 uppercase tracking-widest">Bienvenue sur le portail officiel</p>
-                    <h1 className="text-2xl sm:text-4xl font-black text-white uppercase tracking-tight">{org.name}</h1>
+                    <p data-editable-field="trainer_subtitle" className="text-[11px] font-bold text-cyan-400 uppercase tracking-widest">{heroSubtitle}</p>
+                    <h1 data-editable-field="trainer_title" className="text-2xl sm:text-4xl font-black text-white uppercase tracking-tight">{heroHeadline}</h1>
                 </div>
 
                 {/* ═══════════════════════════════════════════════════════════════ */}
@@ -177,12 +211,12 @@ export function TemplateBentoBox({
                             <div className="flex items-center justify-between pb-3 border-b border-white/10">
                                 <div className="flex items-center gap-2">
                                     <Award className="w-5 h-5 text-cyan-400" />
-                                    <h3 className="text-sm font-black uppercase text-cyan-300 tracking-wider">
-                                        Diplômes & Titres Délivrés
+                                    <h3 data-editable-field="flagship_title" className="text-sm font-black uppercase text-cyan-300 tracking-wider">
+                                        {diplomaTitle}
                                     </h3>
                                 </div>
-                                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                                    Certifié & Reconnu
+                                <span data-editable-field="flagship_subtitle" className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                                    {diplomaDesc}
                                 </span>
                             </div>
 
@@ -268,9 +302,9 @@ export function TemplateBentoBox({
                             </div>
 
                             <div className="p-4 rounded-2xl bg-gradient-to-r from-teal-950/40 to-cyan-950/30 border border-teal-500/30 space-y-3">
-                                <h4 className="font-bold text-sm text-white">Livres, Manuels Scolaires & Polycopiés</h4>
-                                <p className="text-xs text-slate-300 leading-relaxed">
-                                    Accédez aux ouvrages recommandés par les professeurs, achetez des manuels officiels ou consultez des e-books directement sur la plateforme.
+                                <h4 data-editable-field="book_title" className="font-bold text-sm text-white">{bookTitle}</h4>
+                                <p data-editable-field="book_desc" className="text-xs text-slate-300 leading-relaxed">
+                                    {bookDesc}
                                 </p>
                                 <div className="flex items-center gap-3 pt-2">
                                     <Link href={orgPath(orgSlug, 'library')}>
@@ -307,20 +341,20 @@ export function TemplateBentoBox({
                             <div className="grid sm:grid-cols-2 gap-3">
                                 <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-1.5">
                                     <div className="flex items-center justify-between">
-                                        <p className="font-bold text-xs text-white">Élève en Terminale</p>
+                                        <p data-editable-field="review1_author" className="font-bold text-xs text-white">{review1Author}</p>
                                         <span className="text-amber-400 text-xs">⭐⭐⭐⭐⭐</span>
                                     </div>
-                                    <p className="text-[11px] text-slate-300 leading-relaxed">
-                                        "L'accès direct aux bulletins, relevés et cours en ligne a grandement facilité mon suivi scolaire."
+                                    <p data-editable-field="review1_text" className="text-[11px] text-slate-300 leading-relaxed">
+                                        "{review1Text}"
                                     </p>
                                 </div>
                                 <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-1.5">
                                     <div className="flex items-center justify-between">
-                                        <p className="font-bold text-xs text-white">Parent d'élève</p>
+                                        <p data-editable-field="review2_author" className="font-bold text-xs text-white">{review2Author}</p>
                                         <span className="text-amber-400 text-xs">⭐⭐⭐⭐⭐</span>
                                     </div>
-                                    <p className="text-[11px] text-slate-300 leading-relaxed">
-                                        "Encadrement rigoureux et professeurs très disponibles. Très satisfait de l'institution."
+                                    <p data-editable-field="review2_text" className="text-[11px] text-slate-300 leading-relaxed">
+                                        "{review2Text}"
                                     </p>
                                 </div>
                             </div>
@@ -335,7 +369,8 @@ export function TemplateBentoBox({
                         className="w-full flex items-center justify-between p-5 text-left font-black text-sm text-white hover:bg-white/5 transition"
                     >
                         <span className="flex items-center gap-2">
-                            <Sparkles className="w-4 h-4 text-cyan-400" /> À PROPOS DE L'ÉTABLISSEMENT
+                            <Sparkles className="w-4 h-4 text-cyan-400" />
+                            <span data-editable-field="about_title">{cfg.about_title || "À PROPOS DE L'ÉTABLISSEMENT"}</span>
                         </span>
                         {openAbout ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
                     </button>
@@ -347,14 +382,14 @@ export function TemplateBentoBox({
                                 exit={{ height: 0, opacity: 0 }}
                                 className="px-5 pb-5 pt-1 text-xs text-slate-300 leading-relaxed border-t border-white/5 space-y-3"
                             >
-                                <p className="whitespace-pre-line">
-                                    {org.about_text || `${org.name} s'engage à offrir une formation de référence basée sur l'excellence académique, la rigueur et la préparation aux métiers d'avenir.`}
+                                <p data-editable-field="about_text" className="whitespace-pre-line">
+                                    {aboutText}
                                 </p>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 text-center">
-                                    <div className="p-2.5 rounded-xl bg-white/5"><p className="text-base font-black text-white">{filieres.length || classrooms.length}</p><p className="text-[10px] text-slate-400">Filières</p></div>
-                                    <div className="p-2.5 rounded-xl bg-white/5"><p className="text-base font-black text-cyan-400">{teacherCount > 0 ? `${teacherCount}+` : '15+'}</p><p className="text-[10px] text-slate-400">Professeurs</p></div>
-                                    <div className="p-2.5 rounded-xl bg-white/5"><p className="text-base font-black text-teal-400">{studentCount > 0 ? `${studentCount}+` : '500+'}</p><p className="text-[10px] text-slate-400">Étudiants</p></div>
-                                    <div className="p-2.5 rounded-xl bg-white/5"><p className="text-base font-black text-amber-400">98%</p><p className="text-[10px] text-slate-400">Réussite</p></div>
+                                    <div data-editable-field="stat1_value" className="p-2.5 rounded-xl bg-white/5"><p className="text-base font-black text-white">{stat1Val}</p><p className="text-[10px] text-slate-400">{stat1Lbl}</p></div>
+                                    <div data-editable-field="stat2_value" className="p-2.5 rounded-xl bg-white/5"><p className="text-base font-black text-cyan-400">{stat2Val}</p><p className="text-[10px] text-slate-400">{stat2Lbl}</p></div>
+                                    <div data-editable-field="stat3_value" className="p-2.5 rounded-xl bg-white/5"><p className="text-base font-black text-teal-400">{stat3Val}</p><p className="text-[10px] text-slate-400">{stat3Lbl}</p></div>
+                                    <div data-editable-field="stat4_value" className="p-2.5 rounded-xl bg-white/5"><p className="text-base font-black text-amber-400">{stat4Val}</p><p className="text-[10px] text-slate-400">{stat4Lbl}</p></div>
                                 </div>
                             </motion.div>
                         )}
@@ -416,9 +451,9 @@ export function TemplateBentoBox({
                         <p className="text-xs font-black text-white uppercase tracking-wide">Commencez votre avenir</p>
                         <p className="text-[10px] text-slate-400">Inscriptions ouvertes pour l'année académique</p>
                     </div>
-                    <Button onClick={onOpenInscription} className="h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-black text-xs shadow-lg shadow-cyan-500/25 gap-2 w-full sm:w-auto justify-center">
+                    <Button data-editable-field="primary_cta_text" onClick={onOpenInscription} className="h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-black text-xs shadow-lg shadow-cyan-500/25 gap-2 w-full sm:w-auto justify-center">
                         <FileText className="w-4 h-4" />
-                        <span>S'INSCRIRE MAINTENANT</span>
+                        <span>{primaryCta}</span>
                         <ArrowRight className="w-4 h-4" />
                     </Button>
                 </div>
