@@ -205,11 +205,38 @@ export function TemplateCustomizerStudio({
     const [viewportMode, setViewportMode] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
     const [zoomLevel, setZoomLevel] = useState<number>(100);
     const [activeSidebarTab, setActiveSidebarTab] = useState<
-        'profile' | 'buttons' | 'media_gallery' | 'flagship' | 'media' | 'stats' | 'testimonials' | 'toggles' | 'navigation'
+        'profile' | 'courses' | 'buttons' | 'media_gallery' | 'flagship' | 'media' | 'stats' | 'testimonials' | 'toggles' | 'navigation'
     >('profile');
 
     const [saving, setSaving] = useState(false);
     const [uploadingField, setUploadingField] = useState<string | null>(null);
+
+    // ── État des Formations Synchronisées avec la table classrooms ──
+    const [liveClassrooms, setLiveClassrooms] = useState<any[]>(classrooms || []);
+    const [deletedClassroomIds, setDeletedClassroomIds] = useState<string[]>([]);
+    const [loadingClassrooms, setLoadingClassrooms] = useState(false);
+
+    useEffect(() => {
+        async function fetchRealClassrooms() {
+            if (!org?.id) return;
+            setLoadingClassrooms(true);
+            try {
+                const { data, error } = await supabase
+                    .from('classrooms')
+                    .select('*')
+                    .eq('organization_id', org.id)
+                    .order('created_at', { ascending: true });
+                if (!error && data) {
+                    setLiveClassrooms(data);
+                }
+            } catch (e) {
+                console.error('Erreur chargement classrooms:', e);
+            } finally {
+                setLoadingClassrooms(false);
+            }
+        }
+        fetchRealClassrooms();
+    }, [org?.id]);
 
     // ── État d'Édition Directe Interactive depuis le Canevas Live ──
     const [directEditField, setDirectEditField] = useState<{
@@ -265,56 +292,7 @@ export function TemplateCustomizerStudio({
 
         // 🎓 Formations & Cursus section par section
         programs_section_title: rawConfig.programs_section_title || rawConfig.flagship_title || 'GET WHAT YOU WANT — LE BESTSELLER',
-        programs_section_badge: rawConfig.programs_section_badge || '3 Cursus Actifs',
-        custom_programs: Array.isArray(rawConfig.custom_programs) && rawConfig.custom_programs.length > 0
-            ? rawConfig.custom_programs
-            : (classrooms && classrooms.length > 0)
-                ? classrooms.map((c: any, i: number) => ({
-                    id: c.id || `cp_${i}`,
-                    nom: c.name,
-                    duree_mois: c.duree_mois ? `${c.duree_mois} mois` : (c.cycle?.split('•')?.[0]?.trim() || '6 mois'),
-                    description: c.description || (c.schedule_config && typeof c.schedule_config === 'object' && c.schedule_config.description) || '',
-                    frais_scolarite: c.frais_scolarite ? `${new Intl.NumberFormat('fr-FR').format(c.frais_scolarite)} FCFA` : (c.cycle?.split('•')?.[1]?.trim() || '90 000 FCFA'),
-                    prix_barre: c.prix_barre ? `${new Intl.NumberFormat('fr-FR').format(c.prix_barre)} FCFA` : null,
-                    promo_badge: c.prix_barre && c.frais_scolarite ? `-${Math.round(((c.prix_barre - c.frais_scolarite) / c.prix_barre) * 100)}%` : null,
-                    certification_label: 'Certification PRO',
-                    cta_text: 'Postuler'
-                }))
-                : [
-                    {
-                        id: '1',
-                        nom: 'Niveau 1 — Fondamentaux & Pratique Professionnelle',
-                        duree_mois: '6 mois',
-                        description: 'Maîtriser les bases et compétences indispensables du métier. Ateliers pratiques et mises en situation concrètes.',
-                        frais_scolarite: '90 000 FCFA',
-                        prix_barre: '150 000 FCFA',
-                        promo_badge: '-40%',
-                        certification_label: 'Certification PRO',
-                        cta_text: 'Postuler'
-                    },
-                    {
-                        id: '2',
-                        nom: 'Niveau 2 — Perfectionnement & Compétences Avancées',
-                        duree_mois: '6 mois',
-                        description: 'Approfondissement technique et méthodologique. Études de cas réels et projets supervisés.',
-                        frais_scolarite: '120 000 FCFA',
-                        prix_barre: '190 000 FCFA',
-                        promo_badge: '-37%',
-                        certification_label: 'Certification PRO',
-                        cta_text: 'Postuler'
-                    },
-                    {
-                        id: '3',
-                        nom: 'Niveau 3 — Expertise, Leadership & Insertion Métier',
-                        duree_mois: '6 mois',
-                        description: 'Maîtrise complète et posture d’expert autonome. Conduite de projets d’envergure et soutenance finale.',
-                        frais_scolarite: '150 000 FCFA',
-                        prix_barre: '250 000 FCFA',
-                        promo_badge: '-40%',
-                        certification_label: 'Certification PRO',
-                        cta_text: 'Postuler'
-                    }
-                ],
+        programs_section_badge: rawConfig.programs_section_badge || 'Cursus Actifs',
 
         // 🏷️ Tarifs & Réductions des Filières
         filiere_discount_pct: rawConfig.filiere_discount_pct || '',
@@ -379,6 +357,101 @@ export function TemplateCustomizerStudio({
         truncate_long_descriptions: rawConfig.truncate_long_descriptions !== false,
     });
 
+    // Helper pour modifier une classe en direct dans le state local
+    const updateLiveClassroom = (idx: number, patch: Record<string, any>) => {
+        setLiveClassrooms(prev => {
+            const next = [...prev];
+            const current = next[idx] || {};
+            const sched = (current.schedule_config && typeof current.schedule_config === 'object') ? current.schedule_config : {};
+            const updatedSched = {
+                ...sched,
+                ...(patch.promo_badge !== undefined ? { promo_badge: patch.promo_badge } : {}),
+                ...(patch.certification_label !== undefined ? { certification_label: patch.certification_label } : {}),
+                ...(patch.cta_text !== undefined ? { cta_text: patch.cta_text } : {}),
+                ...(patch.description !== undefined ? { description: patch.description } : {}),
+                ...(patch.prix_barre !== undefined ? { prix_barre: patch.prix_barre } : {}),
+            };
+            next[idx] = { ...current, ...patch, schedule_config: updatedSched };
+            return next;
+        });
+    };
+
+    const handleAddClassroom = () => {
+        const newIdx = liveClassrooms.length + 1;
+        const newCls = {
+            id: `temp_${Date.now()}`,
+            organization_id: org.id,
+            name: `Nouvelle Formation ${newIdx}`,
+            training_duration: '6 mois',
+            duree_mois: 6,
+            frais_scolarite: 90000,
+            tuition_fee: 90000,
+            prix_barre: 140000,
+            description: 'Programme pratique complet avec ateliers et suivi personnalisé.',
+            schedule_config: {
+                promo_badge: '-35%',
+                certification_label: 'Certification PRO',
+                cta_text: 'Postuler',
+                description: 'Programme pratique complet avec ateliers et suivi personnalisé.',
+                prix_barre: 140000
+            },
+            is_active: true
+        };
+        setLiveClassrooms(prev => [...prev, newCls]);
+        toast.success('✨ Nouvelle formation ajoutée ! Elle sera synchronisée à la publication.');
+    };
+
+    const handleDeleteClassroom = (idx: number) => {
+        const target = liveClassrooms[idx];
+        if (!target) return;
+        if (!confirm(`Supprimer la formation "${target.name || 'cette formation'}" ? Elle sera également supprimée de la base de données après enregistrement.`)) return;
+        if (target.id && !String(target.id).startsWith('temp_')) {
+            setDeletedClassroomIds(prev => [...prev, String(target.id)]);
+        }
+        setLiveClassrooms(prev => prev.filter((_, i) => i !== idx));
+        toast.info('Formation retirée');
+    };
+
+    // Accès universel aux champs pour l'édition rapide et les cartes
+    const getFieldValue = (key: string): string => {
+        if (key.startsWith('program_')) {
+            const parts = key.split('_');
+            const idx = parseInt(parts[1], 10);
+            const prop = parts.slice(2).join('_');
+            const cls = liveClassrooms[idx];
+            if (!cls) return '';
+            const sched = (cls.schedule_config && typeof cls.schedule_config === 'object') ? cls.schedule_config : {};
+            if (prop === 'nom') return cls.name || '';
+            if (prop === 'duree') return cls.training_duration || (cls.duree_mois ? `${cls.duree_mois} mois` : '');
+            if (prop === 'frais_scolarite') return cls.frais_scolarite !== undefined ? String(cls.frais_scolarite) : (cls.tuition_fee !== undefined ? String(cls.tuition_fee) : '');
+            if (prop === 'prix_barre') return cls.prix_barre !== undefined ? String(cls.prix_barre) : (sched.prix_barre !== undefined ? String(sched.prix_barre) : '');
+            if (prop === 'promo') return sched.promo_badge || '';
+            if (prop === 'description') return cls.description || '';
+            if (prop === 'certification') return sched.certification_label || 'Certification PRO';
+            if (prop === 'cta') return sched.cta_text || 'Postuler';
+            return '';
+        }
+        return (form as any)[key] || '';
+    };
+
+    const setFieldValue = (key: string, value: string) => {
+        if (key.startsWith('program_')) {
+            const parts = key.split('_');
+            const idx = parseInt(parts[1], 10);
+            const prop = parts.slice(2).join('_');
+            if (prop === 'nom') updateLiveClassroom(idx, { name: value });
+            else if (prop === 'duree') updateLiveClassroom(idx, { training_duration: value });
+            else if (prop === 'frais_scolarite') updateLiveClassroom(idx, { frais_scolarite: value });
+            else if (prop === 'prix_barre') updateLiveClassroom(idx, { prix_barre: value });
+            else if (prop === 'promo') updateLiveClassroom(idx, { promo_badge: value });
+            else if (prop === 'description') updateLiveClassroom(idx, { description: value });
+            else if (prop === 'certification') updateLiveClassroom(idx, { certification_label: value });
+            else if (prop === 'cta') updateLiveClassroom(idx, { cta_text: value });
+            return;
+        }
+        setForm(prev => ({ ...prev, [key]: value }));
+    };
+
     // Live Org synthétique pour réactivité instantanée dans le Canvas
     const liveOrg = {
         ...org,
@@ -387,7 +460,7 @@ export function TemplateCustomizerStudio({
         hero_subtitle: cleanMotto(form.trainer_subtitle || org.hero_subtitle),
         about_text: form.trainer_bio || org.about_text,
         hero_image_url: form.trainer_photo_url || org.hero_image_url,
-        template_config: form,
+        template_config: { ...form, custom_programs: undefined },
         landing_layout: selectedLayoutId,
     };
 
@@ -670,9 +743,98 @@ export function TemplateCustomizerStudio({
     const handleSaveAndPublish = async () => {
         setSaving(true);
         try {
-            // Sauvegarde infaillible (Supabase direct + fallback Cloudflare Worker Service Role)
+            // 1. Sauvegarde et synchronisation réelle de chaque classe dans public.classrooms
+            for (const cls of liveClassrooms) {
+                const priceNum = typeof cls.frais_scolarite === 'number'
+                    ? cls.frais_scolarite
+                    : (parseInt(String(cls.frais_scolarite || cls.tuition_fee || '').replace(/[^0-9]/g, ''), 10) || 0);
+
+                const origPriceNum = cls.prix_barre
+                    ? (typeof cls.prix_barre === 'number' ? cls.prix_barre : (parseInt(String(cls.prix_barre).replace(/[^0-9]/g, ''), 10) || null))
+                    : null;
+
+                const durNum = typeof cls.duree_mois === 'number'
+                    ? cls.duree_mois
+                    : (parseInt(String(cls.duree_mois || cls.training_duration || '').replace(/[^0-9]/g, ''), 10) || 6);
+
+                const durText = cls.training_duration || `${durNum} mois`;
+                const cycleText = `${durText} • ${priceNum ? `${new Intl.NumberFormat('fr-FR').format(priceNum)} FCFA` : 'Tarif sur demande'}`;
+
+                const sched = (cls.schedule_config && typeof cls.schedule_config === 'object') ? cls.schedule_config : {};
+                const finalSched = {
+                    ...sched,
+                    description: cls.description || '',
+                    prix_barre: origPriceNum,
+                    original_price: origPriceNum ? `${origPriceNum} FCFA` : null,
+                    duration_text: durText,
+                    promo_badge: sched.promo_badge || null,
+                    certification_label: sched.certification_label || 'Certification PRO',
+                    cta_text: sched.cta_text || 'Postuler'
+                };
+
+                // Si c'est une nouvelle classe créée dans le Studio
+                if (String(cls.id).startsWith('temp_')) {
+                    const { data: insData, error: insErr } = await supabase.from('classrooms').insert({
+                        organization_id: org.id,
+                        name: (cls.name || 'Nouvelle Formation').trim(),
+                        cycle: cycleText,
+                        level: 1,
+                        capacity: 100,
+                        tuition_fee: priceNum,
+                        frais_scolarite: priceNum,
+                        training_duration: durText,
+                        duree_mois: durNum,
+                        description: cls.description || null,
+                        prix_barre: origPriceNum,
+                        schedule_config: finalSched,
+                        competencies_list: cls.description ? cls.description.split(/\r?\n/).filter(Boolean) : []
+                    }).select().single();
+
+                    if (insErr) {
+                        console.warn('Tentative RPC create_classroom_secure pour:', cls.name);
+                        await (supabase.rpc as any)('create_classroom_secure', {
+                            p_org_id: org.id,
+                            p_name: (cls.name || 'Nouvelle Formation').trim(),
+                            p_cycle: cycleText,
+                            p_level: 1,
+                            p_capacity: 100,
+                            p_tuition_fee: priceNum,
+                            p_training_duration: durText,
+                            p_description: cls.description || null,
+                            p_prix_barre: origPriceNum,
+                            p_schedule_config: finalSched,
+                            p_competencies_list: cls.description ? cls.description.split(/\r?\n/).filter(Boolean) : []
+                        });
+                    }
+                } else {
+                    // C'est une classe existante dans classrooms -> UPDATE
+                    await supabase.from('classrooms').update({
+                        name: (cls.name || 'Formation').trim(),
+                        cycle: cycleText,
+                        tuition_fee: priceNum,
+                        frais_scolarite: priceNum,
+                        training_duration: durText,
+                        duree_mois: durNum,
+                        description: cls.description || null,
+                        prix_barre: origPriceNum,
+                        schedule_config: finalSched,
+                        competencies_list: cls.description ? cls.description.split(/\r?\n/).filter(Boolean) : []
+                    }).eq('id', cls.id);
+                }
+            }
+
+            // Supprimer les classes supprimées dans le Studio
+            if (deletedClassroomIds.length > 0) {
+                await supabase.from('classrooms').delete().in('id', deletedClassroomIds);
+            }
+
+            // 2. Nettoyer template_config : supprimer custom_programs déconnecté
+            const cleanConfig = { ...form };
+            delete (cleanConfig as any).custom_programs;
+
+            // 3. Sauvegarde infaillible (Supabase direct + fallback Cloudflare Worker Service Role)
             const res = await saveOrgStyle(org.id, org.slug || orgSlug, {
-                template_config: form,
+                template_config: cleanConfig,
                 landing_layout: selectedLayoutId,
                 gallery_images: form.gallery_images || org.gallery_images,
                 motto: form.trainer_title || org.motto,
@@ -683,7 +845,7 @@ export function TemplateCustomizerStudio({
 
             const updatedOrg = res.org || {
                 ...org,
-                template_config: form,
+                template_config: cleanConfig,
                 landing_layout: selectedLayoutId,
                 gallery_images: form.gallery_images || org.gallery_images,
                 motto: cleanMotto(form.trainer_title || org.motto),
@@ -693,7 +855,7 @@ export function TemplateCustomizerStudio({
             };
 
             onSaveSuccess(updatedOrg);
-            toast.success('🚀 Page d\'accueil personnalisée et enregistrée avec succès !');
+            toast.success('🚀 Page d\'accueil et Formations synchronisées et enregistrées avec succès !');
         } catch (e: any) {
             toast.error(e.message || 'Erreur lors de l\'enregistrement');
         } finally {
@@ -841,7 +1003,7 @@ export function TemplateCustomizerStudio({
         const props = {
             org: liveOrg,
             orgSlug,
-            classrooms,
+            classrooms: liveClassrooms,
             filieres,
             teacherCount,
             studentCount,
@@ -1370,32 +1532,16 @@ export function TemplateCustomizerStudio({
                                     </div>
                                 </div>
 
-                                {/* Liste des Cartes de Formation */}
+                                {/* Liste des Cartes de Formation Synchronisées */}
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between">
-                                        <h4 className="text-xs font-black text-white uppercase tracking-wider">
-                                            Cartes de Formations ({form.custom_programs?.length || 0})
+                                        <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                                            <span>Cartes de Formations ({liveClassrooms.length})</span>
+                                            {loadingClassrooms && <Loader2 className="w-3 h-3 animate-spin text-amber-400" />}
                                         </h4>
                                         <Button
                                             size="sm"
-                                            onClick={() => {
-                                                const newProg = {
-                                                    id: `cp_${Date.now()}`,
-                                                    nom: `Nouveau Cursus ${(form.custom_programs?.length || 0) + 1}`,
-                                                    duree_mois: '6 mois',
-                                                    frais_scolarite: '100 000 FCFA',
-                                                    prix_barre: '150 000 FCFA',
-                                                    promo_badge: '-33%',
-                                                    description: 'Description du programme et compétences clés acquises.',
-                                                    certification_label: 'Certification PRO',
-                                                    cta_text: 'Postuler'
-                                                };
-                                                setForm(prev => ({
-                                                    ...prev,
-                                                    custom_programs: [...(prev.custom_programs || []), newProg]
-                                                }));
-                                                toast.success('Nouvelle carte de formation ajoutée !');
-                                            }}
+                                            onClick={handleAddClassroom}
                                             className="bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl h-8 px-3 cursor-pointer"
                                         >
                                             <Plus className="w-3.5 h-3.5 mr-1" />
@@ -1403,161 +1549,149 @@ export function TemplateCustomizerStudio({
                                         </Button>
                                     </div>
 
-                                    {(form.custom_programs || []).map((prog: any, idx: number) => (
-                                        <div
-                                            key={prog.id || idx}
-                                            id={`studio_card_program_${idx}`}
-                                            className="p-4 rounded-2xl bg-[#0E131F] border border-white/10 hover:border-amber-500/30 transition space-y-3"
-                                        >
-                                            <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                                                <span className="text-xs font-black text-amber-400 flex items-center gap-1.5">
-                                                    <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 flex items-center justify-center text-[10px]">
-                                                        {idx + 1}
-                                                    </span>
-                                                    Carte {idx + 1} : {prog.nom}
-                                                </span>
-                                                {(form.custom_programs || []).length > 1 && (
-                                                    <button
-                                                        onClick={() => {
-                                                            setForm(prev => ({
-                                                                ...prev,
-                                                                custom_programs: (prev.custom_programs || []).filter((_, i) => i !== idx)
-                                                            }));
-                                                            toast.info('Formation retirée');
-                                                        }}
-                                                        className="text-red-400 hover:text-red-300 text-xs p-1 cursor-pointer"
-                                                        title="Supprimer cette formation"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                )}
-                                            </div>
-
-                                            <div>
-                                                <label className="text-[11px] font-bold text-slate-300 block mb-1">Intitulé / Nom de la formation</label>
-                                                <Input
-                                                    id={`studio_field_program_${idx}_nom`}
-                                                    value={prog.nom || ''}
-                                                    onChange={e => {
-                                                        const updated = [...(form.custom_programs || [])];
-                                                        updated[idx] = { ...updated[idx], nom: e.target.value };
-                                                        setForm({ ...form, custom_programs: updated });
-                                                    }}
-                                                    placeholder="Ex: Niveau 1 — Fondamentaux & Pratique"
-                                                    className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs ${activeHighlightedField === `program_${idx}_nom` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
-                                                />
-                                            </div>
-
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div>
-                                                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Durée / Format affiché</label>
-                                                    <Input
-                                                        id={`studio_field_program_${idx}_duree`}
-                                                        value={prog.duree_mois || ''}
-                                                        onChange={e => {
-                                                            const updated = [...(form.custom_programs || [])];
-                                                            updated[idx] = { ...updated[idx], duree_mois: e.target.value };
-                                                            setForm({ ...form, custom_programs: updated });
-                                                        }}
-                                                        placeholder="Ex: 6 mois, 12 semaines"
-                                                        className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs ${activeHighlightedField === `program_${idx}_duree` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Badge Réduction (Optionnel)</label>
-                                                    <Input
-                                                        id={`studio_field_program_${idx}_promo`}
-                                                        value={prog.promo_badge || ''}
-                                                        onChange={e => {
-                                                            const updated = [...(form.custom_programs || [])];
-                                                            updated[idx] = { ...updated[idx], promo_badge: e.target.value };
-                                                            setForm({ ...form, custom_programs: updated });
-                                                        }}
-                                                        placeholder="Ex: -40%, Spécial"
-                                                        className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs ${activeHighlightedField === `program_${idx}_promo` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div>
-                                                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Prix Officiel (Vente)</label>
-                                                    <Input
-                                                        id={`studio_field_program_${idx}_frais_scolarite`}
-                                                        value={prog.frais_scolarite || ''}
-                                                        onChange={e => {
-                                                            const updated = [...(form.custom_programs || [])];
-                                                            updated[idx] = { ...updated[idx], frais_scolarite: e.target.value };
-                                                            setForm({ ...form, custom_programs: updated });
-                                                        }}
-                                                        placeholder="Ex: 90 000 FCFA"
-                                                        className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs font-mono ${activeHighlightedField === `program_${idx}_frais_scolarite` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Prix Initial Barré</label>
-                                                    <Input
-                                                        id={`studio_field_program_${idx}_prix_barre`}
-                                                        value={prog.prix_barre || ''}
-                                                        onChange={e => {
-                                                            const updated = [...(form.custom_programs || [])];
-                                                            updated[idx] = { ...updated[idx], prix_barre: e.target.value };
-                                                            setForm({ ...form, custom_programs: updated });
-                                                        }}
-                                                        placeholder="Ex: 150 000 FCFA"
-                                                        className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs font-mono ${activeHighlightedField === `program_${idx}_prix_barre` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <div>
-                                                <label className="text-[11px] font-bold text-slate-300 block mb-1">Résumé / Description de la formation</label>
-                                                <Textarea
-                                                    id={`studio_field_program_${idx}_description`}
-                                                    value={prog.description || ''}
-                                                    onChange={e => {
-                                                        const updated = [...(form.custom_programs || [])];
-                                                        updated[idx] = { ...updated[idx], description: e.target.value };
-                                                        setForm({ ...form, custom_programs: updated });
-                                                    }}
-                                                    rows={3}
-                                                    placeholder="Décrivez les objectifs et compétences clés..."
-                                                    className={`bg-white/5 border-white/10 text-white rounded-xl text-xs resize-none ${activeHighlightedField === `program_${idx}_description` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
-                                                />
-                                            </div>
-
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div>
-                                                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Mention Bas de Carte</label>
-                                                    <Input
-                                                        id={`studio_field_program_${idx}_certification`}
-                                                        value={prog.certification_label || ''}
-                                                        onChange={e => {
-                                                            const updated = [...(form.custom_programs || [])];
-                                                            updated[idx] = { ...updated[idx], certification_label: e.target.value };
-                                                            setForm({ ...form, custom_programs: updated });
-                                                        }}
-                                                        placeholder="Ex: Certification PRO"
-                                                        className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs ${activeHighlightedField === `program_${idx}_certification` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Bouton d'Action</label>
-                                                    <Input
-                                                        id={`studio_field_program_${idx}_cta`}
-                                                        value={prog.cta_text || ''}
-                                                        onChange={e => {
-                                                            const updated = [...(form.custom_programs || [])];
-                                                            updated[idx] = { ...updated[idx], cta_text: e.target.value };
-                                                            setForm({ ...form, custom_programs: updated });
-                                                        }}
-                                                        placeholder="Ex: Postuler"
-                                                        className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs ${activeHighlightedField === `program_${idx}_cta` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
-                                                    />
-                                                </div>
-                                            </div>
+                                    {liveClassrooms.length === 0 ? (
+                                        <div className="p-6 rounded-2xl bg-white/[0.02] border border-dashed border-white/10 text-center space-y-3">
+                                            <BookOpen className="w-8 h-8 text-amber-400/60 mx-auto" />
+                                            <p className="text-xs text-slate-300 font-bold">Aucune formation enregistrée pour le moment</p>
+                                            <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+                                                Ajoutez votre première formation ici. Elle sera créée et synchronisée directement dans la base de données à l'enregistrement.
+                                            </p>
+                                            <Button
+                                                size="sm"
+                                                onClick={handleAddClassroom}
+                                                className="bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl h-8 px-4 cursor-pointer"
+                                            >
+                                                <Plus className="w-3.5 h-3.5 mr-1" />
+                                                Ajouter ma première formation
+                                            </Button>
                                         </div>
-                                    ))}
+                                    ) : (
+                                        liveClassrooms.map((cls: any, idx: number) => {
+                                            const sched = (cls.schedule_config && typeof cls.schedule_config === 'object') ? cls.schedule_config : {};
+                                            const promoBadge = sched.promo_badge || '';
+                                            const certLabel = sched.certification_label || 'Certification PRO';
+                                            const ctaText = sched.cta_text || 'Postuler';
+                                            const priceVal = cls.frais_scolarite ?? cls.tuition_fee ?? '';
+                                            const origPriceVal = cls.prix_barre ?? sched.prix_barre ?? '';
+                                            const durationVal = cls.training_duration || (cls.duree_mois ? `${cls.duree_mois} mois` : '');
+
+                                            return (
+                                                <div
+                                                    key={cls.id || idx}
+                                                    id={`studio_card_program_${idx}`}
+                                                    className="p-4 rounded-2xl bg-[#0E131F] border border-white/10 hover:border-amber-500/30 transition space-y-3"
+                                                >
+                                                    <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                                                        <span className="text-xs font-black text-amber-400 flex items-center gap-1.5">
+                                                            <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 flex items-center justify-center text-[10px]">
+                                                                {idx + 1}
+                                                            </span>
+                                                            Carte {idx + 1} : {cls.name || 'Formation'}
+                                                        </span>
+                                                        <button
+                                                            onClick={() => handleDeleteClassroom(idx)}
+                                                            className="text-red-400 hover:text-red-300 text-xs p-1 cursor-pointer transition-colors"
+                                                            title="Supprimer cette formation"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="text-[11px] font-bold text-slate-300 block mb-1">Intitulé / Nom de la formation</label>
+                                                        <Input
+                                                            id={`studio_field_program_${idx}_nom`}
+                                                            value={cls.name || ''}
+                                                            onChange={e => updateLiveClassroom(idx, { name: e.target.value })}
+                                                            placeholder="Ex: Niveau 1 — Fondamentaux & Pratique"
+                                                            className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs ${activeHighlightedField === `program_${idx}_nom` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
+                                                        />
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <label className="text-[11px] font-bold text-slate-300 block mb-1">Durée / Format affiché</label>
+                                                            <Input
+                                                                id={`studio_field_program_${idx}_duree`}
+                                                                value={durationVal}
+                                                                onChange={e => updateLiveClassroom(idx, { training_duration: e.target.value })}
+                                                                placeholder="Ex: 6 mois, 12 semaines"
+                                                                className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs ${activeHighlightedField === `program_${idx}_duree` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-[11px] font-bold text-slate-300 block mb-1">Badge Réduction (Optionnel)</label>
+                                                            <Input
+                                                                id={`studio_field_program_${idx}_promo`}
+                                                                value={promoBadge}
+                                                                onChange={e => updateLiveClassroom(idx, { promo_badge: e.target.value })}
+                                                                placeholder="Ex: -40%, Spécial"
+                                                                className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs ${activeHighlightedField === `program_${idx}_promo` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <label className="text-[11px] font-bold text-slate-300 block mb-1">Prix Officiel (Vente)</label>
+                                                            <Input
+                                                                id={`studio_field_program_${idx}_frais_scolarite`}
+                                                                value={priceVal}
+                                                                onChange={e => updateLiveClassroom(idx, { frais_scolarite: e.target.value })}
+                                                                placeholder="Ex: 90 000 FCFA"
+                                                                className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs font-mono ${activeHighlightedField === `program_${idx}_frais_scolarite` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-[11px] font-bold text-slate-300 block mb-1">Prix Initial Barré</label>
+                                                            <Input
+                                                                id={`studio_field_program_${idx}_prix_barre`}
+                                                                value={origPriceVal}
+                                                                onChange={e => updateLiveClassroom(idx, { prix_barre: e.target.value })}
+                                                                placeholder="Ex: 150 000 FCFA"
+                                                                className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs font-mono ${activeHighlightedField === `program_${idx}_prix_barre` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="text-[11px] font-bold text-slate-300 block mb-1">Résumé / Description de la formation</label>
+                                                        <Textarea
+                                                            id={`studio_field_program_${idx}_description`}
+                                                            value={cls.description || ''}
+                                                            onChange={e => updateLiveClassroom(idx, { description: e.target.value })}
+                                                            rows={3}
+                                                            placeholder="Décrivez les objectifs et compétences clés..."
+                                                            className={`bg-white/5 border-white/10 text-white rounded-xl text-xs resize-none ${activeHighlightedField === `program_${idx}_description` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
+                                                        />
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <label className="text-[11px] font-bold text-slate-300 block mb-1">Mention Bas de Carte</label>
+                                                            <Input
+                                                                id={`studio_field_program_${idx}_certification`}
+                                                                value={certLabel}
+                                                                onChange={e => updateLiveClassroom(idx, { certification_label: e.target.value })}
+                                                                placeholder="Ex: Certification PRO"
+                                                                className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs ${activeHighlightedField === `program_${idx}_certification` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-[11px] font-bold text-slate-300 block mb-1">Bouton d'Action</label>
+                                                            <Input
+                                                                id={`studio_field_program_${idx}_cta`}
+                                                                value={ctaText}
+                                                                onChange={e => updateLiveClassroom(idx, { cta_text: e.target.value })}
+                                                                placeholder="Ex: Postuler"
+                                                                className={`bg-white/5 border-white/10 text-white rounded-xl h-9 text-xs ${activeHighlightedField === `program_${idx}_cta` ? 'ring-2 ring-amber-400 bg-amber-500/15' : ''}`}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -2623,16 +2757,16 @@ export function TemplateCustomizerStudio({
                                         </div>
                                     ) : directEditField.isMultiline ? (
                                         <Textarea
-                                            value={(form as any)[directEditField.key] || ''}
-                                            onChange={e => setForm(prev => ({ ...prev, [directEditField.key]: e.target.value }))}
+                                            value={getFieldValue(directEditField.key)}
+                                            onChange={e => setFieldValue(directEditField.key, e.target.value)}
                                             className="bg-black/70 border-amber-500/40 text-white rounded-xl min-h-[75px] text-xs focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
                                             placeholder={`Modifier ${directEditField.label}...`}
                                             autoFocus
                                         />
                                     ) : (
                                         <Input
-                                            value={(form as any)[directEditField.key] || ''}
-                                            onChange={e => setForm(prev => ({ ...prev, [directEditField.key]: e.target.value }))}
+                                            value={getFieldValue(directEditField.key)}
+                                            onChange={e => setFieldValue(directEditField.key, e.target.value)}
                                             className="bg-black/70 border-amber-500/40 text-white rounded-xl h-10 text-xs focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
                                             placeholder={`Modifier ${directEditField.label}...`}
                                             autoFocus

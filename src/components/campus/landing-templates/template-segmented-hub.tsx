@@ -116,38 +116,8 @@ export function TemplateSegmentedHub({
         setLightboxIdx(i => (i !== null && i > 0 ? i - 1 : galleryImages.length - 1));
     };
 
-    // Construction et enrichissement des cartes de formations / filières
-    // 0. Si des cursus personnalisés ont été saisis directement dans le Studio
-    const programCards = (cfg.custom_programs && Array.isArray(cfg.custom_programs) && cfg.custom_programs.length > 0)
-        ? cfg.custom_programs.map((cp: any, i: number) => {
-                const priceNum = typeof cp.frais_scolarite === 'number'
-                    ? cp.frais_scolarite
-                    : (parseInt(String(cp.frais_scolarite || '').replace(/[^0-9]/g, ''), 10) || 0);
-                const origPrice = cp.prix_barre || cp.original_price || null;
-                const durNum = typeof cp.duree_mois === 'number'
-                    ? cp.duree_mois
-                    : (parseInt(String(cp.duree_mois || '').replace(/[^0-9]/g, ''), 10) || 6);
-
-                return {
-                    id: cp.id || `cp_${i}`,
-                    nom: cp.nom || cp.title || `Programme ${i + 1}`,
-                    code: cp.code || `PRO-${i + 1}`,
-                    duree_mois: durNum,
-                    duree_texte: typeof cp.duree_mois === 'string' && cp.duree_mois.includes(' ') ? cp.duree_mois : `${durNum} mois`,
-                    description: cp.description || '',
-                    frais_scolarite: priceNum,
-                    frais_inscription: Number(cp.frais_inscription || 0),
-                    prix_barre: origPrice,
-                    promo_badge: cp.promo_badge || null,
-                    certification_label: cp.certification_label || 'Certification PRO',
-                    cta_text: cp.cta_text || 'Postuler',
-                    echeances: cp.echeances || [],
-                    category: cp.category || 'Formation Certifiante',
-                    icon: i % 2 === 0 ? Briefcase : Cpu,
-                    rawItem: cp,
-                };
-            })
-        : (filieres && filieres.length > 0)
+    // Construction et enrichissement des cartes de formations / filières (SOURCE UNIQUE DE VÉRITÉ : BASE DE DONNÉES)
+    const programCards = (filieres && filieres.length > 0)
         ? filieres.map((f: any, i: number) => ({
             id: f.id,
             nom: f.nom,
@@ -158,8 +128,8 @@ export function TemplateSegmentedHub({
             frais_scolarite: Number(f.frais_scolarite || 0),
             frais_inscription: Number(f.frais_inscription || 0),
             prix_barre: f.prix_barre || null,
-            certification_label: 'Certification PRO',
-            cta_text: 'Postuler',
+            certification_label: f.certification_label || 'Certification PRO',
+            cta_text: f.cta_text || 'Postuler',
             echeances: f.echeances || [],
             category: 'Filière Spécialisée',
             icon: Briefcase,
@@ -168,8 +138,9 @@ export function TemplateSegmentedHub({
         : (classrooms && classrooms.length > 0)
             ? classrooms.map((c: any, i: number) => {
                 // 1. Description réelle de la formation
+                const sched = (c.schedule_config && typeof c.schedule_config === 'object') ? c.schedule_config : {};
                 const desc = c.description
-                    || (c.schedule_config && typeof c.schedule_config === 'object' && c.schedule_config.description)
+                    || sched.description
                     || (Array.isArray(c.competencies_list) && c.competencies_list.length > 0 ? c.competencies_list.join('\n') : '')
                     || (typeof c.competencies_list === 'string' && c.competencies_list)
                     || `Programme complet dispensé par ${org.name}. Apprentissage structuré avec ateliers pratiques et suivi personnalisé.`;
@@ -185,32 +156,34 @@ export function TemplateSegmentedHub({
 
                 // 3. Prix initial barré / Promotion
                 const prixBarre = c.prix_barre
-                    || (c.schedule_config && typeof c.schedule_config === 'object' && (c.schedule_config.prix_barre || c.schedule_config.original_price))
+                    || sched.prix_barre
+                    || (sched.original_price ? parseInt(String(sched.original_price).replace(/[^0-9]/g, ''), 10) : null)
                     || null;
 
                 // 4. Frais d'inscription
                 const regFee = Number(c.frais_inscription || c.registration_fee || 0);
 
-                // 5. Durée en mois
+                // 5. Durée en mois & texte
                 let durationMonths: number | null = c.duree_mois || null;
-                let durationText = '6 mois';
-                if (!durationMonths && c.training_duration) {
-                    durationText = c.training_duration;
-                    const m = String(c.training_duration).match(/(\d+)\s*mois/i);
+                let durationText = c.training_duration || sched.duration_text || '';
+                if (!durationText && c.cycle) {
+                    durationText = c.cycle.split('•')?.[0]?.trim() || '';
+                }
+                if (!durationMonths && durationText) {
+                    const m = String(durationText).match(/(\d+)\s*mois/i);
                     if (m) durationMonths = parseInt(m[1], 10);
                 }
-                if (!durationMonths && c.cycle) {
-                    durationText = c.cycle.split('•')?.[0]?.trim() || c.cycle;
-                    const m = String(c.cycle).match(/(\d+)\s*mois/i);
-                    if (m) durationMonths = parseInt(m[1], 10);
-                    else if (String(c.cycle).toLowerCase().includes('semaine')) durationMonths = 1;
-                    else if (String(c.cycle).toLowerCase().includes('an')) durationMonths = 12;
-                }
-                if (!durationMonths) durationMonths = c.academic_year ? 12 : 6;
-                if (!durationText || durationText.includes('•')) durationText = `${durationMonths} mois`;
+                if (!durationMonths) durationMonths = 6;
+                if (!durationText) durationText = `${durationMonths} mois`;
+
+                // 6. Badges & CTA
+                const promoBadge = sched.promo_badge
+                    || (prixBarre && priceNum && prixBarre > priceNum ? `-${Math.round(((prixBarre - priceNum) / prixBarre) * 100)}%` : null);
+                const certificationLabel = sched.certification_label || 'Certification PRO';
+                const ctaText = sched.cta_text || 'Postuler';
 
                 return {
-                    id: c.id || `c_${i}`,
+                    id: c.id,
                     nom: c.name,
                     code: c.code || `PRO-${i + 1}`,
                     duree_mois: durationMonths,
@@ -219,69 +192,16 @@ export function TemplateSegmentedHub({
                     frais_scolarite: priceNum,
                     frais_inscription: regFee,
                     prix_barre: prixBarre,
-                    certification_label: 'Certification PRO',
-                    cta_text: 'Postuler',
-                    echeances: c.echeances || [],
+                    promo_badge: promoBadge,
+                    certification_label: certificationLabel,
+                    cta_text: ctaText,
+                    echeances: c.echeances || sched.echeances || [],
                     category: c.cycle?.split('•')?.[0]?.trim() || (c.level ? `Niveau ${c.level}` : 'Formation Certifiante'),
                     icon: i % 2 === 0 ? Briefcase : Cpu,
                     rawItem: c,
                 };
             })
-            : [
-                // Fallback universel neutre (100% personnalisable via Studio)
-                {
-                    id: '1',
-                    nom: `Niveau 1 — Fondamentaux & Pratique Professionnelle`,
-                    code: 'NIV-1',
-                    duree_mois: 6,
-                    duree_texte: '6 mois',
-                    description: `Maîtriser les bases et compétences indispensables du métier. Ateliers pratiques et mises en situation concrètes. Accompagnement par des formateurs certifiés.`,
-                    frais_scolarite: 90000,
-                    frais_inscription: 15000,
-                    prix_barre: 150000,
-                    promo_badge: '-40%',
-                    certification_label: 'Certification PRO',
-                    cta_text: 'Postuler',
-                    echeances: [
-                        { tranche: 1, nom: '1ère tranche (Acompte)', montant: 40000 },
-                        { tranche: 2, nom: '2ème tranche', montant: 25000 },
-                        { tranche: 3, nom: '3ème tranche', montant: 25000 }
-                    ],
-                    category: 'Formation Certifiante',
-                    icon: Briefcase
-                },
-                {
-                    id: '2',
-                    nom: `Niveau 2 — Perfectionnement & Compétences Avancées`,
-                    code: 'NIV-2',
-                    duree_mois: 6,
-                    duree_texte: '6 mois',
-                    description: `Approfondissement technique et méthodologique. Études de cas réels et projets supervisés. Perfectionnement des outils professionnels.`,
-                    frais_scolarite: 120000,
-                    frais_inscription: 15000,
-                    prix_barre: 190000,
-                    promo_badge: '-37%',
-                    certification_label: 'Certification PRO',
-                    cta_text: 'Postuler',
-                    echeances: [],
-                    category: 'Perfectionnement Pro',
-                    icon: Cpu
-                },
-                {
-                    id: '3',
-                    nom: `Niveau 3 — Expertise, Leadership & Insertion Métier`,
-                    code: 'NIV-3',
-                    duree_mois: 6,
-                    duree_texte: '6 mois',
-                    description: `Maîtrise complète et posture d'expert autonome. Conduite de projets d'envergure et soutenance finale. Stratégies de valorisation et réseau d'alumni.`,
-                    frais_scolarite: 150000,
-                    frais_inscription: 20000,
-                    prix_barre: 250000,
-                    promo_badge: '-40%',
-                    certification_label: 'Certification PRO',
-                    cta_text: 'Postuler',
-                    echeances: [],
-                    category: 'Mastery & Carrière',
+            : [];
                     icon: Award
                 },
             ];
@@ -834,8 +754,17 @@ export function TemplateSegmentedHub({
                             </span>
                         </div>
 
-                        <div className="grid sm:grid-cols-2 gap-4">
-                            {programCards.map((p: any, idx: number) => {
+                        {programCards.length === 0 ? (
+                            <div className="p-8 rounded-3xl bg-[#06180F]/60 border border-white/10 text-center space-y-3">
+                                <BookOpen className="w-8 h-8 text-amber-400 mx-auto" />
+                                <h4 className="text-white font-bold text-sm">Formations bientôt ouvertes</h4>
+                                <p className="text-slate-400 text-xs max-w-sm mx-auto">
+                                    Les inscriptions pour la prochaine promotion seront bientôt disponibles.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="grid sm:grid-cols-2 gap-4">
+                                {programCards.map((p: any, idx: number) => {
                                 const pricing = getProgramPricing(p);
                                 const isSelected = selectedProgramIdx === idx;
 
@@ -924,6 +853,7 @@ export function TemplateSegmentedHub({
                                 );
                             })}
                         </div>
+                    )}
                     </div>
 
                     {/* RIGHT (Col 5): ABOUT US ACCORDIONS */}
