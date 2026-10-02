@@ -13,6 +13,7 @@ import { orgPath } from '@/lib/custom-domain';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-modal';
 import { cleanMotto } from '@/lib/clean-motto';
 import { cn } from '@/lib/utils';
+import { getNormalizedPrograms, getNormalizedTestimonials, getNormalizedStats } from './template-data-adapter';
 
 interface TemplateProps {
     org: any;
@@ -71,20 +72,9 @@ export function TemplateProductMastery({
         }
     };
 
-    const programs = filieres?.length > 0 ? filieres
-        : classrooms?.length > 0 ? classrooms.map((c, i) => ({
-            id: c.id || `c_${i}`,
-            nom: c.name,
-            category: i % 3 === 0 ? 'UI / UX Design' : i % 3 === 1 ? 'Web & Mobile' : 'Product Strategy',
-            description: `Formation pratique d'élite niveau ${c.level || 'Expert'} avec projets réels et mentorat dédié.`,
-            duree_mois: 3,
-            frais_scolarite: 180000,
-        }))
-        : [
-            { id: '1', nom: 'Design UI/UX & Systèmes', category: 'UI / UX Design', description: 'Conception d\'applications mobiles et web intuitives sur Figma avec Design Systems complets.', duree_mois: 3, frais_scolarite: 180000 },
-            { id: '2', nom: 'Web Design & Prototypage', category: 'Web & Mobile', description: 'Création de sites interactifs percutants, animations avancées et intégration responsive.', duree_mois: 2, frais_scolarite: 150000 },
-            { id: '3', nom: 'Product Design & Growth', category: 'Product Strategy', description: 'Du concept au lancement : stratégie produit, conversion UX et direction artistique.', duree_mois: 2, frais_scolarite: 120000 },
-        ];
+    const programs = getNormalizedPrograms(filieres, classrooms, org, cfg);
+    const testimonials = getNormalizedTestimonials(cfg);
+    const stats = getNormalizedStats(cfg, teacherCount, studentCount);
 
     const portfolioProjects = gallery?.length >= 2 ? gallery.slice(0, 4).map((img, i) => ({
         id: i,
@@ -96,12 +86,6 @@ export function TemplateProductMastery({
         { id: 2, title: 'Design System & Architecture SaaS', cat: 'Design System', img: 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=800&auto=format&fit=crop&q=80' },
         { id: 3, title: 'Plateforme E-Learning Interactive', cat: 'Web Platform', img: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&auto=format&fit=crop&q=80' },
         { id: 4, title: 'Branding & Direction Artistique', cat: 'Brand Identity', img: 'https://images.unsplash.com/photo-1542744094-3a31f272c490?w=800&auto=format&fit=crop&q=80' },
-    ];
-
-    const testimonials = [
-        { name: 'Arnaud M.', role: 'Lead Product Manager', quote: 'Une formation exceptionnelle qui a complètement transformé notre approche du design et de l\'ergonomie.', stars: 5 },
-        { name: 'Élodie K.', role: 'Designer UI/UX Indépendante', quote: 'Pédagogie ultra-concrète. En 3 mois, j\'ai décroché mes premiers contrats internationaux.', stars: 5 },
-        { name: 'Serge T.', role: 'Fondateur de Startup', quote: 'Le meilleur investissement pour notre équipe. Des cours d\'une clarté et d\'un professionnalisme rares.', stars: 5 },
     ];
 
     return (
@@ -455,7 +439,7 @@ export function TemplateProductMastery({
                         </button>
                     </div>
 
-                    {/* Grille de Cartes Programmes */}
+                    {/* Grille de Cartes Programmes Synchronisées & Éditables */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {programs.map((prog: any, idx: number) => (
                             <motion.div
@@ -464,23 +448,42 @@ export function TemplateProductMastery({
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }}
                                 transition={{ delay: idx * 0.1 }}
-                                className="group relative rounded-3xl overflow-hidden bg-white/[0.03] border border-white/10 hover:border-orange-500/50 transition-all duration-300 flex flex-col justify-between p-6 hover:shadow-2xl hover:shadow-orange-500/10"
+                                className="group relative rounded-3xl overflow-hidden bg-white/[0.03] border border-white/10 hover:border-orange-500/50 transition-all duration-300 flex flex-col justify-between p-6 hover:shadow-2xl hover:shadow-orange-500/10 cursor-pointer"
                             >
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between gap-2">
                                         <span className="px-3 py-1 rounded-full bg-orange-500/15 border border-orange-500/30 text-orange-300 font-extrabold text-[10px] uppercase">
                                             {prog.category || 'Programme Pro'}
                                         </span>
-                                        <span className="text-xs font-semibold text-slate-400">
-                                            ⏱️ {prog.duree_mois ? `${prog.duree_mois} mois` : 'Parcours Certifiant'}
-                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                            {prog.promo_badge && (
+                                                <span
+                                                    data-editable-field={`program_${idx}_promo`}
+                                                    className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] font-black cursor-pointer"
+                                                >
+                                                    {prog.promo_badge}
+                                                </span>
+                                            )}
+                                            <span
+                                                data-editable-field={`program_${idx}_duree`}
+                                                className="text-xs font-semibold text-slate-400 cursor-pointer"
+                                            >
+                                                ⏱️ {prog.duree_texte}
+                                            </span>
+                                        </div>
                                     </div>
 
-                                    <h3 className="text-xl font-black text-white group-hover:text-orange-400 transition-colors">
+                                    <h3
+                                        data-editable-field={`program_${idx}_nom`}
+                                        className="text-xl font-black text-white group-hover:text-orange-400 transition-colors cursor-pointer"
+                                    >
                                         {prog.nom}
                                     </h3>
 
-                                    <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">
+                                    <p
+                                        data-editable-field={`program_${idx}_description`}
+                                        className="text-xs text-slate-400 leading-relaxed line-clamp-3 cursor-pointer"
+                                    >
                                         {prog.description}
                                     </p>
                                 </div>
@@ -488,14 +491,28 @@ export function TemplateProductMastery({
                                 <div className="pt-6 mt-6 border-t border-white/10 flex items-center justify-between">
                                     <div>
                                         <p className="text-[10px] text-slate-500 font-medium">Frais de scolarité</p>
-                                        <p className="text-base font-black text-white">
-                                            {prog.frais_scolarite ? `${new Intl.NumberFormat('fr-FR').format(prog.frais_scolarite)} FCFA` : 'Sur dossier'}
-                                        </p>
+                                        <div className="flex items-baseline gap-2">
+                                            {prog.formatted_prix_barre && (
+                                                <span
+                                                    data-editable-field={`program_${idx}_prix_barre`}
+                                                    className="text-xs text-slate-500 line-through font-mono cursor-pointer"
+                                                >
+                                                    {prog.formatted_prix_barre}
+                                                </span>
+                                            )}
+                                            <p
+                                                data-editable-field={`program_${idx}_frais_scolarite`}
+                                                className="text-base font-black text-white font-mono cursor-pointer"
+                                            >
+                                                {prog.formatted_price}
+                                            </p>
+                                        </div>
                                     </div>
 
                                     <button
+                                        data-editable-field={`program_${idx}_cta`}
                                         onClick={onOpenInscription || (() => scrollToSection('contact'))}
-                                        className="w-10 h-10 rounded-2xl bg-orange-500 hover:bg-orange-400 text-white flex items-center justify-center transition transform group-hover:scale-110 shadow-lg shadow-orange-500/30"
+                                        className="w-10 h-10 rounded-2xl bg-orange-500 hover:bg-orange-400 text-white flex items-center justify-center transition transform group-hover:scale-110 shadow-lg shadow-orange-500/30 cursor-pointer"
                                         title="S'inscrire à ce programme"
                                     >
                                         <ArrowUpRight className="w-5 h-5" />
@@ -559,19 +576,32 @@ export function TemplateProductMastery({
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {testimonials.map((t, idx) => (
-                            <div key={idx} className="p-6 rounded-3xl bg-white border border-gray-200/80 shadow-sm space-y-4">
+                        {testimonials.map((t) => (
+                            <div key={t.id} className="p-6 rounded-3xl bg-white border border-gray-200/80 shadow-sm space-y-4">
                                 <div className="flex items-center gap-1 text-amber-500">
                                     {[...Array(t.stars)].map((_, i) => (
                                         <Star key={i} className="w-4 h-4 fill-current" />
                                     ))}
                                 </div>
-                                <p className="text-xs sm:text-sm text-gray-600 leading-relaxed italic">
+                                <p
+                                    data-editable-field={t.quoteFieldKey}
+                                    className="text-xs sm:text-sm text-gray-600 leading-relaxed italic cursor-pointer hover:text-gray-900 transition-colors"
+                                >
                                     &ldquo;{t.quote}&rdquo;
                                 </p>
                                 <div className="pt-2 border-t border-gray-100">
-                                    <p className="font-extrabold text-xs text-gray-900">{t.name}</p>
-                                    <p className="text-[11px] text-gray-400">{t.role}</p>
+                                    <p
+                                        data-editable-field={t.authorFieldKey}
+                                        className="font-extrabold text-xs text-gray-900 cursor-pointer hover:text-[#FF6B00] transition-colors"
+                                    >
+                                        {t.author}
+                                    </p>
+                                    <p
+                                        data-editable-field={t.roleFieldKey}
+                                        className="text-[11px] text-gray-400 cursor-pointer"
+                                    >
+                                        {t.role}
+                                    </p>
                                 </div>
                             </div>
                         ))}

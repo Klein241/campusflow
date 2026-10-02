@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-studio';
+import { getNormalizedPrograms, getNormalizedStats, getNormalizedTestimonials } from './template-data-adapter';
 
 interface TemplateProps {
     org: any;
@@ -37,14 +38,17 @@ export function TemplateBentoBox({
     bc,
     onOpenInscription
 }: TemplateProps) {
+    const cfg: TemplateCustomConfig = org.template_config || {};
+    const programs = getNormalizedPrograms(filieres, classrooms, org, cfg);
+    const stats = getNormalizedStats(cfg, teacherCount, studentCount);
+    const testimonials = getNormalizedTestimonials(cfg);
+
     // Interactive Hub switcher: campus | diplomas | filieres | shop | reviews
     const [activeHub, setActiveHub] = useState<string>('campus');
 
     // Accordions
     const [openAbout, setOpenAbout] = useState<boolean>(true);
     const [openContact, setOpenContact] = useState<boolean>(false);
-
-    const cfg: TemplateCustomConfig = org.template_config || {};
 
     const brandName = cfg.trainer_name || org.name;
     const heroHeadline = cfg.trainer_title || org.name;
@@ -265,21 +269,66 @@ export function TemplateBentoBox({
                                 </span>
                             </div>
 
-                            <div className="grid sm:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
-                                {(filieres.length > 0 ? filieres : classrooms).map((f: any, idx: number) => (
-                                    <div key={f.id || idx} className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2 flex flex-col justify-between">
+                            <div className="grid sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-1">
+                                {programs.map((prog: any, idx: number) => (
+                                    <div key={prog.id || idx} className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2 flex flex-col justify-between hover:border-cyan-500/40 transition-colors cursor-pointer group">
                                         <div>
-                                            <div className="flex items-center justify-between mb-1">
-                                                <h4 className="font-bold text-xs text-white">{f.nom || f.name}</h4>
-                                                {f.duree_mois && (
-                                                    <span className="text-[10px] text-cyan-400 font-bold">{f.duree_mois} mois</span>
-                                                )}
+                                            <div className="flex items-center justify-between mb-1 gap-2">
+                                                <h4
+                                                    data-editable-field={`program_${idx}_nom`}
+                                                    className="font-bold text-xs text-white group-hover:text-cyan-300 transition-colors cursor-pointer"
+                                                >
+                                                    {prog.nom}
+                                                </h4>
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    {prog.promo_badge && (
+                                                        <span
+                                                            data-editable-field={`program_${idx}_promo`}
+                                                            className="text-[9px] font-black text-emerald-300 bg-emerald-500/20 px-1.5 py-0.2 rounded cursor-pointer"
+                                                        >
+                                                            {prog.promo_badge}
+                                                        </span>
+                                                    )}
+                                                    <span
+                                                        data-editable-field={`program_${idx}_duree`}
+                                                        className="text-[10px] text-cyan-400 font-bold cursor-pointer"
+                                                    >
+                                                        {prog.duree_texte}
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <p className="text-[11px] text-slate-400 line-clamp-2">{f.description || 'Formation complète avec cours pratiques et examens réguliers.'}</p>
+                                            <p
+                                                data-editable-field={`program_${idx}_description`}
+                                                className="text-[11px] text-slate-400 line-clamp-2 cursor-pointer"
+                                            >
+                                                {prog.description}
+                                            </p>
                                         </div>
-                                        <button onClick={onOpenInscription} className="text-[11px] text-cyan-300 hover:text-white font-bold flex items-center gap-1 pt-1">
-                                            S'inscrire à cette filière <ArrowRight className="w-3 h-3" />
-                                        </button>
+                                        <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+                                            <div className="flex items-baseline gap-1.5">
+                                                {prog.formatted_prix_barre && (
+                                                    <span
+                                                        data-editable-field={`program_${idx}_prix_barre`}
+                                                        className="text-[10px] text-slate-500 line-through font-mono cursor-pointer"
+                                                    >
+                                                        {prog.formatted_prix_barre}
+                                                    </span>
+                                                )}
+                                                <span
+                                                    data-editable-field={`program_${idx}_frais_scolarite`}
+                                                    className="text-xs font-bold text-teal-300 font-mono cursor-pointer"
+                                                >
+                                                    {prog.formatted_price}
+                                                </span>
+                                            </div>
+                                            <button
+                                                data-editable-field={`program_${idx}_cta`}
+                                                onClick={onOpenInscription}
+                                                className="text-[11px] text-cyan-300 hover:text-white font-bold flex items-center gap-1 cursor-pointer"
+                                            >
+                                                {prog.cta_text || 'S\'inscrire'} <ArrowRight className="w-3 h-3" />
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -339,24 +388,18 @@ export function TemplateBentoBox({
                             </div>
 
                             <div className="grid sm:grid-cols-2 gap-3">
-                                <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-1.5">
-                                    <div className="flex items-center justify-between">
-                                        <p data-editable-field="review1_author" className="font-bold text-xs text-white">{review1Author}</p>
-                                        <span className="text-amber-400 text-xs">⭐⭐⭐⭐⭐</span>
+                                {testimonials.slice(0, 2).map((t) => (
+                                    <div key={t.id} className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-1.5">
+                                        <div className="flex items-center justify-between">
+                                            <p data-editable-field={t.authorFieldKey} className="font-bold text-xs text-white cursor-pointer hover:text-cyan-300 transition-colors">{t.author}</p>
+                                            <span className="text-amber-400 text-xs">⭐⭐⭐⭐⭐</span>
+                                        </div>
+                                        <p data-editable-field={t.quoteFieldKey} className="text-[11px] text-slate-300 leading-relaxed cursor-pointer hover:text-white transition-colors">
+                                            &ldquo;{t.quote}&rdquo;
+                                        </p>
+                                        <p data-editable-field={t.roleFieldKey} className="text-[10px] text-slate-500 cursor-pointer">{t.role}</p>
                                     </div>
-                                    <p data-editable-field="review1_text" className="text-[11px] text-slate-300 leading-relaxed">
-                                        "{review1Text}"
-                                    </p>
-                                </div>
-                                <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-1.5">
-                                    <div className="flex items-center justify-between">
-                                        <p data-editable-field="review2_author" className="font-bold text-xs text-white">{review2Author}</p>
-                                        <span className="text-amber-400 text-xs">⭐⭐⭐⭐⭐</span>
-                                    </div>
-                                    <p data-editable-field="review2_text" className="text-[11px] text-slate-300 leading-relaxed">
-                                        "{review2Text}"
-                                    </p>
-                                </div>
+                                ))}
                             </div>
                         </div>
                     )}

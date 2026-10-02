@@ -29,6 +29,9 @@ export interface SkyAgentContext {
     org_id?: string;
     org_slug?: string;
     current_page?: string;
+    current_course_title?: string;
+    current_lesson_title?: string;
+    current_lesson_content?: string;
     stats?: Record<string, string | number>;
 }
 

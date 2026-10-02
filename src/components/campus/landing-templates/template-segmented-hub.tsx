@@ -202,9 +202,6 @@ export function TemplateSegmentedHub({
                 };
             })
             : [];
-                    icon: Award
-                },
-            ];
 
     // Helper pour calculer les prix et badges marketing d'une formation
     const getProgramPricing = (p: any) => {

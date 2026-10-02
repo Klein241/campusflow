@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import { cleanMotto } from '@/lib/clean-motto';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-studio';
+import { getNormalizedPrograms, getNormalizedStats, getNormalizedTestimonials } from './template-data-adapter';
 
 interface TemplateProps {
     org: any;
@@ -41,6 +42,9 @@ export function TemplateGlassShowcase({
     onOpenInscription
 }: TemplateProps) {
     const cfg: TemplateCustomConfig = org.template_config || {};
+    const programs = getNormalizedPrograms(filieres, classrooms, org, cfg);
+    const testimonials = getNormalizedTestimonials(cfg);
+    const stats = getNormalizedStats(cfg, teacherCount, studentCount);
     const [openCard, setOpenCard] = useState<ShowcaseCard>(null);
     const [activeDock, setActiveDock] = useState<string>('home');
     const [isPlaying, setIsPlaying] = useState(false);
@@ -461,14 +465,65 @@ export function TemplateGlassShowcase({
                                             </Button>
                                         </a>
                                     </div>
-                                    <div className="grid sm:grid-cols-2 gap-3">
-                                        {filieres.map((f: any) => (
-                                            <div key={f.id} className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-teal-500/40 transition">
-                                                <h4 className="font-bold text-white text-sm">{f.nom}</h4>
-                                                <p className="text-xs text-slate-400 mt-1 line-clamp-2">{f.description || 'Programme certifiant avec suivi individualisé.'}</p>
+                                    <div className="grid sm:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-1">
+                                        {programs.map((f: any, idx: number) => (
+                                            <div key={f.id || idx} className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-teal-500/40 transition flex flex-col justify-between cursor-pointer group">
+                                                <div>
+                                                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                                                        <h4
+                                                            data-editable-field={`program_${idx}_nom`}
+                                                            className="font-bold text-white text-sm group-hover:text-teal-300 transition-colors cursor-pointer"
+                                                        >
+                                                            {f.nom}
+                                                        </h4>
+                                                        <div className="flex items-center gap-1">
+                                                            {f.promo_badge && (
+                                                                <span
+                                                                    data-editable-field={`program_${idx}_promo`}
+                                                                    className="text-[9px] font-black text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded cursor-pointer"
+                                                                >
+                                                                    {f.promo_badge}
+                                                                </span>
+                                                            )}
+                                                            <span
+                                                                data-editable-field={`program_${idx}_duree`}
+                                                                className="text-[10px] text-slate-400 font-semibold cursor-pointer"
+                                                            >
+                                                                {f.duree_texte}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <p
+                                                        data-editable-field={`program_${idx}_description`}
+                                                        className="text-xs text-slate-400 mt-1 line-clamp-2 cursor-pointer"
+                                                    >
+                                                        {f.description}
+                                                    </p>
+                                                </div>
                                                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/5 text-xs">
-                                                    <span className="text-slate-500">{f.duree_mois || 12} mois</span>
-                                                    <span className="font-black text-emerald-400">{new Intl.NumberFormat('fr-FR').format(f.frais_scolarite || 0)} XAF</span>
+                                                    <div className="flex items-baseline gap-1.5">
+                                                        {f.formatted_prix_barre && (
+                                                            <span
+                                                                data-editable-field={`program_${idx}_prix_barre`}
+                                                                className="text-[10px] text-slate-500 line-through font-mono cursor-pointer"
+                                                            >
+                                                                {f.formatted_prix_barre}
+                                                            </span>
+                                                        )}
+                                                        <span
+                                                            data-editable-field={`program_${idx}_frais_scolarite`}
+                                                            className="font-black text-emerald-400 font-mono cursor-pointer"
+                                                        >
+                                                            {f.formatted_price}
+                                                        </span>
+                                                    </div>
+                                                    <span
+                                                        data-editable-field={`program_${idx}_cta`}
+                                                        onClick={() => { setOpenCard(null); onOpenInscription?.(); }}
+                                                        className="text-[10px] font-bold text-teal-400 hover:text-white transition cursor-pointer"
+                                                    >
+                                                        {f.cta_text || 'Postuler →'}
+                                                    </span>
                                                 </div>
                                             </div>
                                         ))}

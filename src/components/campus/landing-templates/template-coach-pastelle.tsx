@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-modal';
 import { cleanMotto } from '@/lib/clean-motto';
+import { getNormalizedPrograms, getNormalizedStats, getNormalizedTestimonials } from './template-data-adapter';
 
 interface TemplateProps {
     org: any;
@@ -23,19 +24,13 @@ interface TemplateProps {
     onOpenInscription?: () => void;
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   MODÈLE "JULIE SOLOMON" — Coach Pastel & Expert
-   - Hero plein écran avec photo couvrant toute la largeur en haut
-   - Bandeau "Auteur, Conférencier, Expert..." + logos presse
-   - Section "Et si vous pouviez obtenir exactement ce que vous voulez?" avec livre
-   - Section podcast avec photo secondaire à gauche
-   - Section Programmes & Formations
-   - Hub de contact épuré
-═══════════════════════════════════════════════════════════════════ */
 export function TemplateCoachPastelle({
     org, orgSlug, classrooms, filieres, teacherCount, studentCount, gallery, bc, onOpenInscription
 }: TemplateProps) {
     const cfg: TemplateCustomConfig = org.template_config || {};
+    const programs = getNormalizedPrograms(filieres, classrooms, org, cfg);
+    const stats = getNormalizedStats(cfg, teacherCount, studentCount);
+    const testimonials = getNormalizedTestimonials(cfg);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [activeSection, setActiveSection] = useState('hero');
 
@@ -312,30 +307,71 @@ export function TemplateCoachPastelle({
                         </h2>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                        {(filieres?.length > 0 ? filieres : classrooms?.length > 0 ? classrooms : [
-                            { id: '1', nom: 'Mastery Accélérateur de Marques', description: 'Transformez votre visibilité en autorité incontournable dans votre secteur.' },
-                            { id: '2', nom: 'Coaching Leadership & Prise de Parole', description: 'Développez un charisme naturel et apprenez à captiver chaque audience.' },
-                            { id: '3', nom: 'Stratégie de Contenu & Influence', description: 'Monétisez votre savoir-faire et bâtissez une communauté engagée.' },
-                        ]).slice(0, 3).map((item: any, i: number) => (
+                        {programs.map((item: any, i: number) => (
                             <motion.div
                                 key={item.id || i}
                                 initial={{ opacity: 0, y: 20 }}
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }}
                                 transition={{ delay: i * 0.1 }}
-                                className="p-7 rounded-2xl border border-gray-100 bg-gray-50/50 hover:bg-white hover:shadow-xl transition-all cursor-pointer group"
+                                className="p-7 rounded-2xl border border-gray-100 bg-gray-50/50 hover:bg-white hover:shadow-xl transition-all cursor-pointer group flex flex-col justify-between"
                                 onClick={onOpenInscription}
                             >
-                                <h3 className="font-bold text-base text-[#1E293B] mb-2 group-hover:text-amber-800 transition-colors">{item.nom || item.name}</h3>
-                                <p className="text-xs text-gray-600 leading-relaxed">
-                                    {item.description || `Programme certifiant d'excellence. Méthodes appliquées et suivi personnalisé.`}
-                                </p>
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); onOpenInscription?.(); }}
-                                    className="mt-5 inline-flex items-center gap-1.5 text-xs font-bold text-[#1E293B] group-hover:translate-x-1 transition-transform"
-                                >
-                                    Découvrir le cursus <ArrowRight className="w-3.5 h-3.5" />
-                                </button>
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span
+                                            data-editable-field={`program_${i}_duree`}
+                                            className="text-[10px] font-bold uppercase tracking-wider text-amber-900 bg-amber-100/60 px-2.5 py-1 rounded-full cursor-pointer"
+                                        >
+                                            ⏱️ {item.duree_texte}
+                                        </span>
+                                        {item.promo_badge && (
+                                            <span
+                                                data-editable-field={`program_${i}_promo`}
+                                                className="text-[9px] font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full cursor-pointer"
+                                            >
+                                                {item.promo_badge}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <h3
+                                        data-editable-field={`program_${i}_nom`}
+                                        className="font-bold text-base text-[#1E293B] group-hover:text-amber-800 transition-colors cursor-pointer"
+                                    >
+                                        {item.nom}
+                                    </h3>
+                                    <p
+                                        data-editable-field={`program_${i}_description`}
+                                        className="text-xs text-gray-600 leading-relaxed line-clamp-3 cursor-pointer"
+                                    >
+                                        {item.description}
+                                    </p>
+                                </div>
+                                <div className="pt-4 mt-4 border-t border-gray-100 flex items-center justify-between">
+                                    <div>
+                                        {item.formatted_prix_barre && (
+                                            <span
+                                                data-editable-field={`program_${i}_prix_barre`}
+                                                className="text-[10px] text-gray-400 line-through font-mono mr-1.5 cursor-pointer"
+                                            >
+                                                {item.formatted_prix_barre}
+                                            </span>
+                                        )}
+                                        <span
+                                            data-editable-field={`program_${i}_frais_scolarite`}
+                                            className="text-xs font-bold text-gray-900 font-mono cursor-pointer"
+                                        >
+                                            {item.formatted_price}
+                                        </span>
+                                    </div>
+                                    <button
+                                        data-editable-field={`program_${i}_cta`}
+                                        onClick={(e) => { e.stopPropagation(); onOpenInscription?.(); }}
+                                        className="inline-flex items-center gap-1.5 text-xs font-bold text-[#1E293B] group-hover:translate-x-1 transition-transform cursor-pointer"
+                                    >
+                                        {item.cta_text || 'Découvrir'} <ArrowRight className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
                             </motion.div>
                         ))}
                     </div>

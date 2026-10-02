@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-modal';
 import { cleanMotto } from '@/lib/clean-motto';
+import { getNormalizedPrograms, getNormalizedTestimonials, getNormalizedStats } from './template-data-adapter';
 
 interface TemplateProps {
     org: any;
@@ -79,34 +80,19 @@ export function TemplateTechMentor({
         }
     };
 
-    const projects = filieres?.length > 0
-        ? filieres.slice(0, 3).map((f: any, i) => ({
-            id: f.id || `f_${i}`, nom: f.nom || f.name,
-            cat: ['Web Design', 'App Design', 'UI/UX Design'][i % 3],
-            image: gallery?.[i + 1] || null,
-        }))
-        : classrooms?.length > 0
-            ? classrooms.slice(0, 3).map((c: any, i) => ({
-                id: c.id || `c_${i}`, nom: c.name,
-                cat: ['Web Design', 'App Design', 'UI/UX Design'][i % 3],
-                image: gallery?.[i + 1] || null,
-            }))
-            : [
-                { id: '1', nom: 'Apps Graphiques Numériques', cat: 'Web Design, App Design', image: null },
-                { id: '2', nom: 'Prix Crypto Quotidiens', cat: 'Web Design', image: null },
-                { id: '3', nom: 'Interface de Gestion', cat: 'Web Design, App Design', image: null },
-            ];
+    const programs = getNormalizedPrograms(filieres, classrooms, org, cfg);
+    const stats = getNormalizedStats(cfg, teacherCount, studentCount);
+    const testimonials = getNormalizedTestimonials(cfg);
 
-    const services = filieres?.length > 0
-        ? filieres.map((f: any, i) => ({ id: f.id || i, nom: f.nom || f.name, cat: 'Formation', image: gallery?.[i] || null }))
-        : classrooms?.length > 0
-            ? classrooms.map((c: any, i) => ({ id: c.id || i, nom: c.name, cat: 'Formation', image: gallery?.[i] || null }))
-            : [
-                { id: 'a', nom: 'Design Web & Applications', cat: 'UI/UX & Frontend', image: null },
-                { id: 'b', nom: 'Stratégie Business Digitale', cat: 'STRATÉGIE', image: null },
-                { id: 'c', nom: 'Développement Full-Stack', cat: 'DEV', image: null },
-                { id: 'd', nom: 'Coaching & Mentorat Design', cat: 'COACHING', image: null },
-            ];
+    const projects = programs.slice(0, 3).map((p: any, i: number) => ({
+        id: p.id || `p_${i}`,
+        nom: p.nom,
+        cat: p.category || ['Web Design', 'App Design', 'UI/UX Design'][i % 3],
+        image: gallery?.[i + 1] || null,
+        description: p.description,
+    }));
+
+    const services = programs;
 
     const ACCENT = '#00B4D8';    // bleu néon
     const BG     = '#0A0F1E';    // bleu marine très sombre
@@ -416,25 +402,76 @@ export function TemplateTechMentor({
                         </h2>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         {services.map((svc: any, i: number) => (
-                            <div key={svc.id}
-                                className="rounded-2xl overflow-hidden hover:shadow-xl transition-all cursor-pointer group"
-                                style={{ background: BG, border: '1px solid #ffffff08' }}
+                            <div key={svc.id || i}
+                                className="rounded-2xl overflow-hidden hover:shadow-2xl transition-all cursor-pointer group flex flex-col justify-between p-6 border border-white/10 hover:border-cyan-400/50"
+                                style={{ background: BG }}
                                 onClick={onOpenInscription}
                             >
-                                <div className="aspect-video overflow-hidden relative"
-                                    style={{ background: ['#1a0a2e', '#0a1e1a', '#1e1a0a', '#0a0f1e'][i % 4] }}>
-                                    {svc.image
-                                        ? <img src={svc.image} alt={svc.nom} className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-500" />
-                                        : <div className="w-full h-full flex items-center justify-center text-4xl opacity-20">
-                                            {['🖥', '📊', '⚙️', '🧑‍🏫'][i % 4]}
-                                          </div>
-                                    }
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full bg-cyan-400/10 text-cyan-300 border border-cyan-400/20">
+                                            {svc.category || 'Formation'}
+                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                            {svc.promo_badge && (
+                                                <span
+                                                    data-editable-field={`program_${i}_promo`}
+                                                    className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[9px] font-black cursor-pointer"
+                                                >
+                                                    {svc.promo_badge}
+                                                </span>
+                                            )}
+                                            <span
+                                                data-editable-field={`program_${i}_duree`}
+                                                className="text-xs text-gray-400 font-semibold cursor-pointer"
+                                            >
+                                                ⏱️ {svc.duree_texte}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <h3
+                                        data-editable-field={`program_${i}_nom`}
+                                        className="font-black text-base text-white group-hover:text-cyan-300 transition-colors cursor-pointer"
+                                    >
+                                        {svc.nom}
+                                    </h3>
+
+                                    <p
+                                        data-editable-field={`program_${i}_description`}
+                                        className="text-xs text-gray-400 leading-relaxed line-clamp-3 cursor-pointer"
+                                    >
+                                        {svc.description}
+                                    </p>
                                 </div>
-                                <div className="p-4">
-                                    <p className="text-xs text-gray-500 mb-1">{svc.cat}</p>
-                                    <h3 className="font-black text-sm text-white group-hover:text-cyan-300 transition-colors">{svc.nom}</h3>
+
+                                <div className="pt-4 mt-4 border-t border-white/10 flex items-center justify-between">
+                                    <div>
+                                        {svc.formatted_prix_barre && (
+                                            <span
+                                                data-editable-field={`program_${i}_prix_barre`}
+                                                className="text-[11px] text-gray-500 line-through font-mono mr-2 cursor-pointer"
+                                            >
+                                                {svc.formatted_prix_barre}
+                                            </span>
+                                        )}
+                                        <span
+                                            data-editable-field={`program_${i}_frais_scolarite`}
+                                            className="text-sm font-black text-cyan-300 font-mono cursor-pointer"
+                                        >
+                                            {svc.formatted_price}
+                                        </span>
+                                    </div>
+                                    <button
+                                        data-editable-field={`program_${i}_cta`}
+                                        onClick={(e) => { e.stopPropagation(); onOpenInscription?.(); }}
+                                        className="px-3.5 py-1.5 rounded-full text-xs font-black text-black cursor-pointer hover:scale-105 transition-transform"
+                                        style={{ background: ACCENT }}
+                                    >
+                                        {svc.cta_text || 'Postuler →'}
+                                    </button>
                                 </div>
                             </div>
                         ))}

@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import { cleanMotto } from '@/lib/clean-motto';
+import { getNormalizedPrograms, getNormalizedStats, getNormalizedTestimonials } from './template-data-adapter';
 
 interface TemplateProps {
     org: any;
@@ -40,6 +41,9 @@ export function TemplateBentoGrid({
 }: TemplateProps) {
     const cfg = org.template_config || {};
     const [activeTab, setActiveTab] = useState<'bento' | 'programs' | 'about' | 'gallery' | 'portal'>('bento');
+    const programs = getNormalizedPrograms(filieres, classrooms, org, cfg);
+    const stats = getNormalizedStats(cfg, teacherCount, studentCount);
+    const testimonials = getNormalizedTestimonials(cfg);
 
     const defaultPhotos = [
         'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=800&auto=format&fit=crop&q=80',
@@ -397,55 +401,69 @@ export function TemplateBentoGrid({
                             </Button>
                         </div>
 
-                        {filieres && filieres.length > 0 ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {filieres.map((f: any) => (
-                                    <div key={f.id} className="p-5 rounded-2xl bg-[#0D121D]/90 border border-white/10 hover:border-emerald-500/40 transition-all duration-300 shadow-xl flex flex-col justify-between space-y-4">
-                                        <div className="space-y-2">
-                                            <div className="flex items-center justify-between">
-                                                <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-[10px] font-bold">
-                                                    {f.duree_mois ? `${f.duree_mois} mois` : 'Cursus complet'}
-                                                </span>
-                                                {f.frais_scolarite && (
-                                                    <span className="text-xs font-mono font-bold text-teal-300">
-                                                        {Number(f.frais_scolarite).toLocaleString('fr-FR')} FCFA
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {programs.map((prog: any, idx: number) => (
+                                <div
+                                    key={prog.id || idx}
+                                    className="p-5 rounded-2xl bg-[#0D121D]/90 border border-white/10 hover:border-emerald-500/40 transition-all duration-300 shadow-xl flex flex-col justify-between space-y-4 cursor-pointer group"
+                                >
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span
+                                                data-editable-field={`program_${idx}_duree`}
+                                                className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-[10px] font-bold cursor-pointer"
+                                            >
+                                                ⏱️ {prog.duree_texte}
+                                            </span>
+                                            <div className="flex items-center gap-1.5">
+                                                {prog.promo_badge && (
+                                                    <span
+                                                        data-editable-field={`program_${idx}_promo`}
+                                                        className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-bold cursor-pointer"
+                                                    >
+                                                        {prog.promo_badge}
                                                     </span>
                                                 )}
+                                                {prog.formatted_prix_barre && (
+                                                    <span
+                                                        data-editable-field={`program_${idx}_prix_barre`}
+                                                        className="text-xs font-mono text-slate-500 line-through cursor-pointer"
+                                                    >
+                                                        {prog.formatted_prix_barre}
+                                                    </span>
+                                                )}
+                                                <span
+                                                    data-editable-field={`program_${idx}_frais_scolarite`}
+                                                    className="text-xs font-mono font-bold text-teal-300 cursor-pointer"
+                                                >
+                                                    {prog.formatted_price}
+                                                </span>
                                             </div>
-                                            <h3 className="font-bold text-base text-white">{f.nom}</h3>
-                                            <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">
-                                                {f.description || 'Formation complète préparant aux métiers d\'avenir avec encadrement personnalisé.'}
-                                            </p>
                                         </div>
-                                        <Button onClick={onOpenInscription} size="sm" className="w-full bg-white/5 hover:bg-emerald-500 hover:text-slate-950 text-white font-bold text-xs rounded-xl border border-white/10 transition">
-                                            Postuler à cette filière <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                                        </Button>
+                                        <h3
+                                            data-editable-field={`program_${idx}_nom`}
+                                            className="font-bold text-base text-white group-hover:text-emerald-300 transition-colors cursor-pointer"
+                                        >
+                                            {prog.nom}
+                                        </h3>
+                                        <p
+                                            data-editable-field={`program_${idx}_description`}
+                                            className="text-xs text-slate-400 leading-relaxed line-clamp-3 cursor-pointer"
+                                        >
+                                            {prog.description}
+                                        </p>
                                     </div>
-                                ))}
-                            </div>
-                        ) : classrooms.length > 0 ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {classrooms.map((c: any) => (
-                                    <div key={c.id} className="p-5 rounded-2xl bg-[#0D121D]/90 border border-white/10 space-y-3">
-                                        <h3 className="font-bold text-base text-white">{c.name}</h3>
-                                        <p className="text-xs text-slate-400">Programme complet de cours, devoirs et évaluations régulières.</p>
-                                        <Button onClick={onOpenInscription} size="sm" className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl">
-                                            Rejoindre cette classe <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                                        </Button>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="p-8 rounded-2xl bg-[#0D121D]/90 border border-white/10 text-center space-y-3">
-                                <h3 className="font-bold text-lg text-white">Inscriptions et admissions ouvertes à {org.name}</h3>
-                                <p className="text-xs text-slate-400 max-w-md mx-auto">
-                                    Déposez dès maintenant votre dossier pour rejoindre nos prochaines promotions d'étudiants.
-                                </p>
-                                <Button onClick={onOpenInscription} className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl px-6">
-                                    Formulaire d'Admission
-                                </Button>
-                            </div>
-                        )}
+                                    <Button
+                                        data-editable-field={`program_${idx}_cta`}
+                                        onClick={onOpenInscription}
+                                        size="sm"
+                                        className="w-full bg-white/5 hover:bg-emerald-500 hover:text-slate-950 text-white font-bold text-xs rounded-xl border border-white/10 transition cursor-pointer"
+                                    >
+                                        {prog.cta_text || 'Postuler à ce cursus'} <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 )}
 

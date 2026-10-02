@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-modal';
 import { cleanMotto } from '@/lib/clean-motto';
+import { getNormalizedPrograms, getNormalizedStats, getNormalizedTestimonials } from './template-data-adapter';
 
 interface TemplateProps {
     org: any;
@@ -20,20 +21,13 @@ interface TemplateProps {
     onOpenInscription?: () => void;
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   MODÈLE "NEXIS" — Software Solutions Studio
-   - Hero : blanc avec titre noir géant + photo formateur sur fond jaune
-   - Bandeau stats : Partenaires, Années d'Expérience, Heures, Revenus
-   - Section "Nos Plans Complets" : cartes services jaune & blanc
-   - Section "Nos Travaux" : galerie de projets avec filtres
-   - Témoignages : avis vérifiés avec étoiles
-   - Formulaire de contact interactif + direct WhatsApp
-   - Footer sombre avec marque
-═══════════════════════════════════════════════════════════════════ */
 export function TemplateNexisStudio({
     org, orgSlug, classrooms, filieres, teacherCount, studentCount, gallery, bc, onOpenInscription
 }: TemplateProps) {
     const cfg: TemplateCustomConfig = org.template_config || {};
+    const programs = getNormalizedPrograms(filieres, classrooms, org, cfg);
+    const testimonials = getNormalizedTestimonials(cfg);
+    const stats = getNormalizedStats(cfg, teacherCount, studentCount);
     const [activeFilter, setActiveFilter] = useState<string>('all');
     const [activeSection, setActiveSection] = useState('hero');
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -122,18 +116,6 @@ export function TemplateNexisStudio({
 
     const filteredProjects = activeFilter === 'all' ? projects : projects.filter((p: any) => p.filter === activeFilter);
 
-    const testimonials = [
-        {
-            name: cfg.testimonial1_author || 'Alan Solar',
-            role: cfg.testimonial1_role   || 'PDG, SolarTech',
-            text: cfg.testimonial1_text   || 'Travailler avec cette équipe a été une expérience incroyable. Ils comprennent vraiment nos besoins et livrent des solutions innovantes qui dépassent nos attentes.',
-        },
-        {
-            name: cfg.testimonial2_author || 'Emma Laurent',
-            role: cfg.testimonial2_role   || 'Directrice, StratégieCo',
-            text: cfg.testimonial2_text   || 'La qualité du travail et la réactivité de l\'équipe sont exceptionnelles. Je les recommande vivement pour tout projet digital ambitieux.',
-        },
-    ];
 
     return (
         <div className="min-h-screen bg-white text-black font-sans antialiased overflow-x-hidden">
@@ -329,23 +311,75 @@ export function TemplateNexisStudio({
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {services.map((svc: any, i: number) => (
+                        {programs.map((svc: any, i: number) => (
                             <motion.div
-                                key={svc.id}
+                                key={svc.id || i}
                                 initial={{ opacity: 0, y: 20 }}
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }}
                                 transition={{ delay: i * 0.1 }}
-                                className="p-8 rounded-3xl cursor-pointer group hover:shadow-xl transition-all"
-                                style={{ background: svc.isYellow ? YELLOW : '#F5F5F5' }}
+                                className="p-8 rounded-3xl cursor-pointer group hover:shadow-xl transition-all flex flex-col justify-between"
+                                style={{ background: i % 2 === 1 ? YELLOW : '#F5F5F5' }}
                                 onClick={onOpenInscription}
                             >
-                                <span className="text-3xl mb-4 block">{svc.icon}</span>
-                                <h3 className="font-black text-base text-black mb-2">{svc.nom}</h3>
-                                <p className="text-xs text-gray-700 leading-relaxed mb-4">{svc.desc}</p>
-                                <button className="inline-flex items-center gap-1 text-xs font-black text-black group-hover:translate-x-1 transition-transform">
-                                    En Savoir Plus <ArrowUpRight className="w-3.5 h-3.5" />
-                                </button>
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between gap-2 mb-2">
+                                        <span className="text-2xl">{['💻', '🌐', '📱', '⚡'][i % 4]}</span>
+                                        <div className="flex items-center gap-1.5">
+                                            {svc.promo_badge && (
+                                                <span
+                                                    data-editable-field={`program_${i}_promo`}
+                                                    className="text-[9px] font-black px-2 py-0.5 rounded-full bg-black text-white cursor-pointer"
+                                                >
+                                                    {svc.promo_badge}
+                                                </span>
+                                            )}
+                                            <span
+                                                data-editable-field={`program_${i}_duree`}
+                                                className="text-xs font-bold text-gray-700 bg-white/60 px-2 py-0.5 rounded-md cursor-pointer"
+                                            >
+                                                ⏱️ {svc.duree_texte}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <h3
+                                        data-editable-field={`program_${i}_nom`}
+                                        className="font-black text-base text-black mb-1 cursor-pointer"
+                                    >
+                                        {svc.nom}
+                                    </h3>
+                                    <p
+                                        data-editable-field={`program_${i}_description`}
+                                        className="text-xs text-gray-700 leading-relaxed line-clamp-3 cursor-pointer"
+                                    >
+                                        {svc.description}
+                                    </p>
+                                </div>
+                                <div className="pt-4 mt-4 border-t border-black/10 flex items-center justify-between">
+                                    <div className="flex items-baseline gap-1.5">
+                                        {svc.formatted_prix_barre && (
+                                            <span
+                                                data-editable-field={`program_${i}_prix_barre`}
+                                                className="text-[11px] text-gray-500 line-through font-mono cursor-pointer"
+                                            >
+                                                {svc.formatted_prix_barre}
+                                            </span>
+                                        )}
+                                        <span
+                                            data-editable-field={`program_${i}_frais_scolarite`}
+                                            className="text-sm font-black text-black font-mono cursor-pointer"
+                                        >
+                                            {svc.formatted_price}
+                                        </span>
+                                    </div>
+                                    <button
+                                        data-editable-field={`program_${i}_cta`}
+                                        onClick={(e) => { e.stopPropagation(); onOpenInscription?.(); }}
+                                        className="inline-flex items-center gap-1 text-xs font-black text-black group-hover:translate-x-1 transition-transform cursor-pointer"
+                                    >
+                                        {svc.cta_text || 'En Savoir Plus'} <ArrowUpRight className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
                             </motion.div>
                         ))}
                     </div>
@@ -430,22 +464,37 @@ export function TemplateNexisStudio({
                         <h2 className="text-3xl font-black">Ce Que Disent Nos Partenaires</h2>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        {testimonials.map((t, i) => (
-                            <div key={i} className="p-8 rounded-2xl border border-gray-100 bg-gray-50/50 hover:bg-white hover:shadow-lg transition-all">
+                        {testimonials.slice(0, 2).map((t) => (
+                            <div key={t.id} className="p-8 rounded-2xl border border-gray-100 bg-gray-50/50 hover:bg-white hover:shadow-lg transition-all">
                                 <div className="flex items-center gap-1 mb-4">
-                                    {[...Array(5)].map((_, j) => (
+                                    {[...Array(t.stars)].map((_, j) => (
                                         <Star key={j} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                                     ))}
                                 </div>
-                                <p className="text-sm text-gray-700 italic leading-relaxed mb-6">"{t.text}"</p>
+                                <p
+                                    data-editable-field={t.quoteFieldKey}
+                                    className="text-sm text-gray-700 italic leading-relaxed mb-6 cursor-pointer hover:text-black transition-colors"
+                                >
+                                    &ldquo;{t.quote}&rdquo;
+                                </p>
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-black"
                                         style={{ background: YELLOW, color: BLACK }}>
-                                        {t.name[0]}
+                                        {t.author[0]}
                                     </div>
                                     <div>
-                                        <p className="font-black text-xs text-black">{t.name}</p>
-                                        <p className="text-xs text-gray-500">{t.role}</p>
+                                        <p
+                                            data-editable-field={t.authorFieldKey}
+                                            className="font-black text-xs text-black cursor-pointer hover:text-amber-600 transition-colors"
+                                        >
+                                            {t.author}
+                                        </p>
+                                        <p
+                                            data-editable-field={t.roleFieldKey}
+                                            className="text-xs text-gray-500 cursor-pointer"
+                                        >
+                                            {t.role}
+                                        </p>
                                     </div>
                                 </div>
                             </div>

@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import { cleanMotto } from '@/lib/clean-motto';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-studio';
+import { getNormalizedPrograms, getNormalizedStats, getNormalizedTestimonials } from './template-data-adapter';
 
 interface TemplateProps {
     org: any;
@@ -41,6 +42,9 @@ export function TemplateHubOnglets({
     const [activeTab, setActiveTab] = useState<HubTab>('programs');
 
     const cfg: TemplateCustomConfig = org.template_config || {};
+    const programs = getNormalizedPrograms(filieres, classrooms, org, cfg);
+    const stats = getNormalizedStats(cfg, teacherCount, studentCount);
+    const testimonials = getNormalizedTestimonials(cfg);
 
     const brandName = cfg.trainer_name || org.name;
     const heroTitle = cfg.trainer_title || org.name;
@@ -142,44 +146,72 @@ export function TemplateHubOnglets({
             <AnimatePresence mode="wait">
                 {activeTab === 'programs' && (
                     <motion.div key="programs" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} className="space-y-6">
-                        {(filieres.length > 0 || classrooms.length > 0) ? (
-                            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {(filieres.length > 0 ? filieres : classrooms).map((f: any, idx: number) => {
-                                    const isClass = filieres.length === 0;
-                                    return (
-                                        <div key={f.id || idx} className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-white/20 transition group">
-                                            <div className="flex justify-between items-start mb-3">
-                                                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${f.couleur || bc}20` }}>
-                                                    <BookOpen className="w-5 h-5" style={{ color: f.couleur || bc }} />
-                                                </div>
-                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-slate-300">
-                                                    {f.duree_mois ? `${f.duree_mois} mois` : (isClass ? (f.academic_year || 'Annuel') : 'Cursus')}
-                                                </span>
+                        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {programs.map((f: any, idx: number) => (
+                                <div key={f.id || idx} className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-white/20 transition group flex flex-col justify-between cursor-pointer">
+                                    <div>
+                                        <div className="flex justify-between items-start mb-3 gap-2">
+                                            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${f.couleur || bc}20` }}>
+                                                <BookOpen className="w-5 h-5" style={{ color: f.couleur || bc }} />
                                             </div>
-                                            <h3 className="font-bold text-white text-base mb-1">{f.nom || f.name}</h3>
-                                            <p className="text-xs text-slate-400 line-clamp-2 mb-3">
-                                                {f.description || (isClass ? `Classe active au sein de ${org.name}.` : 'Formation complète avec suivi pédagogique certifié.')}
-                                            </p>
-                                            <div className="pt-3 border-t border-white/5 flex justify-between items-center text-xs">
-                                                <span className="text-slate-500">{isClass ? 'Niveau :' : 'Scolarité :'}</span>
-                                                <span className="font-black text-emerald-400">
-                                                    {isClass ? (f.level || 'Général') : (f.frais_scolarite ? `${new Intl.NumberFormat('fr-FR').format(f.frais_scolarite)} XAF` : 'Sur demande')}
+                                            <div className="flex items-center gap-1.5">
+                                                {f.promo_badge && (
+                                                    <span
+                                                        data-editable-field={`program_${idx}_promo`}
+                                                        className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 cursor-pointer"
+                                                    >
+                                                        {f.promo_badge}
+                                                    </span>
+                                                )}
+                                                <span
+                                                    data-editable-field={`program_${idx}_duree`}
+                                                    className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-slate-300 cursor-pointer"
+                                                >
+                                                    ⏱️ {f.duree_texte}
                                                 </span>
                                             </div>
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        ) : (
-                            <div className="p-8 rounded-2xl bg-white/[0.02] border border-white/5 text-center space-y-2">
-                                <p data-editable-field="session_title" className="text-white font-bold text-base cursor-pointer hover:text-cyan-400 transition-colors">
-                                    {cfg.session_title || `Inscriptions ouvertes pour ${org.name}`}
-                                </p>
-                                <p data-editable-field="session_subtitle" className="text-slate-400 text-xs max-w-md mx-auto cursor-pointer">
-                                    {cfg.session_subtitle || "Déposez dès maintenant votre demande d'admission pour intégrer la prochaine session académique."}
-                                </p>
-                            </div>
-                        )}
+                                        <h3
+                                            data-editable-field={`program_${idx}_nom`}
+                                            className="font-bold text-white text-base mb-1 cursor-pointer hover:text-cyan-300 transition-colors"
+                                        >
+                                            {f.nom}
+                                        </h3>
+                                        <p
+                                            data-editable-field={`program_${idx}_description`}
+                                            className="text-xs text-slate-400 line-clamp-2 mb-3 cursor-pointer"
+                                        >
+                                            {f.description}
+                                        </p>
+                                    </div>
+                                    <div className="pt-3 border-t border-white/5 flex justify-between items-center text-xs">
+                                        <div className="flex items-baseline gap-1.5">
+                                            {f.formatted_prix_barre && (
+                                                <span
+                                                    data-editable-field={`program_${idx}_prix_barre`}
+                                                    className="text-[10px] text-slate-500 line-through font-mono cursor-pointer"
+                                                >
+                                                    {f.formatted_prix_barre}
+                                                </span>
+                                            )}
+                                            <span
+                                                data-editable-field={`program_${idx}_frais_scolarite`}
+                                                className="font-black text-emerald-400 font-mono cursor-pointer"
+                                            >
+                                                {f.formatted_price}
+                                            </span>
+                                        </div>
+                                        <button
+                                            data-editable-field={`program_${idx}_cta`}
+                                            onClick={onOpenInscription}
+                                            className="text-cyan-400 hover:text-white font-bold flex items-center gap-1 text-[11px] cursor-pointer"
+                                        >
+                                            {f.cta_text || 'Postuler'} <ArrowRight className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
 
                         {classrooms.length > 0 && (
                             <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/10">

@@ -1,15 +1,17 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
     LayoutDashboard, ExternalLink, Upload, ImagePlus, Loader2, Save,
     Globe, Edit3, X, Sparkles, Smartphone, Monitor, Tablet, Check,
     Eye, ChevronRight, GraduationCap, ArrowRight, Phone, Mail,
-    Facebook, Instagram, Twitter, Youtube, Linkedin, Layers, Palette
+    Facebook, Instagram, Twitter, Youtube, Linkedin, Layers, Palette,
+    Sliders, BookOpen
 } from 'lucide-react';
 import { uploadToR2 } from '@/lib/r2';
 import { supabase } from '@/lib/supabase';
@@ -19,6 +21,19 @@ import Link from 'next/link';
 import { cleanMotto } from '@/lib/clean-motto';
 import { saveOrgStyle } from '@/lib/api-org-style';
 
+// Import des Templates pour le Rendu Réel
+import { TemplateSegmentedHub } from '@/components/campus/landing-templates/template-segmented-hub';
+import { TemplateProductMastery } from '@/components/campus/landing-templates/template-product-mastery';
+import { TemplateBentoGrid } from '@/components/campus/landing-templates/template-bento-grid';
+import { TemplateTechMentor } from '@/components/campus/landing-templates/template-tech-mentor';
+import { TemplateCoachPastelle } from '@/components/campus/landing-templates/template-coach-pastelle';
+import { TemplateCreativeStudio } from '@/components/campus/landing-templates/template-creative-studio';
+import { TemplateGlassShowcase } from '@/components/campus/landing-templates/template-glass-showcase';
+import { TemplateNexisStudio } from '@/components/campus/landing-templates/template-nexis-studio';
+import { TemplateBentoBox } from '@/components/campus/landing-templates/template-bento-box';
+import { TemplateHubOnglets } from '@/components/campus/landing-templates/template-hub-onglets';
+import { TemplateCustomizerStudio } from '@/components/campus/template-customizer-studio';
+
 interface AdminLandingTabProps {
     org: any;
     orgSlug: string;
@@ -27,7 +42,7 @@ interface AdminLandingTabProps {
     onUpdateOrg: (org: any) => void;
 }
 
-type StudioSection = 'hero' | 'about' | 'gallery' | 'buttons' | 'socials' | 'footer' | 'layout';
+type StudioSection = 'hero' | 'about' | 'gallery' | 'buttons' | 'socials' | 'footer';
 
 export function AdminLandingTab({
     org,
@@ -36,23 +51,47 @@ export function AdminLandingTab({
     onNavigateTab,
     onUpdateOrg
 }: AdminLandingTabProps) {
+    const rawCfg = org.template_config || {};
+
     const heroImgRef = useRef<HTMLInputElement>(null);
     const aboutImgRef = useRef<HTMLInputElement>(null);
     const galleryImgRef = useRef<HTMLInputElement>(null);
 
-    // Section active dans le Studio
+    // Section active dans l'éditeur rapide
     const [activeSection, setActiveSection] = useState<StudioSection>('hero');
     const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
     const [viewMode, setViewMode] = useState<'studio' | 'form'>('studio');
+    const [isStudioOpen, setIsStudioOpen] = useState(false);
 
-    // States
+    // Données réelles des formations et filières pour le rendu en direct
+    const [localClassrooms, setLocalClassrooms] = useState<any[]>([]);
+    const [localFilieres, setLocalFilieres] = useState<any[]>([]);
+
+    useEffect(() => {
+        async function fetchOrgData() {
+            if (!org?.id) return;
+            try {
+                const [clsRes, filRes] = await Promise.all([
+                    supabase.from('classrooms').select('*').eq('organization_id', org.id).order('created_at', { ascending: true }),
+                    supabase.from('filieres').select('*').eq('organization_id', org.id).order('created_at', { ascending: true })
+                ]);
+                if (clsRes.data) setLocalClassrooms(clsRes.data);
+                if (filRes.data) setLocalFilieres(filRes.data);
+            } catch (err) {
+                console.error('Erreur chargement données landing tab:', err);
+            }
+        }
+        fetchOrgData();
+    }, [org?.id]);
+
+    // Initialisation synchronisée avec template_config ET les colonnes org
     const [lHeroTemplate, setLHeroTemplate] = useState<'full' | 'split' | 'minimal'>(org.hero_template || 'split');
-    const [lHeroTitle, setLHeroTitle] = useState(org.hero_title || '');
-    const [lHeroSubtitle, setLHeroSubtitle] = useState(org.hero_subtitle || '');
-    const [lHeroImage, setLHeroImage] = useState(org.hero_image_url || '');
-    const [lAboutText, setLAboutText] = useState(org.about_text || '');
-    const [lAboutImage, setLAboutImage] = useState(org.about_image_url || '');
-    const [lGalleryImages, setLGalleryImages] = useState<string[]>(org.gallery_images || []);
+    const [lHeroTitle, setLHeroTitle] = useState(rawCfg.trainer_name || org.hero_title || org.name || '');
+    const [lHeroSubtitle, setLHeroSubtitle] = useState(rawCfg.trainer_subtitle || rawCfg.trainer_title || org.hero_subtitle || org.motto || '');
+    const [lHeroImage, setLHeroImage] = useState(rawCfg.trainer_photo_url || org.hero_image_url || '');
+    const [lAboutText, setLAboutText] = useState(rawCfg.trainer_bio || rawCfg.about_text || org.about_text || '');
+    const [lAboutImage, setLAboutImage] = useState(rawCfg.about_image_url || org.about_image_url || '');
+    const [lGalleryImages, setLGalleryImages] = useState<string[]>(rawCfg.gallery_images || org.gallery_images || []);
     const [lSocialFb, setLSocialFb] = useState(org.social_links?.facebook || '');
     const [lSocialIg, setLSocialIg] = useState(org.social_links?.instagram || '');
     const [lSocialTw, setLSocialTw] = useState(org.social_links?.twitter || '');
@@ -120,9 +159,21 @@ export function AdminLandingTab({
         }
     };
 
+    // Sauvegarde avec double synchronisation : Base de données + template_config
     const saveLanding = async () => {
         setLSaving(true);
         try {
+            const updatedConfig = {
+                ...(org.template_config || {}),
+                trainer_name: lHeroTitle,
+                trainer_title: lHeroSubtitle,
+                trainer_subtitle: lHeroSubtitle,
+                trainer_photo_url: lHeroImage,
+                trainer_bio: lAboutText,
+                about_text: lAboutText,
+                gallery_images: lGalleryImages,
+            };
+
             const payload = {
                 hero_template: lHeroTemplate,
                 hero_title: lHeroTitle || null,
@@ -142,13 +193,14 @@ export function AdminLandingTab({
                 footer_text: lFooterText || null,
                 cta_login_text: lBtnLoginText || null,
                 cta_register_text: lBtnRegisterText || null,
-                show_register_btn: lShowRegisterBtn
+                show_register_btn: lShowRegisterBtn,
+                template_config: updatedConfig
             };
 
             const saveRes = await saveOrgStyle(org.id, org.slug || orgSlug, payload);
             const updatedOrg = saveRes.org || { ...org, ...payload };
             onUpdateOrg(updatedOrg);
-            toast.success('Page d\'accueil mise à jour avec succès ! 🎉');
+            toast.success('Page d\'accueil et templates synchronisés avec succès ! 🎉');
         } catch (err: any) {
             toast.error('Erreur sauvegarde : ' + err.message);
         } finally {
@@ -156,31 +208,104 @@ export function AdminLandingTab({
         }
     };
 
+    // Live Org synthétique pour réactivité instantanée dans l'Aperçu
+    const liveOrg = {
+        ...org,
+        name: lHeroTitle || org.name,
+        hero_title: lHeroTitle || org.hero_title,
+        motto: cleanMotto(lHeroSubtitle || org.motto),
+        hero_subtitle: cleanMotto(lHeroSubtitle || org.hero_subtitle),
+        about_text: lAboutText || org.about_text,
+        hero_image_url: lHeroImage || org.hero_image_url,
+        about_image_url: lAboutImage || org.about_image_url,
+        gallery_images: lGalleryImages,
+        template_config: {
+            ...(org.template_config || {}),
+            trainer_name: lHeroTitle || org.name,
+            trainer_title: lHeroSubtitle || org.motto,
+            trainer_subtitle: lHeroSubtitle || org.hero_subtitle,
+            trainer_photo_url: lHeroImage || org.hero_image_url,
+            trainer_bio: lAboutText || org.about_text,
+            about_text: lAboutText || org.about_text,
+            gallery_images: lGalleryImages,
+            custom_programs: undefined,
+        }
+    };
+
+    // Rendu en direct du template actif réel
+    const renderActiveTemplate = () => {
+        const props = {
+            org: liveOrg,
+            orgSlug,
+            classrooms: localClassrooms,
+            filieres: localFilieres,
+            teacherCount: 15,
+            studentCount: 350,
+            gallery: lGalleryImages.length > 0 ? lGalleryImages : (org.gallery_images || []),
+            bc: brandColor,
+            onOpenInscription: () => toast.info('Aperçu interactif : inscription réelle sur le site public.'),
+        };
+
+        switch (org.landing_layout || 'segmented_hub') {
+            case 'product_mastery':
+                return <TemplateProductMastery {...props} />;
+            case 'creative_studio':
+                return <TemplateCreativeStudio {...props} />;
+            case 'coach_pastelle':
+                return <TemplateCoachPastelle {...props} />;
+            case 'tech_mentor':
+                return <TemplateTechMentor {...props} />;
+            case 'nexis_studio':
+                return <TemplateNexisStudio {...props} />;
+            case 'bento_box':
+                return <TemplateBentoBox {...props} />;
+            case 'glass_showcase':
+                return <TemplateGlassShowcase {...props} />;
+            case 'segmented_hub':
+                return <TemplateSegmentedHub {...props} />;
+            case 'hub_onglets':
+                return <TemplateHubOnglets {...props} />;
+            case 'bento_grid':
+            default:
+                return <TemplateBentoGrid {...props} />;
+        }
+    };
+
     return (
         <div className="space-y-6 animate-in fade-in duration-200">
-            {/* Banner vers Styles Premium */}
-            <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-amber-500/15 via-purple-500/15 to-teal-500/15 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+            {/* Banner d'Unification vers le Studio Plein Écran */}
+            <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-emerald-500/15 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xl">
                 <div className="flex items-center gap-3">
-                    <span className="text-2xl">✨</span>
+                    <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center text-xl shrink-0">
+                        ✨
+                    </div>
                     <div>
-                        <h3 className="font-extrabold text-sm text-white">Studio de Personnalisation Visuelle</h3>
-                        <p className="text-xs text-slate-400 mt-0.5">Cliquez directement sur n&apos;importe quelle zone dans l&apos;Aperçu en direct pour la modifier.</p>
+                        <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
+                            <span>Gestion de la Page d'accueil</span>
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                Template actif : {org.landing_layout || 'segmented_hub'}
+                            </span>
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                            Modifiez les informations essentielles ci-dessous ou ouvrez le Studio interactif pour tout éditer au clic.
+                        </p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setViewMode(v => v === 'studio' ? 'form' : 'studio')}
-                        className="border-white/10 text-white text-xs h-9 rounded-xl"
+                        className="border-white/10 text-white text-xs h-9 rounded-xl hover:bg-white/10"
                     >
-                        {viewMode === 'studio' ? '📝 Mode Formulaire' : '🎨 Mode Studio Visuel'}
+                        {viewMode === 'studio' ? '📝 Mode Formulaire Seul' : '🎨 Mode Split Studio'}
                     </Button>
                     <Button
-                        onClick={() => onNavigateTab('premium_styles')}
-                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs h-9 px-4 rounded-xl shadow-md"
+                        onClick={() => setIsStudioOpen(true)}
+                        className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs h-9 px-4 rounded-xl shadow-lg shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer"
                     >
-                        Styles Premium →
+                        <Sliders className="w-3.5 h-3.5" />
+                        Ouvrir le Studio Plein Écran
                     </Button>
                 </div>
             </div>
@@ -192,17 +317,17 @@ export function AdminLandingTab({
                         { id: 'hero', label: '🖼️ Hero & Bannière' },
                         { id: 'buttons', label: '🔘 Boutons & Inscription' },
                         { id: 'about', label: '📖 À propos' },
-                        { id: 'gallery', label: '📸 Galerie' },
-                        { id: 'socials', label: '🌐 Réseaux' },
+                        { id: 'gallery', label: '📸 Galerie Photos' },
+                        { id: 'socials', label: '🌐 Réseaux Sociaux' },
                         { id: 'footer', label: '📄 Pied de page' },
                     ] as const).map(tab => (
                         <button
                             key={tab.id}
                             onClick={() => setActiveSection(tab.id)}
                             className={cn(
-                                'px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all',
+                                'px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer',
                                 activeSection === tab.id
-                                    ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/30'
+                                    ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/30'
                                     : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
                             )}
                         >
@@ -212,26 +337,26 @@ export function AdminLandingTab({
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {/* Device switch (only in studio mode) */}
+                    {/* Device switch */}
                     {viewMode === 'studio' && (
                         <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-1">
                             <button
                                 onClick={() => setPreviewDevice('desktop')}
-                                className={cn('p-1.5 rounded-lg text-xs transition', previewDevice === 'desktop' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white')}
+                                className={cn('p-1.5 rounded-lg text-xs transition cursor-pointer', previewDevice === 'desktop' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white')}
                                 title="Aperçu Ordinateur"
                             >
                                 <Monitor className="w-3.5 h-3.5" />
                             </button>
                             <button
                                 onClick={() => setPreviewDevice('tablet')}
-                                className={cn('p-1.5 rounded-lg text-xs transition', previewDevice === 'tablet' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white')}
+                                className={cn('p-1.5 rounded-lg text-xs transition cursor-pointer', previewDevice === 'tablet' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white')}
                                 title="Aperçu Tablette"
                             >
                                 <Tablet className="w-3.5 h-3.5" />
                             </button>
                             <button
                                 onClick={() => setPreviewDevice('mobile')}
-                                className={cn('p-1.5 rounded-lg text-xs transition', previewDevice === 'mobile' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white')}
+                                className={cn('p-1.5 rounded-lg text-xs transition cursor-pointer', previewDevice === 'mobile' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white')}
                                 title="Aperçu Mobile"
                             >
                                 <Smartphone className="w-3.5 h-3.5" />
@@ -252,7 +377,7 @@ export function AdminLandingTab({
                         onClick={saveLanding}
                         disabled={lSaving}
                         size="sm"
-                        className="bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white font-bold rounded-xl text-xs h-8 px-3.5 shadow-md shadow-cyan-600/20"
+                        className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black rounded-xl text-xs h-8 px-4 shadow-md shadow-amber-500/20 cursor-pointer"
                     >
                         {lSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Save className="w-3.5 h-3.5 mr-1" />}
                         Enregistrer
@@ -261,7 +386,7 @@ export function AdminLandingTab({
             </div>
 
             {/* ══════════════════════════════════════════════════════════
-                STUDIO DUAL VIEW (Éditeur à Gauche + Aperçu Direct à Droite)
+                STUDIO DUAL VIEW (Éditeur à Gauche + Aperçu Réel à Droite)
             ══════════════════════════════════════════════════════════ */}
             <div className={cn(
                 'grid gap-6',
@@ -274,193 +399,181 @@ export function AdminLandingTab({
                 )}>
                     {/* SECTION 1 : HERO */}
                     {activeSection === 'hero' && (
-                        <div className="p-5 rounded-3xl bg-white/[0.03] border border-cyan-500/30 space-y-4">
-                            <h3 className="font-bold text-cyan-300 flex items-center gap-2 text-sm">
+                        <div className="p-5 rounded-3xl bg-white/[0.03] border border-amber-500/30 space-y-4">
+                            <h3 className="font-bold text-amber-300 flex items-center gap-2 text-sm">
                                 <Upload className="w-4 h-4" /> Bannière & Titres Principaux
                             </h3>
 
                             <div>
-                                <Label className="text-slate-400 text-xs mb-1.5 block">Modèle de bannière</Label>
-                                <div className="grid grid-cols-3 gap-2">
-                                    {([
-                                        { id: 'full', label: 'Plein écran', icon: '🖼️' },
-                                        { id: 'split', label: 'Deux colonnes', icon: '⬛' },
-                                        { id: 'minimal', label: 'Minimaliste', icon: '✨' },
-                                    ] as const).map(t => (
-                                        <button
-                                            key={t.id}
-                                            onClick={() => setLHeroTemplate(t.id)}
-                                            className={cn(
-                                                'p-2.5 rounded-xl border-2 text-center transition-all',
-                                                lHeroTemplate === t.id
-                                                    ? 'border-cyan-400 bg-cyan-500/10'
-                                                    : 'border-white/10 bg-white/[0.02] hover:border-white/20'
-                                            )}
-                                        >
-                                            <span className="text-lg block mb-0.5">{t.icon}</span>
-                                            <p className="text-[11px] font-semibold text-white">{t.label}</p>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div>
-                                <Label className="text-slate-400 text-xs">Titre principal</Label>
+                                <Label className="text-slate-400 text-xs mb-1.5 block">Titre principal / Nom affiché</Label>
                                 <Input
                                     value={lHeroTitle}
                                     onChange={e => setLHeroTitle(e.target.value)}
                                     placeholder={org.name}
-                                    className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-xs mt-1"
+                                    className="bg-white/5 border-white/10 text-white h-10 rounded-xl text-xs font-bold"
                                 />
                             </div>
 
                             <div>
-                                <Label className="text-slate-400 text-xs">Sous-titre / Slogan</Label>
-                                <Input
+                                <Label className="text-slate-400 text-xs mb-1.5 block">Sous-titre / Slogan Hero</Label>
+                                <Textarea
                                     value={lHeroSubtitle}
                                     onChange={e => setLHeroSubtitle(e.target.value)}
-                                    placeholder={cleanMotto(org.motto, 'Bienvenue sur notre portail officiel')}
-                                    className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-xs mt-1"
+                                    rows={3}
+                                    placeholder="Décrivez votre vision ou promesse de formation..."
+                                    className="bg-white/5 border-white/10 text-white rounded-xl text-xs resize-none"
                                 />
                             </div>
 
                             <div>
-                                <Label className="text-slate-400 text-xs">Image de bannière</Label>
-                                <div
-                                    onClick={() => heroImgRef.current?.click()}
-                                    className={cn(
-                                        'mt-1 w-full p-4 border-2 border-dashed rounded-2xl bg-white/[0.02] transition-colors cursor-pointer text-center',
-                                        lHeroTemplate === 'minimal' ? 'border-white/5 opacity-40 pointer-events-none' : 'border-white/10 hover:border-cyan-500/30'
-                                    )}
-                                >
-                                    {lHeroImage ? (
-                                        <div className="flex flex-col items-center">
-                                            <img src={lHeroImage} alt="" className="w-full h-24 rounded-xl object-cover mb-2 border border-white/10" />
-                                            <p className="text-[11px] text-slate-400">Cliquer pour changer l&apos;image</p>
-                                        </div>
-                                    ) : (
-                                        <div className="flex flex-col items-center text-slate-500">
-                                            <ImagePlus className="w-6 h-6 mb-1 text-cyan-400" />
-                                            <p className="font-semibold text-xs text-white">Téléverser une image</p>
-                                            <p className="text-[10px] text-slate-500">PNG, JPG (max 5 Mo)</p>
-                                        </div>
-                                    )}
-                                </div>
+                                <Label className="text-slate-400 text-xs mb-1.5 block">Image de bannière Hero HD</Label>
+                                {lHeroImage && (
+                                    <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 mb-2 group">
+                                        <img src={lHeroImage} alt="Hero" className="w-full h-full object-cover" />
+                                        <button
+                                            onClick={() => setLHeroImage('')}
+                                            className="absolute top-2 right-2 p-1.5 rounded-full bg-black/70 hover:bg-red-600 text-white transition opacity-0 group-hover:opacity-100"
+                                            title="Retirer l'image"
+                                        >
+                                            <X className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                )}
                                 <input ref={heroImgRef} type="file" accept="image/*" className="hidden" onChange={handleHeroUpload} />
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={uploadingImage}
+                                    onClick={() => heroImgRef.current?.click()}
+                                    className="w-full border-dashed border-amber-500/40 text-amber-300 hover:bg-amber-500/10 h-9 rounded-xl text-xs cursor-pointer"
+                                >
+                                    {uploadingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <ImagePlus className="w-3.5 h-3.5 mr-1.5" />}
+                                    {lHeroImage ? 'Changer l\'image Hero' : 'Téléverser une image Hero HD'}
+                                </Button>
                             </div>
                         </div>
                     )}
 
-                    {/* SECTION 2 : BOUTONS CTA & INSCRIPTION */}
+                    {/* SECTION 2 : BOUTONS */}
                     {activeSection === 'buttons' && (
                         <div className="p-5 rounded-3xl bg-white/[0.03] border border-cyan-500/30 space-y-4">
                             <h3 className="font-bold text-cyan-300 flex items-center gap-2 text-sm">
-                                <GraduationCap className="w-4 h-4" /> Boutons d&apos;Action & Inscription
+                                <Sparkles className="w-4 h-4" /> Boutons d'Action & En-tête
                             </h3>
 
                             <div>
-                                <Label className="text-slate-400 text-xs">Texte du bouton Connexion (Espace Élève)</Label>
+                                <Label className="text-slate-400 text-xs mb-1 block">Texte Bouton Connexion</Label>
                                 <Input
                                     value={lBtnLoginText}
                                     onChange={e => setLBtnLoginText(e.target.value)}
                                     placeholder="Espace Élève"
-                                    className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-xs mt-1"
+                                    className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-xs"
                                 />
-                                <p className="text-[10px] text-slate-500 mt-1">Redirige vers <code>/{orgSlug}/login</code></p>
                             </div>
 
-                            <div className="pt-2 border-t border-white/10">
-                                <label className="flex items-center gap-2.5 cursor-pointer mb-2">
-                                    <input
-                                        type="checkbox"
-                                        checked={lShowRegisterBtn}
-                                        onChange={e => setLShowRegisterBtn(e.target.checked)}
-                                        className="accent-cyan-500 w-4 h-4"
-                                    />
-                                    <span className="text-xs font-bold text-white">Afficher le bouton S&apos;inscrire / Postuler</span>
-                                </label>
+                            <div>
+                                <Label className="text-slate-400 text-xs mb-1 block">Texte Bouton Inscription</Label>
+                                <Input
+                                    value={lBtnRegisterText}
+                                    onChange={e => setLBtnRegisterText(e.target.value)}
+                                    placeholder="S'inscrire"
+                                    className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-xs"
+                                />
+                            </div>
 
-                                {lShowRegisterBtn && (
-                                    <div>
-                                        <Label className="text-slate-400 text-xs">Texte du bouton Inscription</Label>
-                                        <Input
-                                            value={lBtnRegisterText}
-                                            onChange={e => setLBtnRegisterText(e.target.value)}
-                                            placeholder="S'inscrire"
-                                            className="bg-white/5 border-white/10 text-white h-9 rounded-xl text-xs mt-1"
-                                        />
-                                    </div>
-                                )}
+                            <div className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/10">
+                                <div>
+                                    <span className="text-xs font-bold text-white block">Afficher le bouton d'inscription</span>
+                                    <span className="text-[10px] text-slate-400">Permet aux nouveaux apprenants de postuler directement</span>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={lShowRegisterBtn}
+                                    onChange={e => setLShowRegisterBtn(e.target.checked)}
+                                    className="w-4 h-4 rounded text-amber-500 focus:ring-0 cursor-pointer"
+                                />
                             </div>
                         </div>
                     )}
 
-                    {/* SECTION 3 : ABOUT */}
+                    {/* SECTION 3 : À PROPOS */}
                     {activeSection === 'about' && (
                         <div className="p-5 rounded-3xl bg-white/[0.03] border border-indigo-500/30 space-y-4">
                             <h3 className="font-bold text-indigo-300 flex items-center gap-2 text-sm">
-                                <Edit3 className="w-4 h-4" /> À propos de l&apos;établissement
+                                <GraduationCap className="w-4 h-4" /> Section Présentation & Histoire
                             </h3>
 
                             <div>
-                                <Label className="text-slate-400 text-xs">Description & Valeurs</Label>
-                                <textarea
+                                <Label className="text-slate-400 text-xs mb-1.5 block">Texte de présentation</Label>
+                                <Textarea
                                     value={lAboutText}
                                     onChange={e => setLAboutText(e.target.value)}
-                                    placeholder="Décrivez votre école, vos filières d'excellence..."
                                     rows={5}
-                                    className="w-full mt-1 p-3 rounded-2xl bg-white/5 border border-white/10 text-white text-xs resize-none focus:outline-none focus:border-indigo-500"
+                                    placeholder="Présentez l'histoire de l'établissement, vos valeurs et votre pédagogie..."
+                                    className="bg-white/5 border-white/10 text-white rounded-xl text-xs resize-none"
                                 />
                             </div>
 
                             <div>
-                                <Label className="text-slate-400 text-xs">Photo de présentation</Label>
-                                <div
-                                    onClick={() => aboutImgRef.current?.click()}
-                                    className="mt-1 w-full p-4 border-2 border-dashed border-white/10 rounded-2xl bg-white/[0.02] hover:border-indigo-500/30 transition-colors cursor-pointer text-center"
-                                >
-                                    {lAboutImage ? (
-                                        <div className="flex flex-col items-center">
-                                            <img src={lAboutImage} alt="" className="w-full h-28 rounded-xl object-cover mb-2 border border-white/10" />
-                                            <p className="text-[11px] text-slate-400">Cliquer pour changer la photo</p>
-                                        </div>
-                                    ) : (
-                                        <div className="flex flex-col items-center text-slate-500">
-                                            <ImagePlus className="w-6 h-6 mb-1 text-indigo-400" />
-                                            <p className="font-semibold text-xs text-white">Ajouter une photo</p>
-                                        </div>
-                                    )}
-                                </div>
+                                <Label className="text-slate-400 text-xs mb-1.5 block">Photo de la section À Propos</Label>
+                                {lAboutImage && (
+                                    <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 mb-2 group">
+                                        <img src={lAboutImage} alt="About" className="w-full h-full object-cover" />
+                                        <button
+                                            onClick={() => setLAboutImage('')}
+                                            className="absolute top-2 right-2 p-1.5 rounded-full bg-black/70 hover:bg-red-600 text-white transition opacity-0 group-hover:opacity-100"
+                                        >
+                                            <X className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                )}
                                 <input ref={aboutImgRef} type="file" accept="image/*" className="hidden" onChange={handleAboutUpload} />
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={uploadingImage}
+                                    onClick={() => aboutImgRef.current?.click()}
+                                    className="w-full border-dashed border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/10 h-9 rounded-xl text-xs cursor-pointer"
+                                >
+                                    {uploadingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <ImagePlus className="w-3.5 h-3.5 mr-1.5" />}
+                                    {lAboutImage ? 'Remplacer la photo À Propos' : 'Ajouter une photo À Propos'}
+                                </Button>
                             </div>
                         </div>
                     )}
 
-                    {/* SECTION 4 : GALLERY */}
+                    {/* SECTION 4 : GALERIE */}
                     {activeSection === 'gallery' && (
                         <div className="p-5 rounded-3xl bg-white/[0.03] border border-amber-500/30 space-y-4">
-                            <h3 className="font-bold text-amber-300 flex items-center gap-2 text-sm">
-                                <Upload className="w-4 h-4" /> Galerie photos
-                            </h3>
-
-                            <div
-                                onClick={() => galleryImgRef.current?.click()}
-                                className="w-full p-4 border-2 border-dashed border-white/10 rounded-2xl bg-white/[0.02] hover:border-amber-500/30 transition-colors cursor-pointer text-center"
-                            >
-                                <ImagePlus className="w-6 h-6 mx-auto mb-1 text-amber-400" />
-                                <p className="font-semibold text-xs text-white">Ajouter des photos</p>
-                                <p className="text-[10px] text-slate-500">Plusieurs fichiers simultanés</p>
+                            <div className="flex items-center justify-between">
+                                <h3 className="font-bold text-amber-300 flex items-center gap-2 text-sm">
+                                    <ImagePlus className="w-4 h-4" /> Galerie de Photos ({lGalleryImages.length})
+                                </h3>
+                                <input ref={galleryImgRef} type="file" accept="image/*" multiple className="hidden" onChange={handleGalleryUpload} />
+                                <Button
+                                    size="sm"
+                                    disabled={uploadingImage}
+                                    onClick={() => galleryImgRef.current?.click()}
+                                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl h-8 px-3 cursor-pointer"
+                                >
+                                    {uploadingImage ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Upload className="w-3 h-3 mr-1" />}
+                                    Ajouter des photos
+                                </Button>
                             </div>
-                            <input ref={galleryImgRef} type="file" accept="image/*" multiple className="hidden" onChange={handleGalleryUpload} />
 
-                            {lGalleryImages.length > 0 && (
+                            {lGalleryImages.length === 0 ? (
+                                <div className="p-6 border border-dashed border-white/10 rounded-2xl text-center text-xs text-slate-400">
+                                    Aucune photo dans la galerie pour le moment. Cliquez sur "Ajouter des photos".
+                                </div>
+                            ) : (
                                 <div className="grid grid-cols-3 gap-2">
-                                    {lGalleryImages.map((img, i) => (
-                                        <div key={i} className="relative group rounded-xl overflow-hidden border border-white/10 aspect-video">
-                                            <img src={img} alt="" className="w-full h-full object-cover" />
+                                    {lGalleryImages.map((url, i) => (
+                                        <div key={i} className="relative aspect-video rounded-xl overflow-hidden border border-white/10 group">
+                                            <img src={url} alt={`Galerie ${i}`} className="w-full h-full object-cover" />
                                             <button
-                                                onClick={() => setLGalleryImages(p => p.filter((_, j) => j !== i))}
-                                                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-white"
+                                                onClick={() => setLGalleryImages(p => p.filter((_, idx) => idx !== i))}
+                                                className="absolute top-1 right-1 p-1 rounded-full bg-black/70 hover:bg-red-600 text-white transition opacity-0 group-hover:opacity-100"
+                                                title="Supprimer"
                                             >
                                                 <X className="w-3 h-3" />
                                             </button>
@@ -471,7 +584,7 @@ export function AdminLandingTab({
                         </div>
                     )}
 
-                    {/* SECTION 5 : SOCIALS */}
+                    {/* SECTION 5 : RÉSEAUX SOCIAUX */}
                     {activeSection === 'socials' && (
                         <div className="p-5 rounded-3xl bg-white/[0.03] border border-pink-500/30 space-y-3">
                             <h3 className="font-bold text-pink-300 flex items-center gap-2 text-sm">
@@ -493,10 +606,14 @@ export function AdminLandingTab({
                                 <Label className="text-slate-400 text-xs">YouTube</Label>
                                 <Input value={lSocialYt} onChange={e => setLSocialYt(e.target.value)} placeholder="https://youtube.com/@..." className="bg-white/5 border-white/10 text-white h-8 rounded-xl text-xs mt-0.5" />
                             </div>
+                            <div>
+                                <Label className="text-slate-400 text-xs">LinkedIn</Label>
+                                <Input value={lSocialLi} onChange={e => setLSocialLi(e.target.value)} placeholder="https://linkedin.com/in/..." className="bg-white/5 border-white/10 text-white h-8 rounded-xl text-xs mt-0.5" />
+                            </div>
                         </div>
                     )}
 
-                    {/* SECTION 6 : FOOTER */}
+                    {/* SECTION 6 : PIED DE PAGE */}
                     {activeSection === 'footer' && (
                         <div className="p-5 rounded-3xl bg-white/[0.03] border border-slate-500/30 space-y-3">
                             <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm">
@@ -512,157 +629,57 @@ export function AdminLandingTab({
                     )}
                 </div>
 
-                {/* ── PANNEAU APERÇU DIRECT INTERACTIF (Droite) ── */}
+                {/* ── PANNEAU APERÇU DIRECT RÉEL (Droite) ── */}
                 {viewMode === 'studio' && (
                     <div className="lg:col-span-7 flex flex-col items-center">
                         <div className="w-full flex items-center justify-between text-xs text-slate-400 mb-2 px-2">
                             <span className="flex items-center gap-1.5 font-semibold text-white">
-                                <Eye className="w-3.5 h-3.5 text-cyan-400" /> Aperçu en temps réel (Cliquez pour éditer)
+                                <Eye className="w-3.5 h-3.5 text-amber-400" /> Rendu Réel en Direct ({org.landing_layout || 'Hub Segmenté'})
                             </span>
-                            <span className="text-[11px] text-cyan-300/80 bg-cyan-500/10 px-2 py-0.5 rounded-md border border-cyan-500/20">
-                                Mode Interactif WYSIWYG
-                            </span>
+                            <button
+                                onClick={() => setIsStudioOpen(true)}
+                                className="text-[11px] font-bold text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/30 flex items-center gap-1 cursor-pointer transition"
+                            >
+                                <Sparkles className="w-3 h-3" /> Personnaliser en direct →
+                            </button>
                         </div>
 
-                        {/* Device Frame */}
+                        {/* Device Frame avec vrai Template */}
                         <div className={cn(
-                            'transition-all duration-300 rounded-[2.5rem] p-3 border-4 border-slate-800 bg-[#08090E] shadow-2xl overflow-hidden w-full max-h-[750px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/10',
+                            'transition-all duration-300 rounded-[2.5rem] p-3 border-4 border-slate-800 bg-[#08090E] shadow-2xl overflow-hidden w-full max-h-[800px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 relative',
                             previewDevice === 'mobile' ? 'max-w-[340px]' : previewDevice === 'tablet' ? 'max-w-[560px]' : 'max-w-full'
                         )}>
-                            {/* Navbar Mockup avec Click-to-Edit */}
-                            <div
-                                onClick={() => setActiveSection('buttons')}
-                                className={cn(
-                                    'p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2 mb-4 group',
-                                    activeSection === 'buttons' ? 'border-cyan-400 bg-cyan-500/10 ring-2 ring-cyan-500/30' : 'border-white/5 bg-white/[0.02] hover:border-cyan-500/40'
-                                )}
-                            >
-                                <div className="flex items-center gap-2 min-w-0">
-                                    {org.logo_url ? (
-                                        <img src={org.logo_url} alt="" className="w-7 h-7 rounded-lg object-contain" />
-                                    ) : (
-                                        <div className="w-7 h-7 rounded-lg bg-cyan-500/30 flex items-center justify-center text-xs font-black">
-                                            {org.name[0]}
-                                        </div>
-                                    )}
-                                    <span className="font-bold text-xs truncate text-white">{org.name}</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                    {lShowRegisterBtn && (
-                                        <span className="px-2 py-1 rounded-lg bg-white/10 text-[10px] font-semibold text-white/80">
-                                            {lBtnRegisterText}
-                                        </span>
-                                    )}
-                                    <span
-                                        className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-white shadow"
-                                        style={{ background: brandColor }}
-                                    >
-                                        {lBtnLoginText}
-                                    </span>
-                                </div>
-                            </div>
-
-                            {/* Hero Mockup avec Click-to-Edit */}
-                            <div
-                                onClick={() => setActiveSection('hero')}
-                                className={cn(
-                                    'p-5 rounded-3xl border transition-all cursor-pointer relative overflow-hidden mb-4 group',
-                                    activeSection === 'hero' ? 'border-cyan-400 bg-cyan-500/10 ring-2 ring-cyan-500/30' : 'border-white/5 bg-white/[0.02] hover:border-cyan-500/40'
-                                )}
-                            >
-                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition bg-cyan-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow">
-                                    <Edit3 className="w-2.5 h-2.5" /> Modifier Hero
+                            <div className="relative group/frame cursor-pointer" onClick={() => setIsStudioOpen(true)}>
+                                {/* Bouton flottant pour ouvrir le studio en plein écran */}
+                                <div className="absolute top-4 right-4 z-40 bg-black/80 hover:bg-amber-500 hover:text-slate-950 text-white text-[11px] font-bold px-3 py-1.5 rounded-full border border-amber-500/40 backdrop-blur-md shadow-2xl transition flex items-center gap-1.5">
+                                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                                    <span>Éditer chaque section au clic</span>
                                 </div>
 
-                                <div className={cn('gap-4 items-center', lHeroTemplate === 'split' ? 'grid grid-cols-2' : 'flex flex-col text-center')}>
-                                    <div>
-                                        <h2 className="font-black text-sm sm:text-base text-white leading-tight">
-                                            {lHeroTitle || org.name}
-                                        </h2>
-                                        <p className="text-[11px] text-slate-300 mt-1 line-clamp-2">
-                                            {lHeroSubtitle || cleanMotto(org.motto, 'Excellence académique et insertion professionnelle')}
-                                        </p>
-                                        <div className="flex gap-2 mt-3 justify-center sm:justify-start">
-                                            <span className="px-3 py-1 rounded-xl text-white text-[10px] font-bold shadow" style={{ background: brandColor }}>
-                                                {lBtnLoginText}
-                                            </span>
-                                            {lShowRegisterBtn && (
-                                                <span className="px-3 py-1 rounded-xl bg-white/10 text-[10px] font-semibold text-white">
-                                                    {lBtnRegisterText}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                    {lHeroTemplate !== 'minimal' && (
-                                        <div className="w-full h-24 rounded-2xl overflow-hidden bg-black/40 border border-white/10 flex items-center justify-center">
-                                            {lHeroImage ? (
-                                                <img src={lHeroImage} alt="" className="w-full h-full object-cover" />
-                                            ) : (
-                                                <span className="text-[10px] text-slate-500">Image Hero</span>
-                                            )}
-                                        </div>
-                                    )}
+                                <div className="pointer-events-none select-none">
+                                    {renderActiveTemplate()}
                                 </div>
-                            </div>
-
-                            {/* About Mockup avec Click-to-Edit */}
-                            <div
-                                onClick={() => setActiveSection('about')}
-                                className={cn(
-                                    'p-4 rounded-3xl border transition-all cursor-pointer relative mb-4 group',
-                                    activeSection === 'about' ? 'border-indigo-400 bg-indigo-500/10 ring-2 ring-indigo-500/30' : 'border-white/5 bg-white/[0.02] hover:border-indigo-500/40'
-                                )}
-                            >
-                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition bg-indigo-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow">
-                                    <Edit3 className="w-2.5 h-2.5" /> Modifier À propos
-                                </div>
-                                <h3 className="text-xs font-bold text-white mb-1">📖 Présentation de l&apos;école</h3>
-                                <p className="text-[10px] text-slate-400 line-clamp-3">
-                                    {lAboutText || 'Présentation de l\'établissement, des infrastructures, corps professoral et filières certifiées.'}
-                                </p>
-                            </div>
-
-                            {/* Gallery Mockup avec Click-to-Edit */}
-                            <div
-                                onClick={() => setActiveSection('gallery')}
-                                className={cn(
-                                    'p-4 rounded-3xl border transition-all cursor-pointer relative mb-4 group',
-                                    activeSection === 'gallery' ? 'border-amber-400 bg-amber-500/10 ring-2 ring-amber-500/30' : 'border-white/5 bg-white/[0.02] hover:border-amber-500/40'
-                                )}
-                            >
-                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition bg-amber-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow">
-                                    <Edit3 className="w-2.5 h-2.5" /> Modifier Galerie ({lGalleryImages.length})
-                                </div>
-                                <h3 className="text-xs font-bold text-white mb-2">📸 Galerie Photos</h3>
-                                {lGalleryImages.length > 0 ? (
-                                    <div className="grid grid-cols-4 gap-1.5">
-                                        {lGalleryImages.slice(0, 4).map((img, i) => (
-                                            <img key={i} src={img} alt="" className="w-full h-12 rounded-lg object-cover" />
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="p-3 border border-dashed border-white/10 rounded-xl text-center text-[10px] text-slate-500">
-                                        Cliquez pour ajouter des photos à la galerie
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Footer Mockup avec Click-to-Edit */}
-                            <div
-                                onClick={() => setActiveSection('footer')}
-                                className={cn(
-                                    'p-3 rounded-2xl border transition-all cursor-pointer text-center group',
-                                    activeSection === 'footer' ? 'border-slate-400 bg-white/10 ring-2 ring-white/20' : 'border-white/5 bg-white/[0.02] hover:border-white/20'
-                                )}
-                            >
-                                <p className="text-[9px] text-slate-500">
-                                    {lFooterText || `© ${new Date().getFullYear()} ${org.name}. Tous droits réservés.`}
-                                </p>
                             </div>
                         </div>
                     </div>
                 )}
             </div>
+
+            {/* ── MODALE DU STUDIO DE PERSONNALISATION PLEIN ÉCRAN ── */}
+            {isStudioOpen && (
+                <TemplateCustomizerStudio
+                    org={liveOrg}
+                    orgSlug={orgSlug}
+                    currentTemplateId={org.landing_layout || 'segmented_hub'}
+                    classrooms={localClassrooms}
+                    filieres={localFilieres}
+                    onClose={() => setIsStudioOpen(false)}
+                    onSaveSuccess={(updatedOrg) => {
+                        onUpdateOrg(updatedOrg);
+                        setIsStudioOpen(false);
+                    }}
+                />
+            )}
         </div>
     );
 }

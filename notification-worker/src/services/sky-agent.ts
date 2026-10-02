@@ -53,6 +53,9 @@ export interface SkyAgentRequest {
         org_id?: string;
         org_slug?: string;
         current_page?: string;
+        current_course_title?: string;
+        current_lesson_title?: string;
+        current_lesson_content?: string;
         stats?: Record<string, string | number>;
     };
     temperament?: 'caring' | 'strict_pedagogue' | 'uncompromising' | 'strategic_mentor';
@@ -101,7 +104,8 @@ function buildSystemPrompt(
     ctx?: SkyAgentRequest['context'],
     temperament: string = 'strict_pedagogue',
     superadminCustomInstructions: string = '',
-    skillsContent: string = ''
+    skillsContent: string = '',
+    curriculumBlock: string = ''
 ): string {
     const orgName = ctx?.org_name || 'notre établissement partenaire';
     const userName = ctx?.user_name || '';
@@ -185,7 +189,18 @@ DIRECTIVES SELON LES MODES D'UTILISATION :
 - MODE GÉNÉRATEUR D'EXERCICES ([MODE: GÉNÉRATEUR D'EXERCICES & QCM]) :
   Génère des exercices de haut niveau, clairs, adaptés au niveau cible, avec barème de points détaillé et corrigé type intégral.
 - MODE GESTION & STRATÉGIE ([MODE: GESTION & STRATÉGIE ACADÉMIQUE]) :
-  Rédige des documents administratifs, courriers types aux parents, plans de relance de frais de scolarité ou stratégies d'organisation directement exploitables.`;
+  Rédige des documents administratifs, courriers types aux parents, plans de relance de frais de scolarité ou stratégies d'organisation directement exploitables.
+${curriculumBlock ? `
+${curriculumBlock}
+
+DIRECTIVES IMPÉRATIVES DU PROFESSEUR RÉFÉRENT DU CURSUS :
+1. Tu incarnes le Professeur Référent officiel de ${orgName}.
+2. ANCRAGE STRICT AU PROGRAMME : Tes explications théoriques, démonstrations, corrections d'exercices et définitions doivent être RIGOUREUSEMENT FONDÉES sur le catalogue académique officiel, les matières, les chapitres et la leçon active décrits ci-dessus.
+3. ZÉRO INVENTION : Tu ne dois jamais inventer de cours, filières ou diplômes qui ne figurent pas dans le catalogue officiel de l'établissement. Si une question aborde une notion externe non enseignée, explique-la avec rigueur tout en précisant sa relation avec le cursus de l'école.
+4. MÉTHODE SOCRATIQUE PÉDAGOGIQUE : Explique pas à pas avec des analogies claires. Ne donne pas la réponse toute cuite d'un devoir ou examen : guide l'étudiant vers la méthode de résolution autonome.
+5. CONCISION & LISIBILITÉ : Structure tes réponses en 3 à 4 paragraphes courts ou listes à puces aérées sans verbiage inutile.
+6. VALIDATION DE L'ASSIMILATION : À la fin de chaque explication théorique ou méthodologique, termine toujours par une courte question d'application concrète pour tester la compréhension de l'élève.
+` : ''}`;
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -240,6 +255,32 @@ interface PublicCourse {
     chapters: Array<{ title: string; order: number }>;
 }
 
+interface ClassroomCurriculum {
+    id: string;
+    name: string;
+    description?: string;
+    tuition_fee?: number;
+    training_duration?: string;
+    duree_mois?: number;
+    competencies_list?: string[];
+}
+
+interface FiliereCurriculum {
+    id: string;
+    nom: string;
+    description?: string;
+    frais_scolarite?: number;
+    duree_mois?: number;
+    frais_inscription?: number;
+}
+
+interface SubjectCurriculum {
+    id: string;
+    name: string;
+    code?: string;
+    coefficient?: number;
+}
+
 /** Charge la config agent externe depuis Supabase (via RPC SECURITY DEFINER) */
 async function loadChatAgentConfig(
     env: Env,
@@ -263,33 +304,118 @@ async function loadChatAgentConfig(
     }
 }
 
-/** Charge les cours publics d'une org pour enrichir le contexte de l'agent */
-async function loadPublicCourses(
+/** Charge l'ensemble du cursus académique officiel de l'établissement (cours, classes, filières, matières) */
+async function loadSchoolCurriculum(
     env: Env,
     orgId: string
-): Promise<PublicCourse[]> {
+): Promise<{
+    courses: PublicCourse[];
+    classrooms: ClassroomCurriculum[];
+    filieres: FiliereCurriculum[];
+    subjects: SubjectCurriculum[];
+}> {
     try {
         const sb = new SupabaseClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
-        const rows: any = await sb.query('rpc/get_public_courses_for_agent', {
-            method: 'POST',
-            body: { p_org_id: orgId, p_limit: 15 },
-        });
-        return Array.isArray(rows) ? rows : [];
-    } catch {
-        return [];
+        const [courses, classrooms, filieres, subjects] = await Promise.all([
+            sb.query('rpc/get_public_courses_for_agent', {
+                method: 'POST',
+                body: { p_org_id: orgId, p_limit: 15 },
+            }).catch(() => []) as Promise<PublicCourse[]>,
+            sb.query('classrooms', {
+                filters: `organization_id=eq.${orgId}`,
+                limit: 25,
+            }).catch(() => []) as Promise<ClassroomCurriculum[]>,
+            sb.query('filieres', {
+                filters: `organization_id=eq.${orgId}`,
+                limit: 25,
+            }).catch(() => []) as Promise<FiliereCurriculum[]>,
+            sb.query('subjects', {
+                filters: `organization_id=eq.${orgId}`,
+                limit: 30,
+            }).catch(() => []) as Promise<SubjectCurriculum[]>,
+        ]);
+
+        return {
+            courses: Array.isArray(courses) ? courses : [],
+            classrooms: Array.isArray(classrooms) ? classrooms : [],
+            filieres: Array.isArray(filieres) ? filieres : [],
+            subjects: Array.isArray(subjects) ? subjects : [],
+        };
+    } catch (err: any) {
+        console.warn('[DameSKY] loadSchoolCurriculum error:', err?.message);
+        return { courses: [], classrooms: [], filieres: [], subjects: [] };
     }
 }
 
-/** Formate les cours publics en bloc textuel pour le system prompt */
-function formatCoursesBlock(courses: PublicCourse[]): string {
-    if (!courses.length) return '';
-    const list = courses.map(c => {
-        const chaps = Array.isArray(c.chapters)
-            ? c.chapters.map((ch: any) => `  • ${ch.title}`).join('\n')
-            : '';
-        return `📚 ${c.title}${c.subject ? ` [${c.subject}]` : ''}${c.level ? ` — ${c.level}` : ''}\n${c.description ? `   ${c.description.slice(0, 120)}` : ''}${chaps ? `\n${chaps}` : ''}`;
-    }).join('\n\n');
-    return `\n\nCOURS PUBLIÉS DE L'ÉTABLISSEMENT (tu peux en parler aux utilisateurs) :\n${list}`;
+/** Formate l'ensemble du cursus académique pour le professeur référent */
+function formatCurriculumBlock(
+    data: {
+        courses: PublicCourse[];
+        classrooms: ClassroomCurriculum[];
+        filieres: FiliereCurriculum[];
+        subjects: SubjectCurriculum[];
+    },
+    context?: SkyAgentRequest['context']
+): string {
+    const sections: string[] = [];
+
+    // 1. Contexte immédiat de la leçon en cours si l'utilisateur est dans une leçon active
+    if (context?.current_course_title || context?.current_lesson_title || context?.current_lesson_content) {
+        sections.push(
+            `📍 LEÇON ACTIVE ÉTUDIÉE PAR L'UTILISATEUR :\n` +
+            (context.current_course_title ? `- Cours / Matière : ${context.current_course_title}\n` : '') +
+            (context.current_lesson_title ? `- Titre de la leçon : ${context.current_lesson_title}\n` : '') +
+            (context.current_lesson_content ? `- Contenu pédagogique de la leçon :\n"""\n${context.current_lesson_content.slice(0, 3000)}\n"""\n` : '')
+        );
+    }
+
+    // 2. Filières & Formations diplômantes
+    const allPrograms: string[] = [];
+    if (data.filieres.length > 0) {
+        data.filieres.forEach(f => {
+            const fee = f.frais_scolarite ? `${Number(f.frais_scolarite).toLocaleString('fr-FR')} FCFA` : '';
+            const dur = f.duree_mois ? `${f.duree_mois} mois` : '';
+            const details = [fee, dur].filter(Boolean).join(' | ');
+            allPrograms.push(`🎓 Filière : ${f.nom}${details ? ` (${details})` : ''}${f.description ? `\n   Description : ${f.description.slice(0, 160)}` : ''}`);
+        });
+    }
+    if (data.classrooms.length > 0) {
+        data.classrooms.forEach(c => {
+            const fee = c.tuition_fee ? `${Number(c.tuition_fee).toLocaleString('fr-FR')} FCFA` : '';
+            const dur = c.duree_mois ? `${c.duree_mois} mois` : (c.training_duration || '');
+            const details = [fee, dur].filter(Boolean).join(' | ');
+            const comps = Array.isArray(c.competencies_list) && c.competencies_list.length > 0
+                ? `   • Compétences visées : ${c.competencies_list.slice(0, 5).join(', ')}`
+                : '';
+            allPrograms.push(`🏫 Classe / Programme : ${c.name}${details ? ` (${details})` : ''}${c.description ? `\n   Description : ${c.description.slice(0, 160)}` : ''}${comps ? `\n${comps}` : ''}`);
+        });
+    }
+    if (allPrograms.length > 0) {
+        sections.push(`🏛️ FORMATIONS & CURSUS OFFICIELS DE L'ÉTABLISSEMENT :\n${allPrograms.join('\n\n')}`);
+    }
+
+    // 3. Matières enseignées
+    if (data.subjects.length > 0) {
+        const subList = data.subjects.map(s => `• ${s.name}${s.code ? ` (${s.code})` : ''}${s.coefficient ? ` [Coeff: ${s.coefficient}]` : ''}`).join('\n');
+        sections.push(`📖 MATIÈRES AU PROGRAMME :\n${subList}`);
+    }
+
+    // 4. Cours et chapitres publiés
+    if (data.courses.length > 0) {
+        const coursesList = data.courses.map(c => {
+            const chaps = Array.isArray(c.chapters) && c.chapters.length > 0
+                ? c.chapters.map((ch: any) => `  • Chapitre : ${ch.title}`).join('\n')
+                : '';
+            return `📚 Cours : ${c.title}${c.subject ? ` [Matière: ${c.subject}]` : ''}${c.level ? ` [Niveau: ${c.level}]` : ''}\n${c.description ? `   ${c.description.slice(0, 150)}\n` : ''}${chaps}`;
+        }).join('\n\n');
+        sections.push(`📂 SYLLABUS & CHAPITRES DÉTAILLÉS :\n${coursesList}`);
+    }
+
+    if (sections.length === 0) return '';
+    return `\n\n══════════════════════════════════════════════════════════════════\n` +
+           `RÉFÉRENTIEL ACADÉMIQUE OFFICIEL DU CURSUS DE L'ÉTABLISSEMENT :\n` +
+           `══════════════════════════════════════════════════════════════════\n` +
+           sections.join('\n\n');
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -676,20 +802,21 @@ export async function handleSkyAgentChat(request: Request, env: Env): Promise<Re
     // ── 3. Vérifier si un agent externe est configuré pour cette organisation ──
     const externalConfig = await loadChatAgentConfig(env, context?.org_id);
 
-    // ── 4. Charger les cours publics si autorisé ──
-    let coursesBlock = '';
-    if (externalConfig?.chat_access_courses && context?.org_id) {
-        const courses = await loadPublicCourses(env, context.org_id);
-        coursesBlock = formatCoursesBlock(courses);
+    // ── 4. Charger le cursus académique complet (cours, classes, filières, matières) dès qu'une org est renseignée ──
+    let curriculumBlock = '';
+    if (context?.org_id) {
+        const curriculumData = await loadSchoolCurriculum(env, context.org_id);
+        curriculumBlock = formatCurriculumBlock(curriculumData, context);
     }
 
-    // ── 5. Construire le prompt système enrichi pour Dame SKY ──
+    // ── 5. Construire le prompt système enrichi pour Dame SKY (Professeur Référent) ──
     const systemPrompt = buildSystemPrompt(
         role as SkyAgentRole,
         context,
         effectiveTemperament,
         effectiveInstructions,
-        skillsContent + coursesBlock
+        skillsContent,
+        curriculumBlock
     );
 
     // ── 6. Formater le message utilisateur avec les pièces jointes éventuelles ──

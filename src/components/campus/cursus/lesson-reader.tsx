@@ -8,7 +8,8 @@ import {
     ChevronLeft, ChevronRight, Copy,
     Check, Trash2, FileText,
     Eye, Code2, ChevronDown, ChevronUp,
-    Mic, Play, Pause, Download, Loader2, Lock, Globe, Star, X as XIcon
+    Mic, Play, Pause, Download, Loader2, Lock, Globe, Star, X as XIcon,
+    Sparkles
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -16,6 +17,8 @@ import { cn } from '@/lib/utils';
 import { isContentUnlocked } from '@/lib/cursus-drip-service';
 import type { ContentBlock } from './rich-content-editor';
 import { deductSkyPoints } from '@/lib/sky-points-service';
+import { useSkyAgent } from '@/hooks/use-sky-agent';
+import { SkyAgentChat } from '@/components/sky-agent/SkyAgentChat';
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -416,6 +419,42 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
     const [selectedLang, setSelectedLang]       = useState<LangCatalogEntry | null>(null);
     const [translationQuality, setTranslationQuality] = useState<number>(0);
     const [translationMethod, setTranslationMethod]   = useState<string>('');
+
+    // ── TUTEUR PROFESSEUR RÉFÉRENT (DAME SKY / DEEPSEEK V4) ──
+    const [showSkyChat, setShowSkyChat] = useState(false);
+
+    const rawLessonText = useMemo(() => {
+        try {
+            const blocks = JSON.parse(lesson.content || '[]');
+            if (Array.isArray(blocks)) {
+                return blocks.map((b: any) => b.value || '').join('\n\n');
+            }
+            return lesson.content || '';
+        } catch {
+            return lesson.content || '';
+        }
+    }, [lesson.content]);
+
+    const skyContext = useMemo(() => ({
+        org_id: orgId,
+        current_course_title: lesson.subject_title || '',
+        current_lesson_title: lesson.title,
+        current_lesson_content: rawLessonText,
+        stats: {
+            'Leçon': lesson.title,
+            'Matière': lesson.subject_title || 'Non spécifiée',
+            'Chapitre': lesson.chapter_title || 'En cours',
+        }
+    }), [orgId, lesson.subject_title, lesson.title, lesson.chapter_title, rawLessonText]);
+
+    const {
+        messages: skyMessages,
+        isLoading: isSkyLoading,
+        externalAgentActive: skyExternalActive,
+        persona: skyPersona,
+        sendMessage: sendSkyMessage,
+        clearSession: clearSkySession,
+    } = useSkyAgent('student', skyContext);
 
     // Charger le catalogue de langues depuis le worker
     useEffect(() => {
@@ -860,6 +899,22 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
                     >
                         <Globe className="w-3.5 h-3.5" />
                         {selectedLang ? selectedLang.name_native : 'Traduire'}
+                    </button>
+
+                    {/* Bouton Prof Référent IA (Dame SKY / DeepSeek V4) */}
+                    <button
+                        onClick={() => setShowSkyChat(s => !s)}
+                        className={cn(
+                            "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-all",
+                            showSkyChat
+                                ? "bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-md shadow-amber-500/20"
+                                : "bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-indigo-500/10 border-amber-500/30 text-amber-300 hover:border-amber-400/60 hover:text-amber-200"
+                        )}
+                        title="Poser une question sur cette leçon au Professeur Référent (DeepSeek V4)"
+                    >
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                        <span className="hidden sm:inline">Prof Référent IA</span>
+                        <span className="sm:hidden">Prof IA</span>
                     </button>
                 </div>
 
@@ -1404,6 +1459,20 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
                         )}
                     </AnimatePresence>
                 </div>
+
+                {/* ── Chat Tuteur Dame SKY ancré sur cette leçon ── */}
+                <SkyAgentChat
+                    role="student"
+                    context={skyContext}
+                    isOpen={showSkyChat}
+                    onClose={() => setShowSkyChat(false)}
+                    messages={skyMessages}
+                    isLoading={isSkyLoading}
+                    externalAgentActive={skyExternalActive}
+                    persona={skyPersona}
+                    sendMessage={sendSkyMessage}
+                    clearSession={clearSkySession}
+                />
             </motion.div>
         </AnimatePresence>
     );

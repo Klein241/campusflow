@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-modal';
 import { cleanMotto } from '@/lib/clean-motto';
+import { getNormalizedPrograms, getNormalizedStats, getNormalizedTestimonials } from './template-data-adapter';
 
 interface TemplateProps {
     org: any;
@@ -23,20 +24,13 @@ interface TemplateProps {
     onOpenInscription?: () => void;
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   MODÈLE "MARIANA NAPOLITANI" — Creative Studio
-   - Fond crème/saumon pastel, vert forêt #1E6356
-   - Sticky navbar avec smooth scrolling
-   - Portrait en haut à droite avec badge disponible
-   - Grille portefeuille avec filtres interactifs
-   - Section "What I Do" (Services)
-   - Témoignages & Stats
-   - Footer vert sombre avec hub contact
-═══════════════════════════════════════════════════════════════════ */
 export function TemplateCreativeStudio({
     org, orgSlug, classrooms, filieres, teacherCount, studentCount, gallery, bc, onOpenInscription
 }: TemplateProps) {
     const cfg: TemplateCustomConfig = org.template_config || {};
+    const programs = getNormalizedPrograms(filieres, classrooms, org, cfg);
+    const testimonials = getNormalizedTestimonials(cfg);
+    const stats = getNormalizedStats(cfg, teacherCount, studentCount);
     const [activeFilter, setActiveFilter] = useState<string>('all');
     const [activeSection, setActiveSection] = useState('hero');
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -323,39 +317,89 @@ export function TemplateCreativeStudio({
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                        {filtered.slice(0, 3).map((proj: any, idx) => (
+                        {programs.map((proj: any, idx: number) => (
                             <motion.div
-                                key={proj.id}
+                                key={proj.id || idx}
                                 initial={{ opacity: 0, y: 20 }}
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }}
                                 transition={{ delay: idx * 0.1 }}
-                                className="group rounded-3xl overflow-hidden border border-gray-100 hover:shadow-xl transition-all cursor-pointer"
+                                className="group rounded-3xl overflow-hidden border border-gray-100 hover:shadow-xl transition-all cursor-pointer bg-white flex flex-col justify-between"
                                 onClick={onOpenInscription}
                             >
-                                <div className="aspect-[4/3] relative overflow-hidden"
-                                    style={{ background: idx === 0 ? '#E8F5EE' : idx === 1 ? '#FFF3E8' : '#E8F0F5' }}>
-                                    {proj.image
-                                        ? <img src={proj.image} alt={proj.nom} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                                        : (
-                                            <div className="w-full h-full flex items-center justify-center">
-                                                <span className="text-5xl opacity-30">
-                                                    {idx === 0 ? '🥗' : idx === 1 ? '🌿' : '✈️'}
+                                <div>
+                                    <div className="aspect-[4/3] relative overflow-hidden"
+                                        style={{ background: idx === 0 ? '#E8F5EE' : idx === 1 ? '#FFF3E8' : '#E8F0F5' }}>
+                                        {proj.image
+                                            ? <img src={proj.image} alt={proj.nom} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                            : (
+                                                <div className="w-full h-full flex items-center justify-center">
+                                                    <span className="text-5xl opacity-30">
+                                                        {idx === 0 ? '🎨' : idx === 1 ? '🌿' : '✨'}
+                                                    </span>
+                                                </div>
+                                            )
+                                        }
+                                        <button
+                                            data-editable-field={`program_${idx}_cta`}
+                                            onClick={(e) => { e.stopPropagation(); onOpenInscription?.(); }}
+                                            className="absolute bottom-3 right-3 w-9 h-9 rounded-full flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform cursor-pointer"
+                                            style={{ background: ACCENT }}
+                                        >
+                                            <ArrowUpRight className="w-4 h-4" />
+                                        </button>
+                                        <div className="absolute top-3 left-3 flex items-center gap-1.5">
+                                            <span
+                                                data-editable-field={`program_${idx}_duree`}
+                                                className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/90 text-gray-800 shadow-sm cursor-pointer"
+                                            >
+                                                ⏱️ {proj.duree_texte}
+                                            </span>
+                                            {proj.promo_badge && (
+                                                <span
+                                                    data-editable-field={`program_${idx}_promo`}
+                                                    className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-600 text-white shadow-sm cursor-pointer"
+                                                >
+                                                    {proj.promo_badge}
                                                 </span>
-                                            </div>
-                                        )
-                                    }
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); onOpenInscription?.(); }}
-                                        className="absolute bottom-3 right-3 w-9 h-9 rounded-full flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform"
-                                        style={{ background: ACCENT }}
-                                    >
-                                        <ArrowUpRight className="w-4 h-4" />
-                                    </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="p-4 space-y-1.5">
+                                        <h3
+                                            data-editable-field={`program_${idx}_nom`}
+                                            className="font-black text-sm text-[#0D1C19] group-hover:text-[#1E6356] transition-colors cursor-pointer"
+                                        >
+                                            {proj.nom}
+                                        </h3>
+                                        <p
+                                            data-editable-field={`program_${idx}_description`}
+                                            className="text-xs text-gray-500 line-clamp-2 cursor-pointer"
+                                        >
+                                            {proj.description}
+                                        </p>
+                                    </div>
                                 </div>
-                                <div className="p-4">
-                                    <h3 className="font-black text-sm text-[#0D1C19] group-hover:text-[#1E6356] transition-colors">{proj.nom}</h3>
-                                    <p className="text-xs text-gray-500 mt-0.5">{proj.type}</p>
+                                <div className="p-4 pt-0 flex items-baseline justify-between">
+                                    <div className="flex items-baseline gap-1.5">
+                                        {proj.formatted_prix_barre && (
+                                            <span
+                                                data-editable-field={`program_${idx}_prix_barre`}
+                                                className="text-[11px] text-gray-400 line-through font-mono cursor-pointer"
+                                            >
+                                                {proj.formatted_prix_barre}
+                                            </span>
+                                        )}
+                                        <span
+                                            data-editable-field={`program_${idx}_frais_scolarite`}
+                                            className="text-xs font-black text-[#1E6356] font-mono cursor-pointer"
+                                        >
+                                            {proj.formatted_price}
+                                        </span>
+                                    </div>
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                        {proj.category}
+                                    </span>
                                 </div>
                             </motion.div>
                         ))}
