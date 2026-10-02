@@ -840,71 +840,91 @@ const WORKER_MCP_TOOLS = [
     },
 ];
 
-async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
-    const startTime = Date.now();
-    const { pathname } = new URL(request.url);
+// ══════════════════════════════════════════════════════════
+// GESTIONNAIRE DE SESSION ET AUTHENTIFICATION MCP MULTI-CANAUX
+// ══════════════════════════════════════════════════════════
 
-    // ── GESTION DES REQUÊTES GET (Navigateur & Flux SSE Claude) ──
-    if (request.method === 'GET') {
-        const accept = request.headers.get('Accept') || '';
-        if (accept.includes('text/event-stream')) {
-            const stream = new ReadableStream({
-                start(controller) {
-                    controller.enqueue(new TextEncoder().encode(`event: endpoint\ndata: ${pathname}\n\n`));
-                }
-            });
-            return new Response(stream, {
-                headers: {
-                    'Content-Type': 'text/event-stream',
-                    'Cache-Control': 'no-cache',
-                    'Connection': 'keep-alive',
-                    ...CORS_HEADERS,
-                },
-            });
+// Cache mémoire dans l'isolat Cloudflare Worker pour les requêtes rapprochées
+const mcpSessionCache = new Map<string, { agentKey: any; rawKey: string; expiresAt: number }>();
+
+function extractMcpCredentials(request: Request, url: URL, body?: any): { rawKey: string; sessionId: string } {
+    let rawKey = '';
+    let sessionId = url.searchParams.get('sessionId') || url.searchParams.get('session_id') || '';
+
+    // 1. Headers d'autorisation standard et personnalisés
+    const authHeader = request.headers.get('Authorization') || request.headers.get('authorization') || '';
+    if (authHeader) {
+        const cleaned = authHeader.replace(/^Bearer\s+/i, '').trim();
+        if (cleaned.startsWith('cf_live_')) rawKey = cleaned;
+    }
+    if (!rawKey) {
+        const hKey = request.headers.get('x-api-key') ||
+                     request.headers.get('x-mcp-token') ||
+                     request.headers.get('x-auth-token') ||
+                     request.headers.get('api-key') ||
+                     request.headers.get('apikey') || '';
+        if (hKey.trim().startsWith('cf_live_')) rawKey = hKey.trim();
+    }
+    if (!sessionId) {
+        sessionId = request.headers.get('x-mcp-session-id') || request.headers.get('mcp-session-id') || '';
+    }
+
+    // 2. Paramètres d'URL (Query String) — indispensable pour la découverte SSE de Manus IA
+    if (!rawKey) {
+        const qKey = url.searchParams.get('key') ||
+                     url.searchParams.get('token') ||
+                     url.searchParams.get('apiKey') ||
+                     url.searchParams.get('api_key') ||
+                     url.searchParams.get('access_token') ||
+                     url.searchParams.get('auth') ||
+                     url.searchParams.get('mcp_key') || '';
+        if (qKey.trim().startsWith('cf_live_')) rawKey = qKey.trim();
+    }
+
+    // 3. Payload JSON-RPC (compatibilité avec clients qui injectent le token dans _meta ou params)
+    if (body) {
+        if (!rawKey) {
+            const bKey = body?.params?._meta?.token ||
+                         body?.params?._meta?.apiKey ||
+                         body?.params?._meta?.key ||
+                         body?.params?.token ||
+                         body?.params?.apiKey ||
+                         body?.params?.key ||
+                         body?.token ||
+                         body?.apiKey ||
+                         body?.key || '';
+            if (typeof bKey === 'string' && bKey.trim().startsWith('cf_live_')) {
+                rawKey = bKey.trim();
+            }
         }
-
-        return json({
-            status: 'online',
-            server: 'MCP IziTeach Gateway',
-            engine: 'Cloudflare D1 SQLite (Edge Engine)',
-            protocol: 'jsonrpc-2.0',
-            version: '2.0.0',
-            transport: ['HTTP POST (JSON-RPC 2.0)', 'Server-Sent Events (SSE)'],
-            description: 'Passerelle MCP IziTeach haute performance pour Claude Desktop, Manus IA, Cursor, ChatGPT et agents IA autonomes.',
-            authentication: 'Bearer token header (Authorization: Bearer cf_live_...)',
-            endpoints: {
-                jsonrpc: `POST https://campusflow-worker.kleintaptue1.workers.dev/mcp-gateway`,
-                sse: `GET https://campusflow-worker.kleintaptue1.workers.dev/mcp-gateway`,
-            },
-            supported_methods: ['tools/list', 'tools/call', 'initialize', 'ping'],
-            tools_count: WORKER_MCP_TOOLS.length,
-        });
+        if (!sessionId) {
+            const bSess = body?.params?._meta?.sessionId || body?.params?.sessionId || body?.sessionId || '';
+            if (typeof bSess === 'string' && bSess) sessionId = bSess;
+        }
     }
 
-    const url = new URL(request.url);
-    const authHeader = request.headers.get('Authorization') || request.headers.get('x-api-key') || request.headers.get('x-mcp-token') || '';
-    const queryKey = url.searchParams.get('token') || url.searchParams.get('key') || url.searchParams.get('apiKey') || '';
-    const rawKey = (authHeader.replace(/^Bearer\s+/i, '').trim()) || queryKey.trim();
+    return { rawKey, sessionId };
+}
 
-    if (!rawKey || !rawKey.startsWith('cf_live_')) {
-        return json({ jsonrpc: '2.0', error: { code: -32001, message: 'Clé API manquante. Utilisez: Authorization: Bearer cf_live_xxxxx ou le paramètre ?key=' }, id: null }, 401, {
-            'WWW-Authenticate': 'Bearer realm="IziTeach MCP", error="invalid_token", error_description="Missing or invalid cf_live_ token"'
-        });
-    }
+async function authenticateMcpKey(rawKey: string, env: Env): Promise<any | null> {
+    if (!rawKey || !rawKey.startsWith('cf_live_')) return null;
 
     // 1. SHA-256 de la clé API
     const encoder = new TextEncoder();
     const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(rawKey));
     const keyHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
 
-    // 2. Vérification sur D1 (avec fallback Supabase si absent dans D1)
+    // 2. Vérification sur Cloudflare D1
     let agentKey: any = null;
     try {
-        agentKey = await env.CAMPUSFLOW_DB.prepare(
-            `SELECT * FROM ai_agent_keys WHERE key_hash = ?1 AND is_active = 1`
-        ).bind(keyHash).first();
+        if (env.CAMPUSFLOW_DB) {
+            agentKey = await env.CAMPUSFLOW_DB.prepare(
+                `SELECT * FROM ai_agent_keys WHERE key_hash = ?1 AND is_active = 1`
+            ).bind(keyHash).first();
+        }
     } catch {}
 
+    // 3. Fallback Supabase RPC verify_ai_agent_key
     if (!agentKey && env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
         try {
             const supRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/verify_ai_agent_key`, {
@@ -919,14 +939,8 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
             if (supRes.ok) {
                 const verified = await supRes.json() as any;
                 if (verified && verified.valid) {
-                    // ── DÉFENSE EN PROFONDEUR (WORKER SIDE) ──
-                    // La RPC Supabase retourne déjà is_superadmin=false pour les clés compromises,
-                    // mais on ajoute une 2ème couche : on filtre les permissions superadmin:*
-                    // si le serveur ne confirme pas explicitement is_superadmin=true.
                     const verifiedPerms: string[] = verified.permissions || [];
                     const isSuperFromServer = Boolean(verified.is_superadmin);
-                    // Si le serveur dit is_superadmin=false, on supprime toute permission superadmin:*
-                    // par sécurité (en cas de bug futur côté RPC)
                     const sanitizedPerms = isSuperFromServer
                         ? verifiedPerms
                         : verifiedPerms.filter((p: string) => !p.startsWith('superadmin:'));
@@ -944,40 +958,187 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
         } catch {}
     }
 
-    if (!agentKey) {
-        return json({ jsonrpc: '2.0', error: { code: -32001, message: 'Clé API invalide, inactive ou révoquée' }, id: null }, 401, {
-            'WWW-Authenticate': 'Bearer realm="IziTeach MCP", error="invalid_token", error_description="The API key is invalid, inactive, or revoked"'
+    // 4. Double Fallback : requête directe Supabase REST sur ai_agent_keys avec key_hash
+    if (!agentKey && env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+        try {
+            const restRes = await fetch(`${env.SUPABASE_URL}/rest/v1/ai_agent_keys?key_hash=eq.${keyHash}&is_active=eq.true&select=*`, {
+                headers: {
+                    'apikey': env.SUPABASE_SERVICE_KEY,
+                    'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+                },
+            });
+            if (restRes.ok) {
+                const records = await restRes.json() as any[];
+                if (records && records.length > 0) {
+                    const r = records[0];
+                    if (!r.expires_at || new Date(r.expires_at).getTime() > Date.now()) {
+                        const rPerms: string[] = Array.isArray(r.permissions) ? r.permissions : JSON.parse(r.permissions || '[]');
+                        const isSuper = Boolean(r.is_superadmin);
+                        const sanitizedPerms = isSuper ? rPerms : rPerms.filter((p: string) => !p.startsWith('superadmin:'));
+                        agentKey = {
+                            id: r.id,
+                            name: r.name,
+                            organization_id: r.organization_id,
+                            is_superadmin: isSuper ? 1 : 0,
+                            permissions: JSON.stringify(sanitizedPerms),
+                            rate_limit_per_minute: r.rate_limit_per_minute || 60,
+                            bulk_action_threshold: r.bulk_action_threshold || 50,
+                        };
+                        // Màj last_used_at en arrière-plan
+                        fetch(`${env.SUPABASE_URL}/rest/v1/ai_agent_keys?id=eq.${r.id}`, {
+                            method: 'PATCH',
+                            headers: {
+                                'apikey': env.SUPABASE_SERVICE_KEY,
+                                'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+                                'Content-Type': 'application/json',
+                                'Prefer': 'return=minimal',
+                            },
+                            body: JSON.stringify({ last_used_at: new Date().toISOString() }),
+                        }).catch(() => {});
+                    }
+                }
+            }
+        } catch {}
+    }
+
+    return agentKey;
+}
+
+async function getMcpSession(sessionId: string, env: Env): Promise<{ agentKey: any; rawKey: string } | null> {
+    if (!sessionId) return null;
+    const now = Date.now();
+    const mem = mcpSessionCache.get(sessionId);
+    if (mem && mem.expiresAt > now) {
+        return mem;
+    }
+    try {
+        if (env.NOTIFICATION_CACHE) {
+            const kv = await env.NOTIFICATION_CACHE.get(`mcp_session:${sessionId}`, 'json') as any;
+            if (kv && kv.agentKey) {
+                mcpSessionCache.set(sessionId, { agentKey: kv.agentKey, rawKey: kv.rawKey || '', expiresAt: now + 3600_000 });
+                return kv;
+            }
+        }
+    } catch {}
+    return null;
+}
+
+async function saveMcpSession(sessionId: string, agentKey: any, rawKey: string, env: Env): Promise<void> {
+    if (!sessionId || !agentKey) return;
+    const expiresAt = Date.now() + 86400_000; // 24h
+    mcpSessionCache.set(sessionId, { agentKey, rawKey, expiresAt });
+    try {
+        if (env.NOTIFICATION_CACHE) {
+            await env.NOTIFICATION_CACHE.put(
+                `mcp_session:${sessionId}`,
+                JSON.stringify({ agentKey, rawKey }),
+                { expirationTtl: 86400 }
+            );
+        }
+    } catch {}
+}
+
+async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
+    const startTime = Date.now();
+    const url = new URL(request.url);
+    const { pathname } = url;
+
+    // ── GESTION DES REQUÊTES GET (Navigateur & Flux SSE Claude / Manus IA) ──
+    if (request.method === 'GET') {
+        const accept = request.headers.get('Accept') || request.headers.get('accept') || '';
+        if (accept.includes('text/event-stream')) {
+            const { rawKey, sessionId: existingSessionId } = extractMcpCredentials(request, url);
+            const sessionId = existingSessionId || crypto.randomUUID();
+
+            if (rawKey) {
+                const verifiedKey = await authenticateMcpKey(rawKey, env);
+                if (verifiedKey) {
+                    await saveMcpSession(sessionId, verifiedKey, rawKey, env);
+                }
+            }
+
+            // Conserver impérativement la clé et l'identifiant de session dans l'endpoint SSE retourné
+            // pour que le client (Manus IA, Claude Desktop, Cursor) conserve l'autorisation sur ses requêtes POST ultérieures
+            const endpointParams = new URLSearchParams(url.search);
+            endpointParams.set('sessionId', sessionId);
+            if (rawKey) {
+                endpointParams.set('key', rawKey);
+            }
+            const endpointUri = `${pathname}?${endpointParams.toString()}`;
+
+            const stream = new ReadableStream({
+                start(controller) {
+                    controller.enqueue(new TextEncoder().encode(`event: endpoint\ndata: ${endpointUri}\n\n`));
+                }
+            });
+            return new Response(stream, {
+                headers: {
+                    'Content-Type': 'text/event-stream',
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive',
+                    ...CORS_HEADERS,
+                },
+            });
+        }
+
+        return json({
+            status: 'online',
+            server: 'MCP IziTeach Gateway',
+            engine: 'Cloudflare D1 SQLite & Supabase Dual Edge',
+            protocol: 'jsonrpc-2.0',
+            version: '2.0.0',
+            transport: ['HTTP POST (JSON-RPC 2.0)', 'Server-Sent Events (SSE)'],
+            description: 'Passerelle MCP IziTeach haute performance pour Manus IA, Claude Desktop, Cursor, ChatGPT et agents IA autonomes.',
+            authentication: 'Clé dans l\'URL (?key=cf_live_...) ou Header (Authorization: Bearer cf_live_...)',
+            endpoints: {
+                jsonrpc: `POST https://campusflow-worker.kleintaptue1.workers.dev/mcp-gateway`,
+                sse: `GET https://campusflow-worker.kleintaptue1.workers.dev/mcp-gateway`,
+            },
+            supported_methods: ['tools/list', 'tools/call', 'initialize', 'ping'],
+            tools_count: WORKER_MCP_TOOLS.length,
         });
     }
 
-    const rawPermissions: string[] = typeof agentKey.permissions === 'string'
-        ? JSON.parse(agentKey.permissions || '[]')
-        : (agentKey.permissions || []);
-
-    const isSuperadmin = Boolean(agentKey.is_superadmin);
-
-    // ── TRIPLE VÉRIFICATION SÉCURITÉ ──
-    // Si isSuperadmin=false, filtrer les permissions superadmin:* résiduelles
-    // (3ème couche de protection après DB constraint + RPC fix)
-    const permissions: string[] = isSuperadmin
-        ? rawPermissions
-        : rawPermissions.filter(p => !p.startsWith('superadmin:'));
-
-    const orgId = agentKey.organization_id;
-    const agentName = agentKey.name || 'Sky Agent';
-
-    // 3. Parser la requête JSON-RPC
-    let mcpReq: any;
+    // ── GESTION DES REQUÊTES POST (JSON-RPC 2.0) ──
+    let mcpReq: any = null;
     try {
         mcpReq = await request.json();
     } catch {
         return json({ jsonrpc: '2.0', error: { code: -32700, message: 'JSON invalide' }, id: null }, 400);
     }
 
-    const reqId = mcpReq.id ?? null;
+    const reqId = mcpReq?.id ?? null;
 
+    // 1. Extraire les identifiants (Headers, URL Search Params, ou Body JSON-RPC)
+    let { rawKey, sessionId } = extractMcpCredentials(request, url, mcpReq);
+    let agentKey: any = null;
+
+    // Vérifier d'abord si une session valide existe déjà en cache
+    if (sessionId) {
+        const session = await getMcpSession(sessionId, env);
+        if (session) {
+            agentKey = session.agentKey;
+            if (!rawKey && session.rawKey) rawKey = session.rawKey;
+        }
+    }
+
+    // Si pas de session valide en cache mais une clé est fournie, authentifier
+    if (!agentKey && rawKey) {
+        agentKey = await authenticateMcpKey(rawKey, env);
+        if (agentKey && sessionId) {
+            await saveMcpSession(sessionId, agentKey, rawKey, env);
+        }
+    }
+
+    const agentName = agentKey?.name || 'Sky Agent';
+
+    // 2. Handshake & Découverte sans bloquer la négociation du protocole MCP
     if (mcpReq.method === 'ping') {
-        return json({ jsonrpc: '2.0', result: { pong: true, engine: 'Cloudflare D1 Primary Edge (SQLite)', agent: agentName }, id: reqId });
+        return json({
+            jsonrpc: '2.0',
+            result: { pong: true, engine: 'Cloudflare D1 & Supabase Edge Engine', agent: agentName },
+            id: reqId,
+        });
     }
 
     // ── GESTION DES NOTIFICATIONS MCP (COMPATIBILITÉ PROTOCOLE CLIENT MANUS IA / CLAUDE) ──
@@ -1004,6 +1165,35 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
             id: reqId,
         });
     }
+
+    // 3. Sécurisation stricte des méthodes opérationnelles (tools/list, tools/call)
+    // ATTENTION CRITIQUE : NE JAMAIS renvoyer le header "WWW-Authenticate: Bearer" !
+    // Renvoyer ce header déclenche le piège OAuth de Manus IA qui affiche un formulaire
+    // d'autorisation OAuth dans le chat et bloque l'utilisateur en boucle.
+    if (!agentKey) {
+        return json({
+            jsonrpc: '2.0',
+            error: {
+                code: -32001,
+                message: 'Clé API manquante ou invalide. Renseignez votre clé cf_live_... dans l\'URL MCP (?key=cf_live_...) ou via le header Authorization: Bearer cf_live_...',
+            },
+            id: reqId,
+        }, 401);
+    }
+
+    const rawPermissions: string[] = typeof agentKey.permissions === 'string'
+        ? JSON.parse(agentKey.permissions || '[]')
+        : (agentKey.permissions || []);
+
+    const isSuperadmin = Boolean(agentKey.is_superadmin);
+
+    // ── TRIPLE VÉRIFICATION SÉCURITÉ ──
+    // Si isSuperadmin=false, filtrer les permissions superadmin:* résiduelles
+    const permissions: string[] = isSuperadmin
+        ? rawPermissions
+        : rawPermissions.filter((p: string) => !p.startsWith('superadmin:'));
+
+    const orgId = agentKey.organization_id;
 
     if (mcpReq.method === 'tools/list') {
         const tools = WORKER_MCP_TOOLS.filter(t => {
