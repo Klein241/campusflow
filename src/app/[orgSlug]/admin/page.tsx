@@ -47,7 +47,6 @@ import { AdminPaymentsTab } from '@/components/admin/tabs/AdminPaymentsTab';
 import { AdminDisciplineTab } from '@/components/admin/tabs/AdminDisciplineTab';
 import { AdminWhatsAppQueueTab } from '@/components/admin/tabs/AdminWhatsAppQueueTab';
 import { AdminPdfTemplatesTab } from '@/components/admin/tabs/AdminPdfTemplatesTab';
-import { AdminLandingTab } from '@/components/admin/tabs/AdminLandingTab';
 import { AdminSettingsTab } from '@/components/admin/tabs/AdminSettingsTab';
 import { AdminMonitoringTab } from '@/components/admin/tabs/AdminMonitoringTab';
 import { AdminCertificatesTab } from '@/components/admin/tabs/AdminCertificatesTab';
@@ -108,8 +107,7 @@ interface Room { id?: string; name: string; }
 
 const SIDES = [
     { id: 'general' as Tab, icon: Home, label: 'Général' },
-    { id: 'landing' as Tab, icon: LayoutDashboard, label: 'Page d\'accueil' },
-    { id: 'premium_styles' as Tab, icon: Sparkles, label: '✨ Style Premium' },
+    { id: 'premium_styles' as Tab, icon: Sparkles, label: '✨ Studio & Page d\'accueil' },
     { id: 'setup' as Tab, icon: Settings, label: 'Configuration' },
     { id: 'classes' as Tab, icon: School, label: 'Classes & Matières' }, { id: 'rooms' as Tab, icon: Building2, label: 'Salles' },
     { id: 'teachers' as Tab, icon: Users, label: 'Professeurs' }, { id: 'students' as Tab, icon: GraduationCap, label: 'Étudiants' },
@@ -1621,7 +1619,7 @@ function AdminPageContent() {
         toast.success('Domaine retiré');
     };
     const loadCursus = async () => { const subIds = subs.map((s: any) => s.id); if (subIds.length === 0) { setCursusLoaded(true); return; } const { data: chaps } = await supabase.from('chapters').select('*').in('subject_id', subIds).order('position'); setAdminChapters(chaps || []); const chIds = (chaps || []).map((c: any) => c.id); if (chIds.length > 0) { const { data: lsns } = await supabase.from('lessons').select('*').in('chapter_id', chIds).order('position'); setAdminLessons(lsns || []); } setCursusLoaded(true); };
-    const onTab = (t: Tab) => { setTab(t); setSidebar(false); if (t === 'timetable' && !ttLoaded) loadTT(); if (t === 'evaluations' && !evLoaded) loadEv(); if (t === 'payments' && !payLoaded) loadPay(); if (t === 'disciplines' && !dLoaded) loadDisc(); if (t === 'grades' && !grLoaded) loadGrades(); if (t === 'settings') loadSettings(); if (t === 'landing') loadLanding(); if (t === 'modeles') loadTemplateSettings(); if (t === 'cursus' && !cursusLoaded) loadCursus(); if (t === 'whatsapp' && !waLoaded) loadWhatsAppQueue(); };
+    const onTab = (t: Tab) => { const targetTab = t === 'landing' ? 'premium_styles' : t; setTab(targetTab); setSidebar(false); if (targetTab === 'timetable' && !ttLoaded) loadTT(); if (targetTab === 'evaluations' && !evLoaded) loadEv(); if (targetTab === 'payments' && !payLoaded) loadPay(); if (targetTab === 'disciplines' && !dLoaded) loadDisc(); if (targetTab === 'grades' && !grLoaded) loadGrades(); if (targetTab === 'settings') loadSettings(); if (targetTab === 'modeles') loadTemplateSettings(); if (targetTab === 'cursus' && !cursusLoaded) loadCursus(); if (targetTab === 'whatsapp' && !waLoaded) loadWhatsAppQueue(); };
 
     // ═══ CRUD CLASSES INLINE ═══
     const addClassDirect = async () => {
@@ -2463,24 +2461,13 @@ ${bodyHtml}
                         />
                     )}
 
-                    {tab === 'premium_styles' && (
+                    {(tab === 'premium_styles' || tab === 'landing') && (
                         <AdminPremiumStyles
                             org={org}
                             orgSlug={orgSlug}
                             adminSkyPoints={adminSkyPoints}
                             onUpdateOrg={(updated) => setOrg(updated)}
                             onUpdatePoints={(pts) => setAdminSkyPoints(pts)}
-                        />
-                    )}
-
-                    {/* ═══ LANDING PAGE CONFIG ═══ */}
-                    {tab === 'landing' && (
-                        <AdminLandingTab
-                            org={org}
-                            orgSlug={orgSlug}
-                            isCustom={isCustom}
-                            onNavigateTab={(t: any) => setTab(t)}
-                            onUpdateOrg={(updated: any) => setOrg(updated)}
                         />
                     )}
 

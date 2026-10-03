@@ -1188,7 +1188,7 @@ export function TemplateCustomizerStudio({
             {/* ═══════════════════════════════════════════════════════════════
                SPLIT WORKSPACE LAYOUT : SIDEBAR + LIVE CANVAS
             ═══════════════════════════════════════════════════════════════ */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 min-h-0 flex overflow-hidden">
 
                 {/* ─── GAUCHE : PANNEAU DE CONTRÔLE STUDIO (440px) ───────── */}
                 <aside className="w-full sm:w-[440px] lg:w-[480px] border-r border-white/10 bg-[#0B0E17] flex flex-col shrink-0 z-20 overflow-hidden">
@@ -2583,7 +2583,7 @@ export function TemplateCustomizerStudio({
                 </aside>
 
                 {/* ─── DROITE : CANEVAS DE RENDU LIVE (CANVAS INTERACTIF) ─── */}
-                <main className="flex-1 bg-[#06080D] flex flex-col items-center justify-start overflow-hidden relative">
+                <main className="flex-1 min-h-0 min-w-0 bg-[#06080D] flex flex-col items-center justify-start overflow-hidden relative">
 
                     {/* Canvas Background Grid */}
                     <div className="absolute inset-0 pointer-events-none opacity-20"
@@ -2629,7 +2629,11 @@ export function TemplateCustomizerStudio({
                     </div>
 
                     {/* Live Preview Container Frame */}
-                    <div className="flex-1 w-full overflow-y-auto p-4 sm:p-8 flex items-start justify-center">
+                    <div
+                        id="studio-live-preview-scroll-container"
+                        className="flex-1 min-h-0 w-full h-full overflow-y-auto overflow-x-hidden p-4 sm:p-8 flex items-start justify-center relative overscroll-contain [scrollbar-width:thin] [scrollbar-color:rgba(245,158,11,0.5)_transparent] [&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar-thumb]:bg-amber-500/40 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-white/[0.02]"
+                        style={{ scrollBehavior: 'smooth' }}
+                    >
                         <div
                             style={{
                                 transform: `scale(${zoomLevel / 100})`,
