@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import { cleanMotto } from '@/lib/clean-motto';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-studio';
+import { extractContentAndCurriculum } from '@/lib/curriculum-parser';
 
 interface TemplateProps {
     org: any;
@@ -252,44 +253,6 @@ export function TemplateSegmentedHub({
             discountBadge,
             promoBadge
         };
-    };
-
-    // Helper pour extraire séparément l'introduction/présentation et les modules réels
-    const extractContentAndCurriculum = (text: string) => {
-        if (!text) return { intro: '', modules: [] as { num: number; title: string }[] };
-        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-        const introLines: string[] = [];
-        const modules: { num: number; title: string }[] = [];
-        let inModuleSection = false;
-
-        for (const line of lines) {
-            if (line.match(/^(programme|modules|ateliers|étapes|cursus)\s*[:\-]/i)) {
-                inModuleSection = true;
-                continue;
-            }
-
-            const matchNumbered = line.match(/^(\d+)[\.\-\)]\s*(.+)/);
-            const matchModule = line.match(/^(?:module|atelier|partie|étape|semaine)\s*(\d+)?\s*[:\-]?\s*(.+)/i);
-            const matchBullet = line.match(/^[\•\*\-]\s*(.+)/);
-
-            if (matchModule) {
-                const num = matchModule[1] ? parseInt(matchModule[1], 10) : modules.length + 1;
-                modules.push({ num, title: matchModule[2] || line });
-                inModuleSection = true;
-            } else if (matchNumbered) {
-                modules.push({ num: parseInt(matchNumbered[1], 10), title: matchNumbered[2] });
-                inModuleSection = true;
-            } else if (matchBullet && (inModuleSection || lines.length > 2)) {
-                modules.push({ num: modules.length + 1, title: matchBullet[1] });
-            } else if (inModuleSection) {
-                modules.push({ num: modules.length + 1, title: line });
-            } else {
-                introLines.push(line);
-            }
-        }
-
-        const intro = introLines.length > 0 ? introLines.join('\n') : (modules.length === 0 ? text : '');
-        return { intro, modules };
     };
 
     const accordionItems = [

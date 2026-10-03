@@ -135,8 +135,11 @@ export function TeacherCursus({ orgId, userId, userName, allClasses, onStartDM, 
 
     // ── Édition inline ──
     const [editCh,        setEditCh]        = useState<string | null>(null);
+    const [editChTitle,   setEditChTitle]   = useState('');
     const [editChBlocks,  setEditChBlocks]  = useState<ContentBlock[]>([]);
     const [editLesson,    setEditLesson]    = useState<string | null>(null);
+    const [editLessonTitle, setEditLessonTitle] = useState('');
+    const [editLessonDuration, setEditLessonDuration] = useState('15');
     const [editLessonBlocks, setEditLessonBlocks] = useState<ContentBlock[]>([]);
     const [editEx,        setEditEx]        = useState<any | null>(null);
     const [editExForm,    setEditExForm]    = useState({ title: '', type: 'qcm', duration_minutes: 10, max_score: 20, questions: [] as any[] });
@@ -313,9 +316,10 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
 
     const saveChapterContent = async (chId: string) => {
         const serialized = serializeContent(editChBlocks);
-        const { error } = await supabase.from('chapters').update({ content: serialized }).eq('id', chId);
+        const updatedTitle = editChTitle.trim() || 'Chapitre sans titre';
+        const { error } = await supabase.from('chapters').update({ content: serialized, title: updatedTitle }).eq('id', chId);
         if (error) toast.error(error.message);
-        else { setChapters(prev => prev.map(c => c.id === chId ? { ...c, content: serialized } : c)); setEditCh(null); toast.success('Contenu mis à jour ✅'); }
+        else { setChapters(prev => prev.map(c => c.id === chId ? { ...c, content: serialized, title: updatedTitle } : c)); setEditCh(null); toast.success('Chapitre mis à jour ✅'); }
     };
 
     const deleteChapter = async (chId: string) => {
@@ -360,9 +364,15 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
 
     const saveLessonContent = async (lId: string) => {
         const serialized = serializeContent(editLessonBlocks);
-        const { error } = await supabase.from('lessons').update({ content: serialized }).eq('id', lId);
+        const updatedTitle = editLessonTitle.trim() || 'Leçon sans titre';
+        const updatedDuration = parseInt(editLessonDuration) || 15;
+        const { error } = await supabase.from('lessons').update({
+            content: serialized,
+            title: updatedTitle,
+            estimated_minutes: updatedDuration
+        }).eq('id', lId);
         if (error) toast.error(error.message);
-        else { setLessons(prev => prev.map(l => l.id === lId ? { ...l, content: serialized } : l)); setEditLesson(null); toast.success('Leçon mise à jour ✅'); }
+        else { setLessons(prev => prev.map(l => l.id === lId ? { ...l, content: serialized, title: updatedTitle, estimated_minutes: updatedDuration } : l)); setEditLesson(null); toast.success('Leçon mise à jour ✅'); }
     };
 
     const deleteLesson = async (lId: string) => {
@@ -812,7 +822,7 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
                                                     <DiscussButton context={{ type: 'chapter', id: ch.id, title: ch.title, parentTitle: selectedSub?.name }}
                                                         orgId={orgId} userId={userId} userName={userName}
                                                         onOpenChat={onOpenGroupChat || (() => {})} size="xs" />
-                                                    <button onClick={() => { setEditCh(ch.id); setEditChBlocks(parseContent(ch.content)); }}
+                                                    <button onClick={() => { setEditCh(ch.id); setEditChTitle(ch.title || ''); setEditChBlocks(parseContent(ch.content)); }}
                                                         className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-400 transition-all">
                                                         <Edit2 className="w-3.5 h-3.5" />
                                                     </button>
@@ -822,7 +832,17 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
                                                     </button>
                                                 </div>
                                                 {editCh === ch.id && (
-                                                    <div className="px-3 pb-3 space-y-2 border-t border-white/[0.05] pt-2">
+                                                    <div className="px-3 pb-3 space-y-2 border-t border-white/[0.05] pt-2" onClick={e => e.stopPropagation()}>
+                                                        <div>
+                                                            <Label className="text-[11px] text-slate-400 mb-1 block">Titre du chapitre *</Label>
+                                                            <Input
+                                                                value={editChTitle}
+                                                                onChange={e => setEditChTitle(e.target.value)}
+                                                                placeholder="Titre du chapitre..."
+                                                                className="bg-white/[0.05] border-white/10 text-white rounded-xl text-sm h-9"
+                                                            />
+                                                        </div>
+                                                        <Label className="text-[11px] text-slate-400 block">Contenu du chapitre</Label>
                                                         <RichContentEditor blocks={editChBlocks} onChange={setEditChBlocks} placeholder="Contenu du chapitre..." userId={userId}
                                                             onVoicePublished={() => deductSkyPoints(userId, 3, 'note_vocale', 'Note vocale dans un chapitre', 'teacher')} />
                                                         <div className="flex gap-2">
@@ -911,7 +931,7 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
                                                 onSave={(u) => saveLessonDrip(lesson.id, u)}
                                                 compact
                                             />
-                                            <button onClick={() => { setEditLesson(lesson.id); setEditLessonBlocks(parseContent(lesson.content)); }}
+                                            <button onClick={() => { setEditLesson(lesson.id); setEditLessonTitle(lesson.title || ''); setEditLessonDuration(String(lesson.estimated_minutes || 15)); setEditLessonBlocks(parseContent(lesson.content)); }}
                                                 className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-400 transition-all">
                                                 <Edit2 className="w-3.5 h-3.5" />
                                             </button>
@@ -922,6 +942,28 @@ Connectez-vous à IziTeach pour accéder au nouveau contenu dès maintenant.`);
                                         </div>
                                         {editLesson === lesson.id && (
                                             <div className="border-t border-white/[0.06] px-3 pb-3 pt-2.5 space-y-2">
+                                                <div className="flex gap-2">
+                                                    <div className="flex-1">
+                                                        <Label className="text-[10px] text-slate-400 mb-1 block">Titre de la leçon *</Label>
+                                                        <Input
+                                                            value={editLessonTitle}
+                                                            onChange={e => setEditLessonTitle(e.target.value)}
+                                                            placeholder="Titre de la leçon..."
+                                                            className="bg-white/[0.05] border-white/10 text-white h-8 rounded-xl text-xs"
+                                                        />
+                                                    </div>
+                                                    <div className="w-20">
+                                                        <Label className="text-[10px] text-slate-400 mb-1 block">Durée</Label>
+                                                        <Input
+                                                            type="number"
+                                                            value={editLessonDuration}
+                                                            onChange={e => setEditLessonDuration(e.target.value)}
+                                                            className="bg-white/[0.05] border-white/10 text-white h-8 rounded-xl text-xs text-center"
+                                                            placeholder="min"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <Label className="text-[10px] text-slate-400 block">Contenu de la leçon</Label>
                                                 <RichContentEditor blocks={editLessonBlocks} onChange={setEditLessonBlocks} placeholder="Contenu de la leçon..." userId={userId}
                                                     onVoicePublished={() => deductSkyPoints(userId, 3, 'note_vocale', 'Note vocale dans une leçon', 'teacher')} />
                                                 <div className="flex gap-2">

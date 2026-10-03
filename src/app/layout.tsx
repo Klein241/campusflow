@@ -21,6 +21,7 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://iziteach.com'),
   title: "IziTeach — Enseigner simplement",
   description: "IziTeach — Plateforme SaaS de gestion d'écoles physiques et académies en ligne. Enseigner simplement.",
   manifest: "/manifest.json",

@@ -9,6 +9,7 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  staticPageGenerationTimeout: 120,
 } satisfies Record<string, unknown>;
 
 export default nextConfig as NextConfig;

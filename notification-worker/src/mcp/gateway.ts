@@ -93,7 +93,7 @@ const WORKER_MCP_TOOLS = [
     },
     {
         name: 'create_lesson',
-        description: 'Créer une leçon dans un chapitre (supporte le français, anglais, arabe et 20+ langues locales africaines, avec support audio vocal R2 et images)',
+        description: 'Créer une leçon dans un chapitre (supporte le français, anglais, arabe et 20+ langues locales africaines, avec support audio vocal R2 automatique ou personnalisé et images)',
         permission: 'write:curriculum',
         inputSchema: {
             type: 'object',
@@ -104,6 +104,8 @@ const WORKER_MCP_TOOLS = [
                 duration_minutes: { type: 'number' },
                 position: { type: 'number' },
                 language: { type: 'string', description: 'Code de langue (ex: fr, en, sw, ha, yo, ig, lin, ful, ewo, dua, bam, kin, etc. Défaut: fr)' },
+                generate_audio: { type: 'boolean', description: 'Si true, génère automatiquement une note vocale audio pédagogique IA (TTS MeloTTS/Deepgram) stockée sur R2 et intégrée directement à la leçon' },
+                audio_script: { type: 'string', description: 'Texte ou résumé oral personnalisé à synthétiser pour l\'audio (si omis et generate_audio=true, le texte de la leçon sera utilisé)' },
                 audio_url: { type: 'string', description: 'URL publique d\'un fichier audio (MP3, WebM sur Cloudflare R2 ou externe) à attacher comme explication vocale' },
                 audio_caption: { type: 'string', description: 'Légende ou titre de la note vocale (ex: Explication orale du cours)' },
                 audio_duration: { type: 'number', description: 'Durée de l\'audio en secondes (optionnel)' },
@@ -124,6 +126,8 @@ const WORKER_MCP_TOOLS = [
                 duration_minutes: { type: 'number' },
                 position: { type: 'number' },
                 language: { type: 'string' },
+                generate_audio: { type: 'boolean', description: 'Si true, génère ou régénère la synthèse vocale audio de la leçon sur Cloudflare R2' },
+                audio_script: { type: 'string', description: 'Texte oral personnalisé à synthétiser pour l\'audio' },
                 audio_url: { type: 'string', description: 'URL audio R2 à attacher ou remplacer dans la leçon' },
                 audio_caption: { type: 'string', description: 'Légende ou titre de la note vocale' },
             },
@@ -147,17 +151,16 @@ const WORKER_MCP_TOOLS = [
     },
     {
         name: 'generate_lesson_audio',
-        description: 'Générer une synthèse vocale (TTS) IA à partir d\'un texte de cours, la stocker sur Cloudflare R2 et l\'attacher optionnellement à une leçon',
+        description: 'Générer une synthèse vocale (TTS) IA à partir d\'un texte de cours ou directement depuis une leçon existante, la stocker sur Cloudflare R2 et l\'attacher à la leçon',
         permission: 'write:curriculum',
         inputSchema: {
             type: 'object',
             properties: {
-                text: { type: 'string', description: 'Texte pédagogique ou résumé à synthétiser en voix audio' },
-                lesson_id: { type: 'string', description: 'UUID optionnel de la leçon à laquelle attacher immédiatement l\'audio' },
+                lesson_id: { type: 'string', description: 'UUID de la leçon cible. Si text n\'est pas fourni, le texte de cette leçon sera automatiquement chargé depuis la base de données et synthétisé !' },
+                text: { type: 'string', description: 'Texte pédagogique ou résumé à synthétiser en voix audio (optionnel si lesson_id est fourni)' },
                 caption: { type: 'string', description: 'Titre ou légende de la note vocale (ex: Résumé vocal de la leçon)' },
-                language: { type: 'string', description: 'Code de langue de synthèse (fr, en, es - défaut: fr)' },
+                language: { type: 'string', description: 'Code de langue de synthèse (fr, en, es - défaut: langue de la leçon ou fr)' },
             },
-            required: ['text'],
         },
     },
     {

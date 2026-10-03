@@ -96,6 +96,40 @@ async function fetchSupabaseRestOrThrow(env: Env, path: string, options: { metho
 }
 
 
+// ── Helper Extraction de Texte Oral Nettoyé pour la Synthèse Vocale (TTS) ──
+function extractCleanSpeechText(rawContent: string | null | undefined): string {
+    if (!rawContent) return '';
+    let text = '';
+    try {
+        const parsed = JSON.parse(rawContent);
+        if (Array.isArray(parsed)) {
+            text = parsed
+                .filter(b => b && b.type === 'text' && b.value)
+                .map(b => b.value)
+                .join('\n\n');
+        } else if (typeof parsed === 'string') {
+            text = parsed;
+        } else {
+            text = rawContent;
+        }
+    } catch {
+        text = rawContent;
+    }
+
+    return text
+        .replace(/<think>[\s\S]*?<\/think>/g, '')
+        .replace(/```[\s\S]*?```/g, '')       // supprime les blocs de code
+        .replace(/`([^`]+)`/g, '$1')           // code en ligne
+        .replace(/!\[.*?\]\(.*?\)/g, '')       // images markdown
+        .replace(/\[([^\]]+)\]\(.*?\)/g, '$1') // liens markdown
+        .replace(/#{1,6}\s+/g, '')            // titres
+        .replace(/[*_~]{1,3}/g, '')           // emphase
+        .replace(/>\s+/g, '')                 // citations
+        .replace(/[-*+]\s+/g, '')             // puces
+        .replace(/\n{2,}/g, '\n')
+        .trim();
+}
+
 // ── Exécuteur direct Cloudflare D1 + Synchronisation Supabase Directe ──────────────────
 async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx: { agentKey: any; isSuperadmin: boolean; orgId: string | null; agentName: string; agentId: string }, env: Env): Promise<any> {
     const db = env.CAMPUSFLOW_DB;
@@ -427,8 +461,39 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 if (tr.note) langNotice = ` (${tr.note})`;
             }
 
-            // Support Audio direct R2 / URL externe dans les leçons
-            if (args.audio_url) {
+            // Support Audio direct R2 / URL externe OU Synthèse vocale TTS automatique Cloudflare AI
+            let generatedAudioUrl = args.audio_url || null;
+            let audioGenerated = false;
+            const shouldGenerateAudio = Boolean(args.generate_audio || args.auto_generate_audio);
+
+            if (!generatedAudioUrl && shouldGenerateAudio) {
+                try {
+                    const textToSpeak = (args.audio_script || extractCleanSpeechText(finalContent) || args.title).slice(0, 3000);
+                    const { audioBytes, mimeType } = await generateSpeechAudio(env, textToSpeak, langCode);
+                    const timestamp = Date.now();
+                    const safeId = id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+                    const r2Key = `lesson-audio/${timestamp}_${safeId}.mp3`;
+
+                    await env.LIBRARY_BUCKET.put(r2Key, audioBytes, {
+                        httpMetadata: {
+                            contentType: mimeType,
+                            cacheControl: 'public, max-age=31536000',
+                        },
+                        customMetadata: {
+                            generatedBy: 'Cloudflare_MeloTTS',
+                            lang: langCode,
+                            caption: args.audio_caption || `Explication vocale : ${args.title}`,
+                            uploadedAt: new Date().toISOString(),
+                        },
+                    });
+                    generatedAudioUrl = `https://campusflow-worker.kleintaptue1.workers.dev/r2/${r2Key}`;
+                    audioGenerated = true;
+                } catch (audioErr: any) {
+                    console.error('[create_lesson] Échec génération audio TTS:', audioErr);
+                }
+            }
+
+            if (generatedAudioUrl) {
                 let blocks: any[] = [];
                 try {
                     const parsed = JSON.parse(finalContent);
@@ -437,10 +502,10 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 } catch {
                     blocks = [{ type: 'text', value: finalContent }];
                 }
-                if (!blocks.some(b => b.type === 'audio' && b.url === args.audio_url)) {
+                if (!blocks.some(b => b.type === 'audio' && b.url === generatedAudioUrl)) {
                     blocks.push({
                         type: 'audio',
-                        url: args.audio_url,
+                        url: generatedAudioUrl,
                         caption: args.audio_caption || `Explication vocale : ${args.title}`,
                         duration: Number(args.audio_duration) || undefined,
                     });
@@ -485,7 +550,15 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                     }
 
                     broadcastUpdatePush(env, db, targetOrgId, `📚 Nouvelle Leçon [${langCode.toUpperCase()}] : ${args.title}`, `Une nouvelle leçon (${duration} min) est disponible.`, '📚', '/campus/cursus');
-                    return { success: true, lesson_id: id, language: langCode, lesson: inserted[0], message: `✅ Leçon "${args.title}" créée en ${langCode.toUpperCase()}${langNotice} et publiée immédiatement` };
+                    return {
+                        success: true,
+                        lesson_id: id,
+                        language: langCode,
+                        audio_url: generatedAudioUrl,
+                        audio_generated: audioGenerated,
+                        lesson: inserted[0],
+                        message: `✅ Leçon "${args.title}" créée en ${langCode.toUpperCase()}${langNotice} et publiée immédiatement${audioGenerated ? ' avec audio synthétisé sur R2' : ''}`
+                    };
                 }
             }
 
@@ -493,7 +566,14 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 .bind(id, targetOrgId, args.chapter_id, args.title, finalContent, duration, position, new Date().toISOString()).run();
             syncToSupabase(env, 'lessons', 'INSERT', payload);
             broadcastUpdatePush(env, db, targetOrgId, `📚 Nouvelle Leçon [${langCode.toUpperCase()}] : ${args.title}`, `Une nouvelle leçon (${duration} min) est disponible.`, '📚', '/campus/cursus');
-            return { success: true, lesson_id: id, language: langCode, message: `✅ Leçon "${args.title}" créée en ${langCode.toUpperCase()}${langNotice} et publiée` };
+            return {
+                success: true,
+                lesson_id: id,
+                language: langCode,
+                audio_url: generatedAudioUrl,
+                audio_generated: audioGenerated,
+                message: `✅ Leçon "${args.title}" créée en ${langCode.toUpperCase()}${langNotice} et publiée${audioGenerated ? ' avec audio synthétisé sur R2' : ''}`
+            };
         }
 
         // ── UPDATE LESSON ──
@@ -528,8 +608,29 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             }
             if (args.position !== undefined) updatePayload.position = Number(args.position);
 
-            // Si audio_url est fourni lors de la mise à jour
-            if (args.audio_url) {
+            // Si audio_url est fourni OU si generate_audio est demandé
+            let audioToAttach = args.audio_url || null;
+            if (!audioToAttach && (args.generate_audio || args.auto_generate_audio)) {
+                try {
+                    const baseText = updatePayload.content !== undefined ? updatePayload.content : currentContent;
+                    const textToSpeak = (args.audio_script || extractCleanSpeechText(baseText) || args.title || 'Leçon').slice(0, 3000);
+                    const lang = (args.language || 'fr').toLowerCase().trim();
+                    const { audioBytes, mimeType } = await generateSpeechAudio(env, textToSpeak, lang);
+                    const timestamp = Date.now();
+                    const safeId = String(args.lesson_id).replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+                    const r2Key = `lesson-audio/${timestamp}_${safeId}.mp3`;
+
+                    await env.LIBRARY_BUCKET.put(r2Key, audioBytes, {
+                        httpMetadata: { contentType: mimeType, cacheControl: 'public, max-age=31536000' },
+                        customMetadata: { generatedBy: 'Cloudflare_MeloTTS', lang, caption: args.audio_caption || 'Explication audio de la leçon', uploadedAt: new Date().toISOString() },
+                    });
+                    audioToAttach = `https://campusflow-worker.kleintaptue1.workers.dev/r2/${r2Key}`;
+                } catch (audioErr: any) {
+                    console.error('[update_lesson] Échec génération audio TTS:', audioErr);
+                }
+            }
+
+            if (audioToAttach) {
                 const baseText = updatePayload.content !== undefined ? updatePayload.content : currentContent;
                 let blocks: any[] = [];
                 try {
@@ -541,7 +642,7 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 }
                 const audioBlock = {
                     type: 'audio',
-                    url: args.audio_url,
+                    url: audioToAttach,
                     caption: args.audio_caption || 'Explication audio de la leçon',
                 };
                 const existingIdx = blocks.findIndex(b => b.type === 'audio');
@@ -631,14 +732,45 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
 
         // ── GENERATE LESSON AUDIO (TTS VIA CLOUDFLARE AI + R2) ──
         case 'generate_lesson_audio': {
-            if (!args.text || typeof args.text !== 'string' || !args.text.trim()) {
-                throw { code: -32602, message: 'text requis pour générer la synthèse vocale' };
+            if (!args.text && !args.lesson_id) {
+                throw { code: -32602, message: 'Au moins un des paramètres "lesson_id" ou "text" doit être fourni.' };
             }
 
-            const lang = (args.language || 'fr').toLowerCase().trim();
-            const caption = args.caption || 'Synthèse vocale de la leçon';
+            let textToSpeak = typeof args.text === 'string' ? args.text.trim() : '';
+            let targetLesson: any = null;
+            let lessonLang = args.language || 'fr';
 
-            const { audioBytes, mimeType } = await generateSpeechAudio(env, args.text, lang);
+            // Si lesson_id est fourni, charger les données de la leçon pour extraire le texte ou lier l'audio
+            if (args.lesson_id) {
+                if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                    const lessons = await fetchSupabaseRest(env, `lessons?id=eq.${encodeURIComponent(args.lesson_id)}&select=id,organization_id,title,content,language`);
+                    if (lessons && lessons.length > 0) targetLesson = lessons[0];
+                }
+                if (!targetLesson) {
+                    targetLesson = await db.prepare(`SELECT id, organization_id, title, content, language FROM lessons WHERE id = ?1`).bind(args.lesson_id).first().catch(() => null);
+                }
+                if (!targetLesson && !textToSpeak) {
+                    throw { code: -32602, message: `Leçon introuvable (id: "${args.lesson_id}") et aucun texte alternatif fourni.` };
+                }
+                if (targetLesson) {
+                    if (!args.language && targetLesson.language) {
+                        lessonLang = targetLesson.language;
+                    }
+                    if (!textToSpeak) {
+                        textToSpeak = extractCleanSpeechText(targetLesson.content) || targetLesson.title;
+                    }
+                }
+            }
+
+            if (!textToSpeak) {
+                throw { code: -32602, message: 'Texte pédagogique introuvable pour la synthèse vocale.' };
+            }
+
+            const truncatedText = textToSpeak.slice(0, 3000);
+            const lang = (lessonLang || 'fr').toLowerCase().trim();
+            const caption = args.caption || (targetLesson ? `Explication vocale : ${targetLesson.title}` : 'Synthèse vocale de la leçon');
+
+            const { audioBytes, mimeType } = await generateSpeechAudio(env, truncatedText, lang);
 
             const timestamp = Date.now();
             const safeId = args.lesson_id ? String(args.lesson_id).replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) : 'tts';
@@ -660,45 +792,39 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             const audioUrl = `https://campusflow-worker.kleintaptue1.workers.dev/r2/${r2Key}`;
 
             let attached = false;
-            let lessonTitle = '';
+            let lessonTitle = targetLesson?.title || '';
 
-            if (args.lesson_id) {
-                let existingLesson: any = null;
+            if (args.lesson_id && targetLesson) {
+                let blocks: any[] = [];
+                try {
+                    const parsed = JSON.parse(targetLesson.content || '[]');
+                    if (Array.isArray(parsed)) blocks = parsed;
+                    else if (targetLesson.content) blocks = [{ type: 'text', value: targetLesson.content }];
+                } catch {
+                    if (targetLesson.content) blocks = [{ type: 'text', value: targetLesson.content }];
+                }
+
+                const audioBlock = {
+                    type: 'audio',
+                    url: audioUrl,
+                    caption,
+                };
+                const existingIdx = blocks.findIndex(b => b.type === 'audio');
+                if (existingIdx >= 0) {
+                    blocks[existingIdx] = audioBlock;
+                } else {
+                    blocks.push(audioBlock);
+                }
+
+                const newContent = JSON.stringify(blocks);
                 if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
-                    const lessons = await fetchSupabaseRest(env, `lessons?id=eq.${encodeURIComponent(args.lesson_id)}&select=id,title,content`);
-                    if (lessons && lessons.length > 0) existingLesson = lessons[0];
-                }
-                if (!existingLesson) {
-                    existingLesson = await db.prepare(`SELECT id, title, content FROM lessons WHERE id = ?1`).bind(args.lesson_id).first().catch(() => null);
-                }
-
-                if (existingLesson) {
-                    lessonTitle = existingLesson.title;
-                    let blocks: any[] = [];
-                    try {
-                        const parsed = JSON.parse(existingLesson.content || '[]');
-                        if (Array.isArray(parsed)) blocks = parsed;
-                        else if (existingLesson.content) blocks = [{ type: 'text', value: existingLesson.content }];
-                    } catch {
-                        if (existingLesson.content) blocks = [{ type: 'text', value: existingLesson.content }];
-                    }
-
-                    blocks.push({
-                        type: 'audio',
-                        url: audioUrl,
-                        caption,
+                    await fetchSupabaseRest(env, `lessons?id=eq.${encodeURIComponent(args.lesson_id)}`, {
+                        method: 'PATCH',
+                        body: { content: newContent },
                     });
-
-                    const newContent = JSON.stringify(blocks);
-                    if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
-                        await fetchSupabaseRest(env, `lessons?id=eq.${encodeURIComponent(args.lesson_id)}`, {
-                            method: 'PATCH',
-                            body: { content: newContent },
-                        });
-                    }
-                    await db.prepare(`UPDATE lessons SET content = ?1 WHERE id = ?2`).bind(newContent, args.lesson_id).run().catch(() => {});
-                    attached = true;
                 }
+                await db.prepare(`UPDATE lessons SET content = ?1 WHERE id = ?2`).bind(newContent, args.lesson_id).run().catch(() => {});
+                attached = true;
             }
 
             return {
@@ -709,7 +835,7 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 attached_to_lesson: attached,
                 lesson_id: args.lesson_id || null,
                 message: attached
-                    ? `🎙️ Synthèse vocale générée et attachée avec succès à la leçon "${lessonTitle}"`
+                    ? `🎙️ Synthèse vocale générée et attachée avec succès à la leçon "${lessonTitle}" : ${audioUrl}`
                     : `🎙️ Synthèse vocale générée avec succès dans R2 : ${audioUrl}`,
             };
         }
@@ -1838,15 +1964,45 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             font-size: 13px;
             border-top: 1px solid var(--border);
         }
+        @page {
+            size: A4 portrait;
+            margin: 18mm 16mm 20mm 16mm;
+        }
         @media print {
-            body { background: white; color: black; }
-            .chapter-card, .lesson-card, .toc-card { border: 1px solid #ccc; background: none; color: black; box-shadow: none; }
-            .book-title, .lesson-title { color: black; }
-            .lesson-body { color: #222; }
+            .no-print { display: none !important; }
+            body { background: white !important; color: #0f172a !important; font-family: 'Georgia', serif !important; font-size: 11pt !important; }
+            .book-container { max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+            .book-hero {
+                background: white !important; color: #0f172a !important;
+                border: 6px double #1e1b4b !important;
+                min-height: 260mm !important;
+                display: flex !important; flex-direction: column !important; justify-content: center !important;
+                page-break-after: always !important; padding: 40px !important;
+            }
+            .cert-badge { border-color: #f59e0b !important; color: #b45309 !important; background: #fef3c7 !important; }
+            .book-title { color: #0f172a !important; font-size: 28pt !important; }
+            .book-subtitle { color: #475569 !important; }
+            .meta-tag { border: 1px solid #cbd5e1 !important; color: #334155 !important; background: #f8fafc !important; }
+            .toc-card { page-break-after: always !important; background: white !important; border: 1px solid #e2e8f0 !important; box-shadow: none !important; }
+            .toc-list a { background: none !important; border-bottom: 1px dashed #cbd5e1 !important; color: #0f172a !important; }
+            .chapter-card { page-break-before: always !important; background: white !important; border: none !important; box-shadow: none !important; padding: 0 !important; }
+            .chapter-card h2 { color: #1e1b4b !important; border-bottom: 2px solid #1e1b4b !important; padding-bottom: 8px !important; }
+            .lesson-card { background: white !important; border: none !important; border-bottom: 1px solid #e2e8f0 !important; color: #1e293b !important; box-shadow: none !important; }
+            .lesson-title { color: #0f172a !important; }
+            .lesson-body { color: #1e293b !important; font-size: 11pt !important; line-height: 1.7 !important; }
+            .lesson-body strong { color: #0f172a !important; }
+            .chap-exercises { page-break-inside: avoid !important; background: #f8fafc !important; border: 1px solid #cbd5e1 !important; }
         }
     </style>
 </head>
 <body>
+    <div class="print-bar no-print" style="position:sticky;top:0;background:#0f172a;color:white;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;z-index:9999;box-shadow:0 4px 15px rgba(0,0,0,0.4);font-family:system-ui,-apple-system,sans-serif;">
+        <span style="font-weight:bold;font-size:14px;display:flex;align-items:center;gap:8px;">📖 ${bookTitle} — Manuel Officiel de Cours</span>
+        <button onclick="window.print()" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:white;border:none;padding:8px 18px;border-radius:8px;font-weight:bold;cursor:pointer;font-size:13px;">
+            🖨️ Enregistrer en Livre PDF / Imprimer
+        </button>
+    </div>
+
     <header class="book-hero">
         <div class="cert-badge">⭐ Manuel Officiel IziTeach • Édition Certifiée</div>
         <h1 class="book-title">${bookTitle}</h1>

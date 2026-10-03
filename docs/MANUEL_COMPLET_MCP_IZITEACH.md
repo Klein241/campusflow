@@ -192,14 +192,33 @@ Ces outils permettent de concevoir et structurer l'intégralité du programme p�
 - **Description :** Modifie ou supprime un chapitre.
 
 #### `create_lesson`
-- **Description :** Crée et publie une leçon complète avec support riche Markdown, formules LaTeX, vidéos et **génération/traduction multilingue (Français, Anglais, Arabe + 20 langues locales africaines)**.
+- **Description :** Crée et publie une leçon complète avec support riche Markdown, formules LaTeX, vidéos, **génération de synthèse vocale audio automatique (Cloudflare Workers AI + R2)** et **traduction multilingue (Français, Anglais, Arabe + 20 langues locales africaines)**.
 - **Paramètres :**
   - `chapter_id` *(string, requis)* : UUID du chapitre.
   - `title` *(string, requis)* : Titre de la leçon.
   - `content` *(string, requis)* : Contenu pédagogique riche.
-  - `language` *(string, optionnel)* : Code ISO ou code langue (ex: `sw`, `ha`, `yo`, `ig`, `lin`, `ful`, `ewo`, `dua`, `bam`, `kin`, `mlg`, `fr`, `en`, `ar`, etc. — Défaut : `fr`).
+  - `generate_audio` *(boolean, optionnel)* : Si `true`, génère automatiquement la synthèse vocale IA (MeloTTS/Deepgram) dans Cloudflare R2 et l'intègre au lecteur audio de la leçon.
+  - `audio_script` *(string, optionnel)* : Texte oral ou résumé personnalisé à vocaliser (si omis, le texte du cours est lu).
+  - `audio_url` *(string, optionnel)* : URL publique d'un audio déjà hébergé (MP3/WebM).
+  - `audio_caption` *(string, optionnel)* : Légende du lecteur audio (ex: *"Explication orale du cours"*).
+  - `language` *(string, optionnel)* : Code langue (défaut : `fr`).
   - `duration_minutes` *(number, optionnel)* : Durée estimée en minutes (défaut : 15).
   - `position` *(number, optionnel)* : Ordre d'affichage dans le chapitre.
+
+#### `generate_lesson_audio` 🎙️ *(Nouveau)*
+- **Description :** Génère une synthèse vocale (TTS) IA via Cloudflare Workers AI, héberge le fichier MP3 sur Cloudflare R2 haute disponibilité, et l'associe automatiquement à la leçon.
+- **Paramètres :**
+  - `lesson_id` *(string, optionnel si `text` est fourni)* : UUID de la leçon. Si fourni sans `text`, le contenu textuel de la leçon est automatiquement extrait de la base et synthétisé !
+  - `text` *(string, optionnel si `lesson_id` est fourni)* : Texte ou résumé pédagogique à synthétiser.
+  - `caption` *(string, optionnel)* : Titre ou légende de la note vocale.
+  - `language` *(string, optionnel)* : Code langue de synthèse (défaut : langue de la leçon ou `fr`).
+
+#### `add_audio_to_lesson` 🎵 *(Nouveau)*
+- **Description :** Attache directement un fichier audio existant (URL Cloudflare R2 ou web) à une leçon pour le lecteur interactif.
+- **Paramètres :**
+  - `lesson_id` *(string, requis)* : UUID de la leçon.
+  - `audio_url` *(string, requis)* : URL publique du fichier audio.
+  - `caption` *(string, optionnel)* : Titre ou légende du lecteur audio.
 
 #### `create_exercise`
 - **Description :** Crée un exercice ou quiz interactif rattaché à une leçon.

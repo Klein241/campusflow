@@ -29,23 +29,31 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ];
 
     try {
-        const { data: orgs } = await supabase
+        // En build statique CI (Netlify), on limite l'attente à 3 secondes max pour ne jamais bloquer le déploiement
+        const timeoutPromise = new Promise<{ data: null }>((resolve) =>
+            setTimeout(() => resolve({ data: null }), 3000)
+        );
+
+        const queryPromise = supabase
             .from('organizations')
             .select('slug, updated_at, is_active')
-            .eq('is_active', true);
+            .eq('is_active', true)
+            .limit(100);
+
+        const { data: orgs } = await Promise.race([queryPromise, timeoutPromise]);
 
         if (!orgs || orgs.length === 0) {
             return staticRoutes;
         }
 
-        const orgRoutes: MetadataRoute.Sitemap = orgs.map(org => ({
+        const orgRoutes: MetadataRoute.Sitemap = (orgs as any[]).map(org => ({
             url: `${baseUrl}/${org.slug}`,
             lastModified: org.updated_at ? new Date(org.updated_at) : now,
             changeFrequency: 'weekly',
             priority: 0.9,
         }));
 
-        const loginRoutes: MetadataRoute.Sitemap = orgs.map(org => ({
+        const loginRoutes: MetadataRoute.Sitemap = (orgs as any[]).map(org => ({
             url: `${baseUrl}/${org.slug}/login`,
             lastModified: org.updated_at ? new Date(org.updated_at) : now,
             changeFrequency: 'monthly',

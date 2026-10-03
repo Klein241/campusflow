@@ -21,6 +21,7 @@ import { EmailModal } from '@/components/campus/email-modal';
 import { checkHumanActionRateLimit } from '@/lib/anti-bot-guard';
 import { ClassSelectorCards } from './class-selector-cards';
 import { PeriodLockManager } from './period-lock-manager';
+import { generateCurriculumBookPDF } from '@/lib/curriculum-book-pdf';
 
 // ─── Helper notifications push cursus (admin) ────────────────────────────────
 const WORKER_URL = process.env.NEXT_PUBLIC_NOTIFICATION_WORKER_URL || process.env.NEXT_PUBLIC_WORKER_URL || '';
@@ -119,12 +120,18 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
     const [showNewSub, setShowNewSub] = useState(false);
     const [subForm,    setSubForm]    = useState({ name: '', coefficient: '1', classroom_id: '', teacher_id: '' });
     const [savingSub,  setSavingSub]  = useState(false);
+    // ── Edit Matière ──
+    const [editingSubId, setEditingSubId] = useState<string | null>(null);
+    const [editSubForm, setEditSubForm]   = useState({ name: '', coefficient: '1', classroom_id: '', teacher_id: '' });
+    const [savingEditSub, setSavingEditSub] = useState(false);
+    const [generatingBook, setGeneratingBook] = useState<string | null>(null);
 
     // ── Forms chapitre ──
     const [showNewCh, setShowNewCh] = useState(false);
     const [chForm,    setChForm]    = useState<{ title: string; contentBlocks: ContentBlock[] }>({ title: '', contentBlocks: [] });
     const [savingCh,  setSavingCh]  = useState(false);
     const [editCh,    setEditCh]    = useState<string | null>(null);
+    const [editChTitle, setEditChTitle] = useState('');
     const [editChBlocks, setEditChBlocks] = useState<ContentBlock[]>([]);
 
     // ── Forms leçon ──
@@ -132,6 +139,8 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
     const [lessonForm,    setLessonForm]    = useState<{ title: string; contentBlocks: ContentBlock[]; estimated_minutes: string }>({ title: '', contentBlocks: [], estimated_minutes: '15' });
     const [savingLesson,  setSavingLesson]  = useState(false);
     const [editLesson,    setEditLesson]    = useState<string | null>(null);
+    const [editLessonTitle, setEditLessonTitle] = useState('');
+    const [editLessonDuration, setEditLessonDuration] = useState('15');
     const [editLessonBlocks, setEditLessonBlocks] = useState<ContentBlock[]>([]);
 
     // ── Forms exercice ──
@@ -280,6 +289,123 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
         toast.success('Matière supprimée');
     };
 
+    const startEditSub = (sub: any) => {
+        setEditingSubId(sub.id);
+        setEditSubForm({
+            name: sub.name || '',
+            coefficient: String(sub.coefficient || 1),
+            classroom_id: sub.classroom_id || '',
+            teacher_id: sub.teacher_id || ''
+        });
+    };
+
+    const cancelEditSub = () => {
+        setEditingSubId(null);
+        setEditSubForm({ name: '', coefficient: '1', classroom_id: '', teacher_id: '' });
+    };
+
+    const saveEditSubject = async () => {
+        if (!editingSubId || !editSubForm.name.trim()) {
+            return toast.error('Le nom de la matière est requis');
+        }
+        setSavingEditSub(true);
+        try {
+            const coef = parseFloat(editSubForm.coefficient) || 1;
+            const updatedName = editSubForm.name.trim();
+            const { error } = await supabase.from('subjects').update({
+                name: updatedName,
+                coefficient: coef,
+                classroom_id: editSubForm.classroom_id || null,
+                teacher_id: editSubForm.teacher_id || null
+            }).eq('id', editingSubId);
+
+            if (error) throw error;
+
+            const targetClass = allClasses.find((c: any) => c.id === editSubForm.classroom_id);
+            const targetTeacher = allTeachers.find((t: any) => t.id === editSubForm.teacher_id);
+
+            setSubjects(prev => prev.map(s => s.id === editingSubId ? {
+                ...s,
+                name: updatedName,
+                coefficient: coef,
+                classroom_id: editSubForm.classroom_id,
+                teacher_id: editSubForm.teacher_id,
+                classrooms: targetClass ? { id: targetClass.id, name: targetClass.name } : s.classrooms,
+                teacher_profiles: targetTeacher ? { id: targetTeacher.id, first_name: targetTeacher.first_name, last_name: targetTeacher.last_name } : (editSubForm.teacher_id ? s.teacher_profiles : null)
+            } : s));
+
+            toast.success('Matière modifiée avec succès ✅');
+            setEditingSubId(null);
+        } catch (e: any) {
+            toast.error(e.message || 'Erreur lors de la modification');
+        } finally {
+            setSavingEditSub(false);
+        }
+    };
+
+    const handleGenerateSubjectBook = async (sub: any) => {
+        setGeneratingBook(sub.id);
+        try {
+            const { data: orgData } = await supabase.from('organizations')
+                .select('name, logo_url, city, country, phone, email, motto, accreditation_number')
+                .eq('id', orgId).single();
+
+            const subChaps = chapters.filter(c => c.subject_id === sub.id).sort((a, b) => (a.position || 0) - (b.position || 0));
+            const subChapIds = subChaps.map(c => c.id);
+            const subLessons = lessons.filter(l => subChapIds.includes(l.chapter_id)).sort((a, b) => (a.position || 0) - (b.position || 0));
+            const subExs = exercises.filter(e => subChapIds.includes(e.chapter_id));
+
+            const enrichedChapters = subChaps.map(chap => ({
+                id: chap.id,
+                title: chap.title,
+                position: chap.position,
+                description: chap.description,
+                lessons: subLessons.filter(l => l.chapter_id === chap.id).map(l => ({
+                    id: l.id,
+                    title: l.title,
+                    estimated_minutes: l.estimated_minutes,
+                    content: l.content
+                })),
+                exercises: subExs.filter(e => e.chapter_id === chap.id).map(e => ({
+                    id: e.id,
+                    title: e.title,
+                    type: e.type,
+                    questions: e.questions,
+                    max_score: e.max_score
+                }))
+            }));
+
+            const teacherName = sub.teacher_profiles ? `${sub.teacher_profiles.first_name} ${sub.teacher_profiles.last_name}` : undefined;
+
+            generateCurriculumBookPDF({
+                org: {
+                    name: orgData?.name || 'Établissement Agréé',
+                    logo_url: orgData?.logo_url,
+                    city: orgData?.city,
+                    country: orgData?.country,
+                    phone: orgData?.phone,
+                    email: orgData?.email,
+                    motto: orgData?.motto,
+                    accreditation_number: orgData?.accreditation_number
+                },
+                subject: {
+                    id: sub.id,
+                    name: sub.name,
+                    code: sub.code,
+                    coefficient: sub.coefficient,
+                    classroom_name: sub.classrooms?.name,
+                    teacher_name: teacherName
+                },
+                chapters: enrichedChapters
+            });
+            toast.success('Livre de cours officiel généré avec succès !');
+        } catch (err: any) {
+            toast.error(err.message || 'Erreur lors de la génération du livre');
+        } finally {
+            setGeneratingBook(null);
+        }
+    };
+
     const createChapter = async () => {
         if (!chForm.title || !selectedSubId) return;
         setSavingCh(true);
@@ -340,9 +466,14 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
 
     const saveChapterContent = async (chId: string) => {
         const serialized = serializeContent(editChBlocks);
-        await supabase.from('chapters').update({ content: serialized }).eq('id', chId);
-        setChapters(p => p.map(c => c.id === chId ? { ...c, content: serialized } : c));
-        setEditCh(null); toast.success('Chapitre mis à jour');
+        const updatedTitle = editChTitle.trim() || 'Chapitre sans titre';
+        const { error } = await supabase.from('chapters').update({ content: serialized, title: updatedTitle }).eq('id', chId);
+        if (error) {
+            toast.error(error.message);
+            return;
+        }
+        setChapters(p => p.map(c => c.id === chId ? { ...c, content: serialized, title: updatedTitle } : c));
+        setEditCh(null); toast.success('Chapitre mis à jour ✅');
     };
 
     const deleteChapter = async (chId: string) => {
@@ -399,9 +530,19 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
 
     const saveLessonContent = async (lId: string) => {
         const serialized = serializeContent(editLessonBlocks);
-        await supabase.from('lessons').update({ content: serialized }).eq('id', lId);
-        setLessons(p => p.map(l => l.id === lId ? { ...l, content: serialized } : l));
-        setEditLesson(null); toast.success('Leçon mise à jour');
+        const updatedTitle = editLessonTitle.trim() || 'Leçon sans titre';
+        const updatedDuration = parseInt(editLessonDuration) || 15;
+        const { error } = await supabase.from('lessons').update({
+            content: serialized,
+            title: updatedTitle,
+            estimated_minutes: updatedDuration
+        }).eq('id', lId);
+        if (error) {
+            toast.error(error.message);
+            return;
+        }
+        setLessons(p => p.map(l => l.id === lId ? { ...l, content: serialized, title: updatedTitle, estimated_minutes: updatedDuration } : l));
+        setEditLesson(null); toast.success('Leçon mise à jour ✅');
     };
 
     const addQuestion = () => {
@@ -782,6 +923,78 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
                             const pubChaps   = subChaps.filter(c => c.status === 'published').length;
                             const subLessons = lessons.filter(l => subChaps.some(c => c.id === l.chapter_id)).length;
                             const subExs     = exercises.filter(e => subChaps.some(c => c.id === e.chapter_id)).length;
+                            if (editingSubId === sub.id) {
+                                return (
+                                    <motion.div key={sub.id} initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}
+                                        className="w-full text-left rounded-2xl border p-4 bg-white/[0.04] border-indigo-500/40 space-y-3 shadow-xl"
+                                        onClick={e => e.stopPropagation()}>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-bold text-indigo-400 flex items-center gap-1.5">
+                                                <Edit2 className="w-3.5 h-3.5" /> Modifier la matière
+                                            </span>
+                                            <button onClick={cancelEditSub} className="p-1 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white">
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <Label className="text-xs text-slate-400">Nom de la matière / module *</Label>
+                                                <Input
+                                                    value={editSubForm.name}
+                                                    onChange={e => setEditSubForm(p => ({ ...p, name: e.target.value }))}
+                                                    placeholder="Ex: MODULE 2 — CONSTRUIRE SON LIVRE"
+                                                    className="mt-1 bg-white/[0.05] border-white/10 text-white h-9 rounded-xl text-xs"
+                                                />
+                                            </div>
+                                            <div>
+                                                <Label className="text-xs text-slate-400">Coefficient</Label>
+                                                <Input
+                                                    type="number"
+                                                    step="0.5"
+                                                    value={editSubForm.coefficient}
+                                                    onChange={e => setEditSubForm(p => ({ ...p, coefficient: e.target.value }))}
+                                                    className="mt-1 bg-white/[0.05] border-white/10 text-white h-9 rounded-xl text-xs"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <Label className="text-xs text-slate-400">Classe *</Label>
+                                                <select
+                                                    value={editSubForm.classroom_id}
+                                                    onChange={e => setEditSubForm(p => ({ ...p, classroom_id: e.target.value }))}
+                                                    className="mt-1 w-full bg-[#1a1d2e] border border-white/10 text-white text-xs rounded-xl px-2 h-9">
+                                                    <option value="">Choisir...</option>
+                                                    {allClasses.map((cls: any) => <option key={cls.id} value={cls.id}>{cls.name}</option>)}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <Label className="text-xs text-slate-400">Professeur</Label>
+                                                <select
+                                                    value={editSubForm.teacher_id}
+                                                    onChange={e => setEditSubForm(p => ({ ...p, teacher_id: e.target.value }))}
+                                                    className="mt-1 w-full bg-[#1a1d2e] border border-white/10 text-white text-xs rounded-xl px-2 h-9">
+                                                    <option value="">Aucun</option>
+                                                    {allTeachers.map((t: any) => <option key={t.id} value={t.id}>{t.first_name} {t.last_name}</option>)}
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2 pt-1">
+                                            <Button
+                                                onClick={saveEditSubject}
+                                                disabled={savingEditSub || !editSubForm.name.trim()}
+                                                className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl h-8 text-xs font-semibold">
+                                                <Save className="w-3.5 h-3.5 mr-1" />
+                                                {savingEditSub ? 'Enregistrement...' : 'Enregistrer'}
+                                            </Button>
+                                            <Button variant="ghost" onClick={cancelEditSub} className="text-slate-400 hover:text-white rounded-xl h-8 text-xs">
+                                                Annuler
+                                            </Button>
+                                        </div>
+                                    </motion.div>
+                                );
+                            }
+
                             return (
                                 <motion.button key={sub.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: si * 0.04 }}
                                     onClick={() => { setSelectedSubId(sub.id); setSelectedChId(null); }}
@@ -814,12 +1027,31 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
                                             <Progress value={(pubChaps / subChaps.length) * 100} className="h-1" />
                                         </div>
                                     )}
-                                    {/* Delete btn */}
-                                    <div className="flex items-center justify-end mt-3 pt-2 border-t border-white/[0.06]" onClick={e => e.stopPropagation()}>
-                                        <button onClick={() => deleteSub(sub.id)}
-                                            className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400/60 hover:text-red-400 transition-all">
-                                            <Trash2 className="w-3 h-3" />
+                                    {/* Action buttons footer */}
+                                    <div className="flex items-center justify-between mt-3 pt-2 border-t border-white/[0.06]" onClick={e => e.stopPropagation()}>
+                                        <button
+                                            onClick={e => { e.stopPropagation(); handleGenerateSubjectBook(sub); }}
+                                            disabled={generatingBook === sub.id}
+                                            className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-[11px] font-semibold flex items-center gap-1.5 transition-all"
+                                            title="Générer et exporter le Livre de cours officiel (PDF)">
+                                            <BookOpen className="w-3 h-3 text-amber-400" />
+                                            <span>{generatingBook === sub.id ? 'Génération...' : 'Livre PDF'}</span>
                                         </button>
+                                        <div className="flex items-center gap-1.5">
+                                            <button
+                                                onClick={e => { e.stopPropagation(); startEditSub(sub); }}
+                                                className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-indigo-500/20 text-slate-300 hover:text-indigo-300 transition-all flex items-center gap-1 text-[11px]"
+                                                title="Modifier le nom ou coef de la matière">
+                                                <Edit2 className="w-3 h-3" />
+                                                <span>Modifier</span>
+                                            </button>
+                                            <button
+                                                onClick={e => { e.stopPropagation(); deleteSub(sub.id); }}
+                                                className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400/60 hover:text-red-400 transition-all"
+                                                title="Supprimer la matière">
+                                                <Trash2 className="w-3 h-3" />
+                                            </button>
+                                        </div>
                                     </div>
                                 </motion.button>
                             );
@@ -954,7 +1186,7 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
                                                         compact
                                                     />
                                                     <div className="flex-1" />
-                                                    <button onClick={() => { setEditCh(ch.id); setEditChBlocks(parseContent(ch.content)); }}
+                                                    <button onClick={() => { setEditCh(ch.id); setEditChTitle(ch.title || ''); setEditChBlocks(parseContent(ch.content)); }}
                                                         className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-400 transition-all">
                                                         <Edit2 className="w-3.5 h-3.5" />
                                                     </button>
@@ -972,7 +1204,17 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
                                                     </button>
                                                 </div>
                                                 {editCh === ch.id && (
-                                                    <div className="px-3 pb-3 space-y-2 border-t border-white/[0.05] pt-2">
+                                                    <div className="px-3 pb-3 space-y-2 border-t border-white/[0.05] pt-2" onClick={e => e.stopPropagation()}>
+                                                        <div>
+                                                            <Label className="text-[11px] text-slate-400 mb-1 block">Titre du chapitre *</Label>
+                                                            <Input
+                                                                value={editChTitle}
+                                                                onChange={e => setEditChTitle(e.target.value)}
+                                                                placeholder="Titre du chapitre..."
+                                                                className="bg-white/[0.05] border-white/10 text-white rounded-xl text-sm h-9"
+                                                            />
+                                                        </div>
+                                                        <Label className="text-[11px] text-slate-400 block">Contenu du chapitre</Label>
                                                         <RichContentEditor blocks={editChBlocks} onChange={setEditChBlocks} placeholder="Contenu du chapitre..." userId={orgId} />
                                                         <div className="flex gap-2">
                                                             <Button size="sm" onClick={() => saveChapterContent(ch.id)} className="bg-teal-600 text-white rounded-xl text-xs flex-1"><Save className="w-3 h-3 mr-1" />Sauvegarder</Button>
@@ -1066,7 +1308,7 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
                                                 onSave={(u) => saveLessonDrip(l.id, u)}
                                                 compact
                                             />
-                                            <button onClick={() => { setEditLesson(l.id); setEditLessonBlocks(parseContent(l.content)); }}
+                                            <button onClick={() => { setEditLesson(l.id); setEditLessonTitle(l.title || ''); setEditLessonDuration(String(l.estimated_minutes || 15)); setEditLessonBlocks(parseContent(l.content)); }}
                                                 className="p-1.5 rounded-lg bg-white/[0.05] hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-400 transition-all">
                                                 <Edit2 className="w-3 h-3" />
                                             </button>
@@ -1085,9 +1327,31 @@ export function AdminCursus({ orgId, allClasses, allTeachers, allStudents = [], 
                                         </div>
                                         {editLesson === l.id && (
                                             <div className="mt-3 space-y-2 pt-3 border-t border-white/[0.06]">
+                                                <div className="flex gap-2">
+                                                    <div className="flex-1">
+                                                        <Label className="text-[10px] text-slate-400 mb-1 block">Titre de la leçon *</Label>
+                                                        <Input
+                                                            value={editLessonTitle}
+                                                            onChange={e => setEditLessonTitle(e.target.value)}
+                                                            placeholder="Titre de la leçon..."
+                                                            className="bg-white/[0.05] border-white/10 text-white h-8 rounded-xl text-xs"
+                                                        />
+                                                    </div>
+                                                    <div className="w-20">
+                                                        <Label className="text-[10px] text-slate-400 mb-1 block">Durée</Label>
+                                                        <Input
+                                                            type="number"
+                                                            value={editLessonDuration}
+                                                            onChange={e => setEditLessonDuration(e.target.value)}
+                                                            className="bg-white/[0.05] border-white/10 text-white h-8 rounded-xl text-xs text-center"
+                                                            placeholder="min"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <Label className="text-[10px] text-slate-400 block">Contenu de la leçon</Label>
                                                 <RichContentEditor blocks={editLessonBlocks} onChange={setEditLessonBlocks} placeholder="Contenu de la leçon..." userId={orgId} />
                                                 <div className="flex gap-2">
-                                                    <Button size="sm" onClick={() => saveLessonContent(l.id)} className="bg-teal-600 text-white rounded-xl text-xs flex-1 h-8"><Save className="w-3 h-3 mr-1" />OK</Button>
+                                                    <Button size="sm" onClick={() => saveLessonContent(l.id)} className="bg-teal-600 text-white rounded-xl text-xs flex-1 h-8"><Save className="w-3 h-3 mr-1" />Enregistrer</Button>
                                                     <Button size="sm" variant="ghost" onClick={() => setEditLesson(null)} className="text-slate-400 text-xs h-8">Annuler</Button>
                                                 </div>
                                             </div>

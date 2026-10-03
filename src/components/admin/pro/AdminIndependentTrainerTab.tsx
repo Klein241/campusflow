@@ -17,6 +17,7 @@ import { SchoolTypeConfig } from '@/lib/school-type-adapter';
 import { generateCertificatePDF, type CertificateData } from '@/lib/certificate-pdf';
 import { StudentAccessCredentialsModal } from './StudentAccessCredentialsModal';
 import { DirectMobileMoneyPaymentModal } from './DirectMobileMoneyPaymentModal';
+import { extractContentAndCurriculum, SAMPLE_CURRICULUM_TEMPLATE } from '@/lib/curriculum-parser';
 import { cn } from '@/lib/utils';
 
 interface AdminIndependentTrainerTabProps {
@@ -874,19 +875,45 @@ export function AdminIndependentTrainerTab({
 
                             {/* Description & Programme pédagogique */}
                             <div>
-                                <label className="text-xs font-bold text-slate-300 block mb-1">
-                                    Présentation, Objectifs & Modules Pédagogiques
-                                </label>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="text-xs font-bold text-slate-300">
+                                        Présentation, Objectifs & Modules Pédagogiques
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setOfferDescription(SAMPLE_CURRICULUM_TEMPLATE)}
+                                        className="text-[11px] text-amber-400 hover:text-amber-300 underline font-medium cursor-pointer"
+                                    >
+                                        📋 Insérer un exemple
+                                    </button>
+                                </div>
                                 <textarea
                                     value={offerDescription}
                                     onChange={e => setOfferDescription(e.target.value)}
-                                    rows={4}
-                                    placeholder="Décrivez les objectifs clés et les modules (ex:&#10;Module 1 : Fondamentaux & Analyse&#10;Module 2 : Pratique, Ateliers & Mises en situation&#10;Module 3 : Projet & Certification)"
+                                    rows={5}
+                                    placeholder="Présentation et objectifs en premier...&#10;&#10;Programme des modules :&#10;Module 1 — Titre du module 1&#10;Module 2 — Titre du module 2"
                                     className="w-full bg-white/5 border border-white/10 text-white rounded-xl p-3 text-xs focus:outline-none focus:border-amber-400 resize-none font-sans leading-relaxed"
                                 />
-                                <p className="text-[10px] text-slate-400 mt-1">
-                                    💡 Chaque ligne ou tiret sera automatiquement structuré en modules dans la modale de votre landing page.
-                                </p>
+                                {(() => {
+                                    const preview = extractContentAndCurriculum(offerDescription);
+                                    return (
+                                        <div className="mt-1.5 space-y-1">
+                                            <div className="flex items-center justify-between text-[11px] px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300">
+                                                <span className="flex items-center gap-1.5">
+                                                    <span>🎯 Présentation : {preview.intro ? '✅ Détectée' : '⚠️ Non renseignée'}</span>
+                                                    <span>•</span>
+                                                    <span className="font-bold">{preview.modules.length} module(s) détecté(s)</span>
+                                                </span>
+                                                <span className="text-[10px] text-amber-200/70 hidden sm:inline">
+                                                    Séparateur : "Programme des modules :"
+                                                </span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 leading-normal">
+                                                💡 <strong>Disposition automatique :</strong> Écrivez vos paragraphes d'objectifs, puis ajoutez <code>Programme des modules :</code> sur sa propre ligne. Chaque ligne suivante débutant par <code>Module 1 — ...</code> sera automatiquement transformée en carte dorée dans la modale !
+                                            </p>
+                                        </div>
+                                    );
+                                })()}
                             </div>
 
                             <div className="grid grid-cols-2 gap-2">
@@ -1019,19 +1046,45 @@ export function AdminIndependentTrainerTab({
 
                             {/* Description & Programme pédagogique */}
                             <div>
-                                <label className="text-xs font-bold text-slate-300 block mb-1">
-                                    Présentation, Objectifs & Modules Pédagogiques
-                                </label>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="text-xs font-bold text-slate-300">
+                                        Présentation, Objectifs & Modules Pédagogiques
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditingOffer({ ...editingOffer, editDescription: SAMPLE_CURRICULUM_TEMPLATE })}
+                                        className="text-[11px] text-amber-400 hover:text-amber-300 underline font-medium cursor-pointer"
+                                    >
+                                        📋 Insérer un exemple
+                                    </button>
+                                </div>
                                 <textarea
                                     value={editingOffer.editDescription ?? ''}
                                     onChange={e => setEditingOffer({ ...editingOffer, editDescription: e.target.value })}
-                                    rows={4}
-                                    placeholder="Décrivez les objectifs clés et les modules..."
+                                    rows={5}
+                                    placeholder="Présentation et objectifs en premier...&#10;&#10;Programme des modules :&#10;Module 1 — Titre du module 1&#10;Module 2 — Titre du module 2"
                                     className="w-full bg-white/5 border border-white/10 text-white rounded-xl p-3 text-xs focus:outline-none focus:border-amber-400 resize-none font-sans leading-relaxed"
                                 />
-                                <p className="text-[10px] text-slate-400 mt-1">
-                                    💡 Chaque ligne ou tiret sera automatiquement structuré en modules dans la modale de votre landing page.
-                                </p>
+                                {(() => {
+                                    const preview = extractContentAndCurriculum(editingOffer.editDescription || '');
+                                    return (
+                                        <div className="mt-1.5 space-y-1">
+                                            <div className="flex items-center justify-between text-[11px] px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300">
+                                                <span className="flex items-center gap-1.5">
+                                                    <span>🎯 Présentation : {preview.intro ? '✅ Détectée' : '⚠️ Non renseignée'}</span>
+                                                    <span>•</span>
+                                                    <span className="font-bold">{preview.modules.length} module(s) détecté(s)</span>
+                                                </span>
+                                                <span className="text-[10px] text-amber-200/70 hidden sm:inline">
+                                                    Séparateur : "Programme des modules :"
+                                                </span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 leading-normal">
+                                                💡 <strong>Disposition automatique :</strong> Écrivez vos paragraphes d'objectifs, puis ajoutez <code>Programme des modules :</code> sur sa propre ligne. Chaque ligne suivante débutant par <code>Module 1 — ...</code> sera automatiquement transformée en carte dorée dans la modale !
+                                            </p>
+                                        </div>
+                                    );
+                                })()}
                             </div>
 
                             <div>

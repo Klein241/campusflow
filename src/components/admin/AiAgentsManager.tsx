@@ -20,8 +20,13 @@ import {
     Activity, Clock, AlertTriangle, CheckCircle, XCircle,
     ChevronRight, ChevronDown, RefreshCw, Loader2, Info,
     Zap, Lock, BookOpen, Users, BarChart3, Calendar, ListChecks,
-    Ban, ArrowRight, Terminal, Crown, Sparkles
+    Ban, ArrowRight, Terminal, Crown, Sparkles, Coins
 } from 'lucide-react';
+import { SessionManager } from '@/lib/session';
+import { fetchSkyPoints, deductSkyPoints } from '@/lib/sky-points-service';
+
+const FREE_MCP_KEYS_LIMIT = 2;
+const EXTRA_MCP_KEY_COST = 350;
 
 // ── Types ────────────────────────────────────────────────────────
 interface AgentKey {
@@ -198,6 +203,10 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
     const [selectedKeyId, setSelectedKeyId] = useState<string | null>(null);
     const [reviewingId, setReviewingId] = useState<string | null>(null);
 
+    // Points & quotas
+    const [adminPoints, setAdminPoints]     = useState<number | null>(null);
+    const [currentUserId, setCurrentUserId] = useState<string>('');
+
     // Create form state
     const [newKeyName, setNewKeyName]         = useState('');
     const [newKeyDesc, setNewKeyDesc]         = useState('');
@@ -214,6 +223,21 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
     const loadData = useCallback(async () => {
         setLoading(true);
         try {
+            // Load current user and their points balance
+            const session = SessionManager.get();
+            let uid = session?.profile_id || '';
+            if (!uid) {
+                const { data: authData } = await supabase.auth.getUser();
+                uid = authData.user?.id || '';
+            }
+            setCurrentUserId(uid);
+            if (uid) {
+                try {
+                    const pts = await fetchSkyPoints(uid, 'admin');
+                    setAdminPoints(pts);
+                } catch {}
+            }
+
             const [keysRes, logsRes, pendingRes, catalogRes, statsRes] = await Promise.all([
                 supabase.from('ai_agent_keys')
                     .select('*')
@@ -277,6 +301,46 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
         if (!newKeyName.trim()) { toast.error('Donnez un nom à cet agent IA'); return; }
         if (newKeyPerms.length === 0) { toast.error('Sélectionnez au moins une permission'); return; }
 
+        // Règle : Quota de 2 clés gratuites max, au-delà = 350 Shy Points
+        const isPaidKey = agentKeys.length >= FREE_MCP_KEYS_LIMIT;
+
+        if (isPaidKey) {
+            let uid = currentUserId || SessionManager.get()?.profile_id;
+            if (!uid) {
+                const { data: authData } = await supabase.auth.getUser();
+                uid = authData.user?.id;
+            }
+            if (!uid) {
+                toast.error('Session administrateur introuvable. Veuillez vous reconnecter.');
+                return;
+            }
+            const currentBalance = await fetchSkyPoints(uid, 'admin');
+            if (currentBalance < EXTRA_MCP_KEY_COST) {
+                toast.error(`Quota gratuit atteint (${FREE_MCP_KEYS_LIMIT} clés max). Une clé supplémentaire coûte ${EXTRA_MCP_KEY_COST} Shy Points. Votre solde actuel est de ${currentBalance} points.`);
+                return;
+            }
+
+            const confirmed = confirm(
+                `Vous avez déjà ${agentKeys.length} clé(s) API MCP.\n\nLa génération d'une clé supplémentaire coûte ${EXTRA_MCP_KEY_COST} Shy Points.\nVotre solde disponible : ${currentBalance} points.\n\nConfirmez-vous la dépense de ${EXTRA_MCP_KEY_COST} Shy Points ?`
+            );
+            if (!confirmed) return;
+
+            const newBal = await deductSkyPoints(
+                uid,
+                EXTRA_MCP_KEY_COST,
+                'mcp_extra_key',
+                `Création clé API MCP supplémentaire (${newKeyName.trim()})`,
+                'admin',
+                orgId
+            );
+
+            if (newBal === null) {
+                toast.error(`Solde insuffisant en Shy Points (${currentBalance} pts disponibles, ${EXTRA_MCP_KEY_COST} requis).`);
+                return;
+            }
+            setAdminPoints(newBal);
+        }
+
         setCreating(true);
         try {
             const { data, error } = await supabase.rpc('create_ai_agent_key', {
@@ -304,7 +368,7 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
             resetCreateForm();
             // Afficher la clé et recharger la liste
             setCreatedKey(data.full_key);
-            toast.success('Clé agent créée — copiez-la maintenant !');
+            toast.success(isPaidKey ? `Clé créée avec succès (-${EXTRA_MCP_KEY_COST} Shy Points déduits) !` : 'Clé agent créée — copiez-la maintenant !');
             await loadData();
         } catch (e: any) {
             toast.error(e.message || 'Erreur lors de la création');
@@ -480,6 +544,34 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
             {/* ── TAB : KEYS ─────────────────────────────────────────── */}
             {subTab === 'keys' && (
                 <div className="space-y-4">
+                    {/* Quota & Shy Points Banner */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 text-xs">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <Key className="w-4 h-4 text-indigo-400" />
+                            <span className="font-semibold text-slate-200">
+                                Clés API MCP :{' '}
+                                <span className={agentKeys.length >= FREE_MCP_KEYS_LIMIT ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold'}>
+                                    {agentKeys.length}/{FREE_MCP_KEYS_LIMIT} gratuites
+                                </span>
+                            </span>
+                            {agentKeys.length >= FREE_MCP_KEYS_LIMIT ? (
+                                <span className="text-[10px] bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                                    <Coins className="w-3 h-3 text-amber-400" /> +{EXTRA_MCP_KEY_COST} Shy Pts / clé additionnelle
+                                </span>
+                            ) : (
+                                <span className="text-[10px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-medium">
+                                    {FREE_MCP_KEYS_LIMIT - agentKeys.length} restante(s) sans frais
+                                </span>
+                            )}
+                        </div>
+                        {adminPoints !== null && (
+                            <div className="flex items-center gap-1.5 text-violet-300 bg-violet-500/15 border border-violet-500/30 px-3 py-1 rounded-xl font-bold">
+                                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                                <span>{adminPoints} Shy Points</span>
+                            </div>
+                        )}
+                    </div>
+
                     {/* Create button */}
                     {!showCreateForm && !createdKey && (
                         <button
@@ -487,7 +579,9 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
                             className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-indigo-500/40 rounded-xl text-indigo-400 hover:border-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/5 transition font-medium text-sm"
                         >
                             <Plus className="w-5 h-5" />
-                            Autoriser un nouveau Sky Agent
+                            {agentKeys.length >= FREE_MCP_KEYS_LIMIT 
+                                ? `Autoriser un nouveau Sky Agent (${EXTRA_MCP_KEY_COST} Shy Points)` 
+                                : 'Autoriser un nouveau Sky Agent (Gratuit)'}
                         </button>
                     )}
 
@@ -697,6 +791,26 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
                                 <p className="text-xs text-slate-500 mt-1">Laisser vide pour une clé sans expiration</p>
                             </div>
 
+                            {/* Notice Quota & Coût */}
+                            {agentKeys.length >= FREE_MCP_KEYS_LIMIT && (
+                                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2.5">
+                                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                                    <div className="space-y-1">
+                                        <p className="font-bold text-amber-200">
+                                            Création payante — Quota gratuit de {FREE_MCP_KEYS_LIMIT} clés atteint
+                                        </p>
+                                        <p className="text-amber-300/80 leading-relaxed">
+                                            Vous avez déjà {agentKeys.length} clé(s) active(s). La création de cette clé déduira <strong>{EXTRA_MCP_KEY_COST} Shy Points</strong> de votre solde.
+                                            {adminPoints !== null && (
+                                                <span className="block mt-1 font-semibold text-white">
+                                                    Votre solde : {adminPoints} points {adminPoints < EXTRA_MCP_KEY_COST ? '⚠️ (Solde insuffisant)' : '✓ (Solde suffisant)'}
+                                                </span>
+                                            )}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Actions */}
                             <div className="flex gap-2">
                                 <button
@@ -705,7 +819,7 @@ export function AiAgentsManager({ orgId, orgSlug }: { orgId: string; orgSlug: st
                                     className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold transition"
                                 >
                                     {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
-                                    {creating ? 'Création...' : 'Générer la clé'}
+                                    {creating ? 'Création...' : (agentKeys.length >= FREE_MCP_KEYS_LIMIT ? `Générer la clé (${EXTRA_MCP_KEY_COST} Shy Pts)` : 'Générer la clé (Gratuit)')}
                                 </button>
                                 <button
                                     onClick={() => { setShowCreateForm(false); resetCreateForm(); }}
