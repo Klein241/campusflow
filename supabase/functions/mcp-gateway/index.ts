@@ -184,7 +184,7 @@ const MCP_TOOLS = [
     },
     {
         name: 'create_chapter',
-        description: 'Créer un chapitre dans une matière',
+        description: 'Créer un chapitre dans une matière (supporte la planification temporelle et le déverrouillage progressif / drip content)',
         permission: 'write:curriculum',
         inputSchema: {
             type: 'object',
@@ -194,13 +194,23 @@ const MCP_TOOLS = [
                 description: { type: 'string', description: 'Description (optionnel)' },
                 order_index: { type: 'number', description: 'Position dans la liste (défaut: auto)' },
                 position: { type: 'number', description: 'Position dans la liste' },
+                period_name: { type: 'string', description: 'Nom de la période/semaine (ex: "Semaines 1 à 3 : Fondamentaux")' },
+                semaine: { type: 'string', description: 'Alias pour period_name' },
+                unlock_date: { type: 'string', description: 'Date de déverrouillage automatique (ISO ou YYYY-MM-DD)' },
+                available_from: { type: 'string', description: 'Alias pour unlock_date' },
+                date_debut: { type: 'string', description: 'Alias pour unlock_date' },
+                lock_date: { type: 'string', description: 'Date de verrouillage / expiration (optionnel)' },
+                available_until: { type: 'string', description: 'Alias pour lock_date' },
+                date_fin: { type: 'string', description: 'Alias pour lock_date' },
+                is_drip_locked: { type: 'boolean', description: 'Verrouiller manuellement le chapitre (cadenas)' },
+                status: { type: 'string', enum: ['published', 'draft', 'scheduled'], description: 'Statut du chapitre' },
             },
             required: ['subject_id', 'title'],
         },
     },
     {
         name: 'update_chapter',
-        description: 'Modifier un chapitre existant',
+        description: 'Modifier un chapitre existant (titre, description, position, période et date de déverrouillage programmée)',
         permission: 'write:curriculum',
         inputSchema: {
             type: 'object',
@@ -209,6 +219,17 @@ const MCP_TOOLS = [
                 title: { type: 'string', description: 'Nouveau titre' },
                 description: { type: 'string', description: 'Nouvelle description' },
                 position: { type: 'number', description: 'Nouvelle position' },
+                period_name: { type: 'string', description: 'Nom de la période (ex: "Semaines 4 à 6")' },
+                semaine: { type: 'string', description: 'Alias pour period_name' },
+                unlock_date: { type: 'string', description: 'Date de déverrouillage automatique (ISO ou YYYY-MM-DD)' },
+                available_from: { type: 'string', description: 'Alias pour unlock_date' },
+                date_debut: { type: 'string', description: 'Alias pour unlock_date' },
+                lock_date: { type: 'string', description: 'Date de fin de visibilité (optionnel)' },
+                available_until: { type: 'string', description: 'Alias pour lock_date' },
+                date_fin: { type: 'string', description: 'Alias pour lock_date' },
+                is_drip_locked: { type: 'boolean', description: 'Verrouillage forcé (cadenas)' },
+                is_locked: { type: 'boolean', description: 'Alias pour is_drip_locked' },
+                status: { type: 'string', enum: ['published', 'draft', 'scheduled'] },
             },
             required: ['chapter_id'],
         },
@@ -551,6 +572,54 @@ const MCP_TOOLS = [
                 },
             },
             required: ['slots'],
+        },
+    },
+    // ── CALENDRIER & PLANS DE FORMATION PAR SEMAINES (CURRICULUM SCHEDULE) ──
+    {
+        name: 'create_training_plan',
+        description: 'Planifier une période ou semaine de formation (ex: "Semaines 1 à 3 : Fondamentaux") avec dates début/fin et synchronisation automatique du déverrouillage des chapitres associés',
+        permission: 'write:schedule',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                name: { type: 'string', description: 'Nom de la période/semaine (ex: "Semaines 1 à 3 : De l\'idée au projet", "Semaine 4 : Genres littéraires")' },
+                semaine: { type: 'string', description: 'Alias pour "name"' },
+                period_name: { type: 'string', description: 'Alias pour "name"' },
+                classroom_id: { type: 'string', description: 'UUID de la classe (optionnel)' },
+                class_id: { type: 'string', description: 'Alias pour classroom_id' },
+                start_date: { type: 'string', description: 'Date de début (YYYY-MM-DD ou ISO)' },
+                date_debut: { type: 'string', description: 'Alias pour start_date' },
+                end_date: { type: 'string', description: 'Date de fin (YYYY-MM-DD ou ISO)' },
+                date_fin: { type: 'string', description: 'Alias pour end_date' },
+                position: { type: 'number', description: 'Ordre séquentiel (ex: 1 pour Semaine 1, 2 pour Semaine 2)' },
+                chapter_ids: { type: 'array', items: { type: 'string' }, description: 'UUIDs des chapitres à associer et déverrouiller automatiquement sur cette période' },
+                chapter_id: { type: 'string', description: 'UUID d\'un chapitre unique à programmer' },
+            },
+            required: ['name'],
+        },
+    },
+    {
+        name: 'list_training_plans',
+        description: 'Consulter le calendrier prévisionnel des périodes et semaines de formation',
+        permission: 'read:schedule',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                classroom_id: { type: 'string', description: 'UUID de la classe (optionnel)' },
+                class_id: { type: 'string', description: 'Alias pour classroom_id' },
+            },
+        },
+    },
+    {
+        name: 'delete_training_plan',
+        description: 'Supprimer une période du plan de formation',
+        permission: 'write:schedule',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                period_id: { type: 'string', description: 'UUID de la période à supprimer' },
+            },
+            required: ['period_id'],
         },
     },
 
@@ -1058,11 +1127,13 @@ Deno.serve(async (req: Request) => {
 
             // ─ Liste des outils disponibles ─
             case 'tools/list': {
-                const availableTools = MCP_TOOLS.filter(tool =>
-                    agent.isSuperadmin
-                        ? (agent.permissions.includes('superadmin:all') || agent.permissions.includes(tool.permission))
-                        : agent.permissions.includes(tool.permission)
-                );
+                const availableTools = MCP_TOOLS.filter(tool => {
+                    if (agent.isSuperadmin) return true;
+                    if (agent.permissions.includes(tool.permission)) return true;
+                    if (tool.permission === 'read:schedule' && agent.permissions.includes('read:curriculum')) return true;
+                    if (tool.permission === 'write:schedule' && agent.permissions.includes('write:curriculum')) return true;
+                    return false;
+                });
                 response = mcpSuccess(mcpReq.id, { tools: availableTools });
                 logOutput = `${availableTools.length} outils disponibles`;
                 break;
@@ -1080,9 +1151,15 @@ Deno.serve(async (req: Request) => {
                     throw { code: -32601, message: `Outil inconnu : ${toolName}` };
                 }
 
-                const isAllowed = agent.isSuperadmin
-                    ? (agent.permissions.includes('superadmin:all') || agent.permissions.includes(toolDef.permission))
-                    : agent.permissions.includes(toolDef.permission);
+                const hasPerm = (p: string) => agent.permissions.includes(p);
+                let isAllowed = agent.isSuperadmin && (hasPerm('superadmin:all') || hasPerm(toolDef.permission));
+                if (!isAllowed) {
+                    isAllowed = hasPerm(toolDef.permission);
+                    if (!isAllowed && (toolDef.permission === 'write:schedule' || toolDef.permission === 'read:schedule')) {
+                        if (toolDef.permission === 'write:schedule' && hasPerm('write:curriculum')) isAllowed = true;
+                        if (toolDef.permission === 'read:schedule' && hasPerm('read:curriculum')) isAllowed = true;
+                    }
+                }
 
                 if (!isAllowed) {
                     throw {
@@ -1220,14 +1297,34 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             if (!args.subject_id) throw { code: -32602, message: 'subject_id requis' };
             const { data, error } = await supabase
                 .from('chapters')
-                .select('id, title, description, position, status, subject_id')
+                .select('id, title, description, position, status, subject_id, unlock_date, lock_date, period_name, is_drip_locked')
                 .eq('subject_id', args.subject_id as string)
                 .order('position');
             if (error) throw { code: -32002, message: error.message };
-            const chapters = (data || []).map((ch: Record<string, unknown>) => ({
-                ...ch,
-                order_index: ch.position,
-            }));
+            const now = new Date();
+            const chapters = (data || []).map((ch: Record<string, any>) => {
+                const unlockMs = ch.unlock_date ? new Date(ch.unlock_date).getTime() : 0;
+                const lockMs = ch.lock_date ? new Date(ch.lock_date).getTime() : 0;
+                const isLockedManually = Boolean(ch.is_drip_locked);
+                const isLockedByDate = Boolean(unlockMs && unlockMs > now.getTime());
+                const isExpired = Boolean(lockMs && lockMs <= now.getTime());
+                const isUnlocked = !isLockedManually && !isLockedByDate && !isExpired;
+
+                let dripBadge = '🔓 Déverrouillé';
+                if (isLockedManually) dripBadge = '🔒 Verrouillé manuellement';
+                else if (isLockedByDate) dripBadge = `⏳ Débloque le ${new Date(ch.unlock_date).toLocaleDateString('fr-FR')}`;
+                else if (isExpired) dripBadge = '⌛ Période expirée';
+
+                return {
+                    ...ch,
+                    order_index: ch.position,
+                    is_unlocked: isUnlocked,
+                    drip_badge: dripBadge,
+                    period_name: ch.period_name || null,
+                    unlock_date: ch.unlock_date || null,
+                    lock_date: ch.lock_date || null,
+                };
+            });
             return { chapters, total: chapters.length };
         }
 
@@ -1360,6 +1457,24 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
                 orderIndex = (count || 0) + 1;
             }
 
+            const rawUnlock = args.unlock_date || args.available_from || args.date_debut || args.date_publication || null;
+            const rawLock = args.lock_date || args.available_until || args.date_fin || null;
+            const periodName = (args.period_name || args.semaine || args.periode || null) as string | null;
+            const isDripLocked = args.is_drip_locked !== undefined ? Boolean(args.is_drip_locked) : (args.is_locked !== undefined ? Boolean(args.is_locked) : false);
+
+            let unlockIso: string | null = null;
+            if (rawUnlock) {
+                const d = new Date(rawUnlock as string);
+                if (!isNaN(d.getTime())) unlockIso = d.toISOString();
+            }
+            let lockIso: string | null = null;
+            if (rawLock) {
+                const d = new Date(rawLock as string);
+                if (!isNaN(d.getTime())) lockIso = d.toISOString();
+            }
+
+            const chapterStatus = (args.status as string) || (unlockIso && new Date(unlockIso) > new Date() ? 'scheduled' : 'published');
+
             const { data, error } = await supabase
                 .from('chapters')
                 .insert({
@@ -1368,7 +1483,11 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
                     title:           args.title,
                     description:     args.description || null,
                     position:        orderIndex,
-                    status:          'draft',
+                    status:          chapterStatus,
+                    unlock_date:     unlockIso,
+                    lock_date:       lockIso,
+                    period_name:     periodName,
+                    is_drip_locked:  isDripLocked,
                     created_by_ai:   true,
                     ai_agent_name:   agent.agentName,
                 })
@@ -1378,7 +1497,7 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             return {
                 success: true,
                 chapter: data,
-                message: `✅ Chapitre "${args.title}" créé (position ${orderIndex})`,
+                message: `✅ Chapitre "${args.title}" créé (position ${orderIndex})${periodName ? ` [${periodName}]` : ''}${unlockIso ? ` • Déverrouillage prévu le ${unlockIso.slice(0, 10)}` : ''}`,
             };
         }
 
@@ -1389,6 +1508,29 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             if (args.title) updatePayload.title = args.title;
             if (args.description !== undefined) updatePayload.description = args.description;
             if (args.position !== undefined) updatePayload.position = args.position;
+            if (args.status) updatePayload.status = args.status;
+
+            const rawUnlock = args.unlock_date || args.available_from || args.date_debut || args.date_publication;
+            if (rawUnlock !== undefined) {
+                if (!rawUnlock) updatePayload.unlock_date = null;
+                else {
+                    const d = new Date(rawUnlock as string);
+                    if (!isNaN(d.getTime())) updatePayload.unlock_date = d.toISOString();
+                }
+            }
+            const rawLock = args.lock_date || args.available_until || args.date_fin;
+            if (rawLock !== undefined) {
+                if (!rawLock) updatePayload.lock_date = null;
+                else {
+                    const d = new Date(rawLock as string);
+                    if (!isNaN(d.getTime())) updatePayload.lock_date = d.toISOString();
+                }
+            }
+            if (args.period_name !== undefined || args.semaine !== undefined || args.periode !== undefined) {
+                updatePayload.period_name = args.period_name || args.semaine || args.periode || null;
+            }
+            if (args.is_drip_locked !== undefined) updatePayload.is_drip_locked = Boolean(args.is_drip_locked);
+            else if (args.is_locked !== undefined) updatePayload.is_drip_locked = Boolean(args.is_locked);
 
             const { data, error } = await supabase
                 .from('chapters')
@@ -1397,7 +1539,12 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
                 .select()
                 .single();
             if (error) throw { code: -32002, message: error.message };
-            return { success: true, chapter: data, message: `✅ Chapitre mis à jour` };
+            return {
+                success: true,
+                chapter: data,
+                message: `✅ Chapitre mis à jour avec programmation temporelle`,
+                updated_fields: Object.keys(updatePayload),
+            };
         }
 
         // ── DELETE CHAPTER ───────────────────────────────────────────────────
@@ -1748,6 +1895,22 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             if (Array.isArray(args.chapters) && subjectId) {
                 for (let cIdx = 0; cIdx < args.chapters.length; cIdx++) {
                     const chData = args.chapters[cIdx];
+                    const rawUnlock = chData.unlock_date || chData.available_from || chData.date_debut;
+                    const rawLock = chData.lock_date || chData.available_until || chData.date_fin;
+                    const periodName = chData.period_name || chData.semaine || chData.periode || null;
+                    const isDripLocked = chData.is_drip_locked !== undefined ? Boolean(chData.is_drip_locked) : (chData.is_locked !== undefined ? Boolean(chData.is_locked) : false);
+
+                    let unlockDate: string | null = null;
+                    if (rawUnlock) {
+                        const d = new Date(rawUnlock);
+                        if (!isNaN(d.getTime())) unlockDate = d.toISOString();
+                    }
+                    let lockDate: string | null = null;
+                    if (rawLock) {
+                        const d = new Date(rawLock);
+                        if (!isNaN(d.getTime())) lockDate = d.toISOString();
+                    }
+
                     const { data: ch, error: chErr } = await supabase
                         .from('chapters')
                         .insert({
@@ -1756,7 +1919,11 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
                             title: chData.title,
                             description: chData.description || null,
                             position: cIdx + 1,
-                            status: 'draft',
+                            status: chData.status || (unlockDate && new Date(unlockDate) > new Date() ? 'scheduled' : 'draft'),
+                            unlock_date: unlockDate,
+                            lock_date: lockDate,
+                            period_name: periodName,
+                            is_drip_locked: isDripLocked,
                             created_by_ai: true,
                             ai_agent_name: agent.agentName,
                         })
@@ -1809,7 +1976,75 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
                                             duration_minutes: exData.duration_minutes || 10,
                                             max_score: exData.max_score || 20,
                                             created_by_ai: true,
-                                            ai_agent_name: agent.agen        // ── CREATE SCHEDULE SLOT ─────────────────────────────────────────────
+                                            ai_agent_name: agent.agentName,
+                                        });
+                                    if (!exErr) summary.exercises++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return {
+                success: true,
+                message: `✅ Cursus complet généré avec succès`,
+                summary,
+            };
+        }
+
+        // ── LIST SCHEDULE ─────────────────────────────────────────────────────
+        case 'list_schedule': {
+            const targetOrgId = agent.isSuperadmin ? ((args.org_id as string) || agent.orgId) : agent.orgId;
+            const dayNames = ['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+            let slots: any[] = [];
+
+            let query = supabase
+                .from('timetable_slots')
+                .select('*, classrooms:classroom_id(name), subjects:subject_id(name)')
+                .order('day_of_week', { ascending: true })
+                .order('start_time', { ascending: true });
+
+            if (targetOrgId) query = query.eq('organization_id', targetOrgId);
+            if (args.classroom_id || args.class_id) query = query.eq('classroom_id', (args.classroom_id || args.class_id) as string);
+            if (args.subject_id) query = query.eq('subject_id', args.subject_id as string);
+            if (args.day_of_week !== undefined && args.day_of_week !== null && args.day_of_week !== '') {
+                query = query.eq('day_of_week', normalizeDayOfWeek(args.day_of_week));
+            }
+
+            const { data, error } = await query;
+            if (!error && Array.isArray(data)) {
+                slots = data;
+            } else {
+                let rawQuery = supabase
+                    .from('timetable_slots')
+                    .select('*')
+                    .order('day_of_week', { ascending: true })
+                    .order('start_time', { ascending: true });
+
+                if (targetOrgId) rawQuery = rawQuery.eq('organization_id', targetOrgId);
+                if (args.classroom_id || args.class_id) rawQuery = rawQuery.eq('classroom_id', (args.classroom_id || args.class_id) as string);
+                if (args.subject_id) rawQuery = rawQuery.eq('subject_id', args.subject_id as string);
+                if (args.day_of_week !== undefined && args.day_of_week !== null && args.day_of_week !== '') {
+                    rawQuery = rawQuery.eq('day_of_week', normalizeDayOfWeek(args.day_of_week));
+                }
+                const { data: rawData } = await rawQuery;
+                if (Array.isArray(rawData)) slots = rawData;
+            }
+
+            const formattedSlots = slots.map((s: any) => ({
+                ...s,
+                day_name: dayNames[s.day_of_week] || `Jour ${s.day_of_week}`,
+                classroom_name: s.classrooms?.name || null,
+                subject_name: s.subjects?.name || null,
+            }));
+
+            return {
+                schedule: formattedSlots,
+                total: formattedSlots.length,
+                message: `📅 ${formattedSlots.length} créneau(x) trouvé(s)`,
+            };
+        }
         case 'create_schedule_slot': {
             const targetOrgId = agent.isSuperadmin ? ((args.org_id as string) || agent.orgId) : agent.orgId;
             if (!targetOrgId) throw { code: -32602, message: 'organization_id requis' };
@@ -1945,6 +2180,120 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
                 slots: data || [],
                 message: `⚡ Emploi du temps créé avec succès (${(data || []).length} créneau(x) configuré(s))`,
             };
+        }
+
+        // ── CREATE TRAINING PLAN / CURRICULUM SCHEDULE ────────────────────────
+        case 'create_training_plan':
+        case 'create_curriculum_schedule': {
+            const targetOrgId = agent.isSuperadmin ? ((args.org_id as string) || agent.orgId) : agent.orgId;
+            if (!targetOrgId) throw { code: -32602, message: 'organization_id requis' };
+            const name = (args.name || args.period_name || args.semaine || args.title) as string;
+            if (!name) throw { code: -32602, message: '"name" ou "semaine" est requis (ex: "Semaines 1 à 3 : Fondamentaux")' };
+
+            const classId = (args.classroom_id || args.class_id) as string;
+            const startDate = args.start_date || args.date_debut || null;
+            const endDate = args.end_date || args.date_fin || null;
+            const position = Number(args.position ?? args.order_index ?? args.semaine_numero) || 0;
+            const periodId = crypto.randomUUID();
+            const now = new Date().toISOString();
+
+            const periodPayload: Record<string, any> = {
+                id: periodId,
+                organization_id: targetOrgId,
+                classroom_id: classId || null,
+                name: String(name).trim(),
+                start_date: startDate ? String(startDate).slice(0, 10) : null,
+                end_date: endDate ? String(endDate).slice(0, 10) : null,
+                position,
+                is_active: true,
+                created_at: now,
+            };
+
+            const { error: periodErr } = await supabase.from('cursus_periods').insert(periodPayload);
+            if (periodErr) throw { code: -32002, message: periodErr.message };
+
+            // Synchroniser le déverrouillage automatique des chapitres associés
+            let updatedChaptersCount = 0;
+            const targetChapterIds: string[] = [];
+            if (Array.isArray(args.chapter_ids)) {
+                targetChapterIds.push(...args.chapter_ids);
+            } else if (args.chapter_id) {
+                targetChapterIds.push(args.chapter_id as string);
+            }
+
+            for (const chId of targetChapterIds) {
+                const patch: Record<string, any> = {
+                    period_name: name,
+                    is_drip_locked: false,
+                };
+                if (startDate) {
+                    const d = new Date(startDate);
+                    if (!isNaN(d.getTime())) {
+                        d.setHours(8, 0, 0, 0);
+                        patch.unlock_date = d.toISOString();
+                    }
+                }
+                if (endDate) {
+                    const d = new Date(endDate);
+                    if (!isNaN(d.getTime())) {
+                        d.setHours(23, 59, 59, 0);
+                        patch.lock_date = d.toISOString();
+                    }
+                }
+                const { error: chPatchErr } = await supabase.from('chapters').update(patch).eq('id', chId);
+                if (!chPatchErr) updatedChaptersCount++;
+            }
+
+            return {
+                success: true,
+                period_id: periodId,
+                training_plan: periodPayload,
+                updated_chapters_count: updatedChaptersCount,
+                message: `📅 Période de formation programmée : "${name}"${startDate ? ` (du ${startDate}${endDate ? ` au ${endDate}` : ''})` : ''}${updatedChaptersCount > 0 ? ` avec ${updatedChaptersCount} chapitre(s) synchronisé(s)` : ''}`,
+            };
+        }
+
+        // ── LIST TRAINING PLANS ───────────────────────────────────────────────
+        case 'list_training_plans':
+        case 'list_curriculum_schedules': {
+            const targetOrgId = agent.isSuperadmin ? ((args.org_id as string) || agent.orgId) : agent.orgId;
+            let query = supabase
+                .from('cursus_periods')
+                .select('*, classrooms:classroom_id(name)')
+                .order('position', { ascending: true })
+                .order('start_date', { ascending: true });
+
+            if (targetOrgId) query = query.eq('organization_id', targetOrgId);
+            if (args.classroom_id || args.class_id) query = query.eq('classroom_id', (args.classroom_id || args.class_id) as string);
+
+            let { data, error } = await query;
+            if (error || !data) {
+                // Fallback sans jointure
+                let rawQuery = supabase
+                    .from('cursus_periods')
+                    .select('*')
+                    .order('position', { ascending: true })
+                    .order('start_date', { ascending: true });
+                if (targetOrgId) rawQuery = rawQuery.eq('organization_id', targetOrgId);
+                if (args.classroom_id || args.class_id) rawQuery = rawQuery.eq('classroom_id', (args.classroom_id || args.class_id) as string);
+                const { data: rawData } = await rawQuery;
+                data = rawData || [];
+            }
+
+            return {
+                training_plans: data || [],
+                total: (data || []).length,
+                message: `📅 ${(data || []).length} période(s) de formation configurée(s)`,
+            };
+        }
+
+        // ── DELETE TRAINING PLAN ──────────────────────────────────────────────
+        case 'delete_training_plan': {
+            const periodId = (args.period_id || args.id) as string;
+            if (!periodId) throw { code: -32602, message: 'period_id requis' };
+            const { error } = await supabase.from('cursus_periods').delete().eq('id', periodId);
+            if (error) throw { code: -32002, message: error.message };
+            return { success: true, message: `🗑️ Période de formation supprimée` };
         }
 
         // ── PUBLISH LIBRARY ITEM ──────────────────────────────────────────────

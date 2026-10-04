@@ -95,6 +95,23 @@ async function fetchSupabaseRestOrThrow(env: Env, path: string, options: { metho
     return await res.json();
 }
 
+// ── Helper Normalisation du Jour de la Semaine (1 = Lundi, 7 = Dimanche) ──
+export function normalizeDayOfWeek(day: unknown): number {
+    if (typeof day === 'number') {
+        return Math.min(Math.max(1, Math.round(day)), 7);
+    }
+    const str = String(day || '').trim().toLowerCase();
+    const map: Record<string, number> = {
+        '1': 1, 'lundi': 1, 'mon': 1, 'monday': 1,
+        '2': 2, 'mardi': 2, 'tue': 2, 'tuesday': 2,
+        '3': 3, 'mercredi': 3, 'wed': 3, 'wednesday': 3,
+        '4': 4, 'jeudi': 4, 'thu': 4, 'thursday': 4,
+        '5': 5, 'vendredi': 5, 'fri': 5, 'friday': 5,
+        '6': 6, 'samedi': 6, 'sat': 6, 'saturday': 6,
+        '7': 7, 'dimanche': 7, 'sun': 7, 'sunday': 7, '0': 7,
+    };
+    return map[str] || 1;
+}
 
 // ── Helper Extraction de Texte Oral Nettoyé pour la Synthèse Vocale (TTS) ──
 function extractCleanSpeechText(rawContent: string | null | undefined): string {
@@ -226,18 +243,42 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         // ── LIST CHAPTERS ──
         case 'list_chapters': {
             if (!args.subject_id) throw { code: -32602, message: 'subject_id requis' };
+            let rawList: any[] = [];
             if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
-                const supChaps = await fetchSupabaseRest(env, `chapters?subject_id=eq.${encodeURIComponent(args.subject_id as string)}&select=id,title,description,position,status,subject_id&order=position.asc`);
-                if (supChaps) {
-                    const chapters = supChaps.map((ch: any) => ({ ...ch, order_index: ch.position }));
-                    return { chapters, total: chapters.length };
+                const supChaps = await fetchSupabaseRest(env, `chapters?subject_id=eq.${encodeURIComponent(args.subject_id as string)}&select=id,title,description,position,status,subject_id,unlock_date,lock_date,period_name,is_drip_locked&order=position.asc`);
+                if (supChaps && Array.isArray(supChaps)) {
+                    rawList = supChaps;
                 }
             }
-            const { results } = await db.prepare(`SELECT id, title, description, position, status, subject_id FROM chapters WHERE subject_id = ?1 ORDER BY position ASC`).bind(args.subject_id).all().catch(() => ({ results: [] }));
-            const chapters = (results || []).map((ch: any) => ({
-                ...ch,
-                order_index: ch.position,
-            }));
+            if (rawList.length === 0) {
+                const { results } = await db.prepare(`SELECT id, title, description, position, status, subject_id FROM chapters WHERE subject_id = ?1 ORDER BY position ASC`).bind(args.subject_id).all().catch(() => ({ results: [] }));
+                rawList = results || [];
+            }
+
+            const now = new Date();
+            const chapters = rawList.map((ch: any) => {
+                const unlockMs = ch.unlock_date ? new Date(ch.unlock_date).getTime() : 0;
+                const lockMs = ch.lock_date ? new Date(ch.lock_date).getTime() : 0;
+                const isLockedManually = Boolean(ch.is_drip_locked);
+                const isLockedByDate = Boolean(unlockMs && unlockMs > now.getTime());
+                const isExpired = Boolean(lockMs && lockMs <= now.getTime());
+                const isUnlocked = !isLockedManually && !isLockedByDate && !isExpired;
+
+                let dripBadge = '🔓 Déverrouillé';
+                if (isLockedManually) dripBadge = '🔒 Verrouillé manuellement';
+                else if (isLockedByDate) dripBadge = `⏳ Débloque le ${new Date(ch.unlock_date).toLocaleDateString('fr-FR')}`;
+                else if (isExpired) dripBadge = '⌛ Période expirée';
+
+                return {
+                    ...ch,
+                    order_index: ch.position,
+                    is_unlocked: isUnlocked,
+                    drip_badge: dripBadge,
+                    period_name: ch.period_name || null,
+                    unlock_date: ch.unlock_date || null,
+                    lock_date: ch.lock_date || null,
+                };
+            });
             return { chapters, total: chapters.length };
         }
 
@@ -386,6 +427,25 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
             const id = crypto.randomUUID();
             const position = Number(args.position ?? args.order_index) || 1;
+
+            const rawUnlock = args.unlock_date || args.available_from || args.date_debut || args.date_publication || null;
+            const rawLock = args.lock_date || args.available_until || args.date_fin || null;
+            const periodName = args.period_name || args.semaine || args.periode || null;
+            const isDripLocked = args.is_drip_locked !== undefined ? Boolean(args.is_drip_locked) : (args.is_locked !== undefined ? Boolean(args.is_locked) : false);
+
+            let unlockIso: string | null = null;
+            if (rawUnlock) {
+                const d = new Date(rawUnlock);
+                if (!isNaN(d.getTime())) unlockIso = d.toISOString();
+            }
+            let lockIso: string | null = null;
+            if (rawLock) {
+                const d = new Date(rawLock);
+                if (!isNaN(d.getTime())) lockIso = d.toISOString();
+            }
+
+            const chapterStatus = (args.status as string) || (unlockIso && new Date(unlockIso) > new Date() ? 'scheduled' : 'published');
+
             const payload: any = {
                 id,
                 organization_id: targetOrgId,
@@ -393,22 +453,36 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 title: args.title,
                 description: args.description || null,
                 position,
-                status: 'published',
+                status: chapterStatus,
+                unlock_date: unlockIso,
+                lock_date: lockIso,
+                period_name: periodName,
+                is_drip_locked: isDripLocked,
             };
 
             if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
                 const inserted = await fetchSupabaseRest(env, 'chapters', { method: 'POST', body: payload });
                 if (inserted && inserted.length > 0) {
-                    db.prepare(`INSERT INTO chapters (id, organization_id, subject_id, title, description, position, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', ?7, ?7)`)
-                        .bind(id, targetOrgId, args.subject_id, args.title, args.description || '', position, new Date().toISOString()).run().catch(() => {});
-                    return { success: true, chapter_id: id, chapter: inserted[0], message: `✅ Chapitre "${args.title}" créé et synchronisé immédiatement` };
+                    await db.prepare(`INSERT INTO chapters (id, organization_id, subject_id, title, description, position, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)`)
+                        .bind(id, targetOrgId, args.subject_id, args.title, args.description || '', position, chapterStatus, new Date().toISOString()).run().catch(() => {});
+                    return {
+                        success: true,
+                        chapter_id: id,
+                        chapter: inserted[0],
+                        message: `✅ Chapitre "${args.title}" créé${periodName ? ` (${periodName})` : ''}${unlockIso ? ` • Déverrouillage programmé le ${unlockIso.slice(0, 10)}` : ''}`
+                    };
                 }
             }
 
-            await db.prepare(`INSERT INTO chapters (id, organization_id, subject_id, title, description, position, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', ?7, ?7)`)
-                .bind(id, targetOrgId, args.subject_id, args.title, args.description || '', position, new Date().toISOString()).run();
+            await db.prepare(`INSERT INTO chapters (id, organization_id, subject_id, title, description, position, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)`)
+                .bind(id, targetOrgId, args.subject_id, args.title, args.description || '', position, chapterStatus, new Date().toISOString()).run().catch(() => {});
             syncToSupabase(env, 'chapters', 'INSERT', payload);
-            return { success: true, chapter_id: id, message: `✅ Chapitre "${args.title}" créé` };
+            return {
+                success: true,
+                chapter_id: id,
+                chapter: payload,
+                message: `✅ Chapitre "${args.title}" créé${periodName ? ` (${periodName})` : ''}${unlockIso ? ` • Déverrouillage programmé le ${unlockIso.slice(0, 10)}` : ''}`
+            };
         }
 
         // ── UPDATE CHAPTER ──
@@ -420,13 +494,39 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             if (args.position !== undefined) updatePayload.position = Number(args.position);
             if (args.status) updatePayload.status = args.status;
 
+            const rawUnlock = args.unlock_date || args.available_from || args.date_debut || args.date_publication;
+            if (rawUnlock !== undefined) {
+                if (!rawUnlock) updatePayload.unlock_date = null;
+                else {
+                    const d = new Date(rawUnlock);
+                    if (!isNaN(d.getTime())) updatePayload.unlock_date = d.toISOString();
+                }
+            }
+            const rawLock = args.lock_date || args.available_until || args.date_fin;
+            if (rawLock !== undefined) {
+                if (!rawLock) updatePayload.lock_date = null;
+                else {
+                    const d = new Date(rawLock);
+                    if (!isNaN(d.getTime())) updatePayload.lock_date = d.toISOString();
+                }
+            }
+            if (args.period_name !== undefined || args.semaine !== undefined || args.periode !== undefined) {
+                updatePayload.period_name = args.period_name || args.semaine || args.periode || null;
+            }
+            if (args.is_drip_locked !== undefined) updatePayload.is_drip_locked = Boolean(args.is_drip_locked);
+            else if (args.is_locked !== undefined) updatePayload.is_drip_locked = Boolean(args.is_locked);
+
             if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
                 await fetchSupabaseRest(env, `chapters?id=eq.${encodeURIComponent(args.chapter_id)}`, { method: 'PATCH', body: updatePayload });
             }
             const now = new Date().toISOString();
             await db.prepare(`UPDATE chapters SET title = COALESCE(?1, title), description = COALESCE(?2, description), position = COALESCE(?3, position), updated_at = ?4 WHERE id = ?5`)
                 .bind(args.title || null, args.description || null, args.position || null, now, args.chapter_id).run().catch(() => {});
-            return { success: true, message: `✅ Chapitre mis à jour` };
+            return {
+                success: true,
+                message: `✅ Chapitre mis à jour avec programmation temporelle`,
+                updated_fields: Object.keys(updatePayload)
+            };
         }
 
         // ── DELETE CHAPTER ──
@@ -1003,12 +1103,36 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                     const chData = args.chapters[cIdx];
                     const chId = crypto.randomUUID();
                     const chPos = cIdx + 1;
-                    const chPayload = { id: chId, organization_id: targetOrgId, subject_id: subjectId, title: chData.title, description: chData.description || '', position: chPos, status: 'published', created_at: now, updated_at: now };
+                    const rawChUnlock = chData.unlock_date || chData.available_from || chData.date_debut || null;
+                    const rawChLock = chData.lock_date || chData.available_until || chData.date_fin || null;
+                    const chPeriod = chData.period_name || chData.semaine || chData.periode || null;
+                    const chDripLocked = chData.is_drip_locked !== undefined ? Boolean(chData.is_drip_locked) : (chData.is_locked !== undefined ? Boolean(chData.is_locked) : false);
+                    let chUnlockIso: string | null = null;
+                    if (rawChUnlock) { const d = new Date(rawChUnlock); if (!isNaN(d.getTime())) chUnlockIso = d.toISOString(); }
+                    let chLockIso: string | null = null;
+                    if (rawChLock) { const d = new Date(rawChLock); if (!isNaN(d.getTime())) chLockIso = d.toISOString(); }
+                    const chStatus = (chData.status as string) || (chUnlockIso && new Date(chUnlockIso) > new Date() ? 'scheduled' : 'published');
+
+                    const chPayload = {
+                        id: chId,
+                        organization_id: targetOrgId,
+                        subject_id: subjectId,
+                        title: chData.title,
+                        description: chData.description || '',
+                        position: chPos,
+                        status: chStatus,
+                        unlock_date: chUnlockIso,
+                        lock_date: chLockIso,
+                        period_name: chPeriod,
+                        is_drip_locked: chDripLocked,
+                        created_at: now,
+                        updated_at: now
+                    };
                     if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
                         await fetchSupabaseRest(env, 'chapters', { method: 'POST', body: chPayload });
                     }
-                    await db.prepare(`INSERT INTO chapters (id, organization_id, subject_id, title, description, position, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'published', ?7, ?7)`)
-                        .bind(chId, targetOrgId, subjectId, chData.title, chData.description || '', chPos, now).run().catch(() => {});
+                    await db.prepare(`INSERT INTO chapters (id, organization_id, subject_id, title, description, position, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)`)
+                        .bind(chId, targetOrgId, subjectId, chData.title, chData.description || '', chPos, chStatus, now).run().catch(() => {});
                     createdSummary.chapters++;
                     createdCount++;
 
@@ -2940,15 +3064,84 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
 
         // ── LIST SCHEDULE ──
         case 'list_schedule': {
+            const dayNames = ['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+            let slots: any[] = [];
+
             if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
-                let path = `timetable_slots?select=*,classrooms(name),subjects(name)&order=start_time.asc`;
+                // Essayer d'abord avec jointures classrooms et subjects (syntaxe PostgREST avec alias)
+                let path = `timetable_slots?select=*,classrooms:classroom_id(name),subjects:subject_id(name)&order=day_of_week.asc,start_time.asc`;
                 if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
                 if (args.classroom_id || args.class_id) path += `&classroom_id=eq.${encodeURIComponent((args.classroom_id || args.class_id) as string)}`;
                 if (args.subject_id) path += `&subject_id=eq.${encodeURIComponent(args.subject_id as string)}`;
+                if (args.day_of_week !== undefined && args.day_of_week !== null && args.day_of_week !== '') {
+                    const dayNum = normalizeDayOfWeek(args.day_of_week);
+                    path += `&day_of_week=eq.${dayNum}`;
+                }
                 const supData = await fetchSupabaseRest(env, path);
-                if (supData) return { schedule: supData, total: supData.length };
+                if (supData && Array.isArray(supData)) {
+                    slots = supData;
+                } else {
+                    // Fallback select brut sans jointure au cas où PostgREST bloque sur le nommage de la FK
+                    let rawPath = `timetable_slots?select=*&order=day_of_week.asc,start_time.asc`;
+                    if (targetOrgId) rawPath += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+                    if (args.classroom_id || args.class_id) rawPath += `&classroom_id=eq.${encodeURIComponent((args.classroom_id || args.class_id) as string)}`;
+                    if (args.subject_id) rawPath += `&subject_id=eq.${encodeURIComponent(args.subject_id as string)}`;
+                    if (args.day_of_week !== undefined && args.day_of_week !== null && args.day_of_week !== '') {
+                        const dayNum = normalizeDayOfWeek(args.day_of_week);
+                        rawPath += `&day_of_week=eq.${dayNum}`;
+                    }
+                    const rawData = await fetchSupabaseRest(env, rawPath);
+                    if (rawData && Array.isArray(rawData)) slots = rawData;
+                }
             }
-            return { schedule: [], total: 0 };
+
+            // Fallback D1 local si Supabase n'a rien renvoyé ou est hors-ligne
+            if (slots.length === 0) {
+                try {
+                    let d1Query = `SELECT t.*, c.name as classroom_name, s.name as subject_name FROM timetable_slots t
+                                   LEFT JOIN classrooms c ON t.classroom_id = c.id
+                                   LEFT JOIN subjects s ON t.subject_id = s.id
+                                   WHERE t.organization_id = ?1`;
+                    const binds: any[] = [targetOrgId];
+                    if (args.classroom_id || args.class_id) {
+                        d1Query += ` AND t.classroom_id = ?${binds.length + 1}`;
+                        binds.push((args.classroom_id || args.class_id) as string);
+                    }
+                    if (args.subject_id) {
+                        d1Query += ` AND t.subject_id = ?${binds.length + 1}`;
+                        binds.push(args.subject_id as string);
+                    }
+                    if (args.day_of_week !== undefined && args.day_of_week !== null && args.day_of_week !== '') {
+                        const dayNum = normalizeDayOfWeek(args.day_of_week);
+                        d1Query += ` AND t.day_of_week = ?${binds.length + 1}`;
+                        binds.push(dayNum);
+                    }
+                    d1Query += ` ORDER BY t.day_of_week ASC, t.start_time ASC`;
+                    const stmt = db.prepare(d1Query);
+                    const { results } = await stmt.bind(...binds).all().catch(() => ({ results: [] }));
+                    if (results && results.length > 0) {
+                        slots = results.map((r: any) => ({
+                            ...r,
+                            classrooms: r.classroom_name ? { name: r.classroom_name } : null,
+                            subjects: r.subject_name ? { name: r.subject_name } : null,
+                        }));
+                    }
+                } catch {}
+            }
+
+            // Enrichir avec day_name convivial
+            const formattedSlots = slots.map((s: any) => ({
+                ...s,
+                day_name: dayNames[s.day_of_week] || `Jour ${s.day_of_week}`,
+                classroom_name: s.classrooms?.name || s.classroom_name || null,
+                subject_name: s.subjects?.name || s.subject_name || null,
+            }));
+
+            return {
+                schedule: formattedSlots,
+                total: formattedSlots.length,
+                message: `📅 ${formattedSlots.length} créneau(x) trouvé(s)`,
+            };
         }
 
         // ── CREATE / UPDATE SCHEDULE ──
@@ -2958,57 +3151,204 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
             const slotId = (args.slot_id as string) || crypto.randomUUID();
             const classId = (args.classroom_id || args.class_id) as string;
+            const dayNum = normalizeDayOfWeek(args.day_of_week);
+            const dayNames = ['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+
+            // NOTE: timetable_slots en Postgres n'a PAS de colonne updated_at, uniquement created_at
             const payload: Record<string, any> = {
                 organization_id: targetOrgId,
-                updated_at: new Date().toISOString(),
+                day_of_week: dayNum,
+                start_time: String(args.start_time || '08:00').trim(),
+                end_time: String(args.end_time || '10:00').trim(),
+                room: args.room || args.room_name || null,
+                teacher_id: args.teacher_id || null,
             };
             if (classId) payload.classroom_id = classId;
             if (args.subject_id) payload.subject_id = args.subject_id;
-            if (args.day_of_week !== undefined) payload.day_of_week = Number(args.day_of_week) || 1;
-            if (args.start_time) payload.start_time = String(args.start_time).trim();
-            if (args.end_time) payload.end_time = String(args.end_time).trim();
-            if (args.room !== undefined || args.room_name !== undefined) payload.room = args.room || args.room_name || null;
-            if (args.teacher_id !== undefined) payload.teacher_id = args.teacher_id || null;
 
             if (args.slot_id) {
-                syncToSupabase(env, 'timetable_slots', 'UPDATE', { id: slotId, ...payload });
-                return { success: true, slot_id: slotId, message: `✅ Créneau d'emploi du temps modifié` };
+                if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                    await fetchSupabaseRest(env, `timetable_slots?id=eq.${encodeURIComponent(args.slot_id as string)}`, { method: 'PATCH', body: payload });
+                }
+                await db.prepare(`UPDATE timetable_slots SET classroom_id = COALESCE(?1, classroom_id), subject_id = COALESCE(?2, subject_id), day_of_week = ?3, start_time = ?4, end_time = ?5, room_id = ?6, teacher_id = ?7 WHERE id = ?8`)
+                    .bind(classId || null, args.subject_id || null, dayNum, payload.start_time, payload.end_time, payload.room, payload.teacher_id, args.slot_id).run().catch(() => {});
+                return { success: true, slot_id: args.slot_id, message: `✅ Créneau d'emploi du temps modifié : ${dayNames[dayNum] || `Jour ${dayNum}`} de ${payload.start_time} à ${payload.end_time}` };
             } else {
                 payload.id = slotId;
                 payload.created_at = new Date().toISOString();
-                syncToSupabase(env, 'timetable_slots', 'INSERT', payload);
-                return { success: true, slot: payload, message: `✅ Créneau créé` };
+                let insertedSlot: any = null;
+                if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                    const res = await fetchSupabaseRest(env, 'timetable_slots', { method: 'POST', body: payload });
+                    if (res && res.length > 0) insertedSlot = res[0];
+                }
+                await db.prepare(`INSERT INTO timetable_slots (id, organization_id, classroom_id, subject_id, day_of_week, start_time, end_time, room_id, teacher_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`)
+                    .bind(slotId, targetOrgId, classId || null, args.subject_id || null, dayNum, payload.start_time, payload.end_time, payload.room, payload.teacher_id, payload.created_at).run().catch(() => {});
+                return {
+                    success: true,
+                    slot: insertedSlot || payload,
+                    message: `✅ Créneau créé et synchronisé : ${dayNames[dayNum] || `Jour ${dayNum}`} de ${payload.start_time} à ${payload.end_time}${payload.room ? ` (${payload.room})` : ''}`
+                };
             }
         }
 
         // ── DELETE SCHEDULE SLOT ──
         case 'delete_schedule_slot': {
             if (!args.slot_id) throw { code: -32602, message: 'slot_id requis' };
-            syncToSupabase(env, 'timetable_slots', 'DELETE', { id: args.slot_id });
-            return { success: true, message: `🗑️ Créneau supprimé` };
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `timetable_slots?id=eq.${encodeURIComponent(args.slot_id as string)}`, { method: 'DELETE' });
+            }
+            await db.prepare(`DELETE FROM timetable_slots WHERE id = ?1`).bind(args.slot_id).run().catch(() => {});
+            return { success: true, message: `🗑️ Créneau supprimé avec succès` };
         }
 
         // ── BULK CREATE SCHEDULE ──
         case 'bulk_create_schedule': {
             if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
-            const slots = Array.isArray(args.slots) ? args.slots : [];
-            for (const s of slots) {
+            const rawSlots = Array.isArray(args.slots) ? args.slots : [];
+            const defaultClassId = (args.classroom_id || args.class_id) as string;
+            const dayNames = ['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+            const createdList: any[] = [];
+
+            for (const s of rawSlots) {
                 const sId = crypto.randomUUID();
+                const dayNum = normalizeDayOfWeek(s.day_of_week);
+                const classId = s.classroom_id || s.class_id || defaultClassId;
                 const p = {
                     id: sId,
                     organization_id: targetOrgId,
-                    classroom_id: s.classroom_id || s.class_id || args.classroom_id,
-                    subject_id: s.subject_id,
-                    day_of_week: Number(s.day_of_week) || 1,
-                    start_time: String(s.start_time).trim(),
-                    end_time: String(s.end_time).trim(),
-                    room: s.room || null,
+                    classroom_id: classId || null,
+                    subject_id: s.subject_id || null,
+                    day_of_week: dayNum,
+                    start_time: String(s.start_time || '08:00').trim(),
+                    end_time: String(s.end_time || '10:00').trim(),
+                    room: s.room || s.room_name || null,
                     teacher_id: s.teacher_id || null,
                     created_at: new Date().toISOString(),
                 };
-                syncToSupabase(env, 'timetable_slots', 'INSERT', p);
+                if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                    await fetchSupabaseRest(env, 'timetable_slots', { method: 'POST', body: p });
+                }
+                await db.prepare(`INSERT INTO timetable_slots (id, organization_id, classroom_id, subject_id, day_of_week, start_time, end_time, room_id, teacher_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`)
+                    .bind(sId, targetOrgId, p.classroom_id, p.subject_id, dayNum, p.start_time, p.end_time, p.room, p.teacher_id, p.created_at).run().catch(() => {});
+                createdList.push({ ...p, day_name: dayNames[dayNum] || `Jour ${dayNum}` });
             }
-            return { success: true, count: slots.length, message: `⚡ ${slots.length} créneaux ajoutés à l'emploi du temps` };
+            return {
+                success: true,
+                count: createdList.length,
+                slots: createdList,
+                message: `⚡ ${createdList.length} créneaux créés et synchronisés avec succès à l'emploi du temps`
+            };
+        }
+
+        // ── CREATE TRAINING PLAN / CURRICULUM SCHEDULE ──
+        case 'create_training_plan':
+        case 'create_curriculum_schedule': {
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+            const name = (args.name || args.period_name || args.semaine || args.title) as string;
+            if (!name) throw { code: -32602, message: '"name" ou "semaine" est requis (ex: "Semaines 1 à 3 : Fondamentaux")' };
+
+            const classId = (args.classroom_id || args.class_id) as string;
+            const startDate = args.start_date || args.date_debut || null;
+            const endDate = args.end_date || args.date_fin || null;
+            const position = Number(args.position ?? args.order_index ?? args.semaine_numero) || 0;
+            const periodId = crypto.randomUUID();
+            const now = new Date().toISOString();
+
+            const periodPayload: Record<string, any> = {
+                id: periodId,
+                organization_id: targetOrgId,
+                classroom_id: classId || null,
+                name: String(name).trim(),
+                start_date: startDate ? String(startDate).slice(0, 10) : null,
+                end_date: endDate ? String(endDate).slice(0, 10) : null,
+                position,
+                is_active: true,
+                created_at: now,
+            };
+
+            // 1. Sauvegarder dans cursus_periods Supabase
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, 'cursus_periods', { method: 'POST', body: periodPayload });
+            }
+
+            // 2. Si des chapitres sont spécifiés, programmer leur déverrouillage automatique (Drip Content)
+            let updatedChaptersCount = 0;
+            const targetChapterIds: string[] = [];
+            if (Array.isArray(args.chapter_ids)) {
+                targetChapterIds.push(...args.chapter_ids);
+            } else if (args.chapter_id) {
+                targetChapterIds.push(args.chapter_id as string);
+            }
+
+            for (const chId of targetChapterIds) {
+                const patch: Record<string, any> = {
+                    period_name: name,
+                    is_drip_locked: false,
+                };
+                if (startDate) {
+                    const d = new Date(startDate);
+                    if (!isNaN(d.getTime())) {
+                        d.setHours(8, 0, 0, 0);
+                        patch.unlock_date = d.toISOString();
+                    }
+                }
+                if (endDate) {
+                    const d = new Date(endDate);
+                    if (!isNaN(d.getTime())) {
+                        d.setHours(23, 59, 59, 0);
+                        patch.lock_date = d.toISOString();
+                    }
+                }
+                if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                    await fetchSupabaseRest(env, `chapters?id=eq.${encodeURIComponent(chId)}`, { method: 'PATCH', body: patch });
+                }
+                await db.prepare(`UPDATE chapters SET period_name = ?1, updated_at = ?2 WHERE id = ?3`)
+                    .bind(name, now, chId).run().catch(() => {});
+                updatedChaptersCount++;
+            }
+
+            return {
+                success: true,
+                period_id: periodId,
+                training_plan: periodPayload,
+                updated_chapters_count: updatedChaptersCount,
+                message: `📅 Période de formation programmée : "${name}"${startDate ? ` (du ${startDate}${endDate ? ` au ${endDate}` : ''})` : ''}${updatedChaptersCount > 0 ? ` avec ${updatedChaptersCount} chapitre(s) synchronisé(s)` : ''}`,
+            };
+        }
+
+        // ── LIST TRAINING PLANS / CURRICULUM SCHEDULES ──
+        case 'list_training_plans':
+        case 'list_curriculum_schedules': {
+            let periods: any[] = [];
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                let path = `cursus_periods?select=*,classrooms:classroom_id(name)&order=position.asc,start_date.asc`;
+                if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+                if (args.classroom_id || args.class_id) path += `&classroom_id=eq.${encodeURIComponent((args.classroom_id || args.class_id) as string)}`;
+                const supData = await fetchSupabaseRest(env, path);
+                if (supData && Array.isArray(supData)) periods = supData;
+                else {
+                    let rawPath = `cursus_periods?select=*&order=position.asc,start_date.asc`;
+                    if (targetOrgId) rawPath += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+                    if (args.classroom_id || args.class_id) rawPath += `&classroom_id=eq.${encodeURIComponent((args.classroom_id || args.class_id) as string)}`;
+                    const rawData = await fetchSupabaseRest(env, rawPath);
+                    if (rawData && Array.isArray(rawData)) periods = rawData;
+                }
+            }
+            return {
+                training_plans: periods,
+                total: periods.length,
+                message: `📅 ${periods.length} période(s) de formation configurée(s)`,
+            };
+        }
+
+        // ── DELETE TRAINING PLAN ──
+        case 'delete_training_plan': {
+            const periodId = (args.period_id || args.id) as string;
+            if (!periodId) throw { code: -32602, message: 'period_id requis' };
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `cursus_periods?id=eq.${encodeURIComponent(periodId)}`, { method: 'DELETE' });
+            }
+            return { success: true, message: `🗑️ Période de formation supprimée` };
         }
 
         default:
