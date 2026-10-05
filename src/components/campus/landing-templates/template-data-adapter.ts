@@ -1,5 +1,28 @@
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-modal';
 
+export interface ProgramInstallment {
+    number: number;
+    label: string;
+    amount: number;
+    formatted_amount: string;
+    due_date_label?: string;
+}
+
+export interface ProgramSession {
+    id: string;
+    label: string;
+    duration_months: number;
+    duration_label: string;
+    price: number;
+    formatted_price: string;
+    prix_barre?: number | null;
+    formatted_prix_barre?: string | null;
+    promo_badge?: string | null;
+    description?: string;
+    payment_mode?: 'single' | 'installments' | 'flexible';
+    installments: ProgramInstallment[];
+}
+
 export interface NormalizedProgram {
     id: string;
     index: number;
@@ -17,6 +40,8 @@ export interface NormalizedProgram {
     certification_label: string;
     cta_text: string;
     image?: string | null;
+    poster_url?: string | null;
+    sessions: ProgramSession[];
     rawItem?: any;
 }
 
@@ -37,6 +62,90 @@ export interface NormalizedStats {
     stat2: { value: string; label: string; valueKey: string; labelKey: string };
     stat3: { value: string; label: string; valueKey: string; labelKey: string };
     stat4: { value: string; label: string; valueKey: string; labelKey: string };
+}
+
+/**
+ * Génère des sessions types (1 mois, 3 mois, 6 mois) avec tranches de paiement
+ */
+export function buildDefaultProgramSessions(
+    basePrice: number,
+    baseMonths: number = 6,
+    basePrixBarre?: number | null
+): ProgramSession[] {
+    const validPrice = basePrice > 0 ? basePrice : 150000;
+
+    // Calculs proportionnés et arrondis aux 5 000 FCFA
+    const price1m = Math.max(25000, Math.round((validPrice * 0.45) / 5000) * 5000);
+    const price3m = Math.max(45000, Math.round((validPrice * 0.75) / 5000) * 5000);
+    const price6m = validPrice;
+
+    // Tranches pour 1 mois (2 tranches ou comptant)
+    const t1_1m = Math.round(price1m * 0.6 / 1000) * 1000;
+    const t2_1m = price1m - t1_1m;
+
+    // Tranches pour 3 mois (2 tranches égales)
+    const t1_3m = Math.round(price3m * 0.5 / 1000) * 1000;
+    const t2_3m = price3m - t1_3m;
+
+    // Tranches pour 6 mois (3 tranches : 40% - 30% - 30%)
+    const t1_6m = Math.round(price6m * 0.4 / 1000) * 1000;
+    const t2_6m = Math.round(price6m * 0.3 / 1000) * 1000;
+    const t3_6m = price6m - t1_6m - t2_6m;
+
+    return [
+        {
+            id: 'session_1m',
+            label: '1 Mois (Intensif Express)',
+            duration_months: 1,
+            duration_label: '1 mois',
+            price: price1m,
+            formatted_price: `${new Intl.NumberFormat('fr-FR').format(price1m)} FCFA`,
+            prix_barre: basePrixBarre ? Math.round((basePrixBarre * 0.5) / 5000) * 5000 : null,
+            formatted_prix_barre: basePrixBarre ? `${new Intl.NumberFormat('fr-FR').format(Math.round((basePrixBarre * 0.5) / 5000) * 5000)} FCFA` : null,
+            promo_badge: 'Express',
+            description: 'Formation accélérée avec immersion intensive et suivi direct hebdomadaire.',
+            payment_mode: 'flexible',
+            installments: [
+                { number: 1, label: '1ère Tranche (Acompte)', amount: t1_1m, formatted_amount: `${new Intl.NumberFormat('fr-FR').format(t1_1m)} FCFA`, due_date_label: "À l'inscription" },
+                { number: 2, label: '2ème Tranche (Solde)', amount: t2_1m, formatted_amount: `${new Intl.NumberFormat('fr-FR').format(t2_1m)} FCFA`, due_date_label: '15ème jour' }
+            ]
+        },
+        {
+            id: 'session_3m',
+            label: '3 Mois (Rythme Accéléré)',
+            duration_months: 3,
+            duration_label: '3 mois',
+            price: price3m,
+            formatted_price: `${new Intl.NumberFormat('fr-FR').format(price3m)} FCFA`,
+            prix_barre: basePrixBarre ? Math.round((basePrixBarre * 0.8) / 5000) * 5000 : null,
+            formatted_prix_barre: basePrixBarre ? `${new Intl.NumberFormat('fr-FR').format(Math.round((basePrixBarre * 0.8) / 5000) * 5000)} FCFA` : null,
+            promo_badge: 'Populaire',
+            description: 'Équilibre parfait entre pratique, révision des livrables et accompagnement soutenu.',
+            payment_mode: 'flexible',
+            installments: [
+                { number: 1, label: '1ère Tranche (Acompte)', amount: t1_3m, formatted_amount: `${new Intl.NumberFormat('fr-FR').format(t1_3m)} FCFA`, due_date_label: "À l'inscription" },
+                { number: 2, label: '2ème Tranche (Solde)', amount: t2_3m, formatted_amount: `${new Intl.NumberFormat('fr-FR').format(t2_3m)} FCFA`, due_date_label: 'Fin du 1er mois' }
+            ]
+        },
+        {
+            id: 'session_6m',
+            label: '6 Mois (Cursus Approfondi & Mentorat)',
+            duration_months: 6,
+            duration_label: '6 mois',
+            price: price6m,
+            formatted_price: `${new Intl.NumberFormat('fr-FR').format(price6m)} FCFA`,
+            prix_barre: basePrixBarre || null,
+            formatted_prix_barre: basePrixBarre ? `${new Intl.NumberFormat('fr-FR').format(basePrixBarre)} FCFA` : null,
+            promo_badge: basePrixBarre && basePrixBarre > price6m ? `-${Math.round(((basePrixBarre - price6m) / basePrixBarre) * 100)}%` : 'Recommandé',
+            description: 'Maîtrise totale, projets réels encadrés, mentorat individuel et préparation à la certification.',
+            payment_mode: 'flexible',
+            installments: [
+                { number: 1, label: '1ère Tranche (Acompte)', amount: t1_6m, formatted_amount: `${new Intl.NumberFormat('fr-FR').format(t1_6m)} FCFA`, due_date_label: "À l'inscription" },
+                { number: 2, label: '2ème Tranche', amount: t2_6m, formatted_amount: `${new Intl.NumberFormat('fr-FR').format(t2_6m)} FCFA`, due_date_label: 'Fin du 2ème mois' },
+                { number: 3, label: '3ème Tranche (Solde)', amount: t3_6m, formatted_amount: `${new Intl.NumberFormat('fr-FR').format(t3_6m)} FCFA`, due_date_label: 'Avant certification' }
+            ]
+        }
+    ];
 }
 
 /**
@@ -79,6 +188,8 @@ export function getNormalizedPrograms(
             const prixBarreNum = prixBarreRaw ? parseInt(String(prixBarreRaw).replace(/\s/g, '').replace(/[^0-9]/g, ''), 10) : null;
 
             const promoBadge = (cfg as any)[`program_${idx}_promo`] || (prixBarreNum && prixBarreNum > feeNum ? `-${Math.round(((prixBarreNum - feeNum) / prixBarreNum) * 100)}%` : null);
+            const poster = (cfg as any)[`program_${idx}_image`] || null;
+            const sessions = buildDefaultProgramSessions(feeNum, dureeNum, prixBarreNum);
 
             return {
                 id: `demo_${idx}`,
@@ -95,6 +206,9 @@ export function getNormalizedPrograms(
                 promo_badge: promoBadge,
                 certification_label: (cfg as any)[`program_${idx}_certification`] || 'Certification Reconnue',
                 cta_text: (cfg as any)[`program_${idx}_cta`] || 'Postuler',
+                image: poster,
+                poster_url: poster,
+                sessions,
                 rawItem: null,
             };
         });
@@ -169,6 +283,65 @@ export function getNormalizedPrograms(
         const certLabel = (cfg as any)[`program_${idx}_certification`] || sched.certification_label || 'Certification PRO';
         const ctaText = (cfg as any)[`program_${idx}_cta`] || sched.cta_text || 'Postuler';
 
+        // 8. Affiche / Poster
+        const poster = (cfg as any)[`program_${idx}_image`]
+            || item.poster_url
+            || item.image_url
+            || sched.poster_url
+            || sched.image_url
+            || null;
+
+        // 9. Sessions & Modalités de Paiement par Tranche
+        let programSessions: ProgramSession[] = [];
+        if (Array.isArray(sched.sessions) && sched.sessions.length > 0) {
+            programSessions = sched.sessions.map((s: any, sIdx: number) => {
+                const sPrice = Number(s.price || s.frais_scolarite || 0);
+                const sPrixBarre = s.prix_barre ? Number(s.prix_barre) : null;
+                const durMonths = Number(s.duration_months || s.duree_mois || (sIdx === 0 ? 1 : sIdx === 1 ? 3 : 6));
+                const durLabel = s.duration_label || s.duree_texte || `${durMonths} mois`;
+                
+                // Formater les tranches configurées par l'admin
+                let insts: ProgramInstallment[] = [];
+                if (Array.isArray(s.installments) && s.installments.length > 0) {
+                    insts = s.installments.map((inst: any, instIdx: number) => {
+                        const instAmt = Number(inst.amount || inst.montant || 0);
+                        return {
+                            number: inst.number || (instIdx + 1),
+                            label: inst.label || `${instIdx + 1}ère Tranche`,
+                            amount: instAmt,
+                            formatted_amount: `${new Intl.NumberFormat('fr-FR').format(instAmt)} FCFA`,
+                            due_date_label: inst.due_date_label || inst.echeance || (instIdx === 0 ? "À l'inscription" : `Mois ${instIdx + 1}`)
+                        };
+                    });
+                } else if (s.payment_mode === 'installments' || s.payment_mode === 'flexible') {
+                    // Si mode tranches activé mais pas encore détaillé, générer 2 tranches équilibrées
+                    const half = Math.round((sPrice / 2) / 1000) * 1000;
+                    insts = [
+                        { number: 1, label: '1ère Tranche (Acompte)', amount: half, formatted_amount: `${new Intl.NumberFormat('fr-FR').format(half)} FCFA`, due_date_label: "À l'inscription" },
+                        { number: 2, label: '2ème Tranche (Solde)', amount: sPrice - half, formatted_amount: `${new Intl.NumberFormat('fr-FR').format(sPrice - half)} FCFA`, due_date_label: "Mi-parcours" }
+                    ];
+                }
+
+                return {
+                    id: s.id || `session_${durMonths}m_${sIdx}`,
+                    label: s.label || `${durMonths} Mois`,
+                    duration_months: durMonths,
+                    duration_label: durLabel,
+                    price: sPrice,
+                    formatted_price: `${new Intl.NumberFormat('fr-FR').format(sPrice)} FCFA`,
+                    prix_barre: sPrixBarre,
+                    formatted_prix_barre: sPrixBarre ? `${new Intl.NumberFormat('fr-FR').format(sPrixBarre)} FCFA` : null,
+                    promo_badge: s.promo_badge || (sPrixBarre && sPrixBarre > sPrice ? `-${Math.round(((sPrixBarre - sPrice) / sPrixBarre) * 100)}%` : null),
+                    description: s.description || '',
+                    payment_mode: s.payment_mode || (insts.length > 0 ? 'flexible' : 'single'),
+                    installments: insts
+                };
+            });
+        } else {
+            // Sessions types automatiques (1 mois, 3 mois, 6 mois)
+            programSessions = buildDefaultProgramSessions(priceNum, durationMonths, prixBarreNum);
+        }
+
         return {
             id: item.id || `p_${idx}`,
             index: idx,
@@ -185,6 +358,9 @@ export function getNormalizedPrograms(
             promo_badge: promoBadge,
             certification_label: certLabel,
             cta_text: ctaText,
+            image: poster,
+            poster_url: poster,
+            sessions: programSessions,
             rawItem: item,
         };
     });

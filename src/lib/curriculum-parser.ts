@@ -14,23 +14,23 @@ export interface ParsedCurriculum {
     modules: ParsedModuleItem[];
 }
 
-export const SAMPLE_CURRICULUM_TEMPLATE = `NIVEAU 1 — INITIATION À L'ÉCRITURE ET À L'AUTEUR
+export const SAMPLE_CURRICULUM_TEMPLATE = `NIVEAU 1 — FONDAMENTAUX ET PRATIQUE PROFESSIONNELLE
 
-Transformez votre idée en véritable projet de livre et faites vos premiers pas vers le métier d'auteur.
+Développez les compétences clés et maîtrisez les bases indispensables pour réussir dans votre domaine d'activité.
 À travers ce parcours complet, vous apprendrez à :
-- Définir votre idée centrale et donner une direction claire à votre futur livre.
-- Découvrir les principaux genres littéraires et choisir le format adapté.
-- Développer votre style, votre voix d'auteur et votre vocabulaire.
-- Organiser vos idées et construire vos chapitres méthodiquement.
+- Maîtriser les concepts fondamentaux et les méthodologies professionnelles.
+- Appliquer les bonnes pratiques et les outils de référence du secteur.
+- Conduire un projet pratique étape par étape avec rigueur et autonomie.
+- Valider vos acquis à travers des mises en situation concrètes.
 
 Programme des modules :
-Module 1 — De l'idée au projet de livre
-Module 2 — Les genres littéraires
-Module 3 — Maîtriser les fondamentaux de l'écriture
-Module 4 — Rédiger son manuscrit
-Module 5 — Construire son livre
-Module 6 — Devenir auteur et préparer son livre
-Module complémentaire — Intelligence artificielle, éthique et pédagogie`;
+Module 1 — Introduction et fondamentaux du domaine
+Module 2 — Méthodes, outils et environnement de travail
+Module 3 — Pratique guidée et cas d'usage concrets
+Module 4 — Approfondissement et techniques avancées
+Module 5 — Projet pratique et mise en application
+Module 6 — Évaluation finale et certification professionnelle
+Module complémentaire — Innovation, méthodologie et perspectives d'avenir`;
 
 /**
  * Analyse le texte brut d'une offre pour séparer :

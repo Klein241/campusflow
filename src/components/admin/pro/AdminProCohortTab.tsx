@@ -112,13 +112,16 @@ export function AdminProCohortTab({
                 ? (sessionDurationLabel.trim() || 'Formation Personnalisée')
                 : sessionDurationLabel;
             const cycleFormatted = `${finalDuration} • ${sessionRhythm}`;
+            const levelMatch = sessionTitle.trim().match(/(?:niveau|level|nv)\s*(\d+)/i);
+            const detectedLevel = levelMatch ? parseInt(levelMatch[1], 10) : 1;
+
             const { data: newCls, error: clsError } = await supabase
                 .from('classrooms')
                 .insert({
                     organization_id: org.id,
                     name: sessionTitle.trim(),
                     cycle: cycleFormatted,
-                    level: 1,
+                    level: detectedLevel,
                     capacity: parseInt(sessionCapacity) || 30
                 })
                 .select()

@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import { cleanMotto } from '@/lib/clean-motto';
 import { getNormalizedPrograms, getNormalizedStats, getNormalizedTestimonials } from './template-data-adapter';
+import { ProgramCardSessionSelector } from './ProgramCardSessionSelector';
 
 interface TemplateProps {
     org: any;
@@ -415,30 +416,11 @@ export function TemplateBentoGrid({
                                             >
                                                 ⏱️ {prog.duree_texte}
                                             </span>
-                                            <div className="flex items-center gap-1.5">
-                                                {prog.promo_badge && (
-                                                    <span
-                                                        data-editable-field={`program_${idx}_promo`}
-                                                        className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-bold cursor-pointer"
-                                                    >
-                                                        {prog.promo_badge}
-                                                    </span>
-                                                )}
-                                                {prog.formatted_prix_barre && (
-                                                    <span
-                                                        data-editable-field={`program_${idx}_prix_barre`}
-                                                        className="text-xs font-mono text-slate-500 line-through cursor-pointer"
-                                                    >
-                                                        {prog.formatted_prix_barre}
-                                                    </span>
-                                                )}
-                                                <span
-                                                    data-editable-field={`program_${idx}_frais_scolarite`}
-                                                    className="text-xs font-mono font-bold text-teal-300 cursor-pointer"
-                                                >
-                                                    {prog.formatted_price}
+                                            {prog.category && (
+                                                <span className="text-[10px] text-slate-400 font-semibold uppercase">
+                                                    {prog.category}
                                                 </span>
-                                            </div>
+                                            )}
                                         </div>
                                         <h3
                                             data-editable-field={`program_${idx}_nom`}
@@ -453,14 +435,12 @@ export function TemplateBentoGrid({
                                             {prog.description}
                                         </p>
                                     </div>
-                                    <Button
-                                        data-editable-field={`program_${idx}_cta`}
-                                        onClick={onOpenInscription}
-                                        size="sm"
-                                        className="w-full bg-white/5 hover:bg-emerald-500 hover:text-slate-950 text-white font-bold text-xs rounded-xl border border-white/10 transition cursor-pointer"
-                                    >
-                                        {prog.cta_text || 'Postuler à ce cursus'} <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                                    </Button>
+                                    <ProgramCardSessionSelector
+                                        program={prog}
+                                        brandColor="#10B981"
+                                        onOpenInscription={onOpenInscription}
+                                        showPoster={true}
+                                    />
                                 </div>
                             ))}
                         </div>

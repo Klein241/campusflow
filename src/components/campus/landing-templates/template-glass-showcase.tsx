@@ -15,6 +15,7 @@ import { orgPath } from '@/lib/custom-domain';
 import { cleanMotto } from '@/lib/clean-motto';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-studio';
 import { getNormalizedPrograms, getNormalizedStats, getNormalizedTestimonials } from './template-data-adapter';
+import { ProgramCardSessionSelector } from './ProgramCardSessionSelector';
 
 interface TemplateProps {
     org: any;
@@ -500,30 +501,13 @@ export function TemplateGlassShowcase({
                                                         {f.description}
                                                     </p>
                                                 </div>
-                                                <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/5 text-xs">
-                                                    <div className="flex items-baseline gap-1.5">
-                                                        {f.formatted_prix_barre && (
-                                                            <span
-                                                                data-editable-field={`program_${idx}_prix_barre`}
-                                                                className="text-[10px] text-slate-500 line-through font-mono cursor-pointer"
-                                                            >
-                                                                {f.formatted_prix_barre}
-                                                            </span>
-                                                        )}
-                                                        <span
-                                                            data-editable-field={`program_${idx}_frais_scolarite`}
-                                                            className="font-black text-emerald-400 font-mono cursor-pointer"
-                                                        >
-                                                            {f.formatted_price}
-                                                        </span>
-                                                    </div>
-                                                    <span
-                                                        data-editable-field={`program_${idx}_cta`}
-                                                        onClick={() => { setOpenCard(null); onOpenInscription?.(); }}
-                                                        className="text-[10px] font-bold text-teal-400 hover:text-white transition cursor-pointer"
-                                                    >
-                                                        {f.cta_text || 'Postuler →'}
-                                                    </span>
+                                                <div className="mt-3 pt-3 border-t border-white/5">
+                                                    <ProgramCardSessionSelector
+                                                        program={f}
+                                                        brandColor="#14B8A6"
+                                                        onOpenInscription={() => { setOpenCard(null); onOpenInscription?.(); }}
+                                                        showPoster={true}
+                                                    />
                                                 </div>
                                             </div>
                                         ))}

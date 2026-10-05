@@ -35,7 +35,7 @@ async function broadcastUpdatePush(
 }
 
 // ── Helper Supabase REST direct ────────────────────────────────────
-async function fetchSupabaseRest(env: Env, path: string, options: { method?: string; body?: any; headers?: Record<string, string> } = {}): Promise<any> {
+async function fetchSupabaseRest(env: Env, path: string, options: { method?: string; body?: any; headers?: Record<string, string>; timeoutMs?: number } = {}): Promise<any> {
     if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) return null;
     try {
         const url = `${env.SUPABASE_URL}/rest/v1/${path}`;
@@ -49,6 +49,7 @@ async function fetchSupabaseRest(env: Env, path: string, options: { method?: str
                 ...(options.headers || {}),
             },
             body: options.body ? JSON.stringify(options.body) : undefined,
+            signal: AbortSignal.timeout(options.timeoutMs || 6000),
         });
         if (!res.ok) {
             const errText = await res.text();
@@ -63,7 +64,7 @@ async function fetchSupabaseRest(env: Env, path: string, options: { method?: str
 }
 
 // Variante qui throw sur erreur (pour les endpoints critiques où un faux-succès est inacceptable)
-async function fetchSupabaseRestOrThrow(env: Env, path: string, options: { method?: string; body?: any; headers?: Record<string, string> } = {}): Promise<any> {
+async function fetchSupabaseRestOrThrow(env: Env, path: string, options: { method?: string; body?: any; headers?: Record<string, string>; timeoutMs?: number } = {}): Promise<any> {
     if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) {
         throw new Error('Configuration Supabase manquante sur le Worker.');
     }
@@ -78,6 +79,7 @@ async function fetchSupabaseRestOrThrow(env: Env, path: string, options: { metho
             ...(options.headers || {}),
         },
         body: options.body ? JSON.stringify(options.body) : undefined,
+        signal: AbortSignal.timeout(options.timeoutMs || 6000),
     });
     if (!res.ok) {
         let errText = '';
@@ -147,12 +149,95 @@ function extractCleanSpeechText(rawContent: string | null | undefined): string {
         .trim();
 }
 
+// ── Helpers Résolution UUID & Noms (Classes & Matières) ───────────────
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function resolveClassroomId(env: Env, db: any, targetOrgId: string | null, classRef: string | null | undefined): Promise<string | null> {
+    if (!classRef) return null;
+    const str = String(classRef).trim();
+    if (UUID_REGEX.test(str)) return str;
+
+    // Recherche par nom dans Supabase
+    if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+        let q = `classrooms?select=id,name&name=ilike.*${encodeURIComponent(str)}*&limit=1`;
+        if (targetOrgId) q += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+        const res = await fetchSupabaseRest(env, q);
+        if (res && res.length > 0) return res[0].id;
+    }
+    // Fallback D1
+    try {
+        let sql = `SELECT id FROM classrooms WHERE name LIKE ?1`;
+        const binds: any[] = [`%${str}%`];
+        if (targetOrgId) {
+            sql += ` AND organization_id = ?2`;
+            binds.push(targetOrgId);
+        }
+        sql += ` LIMIT 1`;
+        const row = await db.prepare(sql).bind(...binds).first() as any;
+        if (row?.id) return row.id;
+    } catch {}
+    return null;
+}
+
+async function resolveSubjectId(env: Env, db: any, targetOrgId: string | null, subjectRef: string | null | undefined, classId?: string | null): Promise<{ id: string | null; name: string | null }> {
+    if (!subjectRef) return { id: null, name: null };
+    const str = String(subjectRef).trim();
+
+    if (UUID_REGEX.test(str)) {
+        if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+            const res = await fetchSupabaseRest(env, `subjects?id=eq.${encodeURIComponent(str)}&select=id,name&limit=1`);
+            if (res && res.length > 0) return { id: res[0].id, name: res[0].name };
+        }
+        try {
+            const row = await db.prepare(`SELECT id, name FROM subjects WHERE id = ?1 LIMIT 1`).bind(str).first() as any;
+            if (row) return { id: row.id, name: row.name };
+        } catch {}
+        return { id: str, name: null };
+    }
+
+    // Ce n'est pas un UUID mais un nom (ex: "Mathématiques", "Théologie")
+    if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+        let q = `subjects?select=id,name&name=ilike.*${encodeURIComponent(str)}*&limit=1`;
+        if (targetOrgId) q += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+        if (classId) q += `&classroom_id=eq.${encodeURIComponent(classId)}`;
+        const res = await fetchSupabaseRest(env, q);
+        if (res && res.length > 0) return { id: res[0].id, name: res[0].name };
+
+        if (classId) {
+            let q2 = `subjects?select=id,name&name=ilike.*${encodeURIComponent(str)}*&limit=1`;
+            if (targetOrgId) q2 += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
+            const res2 = await fetchSupabaseRest(env, q2);
+            if (res2 && res2.length > 0) return { id: res2[0].id, name: res2[0].name };
+        }
+    }
+    // Fallback D1
+    try {
+        let sql = `SELECT id, name FROM subjects WHERE name LIKE ?1`;
+        const binds: any[] = [`%${str}%`];
+        if (targetOrgId) {
+            sql += ` AND organization_id = ?2`;
+            binds.push(targetOrgId);
+        }
+        sql += ` LIMIT 1`;
+        const row = await db.prepare(sql).bind(...binds).first() as any;
+        if (row) return { id: row.id, name: row.name };
+    } catch {}
+
+    return { id: null, name: str };
+}
+
 // ── Exécuteur direct Cloudflare D1 + Synchronisation Supabase Directe ──────────────────
 async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx: { agentKey: any; isSuperadmin: boolean; orgId: string | null; agentName: string; agentId: string }, env: Env): Promise<any> {
     const db = env.CAMPUSFLOW_DB;
 
     // 🔒 SÉCURITÉ MULTI-TENANT : Un agent d'école ne peut JAMAIS écraser targetOrgId
-    const targetOrgId = ctx.isSuperadmin ? (args.org_id || ctx.orgId) : ctx.orgId;
+    let targetOrgId = ctx.isSuperadmin ? (args.org_id || ctx.orgId) : ctx.orgId;
+    if (!targetOrgId && ctx.isSuperadmin && toolName !== 'list_organizations' && toolName !== 'list_orgs') {
+        try {
+            const defOrg = await db.prepare('SELECT id FROM organizations WHERE is_active = 1 ORDER BY created_at ASC LIMIT 1').first() as any;
+            if (defOrg?.id) targetOrgId = defOrg.id;
+        } catch {}
+    }
 
     switch (toolName) {
         // ── LIST ORGANIZATIONS (SUPERADMIN) ──
@@ -196,7 +281,7 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         // ── LIST CLASSES ──
         case 'list_classes': {
             if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
-                let path = `classrooms?select=id,name,cycle,level,capacity,is_active,organization_id&order=name.asc`;
+                let path = `classrooms?select=id,name,cycle,level,capacity,is_active,organization_id,frais_scolarite,tuition_fee,poster_url,description,schedule_config&order=name.asc`;
                 if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
                 const supClasses = await fetchSupabaseRest(env, path);
                 if (supClasses) return { classes: supClasses, total: supClasses.length };
@@ -210,6 +295,167 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             sql += ` ORDER BY name ASC LIMIT 100`;
             const { results } = await db.prepare(sql).bind(...params).all().catch(() => ({ results: [] }));
             return { classes: results || [], total: (results || []).length };
+        }
+
+        // ── CREATE CLASSROOM / CLASSE ──
+        case 'create_class':
+        case 'create_classroom': {
+            if (!args.name) throw { code: -32602, message: 'name requis' };
+            if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
+
+            // Auto-détection intelligente du niveau si non spécifié (ex: "Niveau 2" => level = 2)
+            let levelNum = Number(args.level);
+            if (isNaN(levelNum) || levelNum <= 0) {
+                const match = String(args.name).match(/(?:niveau|level|nv)\s*(\d+)/i);
+                levelNum = match ? parseInt(match[1], 10) : 1;
+            }
+
+            const id = crypto.randomUUID();
+            const tuitionFee = Number(args.tuition_fee || args.frais_scolarite || 0);
+            const regFee = Number(args.registration_fee || args.frais_inscription || 0);
+            const cycleText = args.cycle || `${args.duration_text || 'Formation Pro'} • ${tuitionFee ? new Intl.NumberFormat('fr-FR').format(tuitionFee) + ' FCFA' : ''}`;
+            const desc = (args.description || '').trim();
+
+            const scheduleConfig: any = args.schedule_config || {};
+            if (args.sessions && Array.isArray(args.sessions)) {
+                scheduleConfig.sessions = args.sessions;
+            }
+            if (args.poster_url) {
+                scheduleConfig.poster_url = args.poster_url;
+            }
+            if (desc) {
+                scheduleConfig.description = desc;
+            }
+
+            const payload: any = {
+                id,
+                organization_id: targetOrgId,
+                name: String(args.name).trim(),
+                cycle: cycleText,
+                level: levelNum,
+                capacity: Number(args.capacity) || 50,
+                is_active: args.is_active !== undefined ? Boolean(args.is_active) : true,
+                tuition_fee: tuitionFee,
+                frais_scolarite: tuitionFee,
+                registration_fee: regFee,
+                frais_inscription: regFee,
+                description: desc || null,
+                poster_url: args.poster_url || null,
+                schedule_config: scheduleConfig,
+                competencies_list: desc ? desc.split(/\r?\n/).filter(Boolean) : []
+            };
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const inserted = await fetchSupabaseRest(env, 'classrooms', { method: 'POST', body: payload });
+                if (inserted && inserted.length > 0) {
+                    return { success: true, classroom_id: id, class: inserted[0], level: levelNum, message: `✅ Classe "${args.name}" (Niveau ${levelNum}) créée avec succès` };
+                }
+            }
+
+            return { success: true, classroom_id: id, level: levelNum, message: `✅ Classe "${args.name}" créée` };
+        }
+
+        // ── UPDATE CLASSROOM / CLASSE ──
+        case 'update_class':
+        case 'update_classroom': {
+            const classId = args.classroom_id || args.class_id;
+            const targetName = args.target_name || args.current_name;
+            if (!classId && !targetName && !args.name) {
+                throw { code: -32602, message: 'classroom_id ou name requis pour identifier la classe' };
+            }
+
+            let foundId = classId;
+            // Si pas d'ID direct, chercher par nom dans Supabase
+            if (!foundId && env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const searchName = targetName || args.name;
+                const matches = await fetchSupabaseRest(env, `classrooms?name=ilike.*${encodeURIComponent(searchName)}*&limit=1`);
+                if (matches && matches.length > 0) {
+                    foundId = matches[0].id;
+                }
+            }
+
+            if (!foundId) {
+                throw { code: -32602, message: 'Classe introuvable avec les critères fournis' };
+            }
+
+            // Calcul du niveau avec auto-détection si non fourni explicitement
+            let levelNum: number | undefined = undefined;
+            if (args.level !== undefined && args.level !== null && !isNaN(Number(args.level))) {
+                levelNum = Number(args.level);
+            } else if (args.name) {
+                const match = String(args.name).match(/(?:niveau|level|nv)\s*(\d+)/i);
+                if (match) levelNum = parseInt(match[1], 10);
+            }
+
+            const updatePayload: any = {};
+            if (args.name) updatePayload.name = String(args.name).trim();
+            if (levelNum !== undefined && !isNaN(levelNum)) updatePayload.level = levelNum;
+            if (args.cycle !== undefined) updatePayload.cycle = args.cycle;
+            if (args.capacity !== undefined) updatePayload.capacity = Number(args.capacity);
+            if (args.is_active !== undefined) updatePayload.is_active = Boolean(args.is_active);
+            if (args.description !== undefined) {
+                updatePayload.description = args.description;
+                updatePayload.competencies_list = args.description ? String(args.description).split(/\r?\n/).filter(Boolean) : [];
+            }
+            if (args.tuition_fee !== undefined || args.frais_scolarite !== undefined) {
+                const fee = Number(args.tuition_fee ?? args.frais_scolarite);
+                updatePayload.tuition_fee = fee;
+                updatePayload.frais_scolarite = fee;
+            }
+            if (args.registration_fee !== undefined || args.frais_inscription !== undefined) {
+                const regFee = Number(args.registration_fee ?? args.frais_inscription);
+                updatePayload.registration_fee = regFee;
+                updatePayload.frais_inscription = regFee;
+            }
+            if (args.poster_url !== undefined) {
+                updatePayload.poster_url = args.poster_url || null;
+            }
+
+            if (args.sessions || args.schedule_config || args.poster_url || args.description) {
+                let existingSched: any = {};
+                if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                    const existing = await fetchSupabaseRest(env, `classrooms?id=eq.${encodeURIComponent(foundId)}&select=schedule_config`);
+                    if (existing && existing.length > 0 && existing[0].schedule_config) {
+                        existingSched = existing[0].schedule_config;
+                    }
+                }
+                updatePayload.schedule_config = {
+                    ...existingSched,
+                    ...(args.schedule_config || {}),
+                    ...(args.sessions ? { sessions: args.sessions } : {}),
+                    ...(args.poster_url ? { poster_url: args.poster_url } : {}),
+                    ...(args.description ? { description: args.description } : {}),
+                };
+            }
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                const updated = await fetchSupabaseRest(env, `classrooms?id=eq.${encodeURIComponent(foundId)}`, {
+                    method: 'PATCH',
+                    body: updatePayload
+                });
+                return {
+                    success: true,
+                    classroom_id: foundId,
+                    level: levelNum,
+                    updated_fields: Object.keys(updatePayload),
+                    class: updated?.[0] || null,
+                    message: `✅ Classe mise à jour avec succès (Niveau: ${levelNum !== undefined ? levelNum : 'inchangé'})`
+                };
+            }
+
+            return { success: true, classroom_id: foundId, message: '✅ Classe mise à jour' };
+        }
+
+        // ── DELETE CLASSROOM / CLASSE ──
+        case 'delete_class':
+        case 'delete_classroom': {
+            const classId = args.classroom_id || args.class_id;
+            if (!classId) throw { code: -32602, message: 'classroom_id requis' };
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `classrooms?id=eq.${encodeURIComponent(classId)}`, { method: 'DELETE' });
+            }
+            return { success: true, message: '🗑️ Classe supprimée' };
         }
 
         // ── LIST SUBJECTS ──
@@ -537,6 +783,145 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             }
             await db.prepare(`DELETE FROM chapters WHERE id = ?1`).bind(args.chapter_id).run().catch(() => {});
             return { success: true, message: `🗑️ Chapitre supprimé` };
+        }
+
+        // ── SCHEDULE CHAPTER (DRIP CONTENT PÉDAGOGIQUE) ──
+        case 'schedule_chapter':
+        case 'create_chapter_schedule': {
+            if (!args.chapter_id) throw { code: -32602, message: 'chapter_id requis' };
+            const patch: Record<string, any> = {
+                status: args.status || 'scheduled',
+            };
+
+            const rawUnlock = args.available_from || args.unlock_date || args.date_debut || args.date_publication || args.release_date;
+            if (rawUnlock !== undefined) {
+                if (!rawUnlock) {
+                    patch.unlock_date = null;
+                } else {
+                    const d = new Date(rawUnlock);
+                    if (!isNaN(d.getTime())) patch.unlock_date = d.toISOString();
+                }
+            }
+            const rawLock = args.available_until || args.lock_date || args.date_fin;
+            if (rawLock !== undefined) {
+                if (!rawLock) {
+                    patch.lock_date = null;
+                } else {
+                    const d = new Date(rawLock);
+                    if (!isNaN(d.getTime())) patch.lock_date = d.toISOString();
+                }
+            }
+            if (args.period_name || args.semaine || args.periode) {
+                patch.period_name = String(args.period_name || args.semaine || args.periode).trim();
+            }
+            if (args.is_locked !== undefined) patch.is_drip_locked = Boolean(args.is_locked);
+            else if (args.is_drip_locked !== undefined) patch.is_drip_locked = Boolean(args.is_drip_locked);
+            else if (patch.unlock_date && new Date(patch.unlock_date).getTime() > Date.now()) {
+                patch.is_drip_locked = true; // Cadenas actif si date future
+            }
+
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `chapters?id=eq.${encodeURIComponent(args.chapter_id)}`, { method: 'PATCH', body: patch });
+            }
+            const now = new Date().toISOString();
+            await db.prepare(`UPDATE chapters SET updated_at = ?1 WHERE id = ?2`).bind(now, args.chapter_id).run().catch(() => {});
+
+            return {
+                success: true,
+                chapter_id: args.chapter_id,
+                period_name: patch.period_name || null,
+                unlock_date: patch.unlock_date || null,
+                lock_date: patch.lock_date || null,
+                is_locked: patch.is_drip_locked ?? false,
+                status: patch.status,
+                message: `📅 Chapitre programmé : déverrouillage le ${patch.unlock_date ? new Date(patch.unlock_date).toLocaleDateString('fr-FR') : 'immédiat'}${patch.period_name ? ` (${patch.period_name})` : ''}`,
+            };
+        }
+
+        // ── PUBLISH SCHEDULED CHAPTER ──
+        case 'publish_scheduled_chapter': {
+            if (!args.chapter_id) throw { code: -32602, message: 'chapter_id requis' };
+            const patch = {
+                status: 'published',
+                is_drip_locked: false,
+                unlock_date: new Date().toISOString(),
+            };
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `chapters?id=eq.${encodeURIComponent(args.chapter_id)}`, { method: 'PATCH', body: patch });
+            }
+            return {
+                success: true,
+                chapter_id: args.chapter_id,
+                status: 'published',
+                is_locked: false,
+                message: `🚀 Chapitre publié et rendu immédiatement accessible aux étudiants`,
+            };
+        }
+
+        // ── UNLOCK CHAPTER ──
+        case 'unlock_chapter': {
+            if (!args.chapter_id) throw { code: -32602, message: 'chapter_id requis' };
+            const patch = {
+                is_drip_locked: false,
+                unlock_date: new Date().toISOString(),
+            };
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                await fetchSupabaseRest(env, `chapters?id=eq.${encodeURIComponent(args.chapter_id)}`, { method: 'PATCH', body: patch });
+            }
+            return {
+                success: true,
+                chapter_id: args.chapter_id,
+                is_locked: false,
+                message: `🔓 Cadenas retiré : chapitre déverrouillé pour tous les étudiants`,
+            };
+        }
+
+        // ── LIST CHAPTER SCHEDULE ──
+        case 'list_chapter_schedule': {
+            let chapters: any[] = [];
+            if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                let path = `chapters?select=id,title,description,position,status,subject_id,unlock_date,lock_date,period_name,is_drip_locked,subjects(id,name,classroom_id,classrooms(id,name))&order=position.asc`;
+                if (args.subject_id) path += `&subject_id=eq.${encodeURIComponent(args.subject_id as string)}`;
+                const supChaps = await fetchSupabaseRest(env, path);
+                if (supChaps && Array.isArray(supChaps)) chapters = supChaps;
+            }
+            if (chapters.length === 0) {
+                let sql = `SELECT c.id, c.title, c.description, c.position, c.subject_id, s.name as subject_name FROM chapters c LEFT JOIN subjects s ON c.subject_id = s.id`;
+                if (args.subject_id) sql += ` WHERE c.subject_id = ?1`;
+                sql += ` ORDER BY c.position ASC LIMIT 100`;
+                const stmt = args.subject_id ? db.prepare(sql).bind(args.subject_id) : db.prepare(sql);
+                const { results } = await stmt.all().catch(() => ({ results: [] }));
+                if (results) chapters = results;
+            }
+
+            const nowTime = Date.now();
+            const scheduleList = chapters.map((c: any) => {
+                const unlockTs = c.unlock_date ? new Date(c.unlock_date).getTime() : null;
+                const lockTs = c.lock_date ? new Date(c.lock_date).getTime() : null;
+                const isDrip = Boolean(c.is_drip_locked);
+                const isFuture = unlockTs !== null && unlockTs > nowTime;
+                const isExpired = lockTs !== null && lockTs < nowTime;
+                const isCurrentlyLocked = isDrip || isFuture || isExpired;
+
+                return {
+                    id: c.id,
+                    title: c.title,
+                    subject_name: c.subjects?.name || c.subject_name || null,
+                    classroom_name: c.subjects?.classrooms?.name || null,
+                    period_name: c.period_name || null,
+                    unlock_date: c.unlock_date || null,
+                    lock_date: c.lock_date || null,
+                    is_locked: isCurrentlyLocked,
+                    status: c.status || (isFuture ? 'scheduled' : 'published'),
+                    access_state: isFuture ? 'À venir' : (isExpired ? 'Expiré' : (isDrip ? 'Verrouillé' : 'Accessible')),
+                };
+            });
+
+            return {
+                schedule: scheduleList,
+                total: scheduleList.length,
+                message: `📅 ${scheduleList.length} chapitre(s) au calendrier pédagogique`,
+            };
         }
 
         // ── CREATE LESSON (AVEC SUPPORT MULTILINGUE & LANGUES AFRICAINES) ──
@@ -2303,16 +2688,34 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             const coeff = Number(args.coefficient) || 1.0;
             const dur = Number(args.duration_minutes) || 60;
             const status = args.status || 'published';
+            const instructions = args.instructions || args.description || null;
 
-            const payload = {
+            // Résolution souple du nom de la matière
+            let subjectName = (args.subject || '').toString().trim() || null;
+            if (!subjectName && args.subject_id) {
+                try {
+                    const subRow = await db.prepare('SELECT name FROM subjects WHERE id = ?1 LIMIT 1').bind(args.subject_id).first() as any;
+                    if (subRow?.name) subjectName = subRow.name;
+                } catch {}
+                if (!subjectName && env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                    const supSub = await fetchSupabaseRest(env, `subjects?id=eq.${encodeURIComponent(args.subject_id)}&select=name&limit=1`);
+                    if (supSub?.[0]?.name) subjectName = supSub[0].name;
+                }
+            }
+
+            // Garantie UUID valide pour created_by (exigence stricte Postgres)
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(ctx.agentId || ''));
+            const creatorId = isUuid ? ctx.agentId : crypto.randomUUID();
+
+            const payload: Record<string, any> = {
                 id,
                 org_id: targetOrgId,
-                created_by: ctx.agentId,
-                title: args.title,
-                subject: args.subject || null,
+                created_by: creatorId,
+                title: String(args.title).trim(),
+                subject: subjectName,
                 coefficient: coeff,
                 duration_minutes: dur,
-                instructions: args.instructions || null,
+                instructions,
                 questions,
                 status,
                 exam_mode: 'structured',
@@ -2322,22 +2725,39 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 const inserted = await fetchSupabaseRest(env, 'exam_papers', { method: 'POST', body: payload });
                 if (inserted && inserted.length > 0) {
                     await db.prepare(`INSERT INTO exam_papers (id, org_id, created_by, title, subject, coefficient, duration_minutes, instructions, questions, status, created_at, updated_at, exam_mode) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11, 'structured')`)
-                        .bind(id, targetOrgId, ctx.agentId, args.title, args.subject || null, coeff, dur, args.instructions || null, questionsStr, status, now).run().catch(() => {});
-                    broadcastUpdatePush(env, db, targetOrgId, `📝 Nouvelle Épreuve : ${args.title}`, `Une nouvelle épreuve ${args.subject ? `de ${args.subject}` : ''} (${dur} min) est prête dans la Salle d'Évaluation.`, '📝', '/campus/evaluations');
-                    return { success: true, paper_id: id, paper: inserted[0], message: `✅ Épreuve "${args.title}" créée dans la Salle d'Évaluation (${questions.length} question(s))` };
+                        .bind(id, targetOrgId, creatorId, payload.title, subjectName, coeff, dur, instructions, questionsStr, status, now).run().catch(() => {});
+                    broadcastUpdatePush(env, db, targetOrgId, `📝 Nouvelle Épreuve : ${payload.title}`, `Une nouvelle épreuve ${subjectName ? `de ${subjectName}` : ''} (${dur} min) est prête dans la Salle d'Évaluation.`, '📝', '/campus/evaluations');
+                    return {
+                        success: true,
+                        paper_id: id,
+                        title: payload.title,
+                        subject: subjectName,
+                        duration_minutes: dur,
+                        coefficient: coeff,
+                        questions_count: questions.length,
+                        status,
+                        paper: inserted[0],
+                        message: `✅ Épreuve "${payload.title}" créée dans la Salle d'Évaluation (${questions.length} question(s))`
+                    };
                 }
             }
 
             await db.prepare(`INSERT INTO exam_papers (id, org_id, created_by, title, subject, coefficient, duration_minutes, instructions, questions, status, created_at, updated_at, exam_mode) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11, 'structured')`)
-                .bind(id, targetOrgId, ctx.agentId, args.title, args.subject || null, coeff, dur, args.instructions || null, questionsStr, status, now).run().catch(() => {});
+                .bind(id, targetOrgId, creatorId, payload.title, subjectName, coeff, dur, instructions, questionsStr, status, now).run().catch(() => {});
 
             syncToSupabase(env, 'exam_papers', 'INSERT', payload);
-            broadcastUpdatePush(env, db, targetOrgId, `📝 Nouvelle Épreuve : ${args.title}`, `Une nouvelle épreuve ${args.subject ? `de ${args.subject}` : ''} (${dur} min) est prête dans la Salle d'Évaluation.`, '📝', '/campus/evaluations');
+            broadcastUpdatePush(env, db, targetOrgId, `📝 Nouvelle Épreuve : ${payload.title}`, `Une nouvelle épreuve ${subjectName ? `de ${subjectName}` : ''} (${dur} min) est prête dans la Salle d'Évaluation.`, '📝', '/campus/evaluations');
 
             return {
                 success: true,
                 paper_id: id,
-                message: `✅ Épreuve "${args.title}" créée dans la Salle d'Évaluation (${questions.length} question(s))`,
+                title: payload.title,
+                subject: subjectName,
+                duration_minutes: dur,
+                coefficient: coeff,
+                questions_count: questions.length,
+                status,
+                message: `✅ Épreuve "${payload.title}" créée dans la Salle d'Évaluation (${questions.length} question(s))`,
             };
         }
 
@@ -3067,12 +3487,25 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
             const dayNames = ['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
             let slots: any[] = [];
 
+            // Résolution UUID si nom de classe ou matière fourni
+            let classIdFilter = (args.classroom_id || args.class_id) as string | undefined;
+            if (classIdFilter && !UUID_REGEX.test(classIdFilter)) {
+                const resolved = await resolveClassroomId(env, db, targetOrgId, classIdFilter);
+                if (resolved) classIdFilter = resolved;
+            }
+
+            let subjectIdFilter = args.subject_id as string | undefined;
+            if (subjectIdFilter && !UUID_REGEX.test(subjectIdFilter)) {
+                const resolved = await resolveSubjectId(env, db, targetOrgId, subjectIdFilter, classIdFilter);
+                if (resolved.id) subjectIdFilter = resolved.id;
+            }
+
             if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
                 // Essayer d'abord avec jointures classrooms et subjects (syntaxe PostgREST avec alias)
                 let path = `timetable_slots?select=*,classrooms:classroom_id(name),subjects:subject_id(name)&order=day_of_week.asc,start_time.asc`;
                 if (targetOrgId) path += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
-                if (args.classroom_id || args.class_id) path += `&classroom_id=eq.${encodeURIComponent((args.classroom_id || args.class_id) as string)}`;
-                if (args.subject_id) path += `&subject_id=eq.${encodeURIComponent(args.subject_id as string)}`;
+                if (classIdFilter) path += `&classroom_id=eq.${encodeURIComponent(classIdFilter)}`;
+                if (subjectIdFilter) path += `&subject_id=eq.${encodeURIComponent(subjectIdFilter)}`;
                 if (args.day_of_week !== undefined && args.day_of_week !== null && args.day_of_week !== '') {
                     const dayNum = normalizeDayOfWeek(args.day_of_week);
                     path += `&day_of_week=eq.${dayNum}`;
@@ -3084,8 +3517,8 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                     // Fallback select brut sans jointure au cas où PostgREST bloque sur le nommage de la FK
                     let rawPath = `timetable_slots?select=*&order=day_of_week.asc,start_time.asc`;
                     if (targetOrgId) rawPath += `&organization_id=eq.${encodeURIComponent(targetOrgId)}`;
-                    if (args.classroom_id || args.class_id) rawPath += `&classroom_id=eq.${encodeURIComponent((args.classroom_id || args.class_id) as string)}`;
-                    if (args.subject_id) rawPath += `&subject_id=eq.${encodeURIComponent(args.subject_id as string)}`;
+                    if (classIdFilter) rawPath += `&classroom_id=eq.${encodeURIComponent(classIdFilter)}`;
+                    if (subjectIdFilter) rawPath += `&subject_id=eq.${encodeURIComponent(subjectIdFilter)}`;
                     if (args.day_of_week !== undefined && args.day_of_week !== null && args.day_of_week !== '') {
                         const dayNum = normalizeDayOfWeek(args.day_of_week);
                         rawPath += `&day_of_week=eq.${dayNum}`;
@@ -3101,15 +3534,19 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                     let d1Query = `SELECT t.*, c.name as classroom_name, s.name as subject_name FROM timetable_slots t
                                    LEFT JOIN classrooms c ON t.classroom_id = c.id
                                    LEFT JOIN subjects s ON t.subject_id = s.id
-                                   WHERE t.organization_id = ?1`;
-                    const binds: any[] = [targetOrgId];
-                    if (args.classroom_id || args.class_id) {
-                        d1Query += ` AND t.classroom_id = ?${binds.length + 1}`;
-                        binds.push((args.classroom_id || args.class_id) as string);
+                                   WHERE 1=1`;
+                    const binds: any[] = [];
+                    if (targetOrgId) {
+                        d1Query += ` AND t.organization_id = ?${binds.length + 1}`;
+                        binds.push(targetOrgId);
                     }
-                    if (args.subject_id) {
+                    if (classIdFilter) {
+                        d1Query += ` AND t.classroom_id = ?${binds.length + 1}`;
+                        binds.push(classIdFilter);
+                    }
+                    if (subjectIdFilter) {
                         d1Query += ` AND t.subject_id = ?${binds.length + 1}`;
-                        binds.push(args.subject_id as string);
+                        binds.push(subjectIdFilter);
                     }
                     if (args.day_of_week !== undefined && args.day_of_week !== null && args.day_of_week !== '') {
                         const dayNum = normalizeDayOfWeek(args.day_of_week);
@@ -3150,7 +3587,44 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         case 'update_schedule_slot': {
             if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
             const slotId = (args.slot_id as string) || crypto.randomUUID();
-            const classId = (args.classroom_id || args.class_id) as string;
+            let rawClass = (args.classroom_id || args.class_id) as string;
+            let resolvedClassId: string | null = null;
+            if (rawClass) {
+                resolvedClassId = await resolveClassroomId(env, db, targetOrgId, rawClass);
+            }
+
+            let rawSubject = (args.subject_id || args.subject) as string;
+            let resolvedSubject = await resolveSubjectId(env, db, targetOrgId, rawSubject, resolvedClassId);
+            let finalSubjectId = resolvedSubject.id;
+
+            // Si la matière n'existe pas encore et qu'un libellé a été passé, auto-création pour éviter erreur FK
+            if (!finalSubjectId && (rawSubject || args.subject_name)) {
+                const subName = (args.subject_name || rawSubject || '').toString().trim();
+                if (subName) {
+                    const newSubId = crypto.randomUUID();
+                    const newSubPayload = {
+                        id: newSubId,
+                        organization_id: targetOrgId,
+                        classroom_id: resolvedClassId || null,
+                        name: subName,
+                        coefficient: 1.0,
+                        created_at: new Date().toISOString(),
+                    };
+                    if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+                        const createdSub = await fetchSupabaseRest(env, 'subjects', { method: 'POST', body: newSubPayload });
+                        if (createdSub && createdSub.length > 0) {
+                            finalSubjectId = createdSub[0].id;
+                        }
+                    }
+                    if (!finalSubjectId) {
+                        await db.prepare('INSERT INTO subjects (id, organization_id, classroom_id, name, coefficient, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)')
+                            .bind(newSubId, targetOrgId, resolvedClassId || null, subName, 1.0, newSubPayload.created_at).run().catch(() => {});
+                        finalSubjectId = newSubId;
+                    }
+                    resolvedSubject = { id: finalSubjectId, name: subName };
+                }
+            }
+
             const dayNum = normalizeDayOfWeek(args.day_of_week);
             const dayNames = ['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
@@ -3163,30 +3637,31 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 room: args.room || args.room_name || null,
                 teacher_id: args.teacher_id || null,
             };
-            if (classId) payload.classroom_id = classId;
-            if (args.subject_id) payload.subject_id = args.subject_id;
+            if (resolvedClassId) payload.classroom_id = resolvedClassId;
+            if (finalSubjectId) payload.subject_id = finalSubjectId;
 
             if (args.slot_id) {
                 if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
                     await fetchSupabaseRest(env, `timetable_slots?id=eq.${encodeURIComponent(args.slot_id as string)}`, { method: 'PATCH', body: payload });
                 }
                 await db.prepare(`UPDATE timetable_slots SET classroom_id = COALESCE(?1, classroom_id), subject_id = COALESCE(?2, subject_id), day_of_week = ?3, start_time = ?4, end_time = ?5, room_id = ?6, teacher_id = ?7 WHERE id = ?8`)
-                    .bind(classId || null, args.subject_id || null, dayNum, payload.start_time, payload.end_time, payload.room, payload.teacher_id, args.slot_id).run().catch(() => {});
+                    .bind(resolvedClassId || null, finalSubjectId || null, dayNum, payload.start_time, payload.end_time, payload.room, payload.teacher_id, args.slot_id).run().catch(() => {});
                 return { success: true, slot_id: args.slot_id, message: `✅ Créneau d'emploi du temps modifié : ${dayNames[dayNum] || `Jour ${dayNum}`} de ${payload.start_time} à ${payload.end_time}` };
             } else {
                 payload.id = slotId;
                 payload.created_at = new Date().toISOString();
                 let insertedSlot: any = null;
                 if (env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
-                    const res = await fetchSupabaseRest(env, 'timetable_slots', { method: 'POST', body: payload });
+                    const res = await fetchSupabaseRestOrThrow(env, 'timetable_slots', { method: 'POST', body: payload });
                     if (res && res.length > 0) insertedSlot = res[0];
                 }
                 await db.prepare(`INSERT INTO timetable_slots (id, organization_id, classroom_id, subject_id, day_of_week, start_time, end_time, room_id, teacher_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`)
-                    .bind(slotId, targetOrgId, classId || null, args.subject_id || null, dayNum, payload.start_time, payload.end_time, payload.room, payload.teacher_id, payload.created_at).run().catch(() => {});
+                    .bind(slotId, targetOrgId, resolvedClassId || null, finalSubjectId || null, dayNum, payload.start_time, payload.end_time, payload.room, payload.teacher_id, payload.created_at).run().catch(() => {});
                 return {
                     success: true,
+                    slot_id: slotId,
                     slot: insertedSlot || payload,
-                    message: `✅ Créneau créé et synchronisé : ${dayNames[dayNum] || `Jour ${dayNum}`} de ${payload.start_time} à ${payload.end_time}${payload.room ? ` (${payload.room})` : ''}`
+                    message: `✅ Créneau créé et synchronisé : ${dayNames[dayNum] || `Jour ${dayNum}`} de ${payload.start_time} à ${payload.end_time}${resolvedSubject.name ? ` (${resolvedSubject.name})` : ''}${payload.room ? ` en salle ${payload.room}` : ''}`
                 };
             }
         }
@@ -3205,19 +3680,23 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
         case 'bulk_create_schedule': {
             if (!targetOrgId) throw { code: -32602, message: 'org_id requis' };
             const rawSlots = Array.isArray(args.slots) ? args.slots : [];
-            const defaultClassId = (args.classroom_id || args.class_id) as string;
+            const defaultRawClass = (args.classroom_id || args.class_id) as string;
+            const defaultClassId = defaultRawClass ? await resolveClassroomId(env, db, targetOrgId, defaultRawClass) : null;
             const dayNames = ['', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
             const createdList: any[] = [];
 
             for (const s of rawSlots) {
                 const sId = crypto.randomUUID();
                 const dayNum = normalizeDayOfWeek(s.day_of_week);
-                const classId = s.classroom_id || s.class_id || defaultClassId;
+                const itemRawClass = s.classroom_id || s.class_id;
+                const classId = itemRawClass ? (await resolveClassroomId(env, db, targetOrgId, itemRawClass)) : defaultClassId;
+                const rawSubject = s.subject_id || s.subject;
+                const resolvedSub = await resolveSubjectId(env, db, targetOrgId, rawSubject, classId);
                 const p = {
                     id: sId,
                     organization_id: targetOrgId,
                     classroom_id: classId || null,
-                    subject_id: s.subject_id || null,
+                    subject_id: resolvedSub.id || null,
                     day_of_week: dayNum,
                     start_time: String(s.start_time || '08:00').trim(),
                     end_time: String(s.end_time || '10:00').trim(),
@@ -3230,7 +3709,7 @@ async function executeMcpToolD1(toolName: string, args: Record<string, any>, ctx
                 }
                 await db.prepare(`INSERT INTO timetable_slots (id, organization_id, classroom_id, subject_id, day_of_week, start_time, end_time, room_id, teacher_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`)
                     .bind(sId, targetOrgId, p.classroom_id, p.subject_id, dayNum, p.start_time, p.end_time, p.room, p.teacher_id, p.created_at).run().catch(() => {});
-                createdList.push({ ...p, day_name: dayNames[dayNum] || `Jour ${dayNum}` });
+                createdList.push({ ...p, day_name: dayNames[dayNum] || `Jour ${dayNum}`, subject_name: resolvedSub.name || null });
             }
             return {
                 success: true,

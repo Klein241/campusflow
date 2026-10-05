@@ -7,7 +7,7 @@ import {
     ExternalLink, CheckCircle2, DollarSign, Calendar,
     BookOpen, Users, Share2, ShieldCheck, Video,
     MessageSquare, Phone, Mail, Edit3, Trash2,
-    Download, UserPlus, Layers, Check, X
+    Download, UserPlus, Layers, Check, X, Image as ImageIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,7 +53,74 @@ export function AdminIndependentTrainerTab({
     const [offerOriginalPrice, setOfferOriginalPrice] = useState('');
     const [offerRegistrationFee, setOfferRegistrationFee] = useState('');
     const [offerDescription, setOfferDescription] = useState('');
+    const [offerPosterUrl, setOfferPosterUrl] = useState('');
+    const [offerSessions, setOfferSessions] = useState<any[]>([]);
     const [creatingOffer, setCreatingOffer] = useState(false);
+
+    // Helper pour générer 3 sessions types (1 mois, 3 mois, 6 mois) avec tranches
+    const generateDefaultSessions = (basePriceStr: string, origPriceStr?: string) => {
+        const p = parseInt(basePriceStr.replace(/[^0-9]/g, ''), 10) || 90000;
+        const op = origPriceStr ? (parseInt(origPriceStr.replace(/[^0-9]/g, ''), 10) || null) : null;
+        const p1m = Math.max(25000, Math.round((p * 0.45) / 5000) * 5000);
+        const p3m = Math.max(45000, Math.round((p * 0.75) / 5000) * 5000);
+        const p6m = p;
+
+        const t1_1m = Math.round((p1m * 0.6) / 1000) * 1000;
+        const t2_1m = p1m - t1_1m;
+
+        const t1_3m = Math.round((p3m * 0.5) / 1000) * 1000;
+        const t2_3m = p3m - t1_3m;
+
+        const t1_6m = Math.round((p6m * 0.4) / 1000) * 1000;
+        const t2_6m = Math.round((p6m * 0.3) / 1000) * 1000;
+        const t3_6m = p6m - t1_6m - t2_6m;
+
+        return [
+            {
+                id: 'session_1m',
+                label: '1 Mois (Intensif Express)',
+                duration_months: 1,
+                duration_label: '1 mois',
+                price: p1m,
+                prix_barre: op ? Math.round((op * 0.5) / 5000) * 5000 : null,
+                promo_badge: 'Express',
+                payment_mode: 'flexible',
+                installments: [
+                    { number: 1, label: '1ère Tranche (Acompte)', amount: t1_1m, due_date_label: "À l'inscription" },
+                    { number: 2, label: '2ème Tranche (Solde)', amount: t2_1m, due_date_label: "15ème jour" },
+                ]
+            },
+            {
+                id: 'session_3m',
+                label: '3 Mois (Rythme Accéléré)',
+                duration_months: 3,
+                duration_label: '3 mois',
+                price: p3m,
+                prix_barre: op ? Math.round((op * 0.8) / 5000) * 5000 : null,
+                promo_badge: 'Populaire',
+                payment_mode: 'flexible',
+                installments: [
+                    { number: 1, label: '1ère Tranche (Acompte)', amount: t1_3m, due_date_label: "À l'inscription" },
+                    { number: 2, label: '2ème Tranche (Solde)', amount: t2_3m, due_date_label: "Fin du 1er mois" },
+                ]
+            },
+            {
+                id: 'session_6m',
+                label: '6 Mois (Cursus Approfondi & Mentorat)',
+                duration_months: 6,
+                duration_label: '6 mois',
+                price: p6m,
+                prix_barre: op || null,
+                promo_badge: op && op > p6m ? `-${Math.round(((op - p6m) / op) * 100)}%` : 'Recommandé',
+                payment_mode: 'flexible',
+                installments: [
+                    { number: 1, label: '1ère Tranche (Acompte)', amount: t1_6m, due_date_label: "À l'inscription" },
+                    { number: 2, label: '2ème Tranche', amount: t2_6m, due_date_label: "Fin du 2ème mois" },
+                    { number: 3, label: '3ème Tranche (Solde)', amount: t3_6m, due_date_label: "Avant certification" },
+                ]
+            }
+        ];
+    };
 
     // Modal édition d'offre existante
     const [editingOffer, setEditingOffer] = useState<any | null>(null);
@@ -127,19 +194,28 @@ export function AdminIndependentTrainerTab({
             const origPriceNum = offerOriginalPrice.trim() ? (parseInt(offerOriginalPrice.replace(/[^0-9]/g, ''), 10) || null) : null;
             const regFeeNum = offerRegistrationFee.trim() ? (parseInt(offerRegistrationFee.replace(/[^0-9]/g, ''), 10) || 0) : 0;
 
+            const finalSessions = offerSessions.length > 0
+                ? offerSessions
+                : generateDefaultSessions(offerPrice, offerOriginalPrice);
+
             const scheduleConfig = {
                 description: offerDescription.trim(),
                 prix_barre: origPriceNum,
                 original_price: offerOriginalPrice.trim(),
-                duration_text: finalFormat
+                duration_text: finalFormat,
+                poster_url: offerPosterUrl.trim() || null,
+                sessions: finalSessions,
             };
+
+            const levelMatch = offerTitle.match(/(?:niveau|level|nv)\s*(\d+)/i);
+            const detectedLevel = levelMatch ? parseInt(levelMatch[1], 10) : 1;
 
             let classroomData = null;
             const { data, error } = await supabase.from('classrooms').insert({
                 organization_id: org.id,
                 name: offerTitle.trim(),
                 cycle: cycleText,
-                level: 1,
+                level: detectedLevel,
                 capacity: 100,
                 tuition_fee: priceNum,
                 frais_scolarite: priceNum,
@@ -148,6 +224,7 @@ export function AdminIndependentTrainerTab({
                 training_duration: finalFormat,
                 description: offerDescription.trim() || null,
                 prix_barre: origPriceNum,
+                poster_url: offerPosterUrl.trim() || null,
                 schedule_config: scheduleConfig,
                 competencies_list: offerDescription.trim() ? offerDescription.trim().split(/\r?\n/).filter(Boolean) : []
             }).select().single();
@@ -158,7 +235,7 @@ export function AdminIndependentTrainerTab({
                     p_org_id: org.id,
                     p_name: offerTitle.trim(),
                     p_cycle: cycleText,
-                    p_level: 1,
+                    p_level: detectedLevel,
                     p_capacity: 100,
                     p_tuition_fee: priceNum,
                     p_registration_fee: regFeeNum,
@@ -182,6 +259,8 @@ export function AdminIndependentTrainerTab({
             setShowAddOffer(false);
             setOfferTitle('');
             setOfferDescription('');
+            setOfferPosterUrl('');
+            setOfferSessions([]);
             setOfferOriginalPrice('');
             setOfferRegistrationFee('');
             setCustomFormat('');
@@ -204,24 +283,39 @@ export function AdminIndependentTrainerTab({
             const regFeeNum = editingOffer.editRegistrationFee?.trim() ? (parseInt(editingOffer.editRegistrationFee.replace(/[^0-9]/g, ''), 10) || 0) : (editingOffer.frais_inscription || 0);
             const desc = (editingOffer.editDescription !== undefined ? editingOffer.editDescription : (editingOffer.description || editingOffer.schedule_config?.description || '')).trim();
 
+            const editSessions = (editingOffer.editSessions && editingOffer.editSessions.length > 0)
+                ? editingOffer.editSessions
+                : (editingOffer.schedule_config?.sessions || generateDefaultSessions(finalPrice, editingOffer.editOriginalPrice));
+
+            const posterUrl = editingOffer.editPosterUrl !== undefined 
+                ? (editingOffer.editPosterUrl?.trim() || null)
+                : (editingOffer.poster_url || editingOffer.schedule_config?.poster_url || null);
+
             const scheduleConfig = {
                 ...(editingOffer.schedule_config || {}),
                 description: desc,
                 prix_barre: origPriceNum,
                 original_price: editingOffer.editOriginalPrice?.trim() || '',
+                poster_url: posterUrl,
+                sessions: editSessions,
             };
+
+            const levelMatch = editingOffer.name.match(/(?:niveau|level|nv)\s*(\d+)/i);
+            const detectedLevel = levelMatch ? parseInt(levelMatch[1], 10) : (editingOffer.level || 1);
 
             const { error } = await supabase
                 .from('classrooms')
                 .update({
                     name: editingOffer.name.trim(),
                     cycle: editingOffer.cycle,
+                    level: detectedLevel,
                     tuition_fee: priceNum,
                     frais_scolarite: priceNum,
                     registration_fee: regFeeNum,
                     frais_inscription: regFeeNum,
                     description: desc || null,
                     prix_barre: origPriceNum,
+                    poster_url: posterUrl,
                     schedule_config: scheduleConfig,
                     competencies_list: desc ? desc.split(/\r?\n/).filter(Boolean) : []
                 })
@@ -489,12 +583,17 @@ export function AdminIndependentTrainerTab({
                                                                 || (item.cycle?.split('•')?.[1]?.trim()) 
                                                                 || '';
                                                             const regFee = item.frais_inscription || item.registration_fee || '';
+                                                            const poster = item.poster_url || item.schedule_config?.poster_url || item.image_url || item.schedule_config?.image_url || '';
+                                                            const sessions = Array.isArray(item.schedule_config?.sessions) ? item.schedule_config.sessions : [];
+
                                                             setEditingOffer({
                                                                 ...item,
                                                                 editDescription: desc,
                                                                 editPrice: currentPrice ? (String(currentPrice).includes('FCFA') ? String(currentPrice) : `${currentPrice} FCFA`) : '',
                                                                 editOriginalPrice: origPrice ? (String(origPrice).includes('FCFA') ? String(origPrice) : `${origPrice} FCFA`) : '',
-                                                                editRegistrationFee: regFee ? (String(regFee).includes('FCFA') ? String(regFee) : `${regFee} FCFA`) : ''
+                                                                editRegistrationFee: regFee ? (String(regFee).includes('FCFA') ? String(regFee) : `${regFee} FCFA`) : '',
+                                                                editPosterUrl: poster,
+                                                                editSessions: sessions
                                                             });
                                                         }}
                                                         className="opacity-0 group-hover:opacity-100 p-1 rounded-md bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition cursor-pointer"
@@ -511,9 +610,40 @@ export function AdminIndependentTrainerTab({
                                                     </button>
                                                 </div>
                                             </div>
-                                            <p className="text-xs text-slate-400 mt-1">
+
+                                            {/* Affiche de la formation si présente */}
+                                            {(() => {
+                                                const pUrl = item.poster_url || item.schedule_config?.poster_url || item.image_url || item.schedule_config?.image_url;
+                                                if (!pUrl) return null;
+                                                return (
+                                                    <div className="w-full h-28 rounded-xl overflow-hidden mt-2 relative bg-slate-900 border border-white/10 group-hover:border-amber-500/40 transition">
+                                                        <img src={pUrl} alt={item.name} className="w-full h-full object-cover" />
+                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                                                        <span className="absolute bottom-1.5 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-md text-[9px] text-amber-300 font-bold border border-white/10 flex items-center gap-1">
+                                                            <ImageIcon className="w-2.5 h-2.5" /> Affiche officielle
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })()}
+
+                                            <p className="text-xs text-slate-400 mt-2">
                                                 {item.cycle || 'Formation & Accompagnement'}
                                             </p>
+
+                                            {/* Badges des sessions et durées disponibles */}
+                                            {(() => {
+                                                const sess = Array.isArray(item.schedule_config?.sessions) ? item.schedule_config.sessions : [];
+                                                if (sess.length === 0) return null;
+                                                return (
+                                                    <div className="flex flex-wrap gap-1 mt-1.5 pt-1.5 border-t border-white/5">
+                                                        {sess.map((s: any, idx: number) => (
+                                                            <span key={idx} className="px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-[9px] text-amber-200 font-medium">
+                                                                ⏱️ {s.duration_label || s.label} : <strong className="text-white font-mono">{s.price ? `${new Intl.NumberFormat('fr-FR').format(s.price)} F` : s.formatted_price}</strong>
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
 
                                         <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between text-xs flex-wrap gap-2">
@@ -969,6 +1099,104 @@ export function AdminIndependentTrainerTab({
                                 </div>
                             </div>
 
+                            {/* Affiche de la formation */}
+                            <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                                        <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
+                                        <span>Affiche officielle de la formation (URL / Image)</span>
+                                    </label>
+                                    <span className="text-[10px] text-slate-400">Visible sur toutes les landing pages</span>
+                                </div>
+                                <div className="flex gap-2">
+                                    <Input
+                                        value={offerPosterUrl}
+                                        onChange={e => setOfferPosterUrl(e.target.value)}
+                                        placeholder="Ex: https://images.unsplash.com/... ou URL de votre affiche"
+                                        className="bg-white/5 border-white/10 text-white rounded-xl h-10 text-xs flex-1"
+                                    />
+                                    {offerPosterUrl && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setOfferPosterUrl('')}
+                                            className="px-2.5 py-1 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs cursor-pointer"
+                                        >
+                                            Effacer
+                                        </button>
+                                    )}
+                                </div>
+                                {offerPosterUrl && (
+                                    <div className="mt-2 relative w-full h-32 rounded-xl overflow-hidden border border-amber-500/30 bg-black/40">
+                                        <img src={offerPosterUrl} alt="Aperçu affiche" className="w-full h-full object-cover" />
+                                        <div className="absolute bottom-1 right-2 bg-black/70 backdrop-blur-md px-2 py-0.5 rounded text-[10px] text-amber-300 font-bold">
+                                            ✓ Aperçu de l'affiche
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Sessions & Modalités de paiement par tranches */}
+                            <div className="p-3.5 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-2.5">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h5 className="text-xs font-black text-amber-300 flex items-center gap-1.5">
+                                            <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                                            <span>Sessions multi-durées & Tranches de paiement</span>
+                                        </h5>
+                                        <p className="text-[10px] text-slate-400">
+                                            Permettez aux étudiants de choisir leur rythme (ex: 1 Mois, 3 Mois, 6 Mois) avec paiement échelonné.
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setOfferSessions(generateDefaultSessions(offerPrice, offerOriginalPrice))}
+                                        className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold border border-amber-500/30 transition cursor-pointer"
+                                    >
+                                        🪄 {offerSessions.length > 0 ? 'Régénérer' : 'Générer 1M / 3M / 6M'}
+                                    </button>
+                                </div>
+
+                                {offerSessions.length > 0 ? (
+                                    <div className="space-y-2 pt-1">
+                                        {offerSessions.map((sess, sIdx) => (
+                                            <div key={sIdx} className="p-2.5 rounded-xl bg-black/40 border border-white/10 space-y-2 text-xs">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="font-bold text-white text-[11px] flex items-center gap-1">
+                                                        <span>⏱️ Session {sess.duration_months} Mois :</span>
+                                                        <span className="text-amber-400">{sess.label}</span>
+                                                    </span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="font-mono font-bold text-amber-300 text-xs">
+                                                            {new Intl.NumberFormat('fr-FR').format(sess.price)} FCFA
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setOfferSessions(offerSessions.filter((_, i) => i !== sIdx))}
+                                                            className="text-red-400 hover:text-red-300 text-[10px] p-1 cursor-pointer"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                {sess.installments && sess.installments.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1.5 pt-1 border-t border-white/5">
+                                                        {sess.installments.map((inst: any, iIdx: number) => (
+                                                            <span key={iIdx} className="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[9px] text-slate-300 font-mono">
+                                                                {inst.label} : <strong>{new Intl.NumberFormat('fr-FR').format(inst.amount)} F</strong>
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-[10px] text-slate-400 italic">
+                                        💡 Par défaut, 3 sessions types (1 Mois express, 3 Mois accéléré, 6 Mois complet) avec paiements par tranches sont configurées automatiquement. Cliquez sur "Générer" pour les personnaliser.
+                                    </p>
+                                )}
+                            </div>
+
                             {offerFormat === 'custom' && (
                                 <motion.div
                                     initial={{ opacity: 0, y: -4 }}
@@ -1126,6 +1354,110 @@ export function AdminIndependentTrainerTab({
                                     placeholder="Ex: 15 000 FCFA"
                                     className="bg-white/5 border-white/10 text-white rounded-xl h-10 text-xs font-mono"
                                 />
+                            </div>
+
+                            {/* Affiche officielle de la formation */}
+                            <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                                        <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
+                                        <span>Affiche officielle de la formation (URL / Image)</span>
+                                    </label>
+                                    <span className="text-[10px] text-slate-400">Visible sur toutes les landing pages</span>
+                                </div>
+                                <div className="flex gap-2">
+                                    <Input
+                                        value={editingOffer.editPosterUrl ?? ''}
+                                        onChange={e => setEditingOffer({ ...editingOffer, editPosterUrl: e.target.value })}
+                                        placeholder="Ex: https://images.unsplash.com/... ou URL de votre affiche"
+                                        className="bg-white/5 border-white/10 text-white rounded-xl h-10 text-xs flex-1"
+                                    />
+                                    {editingOffer.editPosterUrl && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditingOffer({ ...editingOffer, editPosterUrl: '' })}
+                                            className="px-2.5 py-1 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs cursor-pointer"
+                                        >
+                                            Effacer
+                                        </button>
+                                    )}
+                                </div>
+                                {editingOffer.editPosterUrl && (
+                                    <div className="mt-2 relative w-full h-32 rounded-xl overflow-hidden border border-amber-500/30 bg-black/40">
+                                        <img src={editingOffer.editPosterUrl} alt="Aperçu affiche" className="w-full h-full object-cover" />
+                                        <div className="absolute bottom-1 right-2 bg-black/70 backdrop-blur-md px-2 py-0.5 rounded text-[10px] text-amber-300 font-bold">
+                                            ✓ Aperçu de l'affiche
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Sessions & Modalités de paiement par tranches */}
+                            <div className="p-3.5 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-2.5">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h5 className="text-xs font-black text-amber-300 flex items-center gap-1.5">
+                                            <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                                            <span>Sessions multi-durées & Tranches de paiement</span>
+                                        </h5>
+                                        <p className="text-[10px] text-slate-400">
+                                            Rythmes configurés pour cette formation (ex: 1 Mois, 3 Mois, 6 Mois).
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditingOffer({
+                                            ...editingOffer,
+                                            editSessions: generateDefaultSessions(editingOffer.editPrice || '', editingOffer.editOriginalPrice)
+                                        })}
+                                        className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold border border-amber-500/30 transition cursor-pointer"
+                                    >
+                                        🪄 {editingOffer.editSessions && editingOffer.editSessions.length > 0 ? 'Régénérer' : 'Générer 1M / 3M / 6M'}
+                                    </button>
+                                </div>
+
+                                {editingOffer.editSessions && editingOffer.editSessions.length > 0 ? (
+                                    <div className="space-y-2 pt-1">
+                                        {editingOffer.editSessions.map((sess: any, sIdx: number) => (
+                                            <div key={sIdx} className="p-2.5 rounded-xl bg-black/40 border border-white/10 space-y-2 text-xs">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="font-bold text-white text-[11px] flex items-center gap-1">
+                                                        <span>⏱️ Session {sess.duration_months} Mois :</span>
+                                                        <span className="text-amber-400">{sess.label}</span>
+                                                    </span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="font-mono font-bold text-amber-300 text-xs">
+                                                            {new Intl.NumberFormat('fr-FR').format(sess.price)} FCFA
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setEditingOffer({
+                                                                ...editingOffer,
+                                                                editSessions: editingOffer.editSessions.filter((_: any, i: number) => i !== sIdx)
+                                                            })}
+                                                            className="text-red-400 hover:text-red-300 text-[10px] p-1 cursor-pointer"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                {sess.installments && sess.installments.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1.5 pt-1 border-t border-white/5">
+                                                        {sess.installments.map((inst: any, iIdx: number) => (
+                                                            <span key={iIdx} className="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[9px] text-slate-300 font-mono">
+                                                                {inst.label} : <strong>{new Intl.NumberFormat('fr-FR').format(inst.amount)} F</strong>
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-[10px] text-slate-400 italic">
+                                        💡 Par défaut, les 3 sessions types (1M, 3M, 6M) avec tranches sont proposées automatiquement aux apprenants. Cliquez sur "Générer" pour personnaliser les tarifs et tranches.
+                                    </p>
+                                )}
                             </div>
 
                             <div className="flex gap-2 pt-2 border-t border-white/10">

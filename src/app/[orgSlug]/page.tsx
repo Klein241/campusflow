@@ -126,7 +126,14 @@ export default function SchoolLandingPage() {
         return () => window.removeEventListener('scroll', onScroll);
     }, []);
 
-    const scrollToInscription = () => {
+    const scrollToInscription = (prog?: any, sess?: any) => {
+        if (prog) {
+            const matchingClassroom = classrooms.find((c: any) => c.id === prog.id || c.name === prog.nom || c.id === prog.rawItem?.id);
+            if (matchingClassroom) {
+                setSelectedClassroom(matchingClassroom);
+                setInscStep(1);
+            }
+        }
         setShowInscModal(true);
         const el = document.getElementById('inscription');
         if (el) {

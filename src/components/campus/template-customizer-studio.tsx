@@ -772,13 +772,17 @@ export function TemplateCustomizerStudio({
                     cta_text: sched.cta_text || 'Postuler'
                 };
 
+                const classNameStr = (cls.name || 'Nouvelle Formation').trim();
+                const levelMatch = classNameStr.match(/(?:niveau|level|nv)\s*(\d+)/i);
+                const detectedLevel = cls.level ? Number(cls.level) : (levelMatch ? parseInt(levelMatch[1], 10) : 1);
+
                 // Si c'est une nouvelle classe créée dans le Studio
                 if (String(cls.id).startsWith('temp_')) {
                     const { data: insData, error: insErr } = await supabase.from('classrooms').insert({
                         organization_id: org.id,
-                        name: (cls.name || 'Nouvelle Formation').trim(),
+                        name: classNameStr,
                         cycle: cycleText,
-                        level: 1,
+                        level: detectedLevel,
                         capacity: 100,
                         tuition_fee: priceNum,
                         frais_scolarite: priceNum,
@@ -796,7 +800,7 @@ export function TemplateCustomizerStudio({
                             p_org_id: org.id,
                             p_name: (cls.name || 'Nouvelle Formation').trim(),
                             p_cycle: cycleText,
-                            p_level: 1,
+                            p_level: detectedLevel,
                             p_capacity: 100,
                             p_tuition_fee: priceNum,
                             p_training_duration: durText,
@@ -811,6 +815,7 @@ export function TemplateCustomizerStudio({
                     await supabase.from('classrooms').update({
                         name: (cls.name || 'Formation').trim(),
                         cycle: cycleText,
+                        level: detectedLevel,
                         tuition_fee: priceNum,
                         frais_scolarite: priceNum,
                         training_duration: durText,

@@ -14,6 +14,7 @@ import type { TemplateCustomConfig } from '@/components/campus/template-customiz
 import { cleanMotto } from '@/lib/clean-motto';
 import { cn } from '@/lib/utils';
 import { getNormalizedPrograms, getNormalizedTestimonials, getNormalizedStats } from './template-data-adapter';
+import { ProgramCardSessionSelector } from './ProgramCardSessionSelector';
 
 interface TemplateProps {
     org: any;
@@ -488,35 +489,13 @@ export function TemplateProductMastery({
                                     </p>
                                 </div>
 
-                                <div className="pt-6 mt-6 border-t border-white/10 flex items-center justify-between">
-                                    <div>
-                                        <p className="text-[10px] text-slate-500 font-medium">Frais de scolarité</p>
-                                        <div className="flex items-baseline gap-2">
-                                            {prog.formatted_prix_barre && (
-                                                <span
-                                                    data-editable-field={`program_${idx}_prix_barre`}
-                                                    className="text-xs text-slate-500 line-through font-mono cursor-pointer"
-                                                >
-                                                    {prog.formatted_prix_barre}
-                                                </span>
-                                            )}
-                                            <p
-                                                data-editable-field={`program_${idx}_frais_scolarite`}
-                                                className="text-base font-black text-white font-mono cursor-pointer"
-                                            >
-                                                {prog.formatted_price}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <button
-                                        data-editable-field={`program_${idx}_cta`}
-                                        onClick={onOpenInscription || (() => scrollToSection('contact'))}
-                                        className="w-10 h-10 rounded-2xl bg-orange-500 hover:bg-orange-400 text-white flex items-center justify-center transition transform group-hover:scale-110 shadow-lg shadow-orange-500/30 cursor-pointer"
-                                        title="S'inscrire à ce programme"
-                                    >
-                                        <ArrowUpRight className="w-5 h-5" />
-                                    </button>
+                                <div className="mt-4 pt-4 border-t border-white/10">
+                                    <ProgramCardSessionSelector
+                                        program={prog}
+                                        brandColor="#FF6B00"
+                                        onOpenInscription={onOpenInscription || (() => scrollToSection('contact'))}
+                                        showPoster={true}
+                                    />
                                 </div>
                             </motion.div>
                         ))}

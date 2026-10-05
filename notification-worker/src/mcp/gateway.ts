@@ -135,6 +135,90 @@ const WORKER_MCP_TOOLS = [
         inputSchema: { type: 'object', properties: { chapter_id: { type: 'string' } }, required: ['chapter_id'] },
     },
     {
+        name: 'schedule_chapter',
+        description: 'Programmer la publication et le déverrouillage automatique d\'un chapitre à une date précise (Drip Content pédagogique)',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                chapter_id: { type: 'string', description: 'UUID du chapitre à programmer' },
+                classroom_id: { type: 'string', description: 'UUID ou nom de la classe (optionnel)' },
+                class_id: { type: 'string', description: 'Alias pour classroom_id' },
+                available_from: { type: 'string', description: 'Date de déverrouillage (ISO ou YYYY-MM-DD, ex: "2026-10-07T08:00:00Z")' },
+                unlock_date: { type: 'string', description: 'Alias pour available_from' },
+                release_date: { type: 'string', description: 'Alias pour available_from' },
+                date_debut: { type: 'string', description: 'Alias pour available_from' },
+                date_publication: { type: 'string', description: 'Alias pour available_from' },
+                available_until: { type: 'string', description: 'Date limite d\'accès ou de fin (optionnel)' },
+                lock_date: { type: 'string', description: 'Alias pour available_until' },
+                date_fin: { type: 'string', description: 'Alias pour available_until' },
+                period_name: { type: 'string', description: 'Période pédagogique (ex: "Semaines 1 à 3 : Fondamentaux")' },
+                semaine: { type: 'string', description: 'Alias pour period_name' },
+                is_locked: { type: 'boolean', description: 'Si true, verrouille immédiatement avec un cadenas' },
+                is_drip_locked: { type: 'boolean', description: 'Alias pour is_locked' },
+                is_visible_to_students: { type: 'boolean', description: 'Visibilité pour les étudiants (défaut: true)' },
+                status: { type: 'string', enum: ['scheduled', 'published', 'draft'], description: 'Statut du chapitre (défaut: scheduled)' },
+            },
+            required: ['chapter_id']
+        },
+    },
+    {
+        name: 'create_chapter_schedule',
+        description: 'Créer un planning de déverrouillage pour un chapitre (alias de schedule_chapter)',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                chapter_id: { type: 'string', description: 'UUID du chapitre' },
+                classroom_id: { type: 'string', description: 'UUID ou nom de la classe' },
+                available_from: { type: 'string', description: 'Date de déverrouillage' },
+                release_date: { type: 'string', description: 'Date de publication' },
+                available_until: { type: 'string', description: 'Date de fin' },
+                period_name: { type: 'string', description: 'Nom de la période' },
+                is_locked: { type: 'boolean', description: 'Verrouillé ou non' },
+                is_visible_to_students: { type: 'boolean', description: 'Visible aux étudiants' },
+            },
+            required: ['chapter_id']
+        },
+    },
+    {
+        name: 'publish_scheduled_chapter',
+        description: 'Publier immédiatement un chapitre programmé (le rend instantanément visible et déverrouillé aux étudiants)',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                chapter_id: { type: 'string', description: 'UUID du chapitre à publier' },
+            },
+            required: ['chapter_id']
+        },
+    },
+    {
+        name: 'unlock_chapter',
+        description: 'Déverrouiller immédiatement un chapitre (retire le cadenas drip et donne accès aux leçons)',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                chapter_id: { type: 'string', description: 'UUID du chapitre à déverrouiller' },
+            },
+            required: ['chapter_id']
+        },
+    },
+    {
+        name: 'list_chapter_schedule',
+        description: 'Lister le calendrier de déverrouillage et le statut temporel de tous les chapitres d\'une matière ou classe',
+        permission: 'read:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                subject_id: { type: 'string', description: 'UUID ou nom de la matière (optionnel)' },
+                classroom_id: { type: 'string', description: 'UUID ou nom de la classe (optionnel)' },
+                class_id: { type: 'string', description: 'Alias pour classroom_id' },
+            }
+        },
+    },
+    {
         name: 'create_lesson',
         description: 'Créer une leçon dans un chapitre (supporte le français, anglais, arabe et 20+ langues locales africaines, avec support audio vocal R2 automatique ou personnalisé et images)',
         permission: 'write:curriculum',
@@ -453,6 +537,67 @@ const WORKER_MCP_TOOLS = [
         inputSchema: { type: 'object', properties: {} },
     },
     {
+        name: 'create_class',
+        description: 'Créer une nouvelle classe ou formation dans l\'établissement (nom, niveau 1/2/3, cycle, tarif, description, affiche et sessions)',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                name: { type: 'string', description: 'Nom de la classe ou formation (ex: "Développement Web - Niveau 2", "Cohorte Pro 2026")' },
+                level: { type: 'number', description: 'Niveau académique (ex: 1, 2, 3... Auto-détecté depuis le nom si omis)' },
+                cycle: { type: 'string', description: 'Cycle ou durée de la formation' },
+                capacity: { type: 'number', description: 'Capacité maximale d\'étudiants (défaut: 50)' },
+                tuition_fee: { type: 'number', description: 'Frais de scolarité en FCFA' },
+                frais_scolarite: { type: 'number', description: 'Alias pour tuition_fee' },
+                registration_fee: { type: 'number', description: 'Frais d\'inscription en FCFA' },
+                frais_inscription: { type: 'number', description: 'Alias pour registration_fee' },
+                description: { type: 'string', description: 'Description pédagogique ou compétences' },
+                poster_url: { type: 'string', description: 'URL de l\'affiche ou flyer promotionnel' },
+                sessions: { type: 'array', description: 'Sessions avec rythmes (1M, 3M, 6M) et tranches de paiement' },
+                schedule_config: { type: 'object', description: 'Configuration additionnelle' }
+            },
+            required: ['name']
+        },
+    },
+    {
+        name: 'update_class',
+        description: 'Modifier une classe existante (corriger le niveau level à 1, 2 ou 3, modifier le titre, tarif, cycle, description, affiche ou sessions)',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                classroom_id: { type: 'string', description: 'UUID de la classe (optionnel si class_id ou name fourni)' },
+                class_id: { type: 'string', description: 'Alias pour classroom_id' },
+                name: { type: 'string', description: 'Nom ou nouveau titre de la classe' },
+                level: { type: 'number', description: 'Nouveau niveau académique (ex: 2 pour Niveau 2). Auto-détecté depuis le nom si omis.' },
+                cycle: { type: 'string', description: 'Nouveau cycle ou durée' },
+                capacity: { type: 'number', description: 'Capacité maximale' },
+                tuition_fee: { type: 'number', description: 'Frais de scolarité en FCFA' },
+                frais_scolarite: { type: 'number', description: 'Alias pour tuition_fee' },
+                registration_fee: { type: 'number', description: 'Frais d\'inscription' },
+                frais_inscription: { type: 'number', description: 'Alias pour registration_fee' },
+                description: { type: 'string', description: 'Description pédagogique' },
+                poster_url: { type: 'string', description: 'URL de l\'affiche/poster de la formation' },
+                sessions: { type: 'array', description: 'Sessions avec échéanciers de paiement' },
+                schedule_config: { type: 'object', description: 'Configuration étendue' },
+                is_active: { type: 'boolean', description: 'Activer ou archiver la classe' }
+            }
+        },
+    },
+    {
+        name: 'delete_class',
+        description: 'Supprimer ou archiver une classe/formation',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                classroom_id: { type: 'string', description: 'UUID de la classe à supprimer' },
+                class_id: { type: 'string', description: 'Alias pour classroom_id' },
+                name: { type: 'string', description: 'Nom de la classe si UUID non disponible' }
+            }
+        },
+    },
+    {
         name: 'get_org_info',
         description: 'Obtenir les informations générales de l\'organisation',
         permission: 'read:curriculum',
@@ -642,31 +787,41 @@ const WORKER_MCP_TOOLS = [
     },
     {
         name: 'create_exam_paper',
-        description: 'Créer une épreuve d\'examen dans la Salle d\'Évaluation (avec barème, questions QCM/rédaction, durée, coefficient)',
+        description: 'Créer une épreuve d\'examen dans la Salle d\'Évaluation (avec barème, questions QCM/rédaction, durée, coefficient, classe, dates)',
         permission: 'write:curriculum',
         inputSchema: {
             type: 'object',
             properties: {
-                title: { type: 'string' },
-                subject: { type: 'string' },
-                coefficient: { type: 'number' },
-                duration_minutes: { type: 'number' },
-                instructions: { type: 'string' },
+                title: { type: 'string', description: 'Titre de l\'épreuve (ex: "Évaluation du Module 1")' },
+                description: { type: 'string', description: 'Consignes ou description générale de l\'épreuve' },
+                instructions: { type: 'string', description: 'Consignes d\'examen (alias de description)' },
+                subject: { type: 'string', description: 'Nom ou libellé de la matière' },
+                subject_id: { type: 'string', description: 'UUID de la matière (optionnel)' },
+                classroom_id: { type: 'string', description: 'UUID ou nom de la classe (optionnel)' },
+                class_id: { type: 'string', description: 'Alias pour classroom_id' },
+                coefficient: { type: 'number', description: 'Coefficient de l\'épreuve (défaut: 1.0)' },
+                duration_minutes: { type: 'number', description: 'Durée en minutes (défaut: 60)' },
+                total_points: { type: 'number', description: 'Barème total (ex: 20 ou 100)' },
+                max_score: { type: 'number', description: 'Alias pour total_points' },
+                start_date: { type: 'string', description: 'Date de début ou d\'ouverture de l\'épreuve (ISO ou YYYY-MM-DD)' },
+                end_date: { type: 'string', description: 'Date de fin de l\'épreuve' },
+                status: { type: 'string', enum: ['draft', 'published', 'archived'], description: 'Statut de l\'épreuve (défaut: published)' },
                 questions: {
                     type: 'array',
+                    description: 'Liste des questions d\'évaluation',
                     items: {
                         type: 'object',
                         properties: {
-                            text: { type: 'string' },
+                            text: { type: 'string', description: 'Énoncé de la question' },
+                            question: { type: 'string', description: 'Alias de text' },
                             type: { type: 'string', enum: ['qcm', 'vrai_faux', 'redaction', 'texte_a_trou'] },
-                            points: { type: 'number' },
+                            points: { type: 'number', description: 'Nombre de points pour cette question' },
                             options: { type: 'array', items: { type: 'string' } },
-                            correct: {},
+                            correct: { description: 'Bonne réponse ou index' },
+                            answer: { description: 'Alias de correct' },
                         },
-                        required: ['text', 'type', 'points'],
                     },
                 },
-                status: { type: 'string', enum: ['draft', 'published', 'archived'] },
             },
             required: ['title'],
         },
@@ -1029,6 +1184,7 @@ async function authenticateMcpKey(rawKey: string, env: Env): Promise<any | null>
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ p_raw_key: rawKey }),
+                signal: AbortSignal.timeout(4000),
             });
             if (supRes.ok) {
                 const verified = await supRes.json() as any;
@@ -1060,6 +1216,7 @@ async function authenticateMcpKey(rawKey: string, env: Env): Promise<any | null>
                     'apikey': env.SUPABASE_SERVICE_KEY,
                     'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
                 },
+                signal: AbortSignal.timeout(4000),
             });
             if (restRes.ok) {
                 const records = await restRes.json() as any[];
@@ -1160,15 +1317,28 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
             }
             const endpointUri = `${pathname}?${endpointParams.toString()}`;
 
+            let keepAliveTimer: any = null;
             const stream = new ReadableStream({
                 start(controller) {
                     controller.enqueue(new TextEncoder().encode(`event: endpoint\ndata: ${endpointUri}\n\n`));
+                    // Garder le flux SSE ouvert indéfiniment avec des pings SSE toutes les 15s
+                    // Évite le blocage "unexpected EOF" / "transport error" chez Manus IA et Claude
+                    keepAliveTimer = setInterval(() => {
+                        try {
+                            controller.enqueue(new TextEncoder().encode(`: keepalive\n\n`));
+                        } catch {
+                            if (keepAliveTimer) clearInterval(keepAliveTimer);
+                        }
+                    }, 15000);
+                },
+                cancel() {
+                    if (keepAliveTimer) clearInterval(keepAliveTimer);
                 }
             });
             return new Response(stream, {
                 headers: {
                     'Content-Type': 'text/event-stream',
-                    'Cache-Control': 'no-cache',
+                    'Cache-Control': 'no-cache, no-transform',
                     'Connection': 'keep-alive',
                     ...CORS_HEADERS,
                 },
@@ -1298,16 +1468,16 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
             if (t.name === 'translate_content' && (permissions.includes('translate:content') || permissions.includes('write:curriculum'))) return true;
             // Délégation Chat Dame SKY (Claude / MANUS) : accès aux cours publiés et au chat
             if (permissions.includes('chat:dame_sky')) {
-                if (['list_subjects', 'list_chapters', 'list_lessons', 'get_lesson', 'search_published_lessons', 'list_exercises', 'list_chat_messages', 'send_chat_message', 'list_forms', 'list_supported_languages', 'get_org_info', 'list_classes', 'list_library_items'].includes(t.name)) {
+                if (['list_subjects', 'list_chapters', 'list_lessons', 'get_lesson', 'search_published_lessons', 'list_exercises', 'list_chat_messages', 'send_chat_message', 'list_forms', 'list_supported_languages', 'get_org_info', 'list_classes', 'create_class', 'update_class', 'delete_class', 'list_library_items'].includes(t.name)) {
                     return true;
                 }
             }
             // Bibliothèque & Livres : accessible si read:library OU read:curriculum / write:library OU write:curriculum
             if (t.name === 'list_library_items' && (permissions.includes('read:library') || permissions.includes('read:curriculum'))) return true;
             if (['publish_library_item', 'compile_curriculum_to_book', 'delete_library_item'].includes(t.name) && (permissions.includes('write:library') || permissions.includes('write:curriculum'))) return true;
-            // Emploi du temps & Plans de formation : accessible si read:schedule OU read:timetable OU read:curriculum
-            if (['list_schedule', 'list_training_plans', 'list_curriculum_schedules'].includes(t.name) && (permissions.includes('read:schedule') || permissions.includes('read:timetable') || permissions.includes('read:curriculum'))) return true;
-            if (['create_schedule_slot', 'update_schedule', 'update_schedule_slot', 'delete_schedule_slot', 'bulk_create_schedule', 'create_training_plan', 'create_curriculum_schedule', 'delete_training_plan'].includes(t.name) && (permissions.includes('write:schedule') || permissions.includes('write:timetable') || permissions.includes('write:curriculum'))) return true;
+            // Emploi du temps, Plans de formation & Planning des chapitres : accessible si read:schedule OU read:timetable OU read:curriculum
+            if (['list_schedule', 'list_training_plans', 'list_curriculum_schedules', 'list_chapter_schedule'].includes(t.name) && (permissions.includes('read:schedule') || permissions.includes('read:timetable') || permissions.includes('read:curriculum'))) return true;
+            if (['create_schedule_slot', 'update_schedule', 'update_schedule_slot', 'delete_schedule_slot', 'bulk_create_schedule', 'create_training_plan', 'create_curriculum_schedule', 'delete_training_plan', 'schedule_chapter', 'create_chapter_schedule', 'publish_scheduled_chapter', 'unlock_chapter'].includes(t.name) && (permissions.includes('write:schedule') || permissions.includes('write:timetable') || permissions.includes('write:curriculum'))) return true;
             // Examens & Salle d'évaluation
             if (t.name === 'list_exam_papers' && (permissions.includes('read:grades') || permissions.includes('read:curriculum'))) return true;
             if (['create_exam_paper', 'update_exam_paper', 'delete_exam_paper', 'launch_exam_session'].includes(t.name) && (permissions.includes('write:grades') || permissions.includes('write:curriculum'))) return true;
@@ -1344,9 +1514,9 @@ async function handleMcpGateway(request: Request, env: Env): Promise<Response> {
                 isAllowed = permissions.includes('read:library') || permissions.includes('read:curriculum');
             } else if (['publish_library_item', 'compile_curriculum_to_book', 'delete_library_item'].includes(toolName)) {
                 isAllowed = permissions.includes('write:library') || permissions.includes('write:curriculum');
-            } else if (['list_schedule', 'list_training_plans', 'list_curriculum_schedules'].includes(toolName)) {
+            } else if (['list_schedule', 'list_training_plans', 'list_curriculum_schedules', 'list_chapter_schedule'].includes(toolName)) {
                 isAllowed = permissions.includes('read:schedule') || permissions.includes('read:timetable') || permissions.includes('read:curriculum');
-            } else if (['create_schedule_slot', 'update_schedule', 'update_schedule_slot', 'delete_schedule_slot', 'bulk_create_schedule', 'create_training_plan', 'create_curriculum_schedule', 'delete_training_plan'].includes(toolName)) {
+            } else if (['create_schedule_slot', 'update_schedule', 'update_schedule_slot', 'delete_schedule_slot', 'bulk_create_schedule', 'create_training_plan', 'create_curriculum_schedule', 'delete_training_plan', 'schedule_chapter', 'create_chapter_schedule', 'publish_scheduled_chapter', 'unlock_chapter'].includes(toolName)) {
                 isAllowed = permissions.includes('write:schedule') || permissions.includes('write:timetable') || permissions.includes('write:curriculum');
             } else if (toolName === 'list_exam_papers') {
                 isAllowed = permissions.includes('read:grades') || permissions.includes('read:curriculum');

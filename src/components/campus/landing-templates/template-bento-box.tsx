@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { orgPath } from '@/lib/custom-domain';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-studio';
 import { getNormalizedPrograms, getNormalizedStats, getNormalizedTestimonials } from './template-data-adapter';
+import { ProgramCardSessionSelector } from './ProgramCardSessionSelector';
 
 interface TemplateProps {
     org: any;
@@ -304,30 +305,13 @@ export function TemplateBentoBox({
                                                 {prog.description}
                                             </p>
                                         </div>
-                                        <div className="pt-2 border-t border-white/5 flex items-center justify-between">
-                                            <div className="flex items-baseline gap-1.5">
-                                                {prog.formatted_prix_barre && (
-                                                    <span
-                                                        data-editable-field={`program_${idx}_prix_barre`}
-                                                        className="text-[10px] text-slate-500 line-through font-mono cursor-pointer"
-                                                    >
-                                                        {prog.formatted_prix_barre}
-                                                    </span>
-                                                )}
-                                                <span
-                                                    data-editable-field={`program_${idx}_frais_scolarite`}
-                                                    className="text-xs font-bold text-teal-300 font-mono cursor-pointer"
-                                                >
-                                                    {prog.formatted_price}
-                                                </span>
-                                            </div>
-                                            <button
-                                                data-editable-field={`program_${idx}_cta`}
-                                                onClick={onOpenInscription}
-                                                className="text-[11px] text-cyan-300 hover:text-white font-bold flex items-center gap-1 cursor-pointer"
-                                            >
-                                                {prog.cta_text || 'S\'inscrire'} <ArrowRight className="w-3 h-3" />
-                                            </button>
+                                        <div className="pt-2 border-t border-white/5">
+                                            <ProgramCardSessionSelector
+                                                program={prog}
+                                                brandColor="#06B6D4"
+                                                onOpenInscription={onOpenInscription}
+                                                showPoster={true}
+                                            />
                                         </div>
                                     </div>
                                 ))}

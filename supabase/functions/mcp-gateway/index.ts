@@ -247,6 +247,88 @@ const MCP_TOOLS = [
         },
     },
     {
+        name: 'schedule_chapter',
+        description: 'Planifier et programmer la date de déverrouillage / publication d\'un chapitre (Drip Content)',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                chapter_id: { type: 'string', description: 'UUID du chapitre à planifier' },
+                available_from: { type: 'string', description: 'Date de déverrouillage automatique (ISO ou YYYY-MM-DD)' },
+                release_date: { type: 'string', description: 'Alias pour available_from' },
+                unlock_date: { type: 'string', description: 'Alias pour available_from' },
+                date_debut: { type: 'string', description: 'Alias pour available_from' },
+                date_publication: { type: 'string', description: 'Alias pour available_from' },
+                available_until: { type: 'string', description: 'Date limite d\'accès ou de fin (optionnel)' },
+                lock_date: { type: 'string', description: 'Alias pour available_until' },
+                date_fin: { type: 'string', description: 'Alias pour available_until' },
+                period_name: { type: 'string', description: 'Période pédagogique (ex: "Semaines 1 à 3 : Fondamentaux")' },
+                semaine: { type: 'string', description: 'Alias pour period_name' },
+                is_locked: { type: 'boolean', description: 'Si true, verrouille immédiatement avec un cadenas' },
+                is_drip_locked: { type: 'boolean', description: 'Alias pour is_locked' },
+                is_visible_to_students: { type: 'boolean', description: 'Visibilité pour les étudiants (défaut: true)' },
+                status: { type: 'string', enum: ['scheduled', 'published', 'draft'], description: 'Statut du chapitre (défaut: scheduled)' },
+            },
+            required: ['chapter_id']
+        },
+    },
+    {
+        name: 'create_chapter_schedule',
+        description: 'Créer un planning de déverrouillage pour un chapitre (alias de schedule_chapter)',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                chapter_id: { type: 'string', description: 'UUID du chapitre' },
+                classroom_id: { type: 'string', description: 'UUID ou nom de la classe' },
+                available_from: { type: 'string', description: 'Date de déverrouillage' },
+                release_date: { type: 'string', description: 'Date de publication' },
+                available_until: { type: 'string', description: 'Date de fin' },
+                period_name: { type: 'string', description: 'Nom de la période' },
+                is_locked: { type: 'boolean', description: 'Verrouillé ou non' },
+                is_visible_to_students: { type: 'boolean', description: 'Visible aux étudiants' },
+            },
+            required: ['chapter_id']
+        },
+    },
+    {
+        name: 'publish_scheduled_chapter',
+        description: 'Publier immédiatement un chapitre programmé (le rend instantanément visible et déverrouillé aux étudiants)',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                chapter_id: { type: 'string', description: 'UUID du chapitre à publier' },
+            },
+            required: ['chapter_id']
+        },
+    },
+    {
+        name: 'unlock_chapter',
+        description: 'Déverrouiller immédiatement un chapitre (retire le cadenas drip et donne accès aux leçons)',
+        permission: 'write:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                chapter_id: { type: 'string', description: 'UUID du chapitre à déverrouiller' },
+            },
+            required: ['chapter_id']
+        },
+    },
+    {
+        name: 'list_chapter_schedule',
+        description: 'Lister le calendrier de déverrouillage et le statut temporel de tous les chapitres d\'une matière ou classe',
+        permission: 'read:curriculum',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                subject_id: { type: 'string', description: 'UUID ou nom de la matière (optionnel)' },
+                classroom_id: { type: 'string', description: 'UUID ou nom de la classe (optionnel)' },
+                class_id: { type: 'string', description: 'Alias pour classroom_id' },
+            }
+        },
+    },
+    {
         name: 'create_lesson',
         description: 'Créer une leçon dans un chapitre (supporte le texte, markdown, JSON de blocs avec images et note vocale audio R2)',
         permission: 'write:curriculum',
@@ -711,18 +793,41 @@ const MCP_TOOLS = [
     },
     {
         name: 'create_exam_paper',
-        description: 'Créer une épreuve d\'examen dans la Salle d\'Évaluation (avec barème, questions QCM/rédaction, durée, coefficient)',
+        description: 'Créer une épreuve d\'examen dans la Salle d\'Évaluation (avec barème, questions QCM/rédaction, durée, coefficient, classe, dates)',
         permission: 'write:curriculum',
         inputSchema: {
             type: 'object',
             properties: {
-                title: { type: 'string' },
-                subject: { type: 'string' },
-                coefficient: { type: 'number' },
-                duration_minutes: { type: 'number' },
-                instructions: { type: 'string' },
-                questions: { type: 'array' },
-                status: { type: 'string', enum: ['draft', 'published', 'archived'] },
+                title: { type: 'string', description: 'Titre de l\'épreuve (ex: "Évaluation du Module 1")' },
+                description: { type: 'string', description: 'Consignes ou description générale de l\'épreuve' },
+                instructions: { type: 'string', description: 'Consignes d\'examen (alias de description)' },
+                subject: { type: 'string', description: 'Nom ou libellé de la matière' },
+                subject_id: { type: 'string', description: 'UUID de la matière (optionnel)' },
+                classroom_id: { type: 'string', description: 'UUID ou nom de la classe (optionnel)' },
+                class_id: { type: 'string', description: 'Alias pour classroom_id' },
+                coefficient: { type: 'number', description: 'Coefficient de l\'épreuve (défaut: 1.0)' },
+                duration_minutes: { type: 'number', description: 'Durée en minutes (défaut: 60)' },
+                total_points: { type: 'number', description: 'Barème total (ex: 20 ou 100)' },
+                max_score: { type: 'number', description: 'Alias pour total_points' },
+                start_date: { type: 'string', description: 'Date de début ou d\'ouverture de l\'épreuve (ISO ou YYYY-MM-DD)' },
+                end_date: { type: 'string', description: 'Date de fin de l\'épreuve' },
+                status: { type: 'string', enum: ['draft', 'published', 'archived'], description: 'Statut de l\'épreuve (défaut: published)' },
+                questions: {
+                    type: 'array',
+                    description: 'Liste des questions d\'évaluation',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            text: { type: 'string', description: 'Énoncé de la question' },
+                            question: { type: 'string', description: 'Alias de text' },
+                            type: { type: 'string', enum: ['qcm', 'vrai_faux', 'redaction', 'texte_a_trou'] },
+                            points: { type: 'number', description: 'Nombre de points pour cette question' },
+                            options: { type: 'array', items: { type: 'string' } },
+                            correct: { description: 'Bonne réponse ou index' },
+                            answer: { description: 'Alias de correct' },
+                        },
+                    },
+                },
             },
             required: ['title'],
         },
@@ -1553,6 +1658,119 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             const { error } = await supabase.from('chapters').delete().eq('id', args.chapter_id as string);
             if (error) throw { code: -32002, message: error.message };
             return { success: true, message: `🗑️ Chapitre supprimé` };
+        }
+
+        // ── SCHEDULE CHAPTER (DRIP CONTENT) ──────────────────────────────────
+        case 'schedule_chapter':
+        case 'create_chapter_schedule': {
+            if (!args.chapter_id) throw { code: -32602, message: 'chapter_id requis' };
+            const rawUnlock = args.available_from || args.release_date || args.unlock_date || args.date_debut || args.date_publication;
+            const rawLock = args.available_until || args.lock_date || args.date_fin;
+            const periodName = (args.period_name || args.semaine || args.periode || null) as string | null;
+
+            let unlockIso: string | null = null;
+            if (rawUnlock) {
+                const d = new Date(rawUnlock as string);
+                if (!isNaN(d.getTime())) unlockIso = d.toISOString();
+            }
+            let lockIso: string | null = null;
+            if (rawLock) {
+                const d = new Date(rawLock as string);
+                if (!isNaN(d.getTime())) lockIso = d.toISOString();
+            }
+
+            const isLocked = args.is_locked !== undefined ? Boolean(args.is_locked) : (args.is_drip_locked !== undefined ? Boolean(args.is_drip_locked) : false);
+            const status = (args.status as string) || (unlockIso && new Date(unlockIso) > new Date() ? 'scheduled' : 'published');
+
+            const patch: Record<string, any> = {
+                status,
+                unlock_date: unlockIso,
+                lock_date: lockIso,
+                is_drip_locked: isLocked,
+            };
+            if (periodName) patch.period_name = periodName;
+
+            const { data, error } = await supabase
+                .from('chapters')
+                .update(patch)
+                .eq('id', args.chapter_id as string)
+                .select()
+                .single();
+            if (error) throw { code: -32002, message: error.message };
+
+            return {
+                success: true,
+                chapter_id: args.chapter_id,
+                chapter: data,
+                message: `📅 Chapitre "${data?.title || args.chapter_id}" programmé pour déverrouillage${unlockIso ? ` le ${unlockIso.slice(0, 10)}` : ''}${periodName ? ` [${periodName}]` : ''}`
+            };
+        }
+
+        // ── UNLOCK / PUBLISH CHAPTER IMMEDIATELY ──────────────────────────────
+        case 'publish_scheduled_chapter':
+        case 'unlock_chapter': {
+            if (!args.chapter_id) throw { code: -32602, message: 'chapter_id requis' };
+            const { data, error } = await supabase
+                .from('chapters')
+                .update({
+                    status: 'published',
+                    is_drip_locked: false,
+                    unlock_date: new Date().toISOString(),
+                })
+                .eq('id', args.chapter_id as string)
+                .select()
+                .single();
+            if (error) throw { code: -32002, message: error.message };
+
+            return {
+                success: true,
+                chapter_id: args.chapter_id,
+                chapter: data,
+                message: `🔓 Chapitre "${data?.title || args.chapter_id}" déverrouillé et publié avec succès pour les étudiants`
+            };
+        }
+
+        // ── LIST CHAPTER SCHEDULE ────────────────────────────────────────────
+        case 'list_chapter_schedule': {
+            let query = supabase.from('chapters').select('id, title, description, position, status, subject_id, unlock_date, lock_date, period_name, is_drip_locked, subjects(name)').order('position');
+            if (args.subject_id) query = query.eq('subject_id', args.subject_id as string);
+            const { data, error } = await query;
+            if (error) throw { code: -32002, message: error.message };
+
+            const now = new Date();
+            const schedules = (data || []).map((ch: any) => {
+                const unlockMs = ch.unlock_date ? new Date(ch.unlock_date).getTime() : 0;
+                const lockMs = ch.lock_date ? new Date(ch.lock_date).getTime() : 0;
+                const isLockedManually = Boolean(ch.is_drip_locked);
+                const isLockedByDate = Boolean(unlockMs && unlockMs > now.getTime());
+                const isExpired = Boolean(lockMs && lockMs <= now.getTime());
+                const isUnlocked = !isLockedManually && !isLockedByDate && !isExpired;
+
+                let state = 'unlocked';
+                let label = '🔓 Accessible';
+                if (isLockedManually) { state = 'locked_manual'; label = '🔒 Cadenas manuel'; }
+                else if (isLockedByDate) { state = 'scheduled'; label = `⏳ Débloque le ${new Date(ch.unlock_date).toLocaleDateString('fr-FR')}`; }
+                else if (isExpired) { state = 'expired'; label = '⌛ Période terminée'; }
+
+                return {
+                    id: ch.id,
+                    title: ch.title,
+                    position: ch.position,
+                    subject_name: ch.subjects?.name || null,
+                    period_name: ch.period_name || null,
+                    unlock_date: ch.unlock_date,
+                    lock_date: ch.lock_date,
+                    state,
+                    status_label: label,
+                    is_accessible_now: isUnlocked,
+                };
+            });
+
+            return {
+                schedules,
+                total: schedules.length,
+                message: `📅 ${schedules.length} chapitre(s) audité(s) dans le calendrier de déverrouillage`
+            };
         }
 
         // ── CREATE LESSON ────────────────────────────────────────────────────
@@ -2597,17 +2815,29 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
             const coeff = Number(args.coefficient) || 1.0;
             const dur = Number(args.duration_minutes) || 60;
             const status = (args.status as string) || 'published';
+            const instructions = (args.instructions || args.description || null) as string | null;
+
+            // Résolution souple du nom de la matière si subject_id fourni
+            let subjectName = (args.subject as string) || null;
+            if (!subjectName && args.subject_id) {
+                const { data: subData } = await supabase.from('subjects').select('name').eq('id', args.subject_id as string).maybeSingle();
+                if (subData?.name) subjectName = subData.name;
+            }
+
+            // Exigence stricte UUID pour created_by
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(agent.agentId || ''));
+            const creatorId = isUuid ? agent.agentId : crypto.randomUUID();
 
             const { data, error } = await supabase
                 .from('exam_papers')
                 .insert({
                     org_id: targetOrgId,
-                    created_by: agent.id,
+                    created_by: creatorId,
                     title: args.title,
-                    subject: args.subject || null,
+                    subject: subjectName,
                     coefficient: coeff,
                     duration_minutes: dur,
-                    instructions: args.instructions || null,
+                    instructions,
                     questions,
                     status,
                     exam_mode: 'structured',
@@ -2615,7 +2845,12 @@ async function executeTool(toolName: string, args: Record<string, unknown>, agen
                 .select()
                 .single();
             if (error) throw { code: -32002, message: error.message };
-            return { success: true, paper_id: data.id, message: `✅ Épreuve "${args.title}" créée dans la Salle d'Évaluation` };
+            return {
+                success: true,
+                paper_id: data.id,
+                paper: data,
+                message: `✅ Épreuve "${args.title}" créée dans la Salle d'Évaluation (${questions.length} question(s))`
+            };
         }
 
         // ── UPDATE EXAM PAPER ─────────────────────────────────────────────────

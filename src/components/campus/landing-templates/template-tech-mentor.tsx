@@ -12,6 +12,7 @@ import { orgPath } from '@/lib/custom-domain';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-modal';
 import { cleanMotto } from '@/lib/clean-motto';
 import { getNormalizedPrograms, getNormalizedTestimonials, getNormalizedStats } from './template-data-adapter';
+import { ProgramCardSessionSelector } from './ProgramCardSessionSelector';
 
 interface TemplateProps {
     org: any;
@@ -447,31 +448,13 @@ export function TemplateTechMentor({
                                     </p>
                                 </div>
 
-                                <div className="pt-4 mt-4 border-t border-white/10 flex items-center justify-between">
-                                    <div>
-                                        {svc.formatted_prix_barre && (
-                                            <span
-                                                data-editable-field={`program_${i}_prix_barre`}
-                                                className="text-[11px] text-gray-500 line-through font-mono mr-2 cursor-pointer"
-                                            >
-                                                {svc.formatted_prix_barre}
-                                            </span>
-                                        )}
-                                        <span
-                                            data-editable-field={`program_${i}_frais_scolarite`}
-                                            className="text-sm font-black text-cyan-300 font-mono cursor-pointer"
-                                        >
-                                            {svc.formatted_price}
-                                        </span>
-                                    </div>
-                                    <button
-                                        data-editable-field={`program_${i}_cta`}
-                                        onClick={(e) => { e.stopPropagation(); onOpenInscription?.(); }}
-                                        className="px-3.5 py-1.5 rounded-full text-xs font-black text-black cursor-pointer hover:scale-105 transition-transform"
-                                        style={{ background: ACCENT }}
-                                    >
-                                        {svc.cta_text || 'Postuler →'}
-                                    </button>
+                                <div className="pt-4 mt-4 border-t border-white/10">
+                                    <ProgramCardSessionSelector
+                                        program={svc}
+                                        brandColor="#22D3EE"
+                                        onOpenInscription={onOpenInscription}
+                                        showPoster={true}
+                                    />
                                 </div>
                             </div>
                         ))}

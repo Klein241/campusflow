@@ -11,6 +11,7 @@ import { orgPath } from '@/lib/custom-domain';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-modal';
 import { cleanMotto } from '@/lib/clean-motto';
 import { getNormalizedPrograms, getNormalizedStats, getNormalizedTestimonials } from './template-data-adapter';
+import { ProgramCardSessionSelector } from './ProgramCardSessionSelector';
 
 interface TemplateProps {
     org: any;
@@ -380,26 +381,13 @@ export function TemplateCreativeStudio({
                                         </p>
                                     </div>
                                 </div>
-                                <div className="p-4 pt-0 flex items-baseline justify-between">
-                                    <div className="flex items-baseline gap-1.5">
-                                        {proj.formatted_prix_barre && (
-                                            <span
-                                                data-editable-field={`program_${idx}_prix_barre`}
-                                                className="text-[11px] text-gray-400 line-through font-mono cursor-pointer"
-                                            >
-                                                {proj.formatted_prix_barre}
-                                            </span>
-                                        )}
-                                        <span
-                                            data-editable-field={`program_${idx}_frais_scolarite`}
-                                            className="text-xs font-black text-[#1E6356] font-mono cursor-pointer"
-                                        >
-                                            {proj.formatted_price}
-                                        </span>
-                                    </div>
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                                        {proj.category}
-                                    </span>
+                                <div className="p-4 pt-0">
+                                    <ProgramCardSessionSelector
+                                        program={proj}
+                                        brandColor="#1E6356"
+                                        onOpenInscription={onOpenInscription}
+                                        showPoster={false}
+                                    />
                                 </div>
                             </motion.div>
                         ))}

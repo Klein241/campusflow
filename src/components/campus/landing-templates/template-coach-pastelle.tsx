@@ -11,6 +11,7 @@ import { orgPath } from '@/lib/custom-domain';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-modal';
 import { cleanMotto } from '@/lib/clean-motto';
 import { getNormalizedPrograms, getNormalizedStats, getNormalizedTestimonials } from './template-data-adapter';
+import { ProgramCardSessionSelector } from './ProgramCardSessionSelector';
 
 interface TemplateProps {
     org: any;
@@ -34,8 +35,8 @@ export function TemplateCoachPastelle({
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [activeSection, setActiveSection] = useState('hero');
 
-    const trainerName     = cfg.trainer_name    || org.name       || 'Julie Solomon';
-    const trainerTitle    = cleanMotto(cfg.trainer_title || org.motto, 'Auteur, Conférencier, Accélérateur de Marques & Coach');
+    const trainerName     = cfg.trainer_name    || org.name       || 'Expert & Formateur';
+    const trainerTitle    = cleanMotto(cfg.trainer_title || org.motto, 'Formateur, Conférencier & Coach Professionnel');
     const trainerSubtitle = cleanMotto(cfg.trainer_subtitle || org.hero_subtitle, 'Et si vous pouviez obtenir exactement ce que vous voulez ?');
     const trainerBio      = cfg.trainer_bio     || org.about_text || 'Vous le pouvez — et je vais vous montrer le chemin grâce à nos programmes. Passez de l\'Invisible à l\'Irrésistible.';
     const bookCta         = cfg.book_cta        || 'Rejoignez nos programmes certifiants aujourd\'hui !';
@@ -347,30 +348,13 @@ export function TemplateCoachPastelle({
                                         {item.description}
                                     </p>
                                 </div>
-                                <div className="pt-4 mt-4 border-t border-gray-100 flex items-center justify-between">
-                                    <div>
-                                        {item.formatted_prix_barre && (
-                                            <span
-                                                data-editable-field={`program_${i}_prix_barre`}
-                                                className="text-[10px] text-gray-400 line-through font-mono mr-1.5 cursor-pointer"
-                                            >
-                                                {item.formatted_prix_barre}
-                                            </span>
-                                        )}
-                                        <span
-                                            data-editable-field={`program_${i}_frais_scolarite`}
-                                            className="text-xs font-bold text-gray-900 font-mono cursor-pointer"
-                                        >
-                                            {item.formatted_price}
-                                        </span>
-                                    </div>
-                                    <button
-                                        data-editable-field={`program_${i}_cta`}
-                                        onClick={(e) => { e.stopPropagation(); onOpenInscription?.(); }}
-                                        className="inline-flex items-center gap-1.5 text-xs font-bold text-[#1E293B] group-hover:translate-x-1 transition-transform cursor-pointer"
-                                    >
-                                        {item.cta_text || 'Découvrir'} <ArrowRight className="w-3.5 h-3.5" />
-                                    </button>
+                                <div className="pt-4 mt-4 border-t border-gray-100">
+                                    <ProgramCardSessionSelector
+                                        program={item}
+                                        brandColor="#B45309"
+                                        onOpenInscription={onOpenInscription}
+                                        showPoster={true}
+                                    />
                                 </div>
                             </motion.div>
                         ))}

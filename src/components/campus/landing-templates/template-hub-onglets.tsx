@@ -13,6 +13,7 @@ import { orgPath } from '@/lib/custom-domain';
 import { cleanMotto } from '@/lib/clean-motto';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-studio';
 import { getNormalizedPrograms, getNormalizedStats, getNormalizedTestimonials } from './template-data-adapter';
+import { ProgramCardSessionSelector } from './ProgramCardSessionSelector';
 
 interface TemplateProps {
     org: any;
@@ -148,13 +149,13 @@ export function TemplateHubOnglets({
                     <motion.div key="programs" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} className="space-y-6">
                         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                             {programs.map((f: any, idx: number) => (
-                                <div key={f.id || idx} className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-white/20 transition group flex flex-col justify-between cursor-pointer">
+                                <div key={f.id || idx} className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-white/20 transition group flex flex-col justify-between">
                                     <div>
                                         <div className="flex justify-between items-start mb-3 gap-2">
-                                            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${f.couleur || bc}20` }}>
+                                            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${f.couleur || bc}20` }}>
                                                 <BookOpen className="w-5 h-5" style={{ color: f.couleur || bc }} />
                                             </div>
-                                            <div className="flex items-center gap-1.5">
+                                            <div className="flex items-center gap-1.5 flex-wrap justify-end">
                                                 {f.promo_badge && (
                                                     <span
                                                         data-editable-field={`program_${idx}_promo`}
@@ -179,35 +180,19 @@ export function TemplateHubOnglets({
                                         </h3>
                                         <p
                                             data-editable-field={`program_${idx}_description`}
-                                            className="text-xs text-slate-400 line-clamp-2 mb-3 cursor-pointer"
+                                            className="text-xs text-slate-400 line-clamp-2 mb-4 cursor-pointer"
                                         >
                                             {f.description}
                                         </p>
                                     </div>
-                                    <div className="pt-3 border-t border-white/5 flex justify-between items-center text-xs">
-                                        <div className="flex items-baseline gap-1.5">
-                                            {f.formatted_prix_barre && (
-                                                <span
-                                                    data-editable-field={`program_${idx}_prix_barre`}
-                                                    className="text-[10px] text-slate-500 line-through font-mono cursor-pointer"
-                                                >
-                                                    {f.formatted_prix_barre}
-                                                </span>
-                                            )}
-                                            <span
-                                                data-editable-field={`program_${idx}_frais_scolarite`}
-                                                className="font-black text-emerald-400 font-mono cursor-pointer"
-                                            >
-                                                {f.formatted_price}
-                                            </span>
-                                        </div>
-                                        <button
-                                            data-editable-field={`program_${idx}_cta`}
-                                            onClick={onOpenInscription}
-                                            className="text-cyan-400 hover:text-white font-bold flex items-center gap-1 text-[11px] cursor-pointer"
-                                        >
-                                            {f.cta_text || 'Postuler'} <ArrowRight className="w-3 h-3" />
-                                        </button>
+
+                                    <div className="pt-3 border-t border-white/10">
+                                        <ProgramCardSessionSelector
+                                            program={f}
+                                            brandColor={f.couleur || bc || '#06B6D4'}
+                                            onOpenInscription={onOpenInscription}
+                                            showPoster={true}
+                                        />
                                     </div>
                                 </div>
                             ))}

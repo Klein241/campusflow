@@ -17,6 +17,8 @@ import { orgPath } from '@/lib/custom-domain';
 import { cleanMotto } from '@/lib/clean-motto';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-studio';
 import { extractContentAndCurriculum } from '@/lib/curriculum-parser';
+import { getNormalizedPrograms } from './template-data-adapter';
+import { ProgramCardSessionSelector } from './ProgramCardSessionSelector';
 
 interface TemplateProps {
     org: any;
@@ -118,91 +120,14 @@ export function TemplateSegmentedHub({
     };
 
     // Construction et enrichissement des cartes de formations / filières (SOURCE UNIQUE DE VÉRITÉ : BASE DE DONNÉES)
-    const programCards = (filieres && filieres.length > 0)
-        ? filieres.map((f: any, i: number) => ({
-            id: f.id,
-            nom: f.nom,
-            code: f.code || `FIL-${i + 1}`,
-            duree_mois: f.duree_mois || 12,
-            duree_texte: `${f.duree_mois || 12} mois`,
-            description: f.description || `Programme d'excellence académique en ${f.nom}. Enseignements théoriques et pratiques intensifs.`,
-            frais_scolarite: Number(f.frais_scolarite || 0),
-            frais_inscription: Number(f.frais_inscription || 0),
-            prix_barre: f.prix_barre || null,
-            certification_label: f.certification_label || 'Certification PRO',
-            cta_text: f.cta_text || 'Postuler',
-            echeances: f.echeances || [],
-            category: 'Filière Spécialisée',
-            icon: Briefcase,
-            rawItem: f,
-        }))
-        : (classrooms && classrooms.length > 0)
-            ? classrooms.map((c: any, i: number) => {
-                // 1. Description réelle de la formation
-                const sched = (c.schedule_config && typeof c.schedule_config === 'object') ? c.schedule_config : {};
-                const desc = c.description
-                    || sched.description
-                    || (Array.isArray(c.competencies_list) && c.competencies_list.length > 0 ? c.competencies_list.join('\n') : '')
-                    || (typeof c.competencies_list === 'string' && c.competencies_list)
-                    || `Programme complet dispensé par ${org.name}. Apprentissage structuré avec ateliers pratiques et suivi personnalisé.`;
-
-                // 2. Frais de scolarité / Tarif réel
-                let priceNum = Number(c.frais_scolarite || c.tuition_fee || 0);
-                if (!priceNum && c.cycle) {
-                    const match = String(c.cycle).match(/(\d[\d\s]*)\s*(FCFA|XAF|EUR|USD|\$|€)/i);
-                    if (match) {
-                        priceNum = parseInt(match[1].replace(/\s/g, ''), 10);
-                    }
-                }
-
-                // 3. Prix initial barré / Promotion
-                const prixBarre = c.prix_barre
-                    || sched.prix_barre
-                    || (sched.original_price ? parseInt(String(sched.original_price).replace(/[^0-9]/g, ''), 10) : null)
-                    || null;
-
-                // 4. Frais d'inscription
-                const regFee = Number(c.frais_inscription || c.registration_fee || 0);
-
-                // 5. Durée en mois & texte
-                let durationMonths: number | null = c.duree_mois || null;
-                let durationText = c.training_duration || sched.duration_text || '';
-                if (!durationText && c.cycle) {
-                    durationText = c.cycle.split('•')?.[0]?.trim() || '';
-                }
-                if (!durationMonths && durationText) {
-                    const m = String(durationText).match(/(\d+)\s*mois/i);
-                    if (m) durationMonths = parseInt(m[1], 10);
-                }
-                if (!durationMonths) durationMonths = 6;
-                if (!durationText) durationText = `${durationMonths} mois`;
-
-                // 6. Badges & CTA
-                const promoBadge = sched.promo_badge
-                    || (prixBarre && priceNum && prixBarre > priceNum ? `-${Math.round(((prixBarre - priceNum) / prixBarre) * 100)}%` : null);
-                const certificationLabel = sched.certification_label || 'Certification PRO';
-                const ctaText = sched.cta_text || 'Postuler';
-
-                return {
-                    id: c.id,
-                    nom: c.name,
-                    code: c.code || `PRO-${i + 1}`,
-                    duree_mois: durationMonths,
-                    duree_texte: durationText,
-                    description: desc,
-                    frais_scolarite: priceNum,
-                    frais_inscription: regFee,
-                    prix_barre: prixBarre,
-                    promo_badge: promoBadge,
-                    certification_label: certificationLabel,
-                    cta_text: ctaText,
-                    echeances: c.echeances || sched.echeances || [],
-                    category: c.cycle?.split('•')?.[0]?.trim() || (c.level ? `Niveau ${c.level}` : 'Formation Certifiante'),
-                    icon: i % 2 === 0 ? Briefcase : Cpu,
-                    rawItem: c,
-                };
-            })
-            : [];
+    const normalizedPrograms = getNormalizedPrograms(filieres, classrooms, org, cfg);
+    const programCards = normalizedPrograms.map((p, i) => ({
+        ...p,
+        code: p.rawItem?.code || `PRO-${i + 1}`,
+        frais_inscription: Number(p.rawItem?.frais_inscription || p.rawItem?.registration_fee || 0),
+        echeances: p.rawItem?.echeances || p.rawItem?.schedule_config?.echeances || [],
+        icon: i % 2 === 0 ? Briefcase : Cpu,
+    }));
 
     // Helper pour calculer les prix et badges marketing d'une formation
     const getProgramPricing = (p: any) => {
@@ -390,69 +315,26 @@ export function TemplateSegmentedHub({
                             );
                         })()}
 
-                        {/* 💎 Encadré Marketing : Tarifs & Conditions Spéciales */}
-                        {(() => {
-                            const pricing = getProgramPricing(activeModalProgram);
-                            return (
-                                <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-[#0D2418] via-[#091D13] to-[#04120B] border border-amber-400/40 shadow-xl space-y-3">
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
-                                        <div>
-                                            <span className="text-[10px] text-amber-400 uppercase tracking-widest font-black block">
-                                                Tarif Officiel & Modalités d'Admission
-                                            </span>
-                                            <div className="flex items-baseline gap-2.5 mt-1 flex-wrap">
-                                                {pricing.originalPriceStr && (
-                                                    <span className="text-sm sm:text-base text-slate-400 line-through decoration-red-500 decoration-2 font-mono">
-                                                        {pricing.originalPriceStr}
-                                                    </span>
-                                                )}
-                                                <span className="text-2xl sm:text-3xl font-black text-amber-300 tracking-tight font-mono">
-                                                    {pricing.currentPriceStr}
-                                                </span>
-                                                {pricing.promoBadge && (
-                                                    <span className="px-2 py-0.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black uppercase">
-                                                        {pricing.promoBadge}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        <div className="text-right sm:self-center">
-                                            <span className="text-[11px] text-slate-300 block">
-                                                Accompagnement complet de {activeModalProgram.duree_mois} mois
-                                            </span>
-                                            {activeModalProgram.frais_inscription > 0 && (
-                                                <span className="text-[10px] text-amber-400/80 block mt-0.5">
-                                                    + Frais d'inscription : {new Intl.NumberFormat('fr-FR').format(activeModalProgram.frais_inscription)} FCFA
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Modalité de paiement / tranches */}
-                                    {activeModalProgram.echeances && activeModalProgram.echeances.length > 0 ? (
-                                        <div className="space-y-1.5 pt-1">
-                                            <span className="text-[10px] text-slate-300 uppercase tracking-wider font-bold block">
-                                                Échéancier de paiement disponible :
-                                            </span>
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                                {activeModalProgram.echeances.map((ech: any, idx: number) => (
-                                                    <div key={idx} className="p-2 rounded-xl bg-black/40 border border-white/5 text-[11px]">
-                                                        <div className="text-slate-400 truncate">{ech.nom || `Tranche ${idx + 1}`}</div>
-                                                        <div className="font-bold text-white mt-0.5">{new Intl.NumberFormat('fr-FR').format(ech.montant)} FCFA</div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <p className="text-[11px] text-slate-300 font-light flex items-center gap-1.5">
-                                            <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                                            <span>Facilité de règlement en plusieurs tranches sans frais disponible sur simple demande.</span>
-                                        </p>
-                                    )}
-                                </div>
-                            );
-                        })()}
+                        {/* 💎 Encadré Marketing : Sessions & Tarifs Dynamiques avec Échéancier */}
+                        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-[#0D2418] via-[#091D13] to-[#04120B] border border-amber-400/40 shadow-xl space-y-3">
+                            <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                                <span className="text-[10px] text-amber-400 uppercase tracking-widest font-black block">
+                                    Sessions Disponibles & Modalités de Règlement
+                                </span>
+                                <span className="text-[10px] text-slate-400">
+                                    {activeModalProgram.duree_texte || `${activeModalProgram.duree_mois} mois`}
+                                </span>
+                            </div>
+                            <ProgramCardSessionSelector
+                                program={activeModalProgram}
+                                brandColor="#F59E0B"
+                                onOpenInscription={() => {
+                                    setActiveModalProgram(null);
+                                    onOpenInscription?.();
+                                }}
+                                showPoster={false}
+                            />
+                        </div>
                     </div>
 
                     {/* Actions de Conversion */}
@@ -769,45 +651,32 @@ export function TemplateSegmentedHub({
                                                 </p>
                                             </div>
 
-                                            {/* Section Tarifs Marketing sur la carte */}
-                                            <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 flex items-baseline justify-between gap-2">
-                                                <div>
-                                                    <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">
-                                                        Investissement
-                                                    </span>
-                                                    <div className="flex items-baseline gap-1.5 mt-0.5">
-                                                        {pricing.originalPriceStr && (
-                                                            <span data-editable-field={`program_${idx}_prix_barre`} className="text-[11px] text-slate-500 line-through font-mono cursor-pointer">
-                                                                {pricing.originalPriceStr}
-                                                            </span>
-                                                        )}
-                                                        <span data-editable-field={`program_${idx}_frais_scolarite`} className="text-sm font-black text-amber-300 font-mono cursor-pointer">
-                                                            {pricing.currentPriceStr}
-                                                        </span>
-                                                    </div>
-                                                </div>
-
-                                                <span className="text-[10px] text-amber-400 font-semibold underline underline-offset-2 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
-                                                    Détails <ChevronRight className="w-3 h-3" />
-                                                </span>
+                                            {/* Sélecteur de Sessions Interactif & Modalités */}
+                                            <div className="pt-3 border-t border-white/10" onClick={(e) => e.stopPropagation()}>
+                                                <ProgramCardSessionSelector
+                                                    program={p}
+                                                    brandColor="#F59E0B"
+                                                    onOpenInscription={onOpenInscription}
+                                                    showPoster={true}
+                                                />
                                             </div>
-                                        </div>
 
-                                        {/* Pied de carte avec action */}
-                                        <div className="flex items-center justify-between pt-3 mt-2 border-t border-white/5 text-xs">
-                                            <span data-editable-field={`program_${idx}_certification`} className="text-[11px] text-slate-400 font-medium cursor-pointer">
-                                                {p.certification_label || 'Certification PRO'}
-                                            </span>
-                                            <button
-                                                data-editable-field={`program_${idx}_cta`}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onOpenInscription?.();
-                                                }}
-                                                className="text-[11px] font-bold text-amber-300 hover:text-white flex items-center gap-1 cursor-pointer"
-                                            >
-                                                {p.cta_text || 'Postuler'} <ArrowRight className="w-3.5 h-3.5" />
-                                            </button>
+                                            {/* Bouton vers syllabus détaillé */}
+                                            <div className="flex items-center justify-between pt-2 border-t border-white/5 text-[11px]">
+                                                <span data-editable-field={`program_${idx}_certification`} className="text-slate-400 font-medium cursor-pointer">
+                                                    {p.certification_label || 'Certification PRO'}
+                                                </span>
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedProgramIdx(idx);
+                                                        setActiveModalProgram(p);
+                                                    }}
+                                                    className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                                                >
+                                                    <span>Syllabus complet</span>
+                                                    <ChevronRight className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
                                         </div>
                                     </motion.div>
                                 );

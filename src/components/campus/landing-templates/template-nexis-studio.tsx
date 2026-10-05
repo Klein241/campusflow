@@ -8,6 +8,7 @@ import { orgPath } from '@/lib/custom-domain';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-modal';
 import { cleanMotto } from '@/lib/clean-motto';
 import { getNormalizedPrograms, getNormalizedStats, getNormalizedTestimonials } from './template-data-adapter';
+import { ProgramCardSessionSelector } from './ProgramCardSessionSelector';
 
 interface TemplateProps {
     org: any;
@@ -355,30 +356,13 @@ export function TemplateNexisStudio({
                                         {svc.description}
                                     </p>
                                 </div>
-                                <div className="pt-4 mt-4 border-t border-black/10 flex items-center justify-between">
-                                    <div className="flex items-baseline gap-1.5">
-                                        {svc.formatted_prix_barre && (
-                                            <span
-                                                data-editable-field={`program_${i}_prix_barre`}
-                                                className="text-[11px] text-gray-500 line-through font-mono cursor-pointer"
-                                            >
-                                                {svc.formatted_prix_barre}
-                                            </span>
-                                        )}
-                                        <span
-                                            data-editable-field={`program_${i}_frais_scolarite`}
-                                            className="text-sm font-black text-black font-mono cursor-pointer"
-                                        >
-                                            {svc.formatted_price}
-                                        </span>
-                                    </div>
-                                    <button
-                                        data-editable-field={`program_${i}_cta`}
-                                        onClick={(e) => { e.stopPropagation(); onOpenInscription?.(); }}
-                                        className="inline-flex items-center gap-1 text-xs font-black text-black group-hover:translate-x-1 transition-transform cursor-pointer"
-                                    >
-                                        {svc.cta_text || 'En Savoir Plus'} <ArrowUpRight className="w-3.5 h-3.5" />
-                                    </button>
+                                <div className="pt-4 mt-4 border-t border-black/10">
+                                    <ProgramCardSessionSelector
+                                        program={svc}
+                                        brandColor="#000000"
+                                        onOpenInscription={onOpenInscription}
+                                        showPoster={true}
+                                    />
                                 </div>
                             </motion.div>
                         ))}
