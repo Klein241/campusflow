@@ -181,7 +181,7 @@ export function useNotifications(): UseNotificationsReturn {
         if (!user?.id) return;
 
         const channel = supabase
-            .channel(`notif_hook_${user.id}_${Date.now()}`)
+            .channel(`notif_hook_${user.id}`)
             .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',

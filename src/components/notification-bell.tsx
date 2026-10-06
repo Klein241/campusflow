@@ -152,7 +152,7 @@ export function NotificationBell() {
         // Listen for new DMs
         // Listen for new notifications (messages, friend requests accepted, etc.)
         const notificationChannel = supabase
-            .channel(`notif_generic_${user.id}_${Date.now()}`)
+            .channel(`notif_generic_${user.id}`)
             .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',
@@ -195,7 +195,7 @@ export function NotificationBell() {
 
         // Listen for admin notifications (these are from a separate admin_notifications table)
         const adminChannel = supabase
-            .channel(`notif_admin_${user.id}_${Date.now()}`)
+            .channel(`notif_admin_${user.id}`)
             .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',

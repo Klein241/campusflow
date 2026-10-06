@@ -94,7 +94,7 @@ export function SuperadminNotificationBell({
     useEffect(() => {
         // 1. New Organizations
         const orgChan = supabase
-            .channel(`sa_orgs_${Date.now()}`)
+            .channel('sa_realtime_orgs')
             .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',
@@ -115,7 +115,7 @@ export function SuperadminNotificationBell({
 
         // 2. Sky Points Requests
         const reqChan = supabase
-            .channel(`sa_reqs_${Date.now()}`)
+            .channel('sa_realtime_reqs')
             .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',
@@ -136,7 +136,7 @@ export function SuperadminNotificationBell({
 
         // 3. System Health Alerts
         const healthChan = supabase
-            .channel(`sa_health_${Date.now()}`)
+            .channel('sa_realtime_health')
             .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',

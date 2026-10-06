@@ -109,7 +109,7 @@ export function AdminNotificationBell({
 
         // 1. Inscriptions
         const inscChan = supabase
-            .channel(`admin_insc_${orgId}_${Date.now()}`)
+            .channel(`admin_insc_${orgId}`)
             .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',
@@ -132,7 +132,7 @@ export function AdminNotificationBell({
 
         // 2. Payments
         const payChan = supabase
-            .channel(`admin_pay_${orgId}_${Date.now()}`)
+            .channel(`admin_pay_${orgId}`)
             .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',
@@ -154,7 +154,7 @@ export function AdminNotificationBell({
 
         // 3. Exam Submissions
         const examChan = supabase
-            .channel(`admin_exam_${orgId}_${Date.now()}`)
+            .channel(`admin_exam_${orgId}`)
             .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',

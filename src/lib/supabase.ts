@@ -24,6 +24,24 @@ export const supabase: SupabaseClient = createClient(
             detectSessionInUrl: true,
             // Store session in localStorage (default for browser client)
             storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-        }
+        },
+        global: {
+            // Empêche les requêtes de rester bloquées à l'infini en cas de panne ou redémarrage Supabase
+            fetch: (url, options = {}) => {
+                if (typeof AbortController !== 'undefined') {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 10000);
+                    const originalSignal = (options as any)?.signal;
+                    if (originalSignal) {
+                        originalSignal.addEventListener('abort', () => controller.abort());
+                    }
+                    return fetch(url, {
+                        ...options,
+                        signal: controller.signal,
+                    }).finally(() => clearTimeout(timeoutId));
+                }
+                return fetch(url, options);
+            },
+        },
     }
 )

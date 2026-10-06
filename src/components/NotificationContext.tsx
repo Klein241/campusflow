@@ -137,7 +137,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         if (!user?.id) return;
 
         const channel = supabase
-            .channel(`notif_ctx_${user.id}_${Date.now()}`)
+            .channel(`notif_ctx_${user.id}`)
             .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',

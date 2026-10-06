@@ -539,7 +539,7 @@ export function NotificationBell({ orgId, userId, onClick }: NotifBellProps) {
 
         // Realtime: INSERT → +1
         const channel = supabase
-            .channel(`notif-bell-${userId}-${Date.now()}`)
+            .channel(`notif-bell-${userId}`)
             .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',
