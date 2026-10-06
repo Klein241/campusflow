@@ -151,46 +151,83 @@ export default function SchoolLandingPage() {
         }
     }, [orgSlug]);
 
+    const [fetchError, setFetchError] = useState<string | null>(null);
+
     // Data fetch
     useEffect(() => {
+        let mounted = true;
         async function load() {
-            const { data } = await supabase.from('organizations').select('*').eq('slug', orgSlug).single();
-            if (data) {
-                if (data.motto) data.motto = cleanMotto(data.motto);
-                if (data.hero_subtitle) data.hero_subtitle = cleanMotto(data.hero_subtitle);
-
-                // Récupération instantanée du cache LocalStorage si disponible
+            setFetchError(null);
+            try {
+                // Récupérer le cache local immédiat au cas où la connexion réseau est lente ou en panne
+                let localCachedOrg: any = null;
                 if (typeof window !== 'undefined') {
                     try {
-                        const cachedTpl = localStorage.getItem(`campusflow_template_config_${data.id}`) || localStorage.getItem(`campusflow_template_config_${orgSlug}`);
-                        if (cachedTpl) {
-                            const parsed = JSON.parse(cachedTpl);
-                            data.template_config = { ...(parsed || {}), ...(data.template_config || {}) };
-                        }
-                        const cachedLayout = localStorage.getItem(`campusflow_landing_layout_${data.id}`) || localStorage.getItem(`campusflow_landing_layout_${orgSlug}`);
-                        if (cachedLayout && !data.landing_layout) {
-                            data.landing_layout = cachedLayout;
-                        }
+                        const raw = localStorage.getItem(`campusflow_org_${orgSlug}`);
+                        if (raw) localCachedOrg = JSON.parse(raw);
                     } catch (e) {
                         // ignore
                     }
                 }
 
-                setOrg(data);
-                const [clsRes, filRes, tRes, sRes] = await Promise.all([
-                    supabase.from('classrooms').select('*').eq('organization_id', data.id).eq('is_active', true),
-                    supabase.from('filieres').select('*').eq('organization_id', data.id).eq('is_active', true),
-                    supabase.from('teacher_profiles').select('id', { count: 'exact', head: true }).eq('organization_id', data.id),
-                    supabase.from('student_profiles').select('id', { count: 'exact', head: true }).eq('organization_id', data.id),
-                ]);
-                setClassrooms(clsRes.data || []);
-                setFilieres(filRes.data || []);
-                setTeacherCount(tRes.count || 0);
-                setStudentCount(sRes.count || 0);
+                const { data, error } = await supabase.from('organizations').select('*').eq('slug', orgSlug).single();
+                
+                const finalOrg = data || localCachedOrg;
+                if (finalOrg) {
+                    if (data && typeof window !== 'undefined') {
+                        try {
+                            localStorage.setItem(`campusflow_org_${orgSlug}`, JSON.stringify(data));
+                        } catch (e) {}
+                    }
+                    if (finalOrg.motto) finalOrg.motto = cleanMotto(finalOrg.motto);
+                    if (finalOrg.hero_subtitle) finalOrg.hero_subtitle = cleanMotto(finalOrg.hero_subtitle);
+
+                    // Récupération instantanée du cache LocalStorage si disponible
+                    if (typeof window !== 'undefined') {
+                        try {
+                            const cachedTpl = localStorage.getItem(`campusflow_template_config_${finalOrg.id}`) || localStorage.getItem(`campusflow_template_config_${orgSlug}`);
+                            if (cachedTpl) {
+                                const parsed = JSON.parse(cachedTpl);
+                                finalOrg.template_config = { ...(parsed || {}), ...(finalOrg.template_config || {}) };
+                            }
+                            const cachedLayout = localStorage.getItem(`campusflow_landing_layout_${finalOrg.id}`) || localStorage.getItem(`campusflow_landing_layout_${orgSlug}`);
+                            if (cachedLayout && !finalOrg.landing_layout) {
+                                finalOrg.landing_layout = cachedLayout;
+                            }
+                        } catch (e) {
+                            // ignore
+                        }
+                    }
+
+                    if (mounted) setOrg(finalOrg);
+
+                    try {
+                        const [clsRes, filRes, tRes, sRes] = await Promise.all([
+                            supabase.from('classrooms').select('*').eq('organization_id', finalOrg.id).eq('is_active', true),
+                            supabase.from('filieres').select('*').eq('organization_id', finalOrg.id).eq('is_active', true),
+                            supabase.from('teacher_profiles').select('id', { count: 'exact', head: true }).eq('organization_id', finalOrg.id),
+                            supabase.from('student_profiles').select('id', { count: 'exact', head: true }).eq('organization_id', finalOrg.id),
+                        ]);
+                        if (mounted) {
+                            setClassrooms(clsRes.data || []);
+                            setFilieres(filRes.data || []);
+                            setTeacherCount(tRes.count || 0);
+                            setStudentCount(sRes.count || 0);
+                        }
+                    } catch (subErr) {
+                        console.warn('[SchoolLandingPage] sub-resources fetch skipped:', subErr);
+                    }
+                } else if (error) {
+                    if (mounted) setFetchError(error.message || 'Erreur de connexion');
+                }
+            } catch (err: any) {
+                if (mounted) setFetchError(err?.message || 'Erreur de communication serveur');
+            } finally {
+                if (mounted) setLoading(false);
             }
-            setLoading(false);
         }
         load();
+        return () => { mounted = false; };
     }, [orgSlug]);
 
     // Generate 12-char alphanumeric access code
@@ -315,16 +352,40 @@ export default function SchoolLandingPage() {
         </div>
     );
 
-    if (!org) return (
-        <div className="min-h-screen bg-[#08090E] flex flex-col items-center justify-center text-white p-8 text-center">
-            <div className="w-20 h-20 rounded-3xl bg-red-500/10 flex items-center justify-center mb-6">
-                <AlertCircle className="w-10 h-10 text-red-400" />
+    if (!org) {
+        if (fetchError) {
+            return (
+                <div className="min-h-screen bg-[#08090E] flex flex-col items-center justify-center text-white p-8 text-center">
+                    <div className="w-20 h-20 rounded-3xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-6 shadow-xl shadow-amber-500/5">
+                        <AlertCircle className="w-10 h-10 text-amber-400" />
+                    </div>
+                    <h1 className="text-2xl font-black mb-3 text-white">Connexion au serveur temporairement ralentie</h1>
+                    <p className="text-slate-400 mb-6 max-w-md text-sm leading-relaxed">
+                        La base de données met plus de temps que d'habitude à répondre (timeout réseau). Vos cours, vos données et votre établissement sont en parfaite sécurité.
+                    </p>
+                    <div className="flex items-center gap-3">
+                        <Button 
+                            onClick={() => window.location.reload()} 
+                            className="rounded-2xl px-6 bg-teal-600 hover:bg-teal-500 text-white font-bold cursor-pointer"
+                        >
+                            Actualiser la page
+                        </Button>
+                        <Link href="/"><Button variant="outline" className="rounded-2xl px-6 border-white/10 hover:bg-white/5">Accueil</Button></Link>
+                    </div>
+                </div>
+            );
+        }
+        return (
+            <div className="min-h-screen bg-[#08090E] flex flex-col items-center justify-center text-white p-8 text-center">
+                <div className="w-20 h-20 rounded-3xl bg-red-500/10 flex items-center justify-center mb-6">
+                    <AlertCircle className="w-10 h-10 text-red-400" />
+                </div>
+                <h1 className="text-3xl font-black mb-3">Établissement introuvable</h1>
+                <p className="text-slate-400 mb-8 max-w-sm">L&apos;URL <code className="text-teal-400 bg-teal-400/10 px-2 py-0.5 rounded-lg">/{orgSlug}</code> ne correspond à aucun établissement.</p>
+                <Link href="/"><Button className="rounded-2xl px-8">Retour à l&apos;accueil</Button></Link>
             </div>
-            <h1 className="text-3xl font-black mb-3">Établissement introuvable</h1>
-            <p className="text-slate-400 mb-8 max-w-sm">L&apos;URL <code className="text-teal-400 bg-teal-400/10 px-2 py-0.5 rounded-lg">/{orgSlug}</code> ne correspond à aucun établissement.</p>
-            <Link href="/"><Button className="rounded-2xl px-8">Retour à l&apos;accueil</Button></Link>
-        </div>
-    );
+        );
+    }
 
     // ── Suspension : Portail Indisponible ───────────────────────────────
     if (org.is_active === false) return (
