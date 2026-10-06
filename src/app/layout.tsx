@@ -54,14 +54,17 @@ export const viewport: Viewport = {
   themeColor: "#0B0E14",
 };
 
+import { DomTranslatePatch } from "@/components/DomTranslatePatch";
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" className="dark" style={{ colorScheme: 'dark' }} suppressHydrationWarning>
+    <html lang="fr" translate="no" className="dark notranslate" style={{ colorScheme: 'dark' }} suppressHydrationWarning>
       <head>
+        <meta name="google" content="notranslate" />
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
@@ -74,7 +77,8 @@ export default function RootLayout({
         <meta name="msapplication-TileColor" content="#0B0E14" />
         <meta name="color-scheme" content="dark" />
       </head>
-      <body className={`${inter.variable} ${outfit.variable} antialiased bg-[#0B0E14] text-white`}>
+      <body className={`${inter.variable} ${outfit.variable} antialiased bg-[#0B0E14] text-white notranslate`}>
+        <DomTranslatePatch />
         <CustomDomainResolver />
         <PushNotificationManager />
         <NotificationListener />
