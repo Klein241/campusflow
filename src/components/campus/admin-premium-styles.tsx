@@ -27,6 +27,7 @@ interface AdminPremiumStylesProps {
     adminSkyPoints: number;
     onUpdateOrg: (updatedOrg: any) => void;
     onUpdatePoints: (newBalance: number) => void;
+    onRefreshClasses?: () => void;
 }
 
 // ═══ Composant Carte Bannière ═══
@@ -266,7 +267,8 @@ export function AdminPremiumStyles({
     orgSlug,
     adminSkyPoints,
     onUpdateOrg,
-    onUpdatePoints
+    onUpdatePoints,
+    onRefreshClasses
 }: AdminPremiumStylesProps) {
     const [prices, setPrices] = useState<Record<string, number>>({});
     const [loadingPrices, setLoadingPrices] = useState(true);
@@ -501,6 +503,7 @@ export function AdminPremiumStyles({
                     onSaveSuccess={(updatedOrg) => {
                         setLocalOrg(updatedOrg);
                         onUpdateOrg(updatedOrg);
+                        if (onRefreshClasses) onRefreshClasses();
                     }}
                 />
             )}

@@ -1172,6 +1172,17 @@ function AdminPageContent() {
     const saveCls = async (): Promise<Cls[]> => { setSaving(true); try { const unsaved = cls.filter(c => !c.id); if (unsaved.length > 0) { const { data, error } = await supabase.from('classrooms').insert(unsaved.map(c => ({ organization_id: org.id, name: c.name, cycle: c.cycle || null, filiere_id: c.filiere_id, level: c.level, capacity: c.capacity }))).select(); if (error) throw error; const saved = (data || []).map((d: any) => ({ id: d.id, name: d.name, cycle: d.cycle || '', filiere_id: d.filiere_id, level: d.level, capacity: d.capacity })); const merged = [...cls.filter(c => c.id), ...saved]; setCls(merged); toast.success('Classes sauvegardées !'); setSaving(false); return merged; } toast.success('Classes OK'); setSaving(false); return cls; } catch (e: any) { toast.error(e.message); setSaving(false); return cls; } };
     const saveSubs = async () => { setSaving(true); try { const u = subs.filter(s => !s.id); if (u.length > 0) { const { error } = await supabase.from('subjects').insert(u.map(s => ({ organization_id: org.id, name: s.name, code: s.code, coefficient: s.coefficient, classroom_id: s.classroom_id, teacher_id: s.teacher_id }))); if (error) throw error; } const { data } = await supabase.from('subjects').select('*').eq('organization_id', org.id); setSubs((data || []).map((x: any) => ({ id: x.id, name: x.name, code: x.code, coefficient: x.coefficient, classroom_id: x.classroom_id, teacher_id: x.teacher_id }))); toast.success('Matières sauvegardées !'); } catch (e: any) { toast.error(e.message); } finally { setSaving(false); } };
     const finishSetup = async () => { await saveCls(); await saveSubs(); await supabase.from('organizations').update({ setup_completed: true }).eq('id', org.id); setOrg({ ...org, setup_completed: true }); setTab('general'); toast.success('🎉 Configuration terminée !'); };
+    const refreshClasses = async () => {
+        if (!org?.id) return;
+        const { data: c } = await supabase.from('classrooms').select('*').eq('organization_id', org.id).order('name');
+        if (c) {
+            setCls(c.map((x: any) => ({ ...x, cycle: x.cycle || '', level: x.level || 1, capacity: x.capacity || 50 })));
+        }
+        const { data: s } = await supabase.from('subjects').select('*').eq('organization_id', org.id).order('name');
+        if (s) {
+            setSubs(s.map((x: any) => ({ id: x.id, name: x.name, code: x.code || '', coefficient: x.coefficient || 1, classroom_id: x.classroom_id, teacher_id: x.teacher_id })));
+        }
+    };
     const createTeacher = async (formData?: any): Promise<string | undefined> => {
         const fnTrim = (formData?.first_name || tFN).trim();
         const lnTrim = (formData?.last_name || tLN).trim();
@@ -1619,7 +1630,7 @@ function AdminPageContent() {
         toast.success('Domaine retiré');
     };
     const loadCursus = async () => { const subIds = subs.map((s: any) => s.id); if (subIds.length === 0) { setCursusLoaded(true); return; } const { data: chaps } = await supabase.from('chapters').select('*').in('subject_id', subIds).order('position'); setAdminChapters(chaps || []); const chIds = (chaps || []).map((c: any) => c.id); if (chIds.length > 0) { const { data: lsns } = await supabase.from('lessons').select('*').in('chapter_id', chIds).order('position'); setAdminLessons(lsns || []); } setCursusLoaded(true); };
-    const onTab = (t: Tab) => { const targetTab = t === 'landing' ? 'premium_styles' : t; setTab(targetTab); setSidebar(false); if (targetTab === 'timetable' && !ttLoaded) loadTT(); if (targetTab === 'evaluations' && !evLoaded) loadEv(); if (targetTab === 'payments' && !payLoaded) loadPay(); if (targetTab === 'disciplines' && !dLoaded) loadDisc(); if (targetTab === 'grades' && !grLoaded) loadGrades(); if (targetTab === 'settings') loadSettings(); if (targetTab === 'modeles') loadTemplateSettings(); if (targetTab === 'cursus' && !cursusLoaded) loadCursus(); if (targetTab === 'whatsapp' && !waLoaded) loadWhatsAppQueue(); };
+    const onTab = (t: Tab) => { const targetTab = t === 'landing' ? 'premium_styles' : t; setTab(targetTab); setSidebar(false); if (targetTab === 'classes' || targetTab === 'setup') void refreshClasses(); if (targetTab === 'timetable' && !ttLoaded) loadTT(); if (targetTab === 'evaluations' && !evLoaded) loadEv(); if (targetTab === 'payments' && !payLoaded) loadPay(); if (targetTab === 'disciplines' && !dLoaded) loadDisc(); if (targetTab === 'grades' && !grLoaded) loadGrades(); if (targetTab === 'settings') loadSettings(); if (targetTab === 'modeles') loadTemplateSettings(); if (targetTab === 'cursus' && !cursusLoaded) loadCursus(); if (targetTab === 'whatsapp' && !waLoaded) loadWhatsAppQueue(); };
 
     // ═══ CRUD CLASSES INLINE ═══
     const addClassDirect = async () => {
@@ -2209,6 +2220,8 @@ ${bodyHtml}
                             subs={subs}
                             setSubs={setSubs}
                             publicBase={publicBase}
+                            saveCls={saveCls}
+                            saveSubs={saveSubs}
                             finishSetup={finishSetup}
                             saving={saving}
                         />
@@ -2468,6 +2481,7 @@ ${bodyHtml}
                             adminSkyPoints={adminSkyPoints}
                             onUpdateOrg={(updated) => setOrg(updated)}
                             onUpdatePoints={(pts) => setAdminSkyPoints(pts)}
+                            onRefreshClasses={refreshClasses}
                         />
                     )}
 

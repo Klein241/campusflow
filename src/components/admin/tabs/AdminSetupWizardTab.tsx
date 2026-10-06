@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CheckCircle2, School, Plus, Trash2, ArrowRight, ArrowLeft, Loader2, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
 
 interface Cls {
     id?: string;
@@ -66,42 +67,176 @@ export function AdminSetupWizardTab({
     const [newSub, setNewSub] = useState('');
     const [selCls, setSelCls] = useState('');
     const [saving, setSaving] = useState(false);
+    const [actionLoading, setActionLoading] = useState(false);
 
-    const addClass = () => {
-        if (!newName.trim()) return;
-        setCls(prev => [...prev, { name: newName.trim(), cycle: 'general', filiere_id: null, level: 1, capacity: 40 }]);
-        setNewName('');
+    // ── 1. Ajout immédiat avec persistance Supabase ──
+    const addClass = async () => {
+        const trimmed = newName.trim();
+        if (!trimmed || !org?.id) return;
+
+        setActionLoading(true);
+        try {
+            const levelMatch = trimmed.match(/(?:niveau|level|nv)\s*(\d+)/i);
+            const detectedLevel = levelMatch ? parseInt(levelMatch[1], 10) : 1;
+            const newObj = {
+                organization_id: org.id,
+                name: trimmed,
+                cycle: 'general',
+                filiere_id: null,
+                level: detectedLevel,
+                capacity: 50
+            };
+
+            const { data, error } = await supabase.from('classrooms').insert([newObj]).select().single();
+            if (error) throw error;
+
+            const saved = {
+                id: data.id,
+                name: data.name,
+                cycle: data.cycle || 'general',
+                filiere_id: data.filiere_id,
+                level: data.level || detectedLevel,
+                capacity: data.capacity || 50
+            };
+
+            setCls(prev => [...prev, saved]);
+            setNewName('');
+            toast.success(`Filière "${trimmed}" créée et enregistrée !`);
+        } catch (e: any) {
+            console.error('Erreur addClass:', e);
+            // Fallback local si problème réseau temporaire
+            setCls(prev => [...prev, { name: trimmed, cycle: 'general', filiere_id: null, level: 1, capacity: 50 }]);
+            setNewName('');
+            toast.info(`Filière "${trimmed}" ajoutée localement`);
+        } finally {
+            setActionLoading(false);
+        }
     };
 
-    const quickAdd = (level: string) => {
-        setCls(prev => [...prev, { name: `${level} A`, cycle: 'general', filiere_id: null, level: 1, capacity: 40 }]);
+    // ── 2. Ajout rapide pré-formaté ──
+    const quickAdd = async (level: string) => {
+        if (!org?.id) return;
+        const name = `${level} A`;
+        setActionLoading(true);
+        try {
+            const levelMatch = level.match(/(?:niveau|level|nv)\s*(\d+)/i);
+            const detectedLevel = levelMatch ? parseInt(levelMatch[1], 10) : 1;
+            const newObj = {
+                organization_id: org.id,
+                name,
+                cycle: 'general',
+                filiere_id: null,
+                level: detectedLevel,
+                capacity: 50
+            };
+
+            const { data, error } = await supabase.from('classrooms').insert([newObj]).select().single();
+            if (error) throw error;
+
+            setCls(prev => [...prev, data]);
+            toast.success(`Classe "${name}" créée et enregistrée !`);
+        } catch (e: any) {
+            console.error('Erreur quickAdd:', e);
+            setCls(prev => [...prev, { name, cycle: 'general', filiere_id: null, level: 1, capacity: 50 }]);
+        } finally {
+            setActionLoading(false);
+        }
     };
 
-    const addSub = () => {
-        if (!newSub.trim() || !selCls) return;
-        setSubs(prev => [...prev, { name: newSub.trim(), code: newSub.slice(0, 4).toUpperCase(), coefficient: 1, classroom_id: selCls, teacher_id: null }]);
-        setNewSub('');
+    // ── 3. Suppression réelle en base de données ──
+    const removeClass = async (c: any, index: number) => {
+        if (!confirm(`Supprimer définitivement "${c.name}" ?`)) return;
+        setActionLoading(true);
+        try {
+            if (c.id) {
+                const { error } = await supabase.from('classrooms').delete().eq('id', c.id);
+                if (error) throw error;
+            }
+            setCls(prev => prev.filter((_, idx) => idx !== index));
+            toast.success(`"${c.name}" supprimée.`);
+        } catch (e: any) {
+            console.error('Erreur removeClass:', e);
+            toast.error('Erreur de suppression : ' + e.message);
+        } finally {
+            setActionLoading(false);
+        }
     };
 
-    const addDefs = () => {
-        if (!selCls) return;
-        const list = DEFS[org.type] || DEFS.college;
-        const toAdd = list.map(name => ({
-            name,
-            code: name.slice(0, 4).toUpperCase(),
-            coefficient: 1,
-            classroom_id: selCls,
-            teacher_id: null
-        }));
-        setSubs(prev => [...prev, ...toAdd]);
-        toast.success('Matières par défaut ajoutées !');
+    // ── 4. Ajout de matière persistée ──
+    const addSub = async () => {
+        if (!newSub.trim() || !selCls || !org?.id) return;
+        const name = newSub.trim();
+        const code = name.slice(0, 4).toUpperCase();
+        setActionLoading(true);
+        try {
+            const newSubObj = {
+                organization_id: org.id,
+                name,
+                code,
+                coefficient: 1,
+                classroom_id: selCls,
+                teacher_id: null
+            };
+            const { data, error } = await supabase.from('subjects').insert([newSubObj]).select().single();
+            if (error) throw error;
+
+            setSubs(prev => [...prev, data]);
+            setNewSub('');
+            toast.success(`Matière "${name}" enregistrée !`);
+        } catch (e: any) {
+            console.error('Erreur addSub:', e);
+            setSubs(prev => [...prev, { name, code, coefficient: 1, classroom_id: selCls, teacher_id: null }]);
+            setNewSub('');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // ── 5. Ajout matières par défaut ──
+    const addDefs = async () => {
+        if (!selCls || !org?.id) return;
+        const list = DEFS[org.type] || DEFS.centre_formation || DEFS.college;
+        setActionLoading(true);
+        try {
+            const toAdd = list.map(name => ({
+                organization_id: org.id,
+                name,
+                code: name.slice(0, 4).toUpperCase(),
+                coefficient: 1,
+                classroom_id: selCls,
+                teacher_id: null
+            }));
+            const { data, error } = await supabase.from('subjects').insert(toAdd).select();
+            if (error) throw error;
+
+            setSubs(prev => [...prev, ...(data || [])]);
+            toast.success('Matières par défaut ajoutées et enregistrées !');
+        } catch (e: any) {
+            console.error('Erreur addDefs:', e);
+            toast.error(e.message || 'Erreur lors de l\'ajout des matières');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // ── 6. Suppression de matière ──
+    const removeSub = async (subId: string | undefined, subIndex: number) => {
+        try {
+            if (subId) {
+                await supabase.from('subjects').delete().eq('id', subId);
+            }
+            setSubs(prev => prev.filter((s, idx) => subId ? s.id !== subId : idx !== subIndex));
+            toast.success('Matière retirée');
+        } catch (e: any) {
+            toast.error(e.message);
+        }
     };
 
     return (
         <div className="space-y-6 animate-in fade-in duration-200">
             {/* Étapes du Wizard */}
             <div className="flex items-center justify-center gap-2 mb-6">
-                {['Classes', 'Matières', 'Professeurs'].map((s, i) => (
+                {['Classes & Filières', 'Matières & Modules', 'Professeurs & Formateurs'].map((s, i) => (
                     <div key={i} className="flex items-center gap-2">
                         <button
                             onClick={() => setStep(i)}
@@ -121,17 +256,24 @@ export function AdminSetupWizardTab({
                 ))}
             </div>
 
-            {/* Étape 1 : Classes */}
+            {/* Étape 1 : Classes & Filières */}
             {step === 0 && (
                 <div className="space-y-4">
                     <div className="p-5 rounded-xl bg-white/[0.03] border border-white/10">
                         <h3 className="font-bold text-lg mb-3">{isCL ? '🏫 Salles de classe' : '📚 Filières et niveaux'}</h3>
                         {isCL && (
                             <div className="mb-4">
-                                <p className="text-sm text-slate-400 mb-2">Ajout rapide:</p>
+                                <p className="text-sm text-slate-400 mb-2">Ajout rapide :</p>
                                 <div className="flex flex-wrap gap-2">
                                     {(org.type === 'college' ? COLLEGE : [...COLLEGE, ...LYCEE]).map(l => (
-                                        <Button key={l} size="sm" variant="outline" className="text-xs border-white/10" onClick={() => quickAdd(l)}>
+                                        <Button
+                                            key={l}
+                                            size="sm"
+                                            variant="outline"
+                                            className="text-xs border-white/10"
+                                            disabled={actionLoading}
+                                            onClick={() => quickAdd(l)}
+                                        >
                                             <Plus className="w-3 h-3 mr-1" />{l}
                                         </Button>
                                     ))}
@@ -143,11 +285,16 @@ export function AdminSetupWizardTab({
                                 value={newName}
                                 onChange={e => setNewName(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && addClass()}
-                                placeholder={isCL ? '6ème A...' : 'Niveau 1...'}
+                                placeholder={isCL ? '6ème A...' : 'Niveau 1... ou Nom de la Filière'}
                                 className="bg-white/5 border-white/10 text-white h-10 rounded-lg"
+                                disabled={actionLoading}
                             />
-                            <Button onClick={addClass} disabled={!newName.trim()} className="bg-indigo-600 shrink-0">
-                                <Plus className="w-4 h-4" />
+                            <Button
+                                onClick={addClass}
+                                disabled={!newName.trim() || actionLoading}
+                                className="bg-indigo-600 hover:bg-indigo-500 shrink-0"
+                            >
+                                {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                             </Button>
                         </div>
                     </div>
@@ -155,13 +302,18 @@ export function AdminSetupWizardTab({
                     {cls.length > 0 && (
                         <div className="space-y-2">
                             {cls.map((c, i) => (
-                                <div key={i} className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-white/5 border border-white/10">
+                                <div key={c.id || i} className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-white/5 border border-white/10">
                                     <div className="flex items-center gap-3">
                                         <School className="w-4 h-4 text-indigo-400" />
                                         <span className="text-sm font-medium">{c.name}</span>
-                                        {!c.id && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300">nouveau</span>}
+                                        {!c.id && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300">synchronisation...</span>}
                                     </div>
-                                    <button onClick={() => setCls(p => p.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-300 p-1">
+                                    <button
+                                        onClick={() => removeClass(c, i)}
+                                        disabled={actionLoading}
+                                        className="text-red-400 hover:text-red-300 p-1 cursor-pointer transition-colors"
+                                        title="Supprimer définitivement"
+                                    >
                                         <Trash2 className="w-4 h-4" />
                                     </button>
                                 </div>
@@ -174,8 +326,27 @@ export function AdminSetupWizardTab({
                             onClick={async () => {
                                 setSaving(true);
                                 try {
-                                    const saved = saveCls ? await saveCls() : cls;
-                                    if (saved) setCls(saved);
+                                    // S'il reste des classes locales sans ID, les enregistrer en bloc
+                                    const unsaved = cls.filter(c => !c.id);
+                                    if (unsaved.length > 0 && org?.id) {
+                                        const { data, error } = await supabase.from('classrooms').insert(
+                                            unsaved.map(c => ({
+                                                organization_id: org.id,
+                                                name: c.name,
+                                                cycle: c.cycle || 'general',
+                                                filiere_id: c.filiere_id,
+                                                level: c.level || 1,
+                                                capacity: c.capacity || 50
+                                            }))
+                                        ).select();
+                                        if (!error && data) {
+                                            const savedMap = [...cls.filter(c => c.id), ...data];
+                                            setCls(savedMap);
+                                        }
+                                    }
+                                    if (saveCls) {
+                                        await saveCls();
+                                    }
                                     setStep(1);
                                 } finally {
                                     setSaving(false);
@@ -195,8 +366,8 @@ export function AdminSetupWizardTab({
             {step === 1 && (
                 <div className="space-y-4">
                     <div className="p-5 rounded-xl bg-white/[0.03] border border-white/10">
-                        <h3 className="font-bold text-lg mb-3">📖 Matières par classe</h3>
-                        <Label className="text-slate-400 text-sm mb-1 block">Classe</Label>
+                        <h3 className="font-bold text-lg mb-3">📖 Matières et modules par classe</h3>
+                        <Label className="text-slate-400 text-sm mb-1 block">Classe / Filière cible</Label>
                         <select
                             value={selCls}
                             onChange={e => setSelCls(e.target.value)}
@@ -210,19 +381,30 @@ export function AdminSetupWizardTab({
 
                         {selCls && (
                             <div className="mt-3">
-                                <Button size="sm" variant="outline" className="mb-3 text-xs border-white/10 text-slate-300" onClick={addDefs}>
-                                    <Plus className="w-3 h-3 mr-1" /> Matières standards par défaut
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="mb-3 text-xs border-white/10 text-slate-300"
+                                    onClick={addDefs}
+                                    disabled={actionLoading}
+                                >
+                                    <Plus className="w-3 h-3 mr-1" /> Matières & modules standards
                                 </Button>
                                 <div className="flex gap-2">
                                     <Input
                                         value={newSub}
                                         onChange={e => setNewSub(e.target.value)}
                                         onKeyDown={e => e.key === 'Enter' && addSub()}
-                                        placeholder="Nom matière (ex: Mathématiques...)"
+                                        placeholder="Nom matière (ex: Mathématiques, Rédaction, Marketing...)"
                                         className="bg-white/5 border-white/10 text-white h-10 rounded-lg"
+                                        disabled={actionLoading}
                                     />
-                                    <Button onClick={addSub} disabled={!newSub.trim()} className="bg-emerald-600 hover:bg-emerald-500 shrink-0">
-                                        <Plus className="w-4 h-4" />
+                                    <Button
+                                        onClick={addSub}
+                                        disabled={!newSub.trim() || actionLoading}
+                                        className="bg-emerald-600 hover:bg-emerald-500 shrink-0"
+                                    >
+                                        {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                                     </Button>
                                 </div>
                             </div>
@@ -237,8 +419,15 @@ export function AdminSetupWizardTab({
                                 <h4 className="font-medium text-sm text-indigo-300 mb-2">{c.name}</h4>
                                 <div className="flex flex-wrap gap-2">
                                     {cs.map((s, i) => (
-                                        <span key={i} className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white">
+                                        <span key={s.id || i} className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white flex items-center gap-1.5">
                                             {s.name}
+                                            <button
+                                                onClick={() => removeSub(s.id, i)}
+                                                className="text-slate-400 hover:text-red-400 ml-1"
+                                                title="Retirer cette matière"
+                                            >
+                                                ×
+                                            </button>
                                         </span>
                                     ))}
                                 </div>
@@ -275,7 +464,7 @@ export function AdminSetupWizardTab({
                 <div className="space-y-4">
                     <div className="p-5 rounded-xl bg-white/[0.03] border border-white/10 text-center">
                         <UserPlus className="w-12 h-12 text-indigo-400 mx-auto mb-3" />
-                        <h3 className="font-bold text-lg mb-2 text-white">Invitez vos professeurs</h3>
+                        <h3 className="font-bold text-lg mb-2 text-white">Invitez vos professeurs et formateurs</h3>
                         <p className="text-sm text-slate-400 mb-4">Partagez ce lien direct avec votre corps professoral :</p>
                         <div className="flex items-center justify-center gap-2">
                             <code className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-emerald-300 text-sm font-mono">
