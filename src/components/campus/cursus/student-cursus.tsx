@@ -282,7 +282,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
         return scores.reduce((acc: number, s: any) => acc + s.avg, 0) / scores.length;
     };
 
-    const markLessonDone = async (lessonId: string) => {
+    const markLessonDone = async (lessonId: string, options?: { silent?: boolean }) => {
         const existing = getLessonProgress(lessonId);
         if (existing?.completed) return;
         await supabase.from('lesson_progress').upsert(
@@ -290,7 +290,24 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
             { onConflict: 'student_id,lesson_id' }
         );
         setProgress(prev => [...prev.filter(p => p.lesson_id !== lessonId), { student_id: userId, lesson_id: lessonId, completed: true }]);
-        toast.success('Leçon marquée terminée ✅');
+        if (!options?.silent) {
+            toast.success('Leçon marquée terminée ✅');
+        }
+    };
+
+    const toggleLessonDone = async (lessonId: string) => {
+        const existing = getLessonProgress(lessonId);
+        const nextStatus = !existing?.completed;
+        await supabase.from('lesson_progress').upsert(
+            { student_id: userId, lesson_id: lessonId, completed: nextStatus, completed_at: nextStatus ? new Date().toISOString() : null, organization_id: orgId },
+            { onConflict: 'student_id,lesson_id' }
+        );
+        setProgress(prev => [...prev.filter(p => p.lesson_id !== lessonId), { student_id: userId, lesson_id: lessonId, completed: nextStatus }]);
+        if (nextStatus) {
+            toast.success('Leçon marquée terminée ✅');
+        } else {
+            toast.info('Leçon marquée non terminée');
+        }
     };
 
     const sendDispute = async () => {
@@ -349,6 +366,8 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                     userId={userId}
                     orgId={orgId}
                     initialShowNotes={false}
+                    isCompleted={isLessonCompleted(readerLesson.id)}
+                    onToggleComplete={() => toggleLessonDone(readerLesson.id)}
                 />
             )}
             {/* ── Lesson Reader en mode Bloc Notes ── */}
@@ -360,6 +379,8 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                     userId={userId}
                     orgId={orgId}
                     initialShowNotes={true}
+                    isCompleted={isLessonCompleted(blocNotesLesson.id)}
+                    onToggleComplete={() => toggleLessonDone(blocNotesLesson.id)}
                 />
             )}
 
@@ -1204,6 +1225,15 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                         {/* ── Leçons ── */}
                         {activeTab === 'lessons' && (
                             <div className="space-y-2">
+                                {chLessons.length > 0 && (
+                                    <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-teal-500/10 border border-teal-500/20 text-[11px] text-teal-300">
+                                        <span className="flex items-center gap-1.5">
+                                            <Sparkles className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                                            <span>Progression automatique : ouvrir une leçon enregistre votre avancement.</span>
+                                        </span>
+                                        <span className="font-bold shrink-0">{chLessons.filter(l => isLessonCompleted(l.id)).length}/{chLessons.length} terminée(s)</span>
+                                    </div>
+                                )}
                                 {chLessons.length === 0 && (
                                     <div className="text-center py-8">
                                         <FileText className="w-8 h-8 mx-auto mb-2 text-slate-700" />
@@ -1366,6 +1396,8 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                                                                         setVideoPopup({ url: lesson.video_url, title: lesson.title, contentId: lesson.id, contentType: 'lesson' });
                                                                         setVideoNote('');
                                                                         setVideoStartTime(Date.now());
+                                                                        // 💡 Astuce Progression : Le visionnage valide automatiquement la leçon
+                                                                        markLessonDone(lesson.id, { silent: true });
                                                                         await supabase.from('lesson_video_views').upsert({
                                                                             user_id: userId, content_type: 'lesson', content_id: lesson.id, organization_id: orgId, opened_at: new Date().toISOString()
                                                                         }, { onConflict: 'user_id,content_type,content_id', ignoreDuplicates: false });
@@ -1379,7 +1411,11 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
 
                                                             {lesson.content && (
                                                                 <button
-                                                                    onClick={() => setReaderLesson({ ...lesson, chapter_title: selectedCh?.title, subject_title: selectedSub?.name })}
+                                                                    onClick={() => {
+                                                                        setReaderLesson({ ...lesson, chapter_title: selectedCh?.title, subject_title: selectedSub?.name });
+                                                                        // 💡 Astuce Progression : La lecture valide automatiquement la leçon dans le cursus
+                                                                        markLessonDone(lesson.id, { silent: true });
+                                                                    }}
                                                                     className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-950/40"
                                                                 >
                                                                     <Maximize2 className="w-3.5 h-3.5" />
@@ -1387,15 +1423,19 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                                                                 </button>
                                                             )}
 
-                                                            {!done && (
-                                                                <button
-                                                                    onClick={() => markLessonDone(lesson.id)}
-                                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold hover:bg-emerald-500/25 transition-all"
-                                                                >
-                                                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                                                    <span>Fait</span>
-                                                                </button>
-                                                            )}
+                                                            <button
+                                                                onClick={() => toggleLessonDone(lesson.id)}
+                                                                className={cn(
+                                                                    "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                                                                    done
+                                                                        ? "bg-emerald-500/25 border border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/35"
+                                                                        : "bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/20"
+                                                                )}
+                                                                title={done ? "Leçon terminée (cliquez pour annuler)" : "Marquer cette leçon comme terminée"}
+                                                            >
+                                                                <CheckCircle2 className={cn("w-3.5 h-3.5", done ? "text-emerald-300" : "text-emerald-400/80")} />
+                                                                <span>{done ? '✓ Fait' : 'Fait'}</span>
+                                                            </button>
                                                         </div>
                                                     </>
                                                 )}

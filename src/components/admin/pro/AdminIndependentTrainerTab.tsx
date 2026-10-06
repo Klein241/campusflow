@@ -18,6 +18,8 @@ import { generateCertificatePDF, type CertificateData } from '@/lib/certificate-
 import { StudentAccessCredentialsModal } from './StudentAccessCredentialsModal';
 import { DirectMobileMoneyPaymentModal } from './DirectMobileMoneyPaymentModal';
 import { extractContentAndCurriculum, SAMPLE_CURRICULUM_TEMPLATE } from '@/lib/curriculum-parser';
+import { SessionConfigEditor } from './SessionConfigEditor';
+import { PosterUploadField } from './PosterUploadField';
 import { cn } from '@/lib/utils';
 
 interface AdminIndependentTrainerTabProps {
@@ -224,7 +226,6 @@ export function AdminIndependentTrainerTab({
                 training_duration: finalFormat,
                 description: offerDescription.trim() || null,
                 prix_barre: origPriceNum,
-                poster_url: offerPosterUrl.trim() || null,
                 schedule_config: scheduleConfig,
                 competencies_list: offerDescription.trim() ? offerDescription.trim().split(/\r?\n/).filter(Boolean) : []
             }).select().single();
@@ -315,7 +316,6 @@ export function AdminIndependentTrainerTab({
                     frais_inscription: regFeeNum,
                     description: desc || null,
                     prix_barre: origPriceNum,
-                    poster_url: posterUrl,
                     schedule_config: scheduleConfig,
                     competencies_list: desc ? desc.split(/\r?\n/).filter(Boolean) : []
                 })
@@ -1099,103 +1099,18 @@ export function AdminIndependentTrainerTab({
                                 </div>
                             </div>
 
-                            {/* Affiche de la formation */}
-                            <div>
-                                <div className="flex items-center justify-between mb-1">
-                                    <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                                        <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
-                                        <span>Affiche officielle de la formation (URL / Image)</span>
-                                    </label>
-                                    <span className="text-[10px] text-slate-400">Visible sur toutes les landing pages</span>
-                                </div>
-                                <div className="flex gap-2">
-                                    <Input
-                                        value={offerPosterUrl}
-                                        onChange={e => setOfferPosterUrl(e.target.value)}
-                                        placeholder="Ex: https://images.unsplash.com/... ou URL de votre affiche"
-                                        className="bg-white/5 border-white/10 text-white rounded-xl h-10 text-xs flex-1"
-                                    />
-                                    {offerPosterUrl && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setOfferPosterUrl('')}
-                                            className="px-2.5 py-1 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs cursor-pointer"
-                                        >
-                                            Effacer
-                                        </button>
-                                    )}
-                                </div>
-                                {offerPosterUrl && (
-                                    <div className="mt-2 relative w-full h-32 rounded-xl overflow-hidden border border-amber-500/30 bg-black/40">
-                                        <img src={offerPosterUrl} alt="Aperçu affiche" className="w-full h-full object-cover" />
-                                        <div className="absolute bottom-1 right-2 bg-black/70 backdrop-blur-md px-2 py-0.5 rounded text-[10px] text-amber-300 font-bold">
-                                            ✓ Aperçu de l'affiche
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                            {/* Affiche de la formation avec Upload direct */}
+                            <PosterUploadField
+                                value={offerPosterUrl}
+                                onChange={setOfferPosterUrl}
+                            />
 
-                            {/* Sessions & Modalités de paiement par tranches */}
-                            <div className="p-3.5 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-2.5">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <h5 className="text-xs font-black text-amber-300 flex items-center gap-1.5">
-                                            <Calendar className="w-3.5 h-3.5 text-amber-400" />
-                                            <span>Sessions multi-durées & Tranches de paiement</span>
-                                        </h5>
-                                        <p className="text-[10px] text-slate-400">
-                                            Permettez aux étudiants de choisir leur rythme (ex: 1 Mois, 3 Mois, 6 Mois) avec paiement échelonné.
-                                        </p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setOfferSessions(generateDefaultSessions(offerPrice, offerOriginalPrice))}
-                                        className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold border border-amber-500/30 transition cursor-pointer"
-                                    >
-                                        🪄 {offerSessions.length > 0 ? 'Régénérer' : 'Générer 1M / 3M / 6M'}
-                                    </button>
-                                </div>
-
-                                {offerSessions.length > 0 ? (
-                                    <div className="space-y-2 pt-1">
-                                        {offerSessions.map((sess, sIdx) => (
-                                            <div key={sIdx} className="p-2.5 rounded-xl bg-black/40 border border-white/10 space-y-2 text-xs">
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <span className="font-bold text-white text-[11px] flex items-center gap-1">
-                                                        <span>⏱️ Session {sess.duration_months} Mois :</span>
-                                                        <span className="text-amber-400">{sess.label}</span>
-                                                    </span>
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className="font-mono font-bold text-amber-300 text-xs">
-                                                            {new Intl.NumberFormat('fr-FR').format(sess.price)} FCFA
-                                                        </span>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setOfferSessions(offerSessions.filter((_, i) => i !== sIdx))}
-                                                            className="text-red-400 hover:text-red-300 text-[10px] p-1 cursor-pointer"
-                                                        >
-                                                            ✕
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                {sess.installments && sess.installments.length > 0 && (
-                                                    <div className="flex flex-wrap gap-1.5 pt-1 border-t border-white/5">
-                                                        {sess.installments.map((inst: any, iIdx: number) => (
-                                                            <span key={iIdx} className="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[9px] text-slate-300 font-mono">
-                                                                {inst.label} : <strong>{new Intl.NumberFormat('fr-FR').format(inst.amount)} F</strong>
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p className="text-[10px] text-slate-400 italic">
-                                        💡 Par défaut, 3 sessions types (1 Mois express, 3 Mois accéléré, 6 Mois complet) avec paiements par tranches sont configurées automatiquement. Cliquez sur "Générer" pour les personnaliser.
-                                    </p>
-                                )}
-                            </div>
+                            {/* Sessions multi-durées & Tranches de paiement éditables */}
+                            <SessionConfigEditor
+                                sessions={offerSessions}
+                                onChange={setOfferSessions}
+                                onGenerateDefaults={() => setOfferSessions(generateDefaultSessions(offerPrice, offerOriginalPrice))}
+                            />
 
                             {offerFormat === 'custom' && (
                                 <motion.div
@@ -1356,109 +1271,21 @@ export function AdminIndependentTrainerTab({
                                 />
                             </div>
 
-                            {/* Affiche officielle de la formation */}
-                            <div>
-                                <div className="flex items-center justify-between mb-1">
-                                    <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                                        <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
-                                        <span>Affiche officielle de la formation (URL / Image)</span>
-                                    </label>
-                                    <span className="text-[10px] text-slate-400">Visible sur toutes les landing pages</span>
-                                </div>
-                                <div className="flex gap-2">
-                                    <Input
-                                        value={editingOffer.editPosterUrl ?? ''}
-                                        onChange={e => setEditingOffer({ ...editingOffer, editPosterUrl: e.target.value })}
-                                        placeholder="Ex: https://images.unsplash.com/... ou URL de votre affiche"
-                                        className="bg-white/5 border-white/10 text-white rounded-xl h-10 text-xs flex-1"
-                                    />
-                                    {editingOffer.editPosterUrl && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setEditingOffer({ ...editingOffer, editPosterUrl: '' })}
-                                            className="px-2.5 py-1 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs cursor-pointer"
-                                        >
-                                            Effacer
-                                        </button>
-                                    )}
-                                </div>
-                                {editingOffer.editPosterUrl && (
-                                    <div className="mt-2 relative w-full h-32 rounded-xl overflow-hidden border border-amber-500/30 bg-black/40">
-                                        <img src={editingOffer.editPosterUrl} alt="Aperçu affiche" className="w-full h-full object-cover" />
-                                        <div className="absolute bottom-1 right-2 bg-black/70 backdrop-blur-md px-2 py-0.5 rounded text-[10px] text-amber-300 font-bold">
-                                            ✓ Aperçu de l'affiche
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                            {/* Affiche officielle de la formation avec Upload direct */}
+                            <PosterUploadField
+                                value={editingOffer.editPosterUrl ?? ''}
+                                onChange={url => setEditingOffer({ ...editingOffer, editPosterUrl: url })}
+                            />
 
-                            {/* Sessions & Modalités de paiement par tranches */}
-                            <div className="p-3.5 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-2.5">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <h5 className="text-xs font-black text-amber-300 flex items-center gap-1.5">
-                                            <Calendar className="w-3.5 h-3.5 text-amber-400" />
-                                            <span>Sessions multi-durées & Tranches de paiement</span>
-                                        </h5>
-                                        <p className="text-[10px] text-slate-400">
-                                            Rythmes configurés pour cette formation (ex: 1 Mois, 3 Mois, 6 Mois).
-                                        </p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setEditingOffer({
-                                            ...editingOffer,
-                                            editSessions: generateDefaultSessions(editingOffer.editPrice || '', editingOffer.editOriginalPrice)
-                                        })}
-                                        className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold border border-amber-500/30 transition cursor-pointer"
-                                    >
-                                        🪄 {editingOffer.editSessions && editingOffer.editSessions.length > 0 ? 'Régénérer' : 'Générer 1M / 3M / 6M'}
-                                    </button>
-                                </div>
-
-                                {editingOffer.editSessions && editingOffer.editSessions.length > 0 ? (
-                                    <div className="space-y-2 pt-1">
-                                        {editingOffer.editSessions.map((sess: any, sIdx: number) => (
-                                            <div key={sIdx} className="p-2.5 rounded-xl bg-black/40 border border-white/10 space-y-2 text-xs">
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <span className="font-bold text-white text-[11px] flex items-center gap-1">
-                                                        <span>⏱️ Session {sess.duration_months} Mois :</span>
-                                                        <span className="text-amber-400">{sess.label}</span>
-                                                    </span>
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className="font-mono font-bold text-amber-300 text-xs">
-                                                            {new Intl.NumberFormat('fr-FR').format(sess.price)} FCFA
-                                                        </span>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setEditingOffer({
-                                                                ...editingOffer,
-                                                                editSessions: editingOffer.editSessions.filter((_: any, i: number) => i !== sIdx)
-                                                            })}
-                                                            className="text-red-400 hover:text-red-300 text-[10px] p-1 cursor-pointer"
-                                                        >
-                                                            ✕
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                {sess.installments && sess.installments.length > 0 && (
-                                                    <div className="flex flex-wrap gap-1.5 pt-1 border-t border-white/5">
-                                                        {sess.installments.map((inst: any, iIdx: number) => (
-                                                            <span key={iIdx} className="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[9px] text-slate-300 font-mono">
-                                                                {inst.label} : <strong>{new Intl.NumberFormat('fr-FR').format(inst.amount)} F</strong>
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p className="text-[10px] text-slate-400 italic">
-                                        💡 Par défaut, les 3 sessions types (1M, 3M, 6M) avec tranches sont proposées automatiquement aux apprenants. Cliquez sur "Générer" pour personnaliser les tarifs et tranches.
-                                    </p>
-                                )}
-                            </div>
+                            {/* Sessions multi-durées & Tranches de paiement éditables */}
+                            <SessionConfigEditor
+                                sessions={editingOffer.editSessions || []}
+                                onChange={newSessions => setEditingOffer({ ...editingOffer, editSessions: newSessions })}
+                                onGenerateDefaults={() => setEditingOffer({
+                                    ...editingOffer,
+                                    editSessions: generateDefaultSessions(editingOffer.editPrice || '', editingOffer.editOriginalPrice)
+                                })}
+                            />
 
                             <div className="flex gap-2 pt-2 border-t border-white/10">
                                 <Button

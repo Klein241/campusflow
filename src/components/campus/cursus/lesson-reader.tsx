@@ -53,6 +53,8 @@ interface LessonReaderProps {
     orgId: string;
     /** Si true, ouvre le panneau Notes directement à l'ouverture */
     initialShowNotes?: boolean;
+    isCompleted?: boolean;
+    onToggleComplete?: () => void;
 }
 
 const LANGUAGE_META: Record<string, { name: string; flag: string }> = {
@@ -379,7 +381,16 @@ function renderTextWithCode(raw: string, notes: LessonReaderNote[], colorMap: Re
     }).filter(Boolean) as React.ReactNode[];
 }
 
-export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialShowNotes = false }: LessonReaderProps) {
+export function LessonReader({
+    isOpen,
+    onClose,
+    lesson,
+    userId,
+    orgId,
+    initialShowNotes = false,
+    isCompleted = false,
+    onToggleComplete
+}: LessonReaderProps) {
     // Hide bottom nav when lesson reader is open
     useEffect(() => {
         if (isOpen) {
@@ -793,6 +804,25 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
                         )}
                         <h2 className="text-sm font-bold text-white truncate">{lesson.title}</h2>
                     </div>
+
+                    {/* Statut de progression / Bouton Terminer */}
+                    {onToggleComplete && (
+                        <button
+                            type="button"
+                            onClick={onToggleComplete}
+                            className={cn(
+                                "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border shrink-0 cursor-pointer",
+                                isCompleted
+                                    ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30"
+                                    : "bg-emerald-500/10 border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/20"
+                            )}
+                            title={isCompleted ? "Leçon terminée (cliquer pour annuler)" : "Marquer cette leçon comme terminée"}
+                        >
+                            <Check className={cn("w-3.5 h-3.5", isCompleted ? "text-emerald-300" : "text-emerald-400")} />
+                            <span className="hidden sm:inline">{isCompleted ? '✓ Terminée' : 'Marquer fait'}</span>
+                            <span className="sm:hidden">{isCompleted ? '✓ Fait' : 'Fait'}</span>
+                        </button>
+                    )}
 
                     {/* Multilingual / Bilingual Synchrone Switcher */}
                     {hasOriginal && (
@@ -1361,6 +1391,36 @@ export function LessonReader({ isOpen, onClose, lesson, userId, orgId, initialSh
                                         }
                                         return null;
                                     })}
+                                </div>
+                            )}
+
+                            {/* ── Fin de leçon & Validation de progression ── */}
+                            {onToggleComplete && (
+                                <div className="mt-14 pt-8 border-t border-white/[0.08] text-center space-y-3 pb-8">
+                                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                                        <Check className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <h4 className="text-base font-bold text-white">Leçon terminée !</h4>
+                                        <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                                            {isCompleted 
+                                                ? "Bravo ! Cette leçon est validée dans votre progression globale." 
+                                                : "Votre lecture a été enregistrée. Confirmez pour valider votre avancement."}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={onToggleComplete}
+                                        className={cn(
+                                            "px-6 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2 mx-auto cursor-pointer shadow-lg",
+                                            isCompleted
+                                                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30"
+                                                : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/50"
+                                        )}
+                                    >
+                                        <Check className="w-4 h-4" />
+                                        <span>{isCompleted ? '✓ Leçon validée dans le cursus' : 'Marquer comme terminée'}</span>
+                                    </button>
                                 </div>
                             )}
                         </div>
