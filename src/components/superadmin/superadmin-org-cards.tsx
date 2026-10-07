@@ -45,6 +45,7 @@ export interface OrgCardItem {
     badge_title?: string | null;
     is_online_academy?: boolean;
     verification_docs?: any[] | null;
+    show_portal_button?: boolean;
 }
 
 interface SuperadminOrgCardsProps {
@@ -68,6 +69,63 @@ export function SuperadminOrgCards({
 }: SuperadminOrgCardsProps) {
     const [search, setSearch] = useState('');
     const [filterTab, setFilterTab] = useState<'all' | 'active' | 'suspended' | 'domain' | 'traffic'>('all');
+
+    // Portal visibility toggle state
+    const [updatingPortalBtn, setUpdatingPortalBtn] = useState<string | null>(null);
+    const [bulkUpdatingPortalBtn, setBulkUpdatingPortalBtn] = useState(false);
+
+    const handleTogglePortalButton = async (org: OrgCardItem) => {
+        const currentStatus = org.show_portal_button !== false;
+        const newStatus = !currentStatus;
+        setUpdatingPortalBtn(org.id);
+        try {
+            const { error } = await supabase
+                .from('organizations')
+                .update({ show_portal_button: newStatus })
+                .eq('id', org.id);
+
+            if (error) {
+                console.error('Erreur toggle show_portal_button:', error);
+                toast.error('Erreur lors de la mise à jour : ' + error.message);
+                return;
+            }
+
+            toast.success(`Portail sur iziteach.com ${newStatus ? 'activé (visible)' : 'désactivé (masqué)'} pour ${org.name}`);
+            if (onOrgUpdated) {
+                onOrgUpdated({ ...org, show_portal_button: newStatus });
+            }
+        } catch (e: any) {
+            toast.error('Erreur inattendue : ' + (e.message || ''));
+        } finally {
+            setUpdatingPortalBtn(null);
+        }
+    };
+
+    const handleBulkTogglePortalButton = async (visible: boolean) => {
+        const actionLabel = visible ? 'afficher' : 'masquer';
+        if (!confirm(`Confirmer : Voulez-vous ${actionLabel} le bouton "Visiter le portail" sur iziteach.com pour TOUTES les ${orgs.length} organisations ?`)) {
+            return;
+        }
+        setBulkUpdatingPortalBtn(true);
+        try {
+            const { error } = await supabase
+                .from('organizations')
+                .update({ show_portal_button: visible })
+                .neq('id', '00000000-0000-0000-0000-000000000000');
+
+            if (error) {
+                toast.error('Erreur lors de la mise à jour globale : ' + error.message);
+                return;
+            }
+
+            toast.success(`Le bouton portail est maintenant ${visible ? 'VISIBLE' : 'MASQUÉ'} pour toutes les écoles sur iziteach.com`);
+            onRefresh();
+        } catch (e: any) {
+            toast.error('Erreur inattendue : ' + (e.message || ''));
+        } finally {
+            setBulkUpdatingPortalBtn(false);
+        }
+    };
 
     // Modals
     const [editOrg, setEditOrg] = useState<OrgCardItem | null>(null);
@@ -817,24 +875,49 @@ export function SuperadminOrgCards({
     return (
         <div className="space-y-6">
             {/* ═══ BARRE D'OUTILS ET FILTRES ═══ */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-2xl bg-white/[0.02] border border-white/8">
-                {/* Search Bar */}
-                <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                    <input
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        placeholder="Rechercher par nom, slug, ville, domaine..."
-                        className="w-full bg-white/5 border border-white/10 text-white pl-10 pr-4 h-11 rounded-xl text-xs placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 transition-all"
-                    />
-                    {search && (
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-4 rounded-2xl bg-white/[0.02] border border-white/8">
+                {/* Search Bar & Contrôle "Visiter le portail" sur https://iziteach.com */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 max-w-2xl">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                        <input
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            placeholder="Rechercher par nom, slug, ville, domaine..."
+                            className="w-full bg-white/5 border border-white/10 text-white pl-10 pr-4 h-11 rounded-xl text-xs placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 transition-all"
+                        />
+                        {search && (
+                            <button
+                                onClick={() => setSearch('')}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-white"
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Contrôle Global du bouton "Visiter le portail" sur https://iziteach.com */}
+                    <div className="flex items-center gap-1.5 shrink-0 bg-white/5 p-1 rounded-xl border border-white/10">
+                        <span className="text-[10px] font-bold text-slate-400 px-2 hidden sm:inline flex items-center gap-1">
+                            🌐 Portail Accueil :
+                        </span>
                         <button
-                            onClick={() => setSearch('')}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-white"
+                            onClick={() => handleBulkTogglePortalButton(true)}
+                            disabled={bulkUpdatingPortalBtn}
+                            className="px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 border border-emerald-500/30 transition-all flex items-center gap-1 disabled:opacity-50"
+                            title="Activer et afficher le bouton 'Visiter le portail' sur iziteach.com pour toutes les organisations"
                         >
-                            <X className="w-3.5 h-3.5" />
+                            <Eye className="w-3 h-3 text-emerald-400" /> Tout Activer
                         </button>
-                    )}
+                        <button
+                            onClick={() => handleBulkTogglePortalButton(false)}
+                            disabled={bulkUpdatingPortalBtn}
+                            className="px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 border border-rose-500/30 transition-all flex items-center gap-1 disabled:opacity-50"
+                            title="Désactiver et masquer le bouton 'Visiter le portail' sur iziteach.com pour toutes les organisations"
+                        >
+                            <EyeOff className="w-3 h-3 text-rose-400" /> Tout Masquer
+                        </button>
+                    </div>
                 </div>
 
                 {/* Filter Tabs */}
@@ -982,6 +1065,43 @@ export function SuperadminOrgCards({
                                                 </button>
                                             </div>
                                         )}
+                                    </div>
+
+                                    {/* ── Contrôle individuel: Visibilité du bouton "Visiter le portail" sur https://iziteach.com ── */}
+                                    <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5 flex items-center justify-between text-xs mb-4">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            <Globe className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                                            <div className="min-w-0">
+                                                <span className="text-[11px] font-bold text-slate-300 block truncate">Portail iziteach.com</span>
+                                                <span className="text-[9px] text-slate-500 block">Bouton accueil</span>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleTogglePortalButton(org)}
+                                            disabled={updatingPortalBtn === org.id}
+                                            className={cn(
+                                                'px-2.5 py-1 rounded-lg text-[10px] font-black transition-all flex items-center gap-1 border shrink-0',
+                                                org.show_portal_button !== false
+                                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                                                    : 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30'
+                                            )}
+                                            title={org.show_portal_button !== false ? "Cliquez pour masquer le bouton 'Visiter le portail' sur iziteach.com" : "Cliquez pour afficher le bouton 'Visiter le portail' sur iziteach.com"}
+                                        >
+                                            {updatingPortalBtn === org.id ? (
+                                                <Loader2 className="w-3 h-3 animate-spin" />
+                                            ) : org.show_portal_button !== false ? (
+                                                <>
+                                                    <Eye className="w-3 h-3 text-emerald-400" />
+                                                    <span>Visible</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <EyeOff className="w-3 h-3 text-rose-400" />
+                                                    <span>Masqué</span>
+                                                </>
+                                            )}
+                                        </button>
                                     </div>
 
                                     {/* ── Métriques Chiffrées ── */}

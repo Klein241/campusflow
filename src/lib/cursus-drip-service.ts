@@ -44,10 +44,23 @@ export function formatDripDate(isoDate?: string | null): string {
     }
 }
 
+export interface DripContext {
+    enrolledAt?: string | Date | null;
+    durationMonths?: number | null;
+    chapterIndex?: number;
+    totalChapters?: number;
+}
+
 /**
  * Détermine si un chapitre ou une leçon est déverrouillé(e) pour les étudiants.
+ * Prend en compte le contexte de session de l'étudiant (ex: session intensive 1 mois ou 3 mois)
+ * pour éviter qu'une planification sur 6 mois ne bloque un étudiant ayant souscrit pour 1 ou 3 mois.
  */
-export function isContentUnlocked(item: DripItem, now: Date = new Date()): DripStatus {
+export function isContentUnlocked(
+    item: DripItem,
+    now: Date = new Date(),
+    context?: DripContext
+): DripStatus {
     const isLockedManually = Boolean(item.is_drip_locked);
     const nowMs = now.getTime();
 
@@ -56,11 +69,38 @@ export function isContentUnlocked(item: DripItem, now: Date = new Date()): DripS
     let formattedUnlockDate = '';
     let formattedLockDate = '';
 
+    // Détection d'un déverrouillage accéléré pour les sessions courtes (1 mois ou 3 mois)
+    const isShortSession = Boolean(
+        context?.durationMonths && context.durationMonths < 6
+    );
+
     if (item.unlock_date) {
         const unlockMs = new Date(item.unlock_date).getTime();
         if (!isNaN(unlockMs) && unlockMs > nowMs) {
-            isLockedByDate = true;
-            formattedUnlockDate = formatDripDate(item.unlock_date);
+            // Si l'étudiant est dans une session courte (ex: 1 mois ou 3 mois) avec une date d'inscription
+            let adaptedByShortSession = false;
+            if (isShortSession && context?.enrolledAt) {
+                const enrolledMs = new Date(context.enrolledAt).getTime();
+                if (!isNaN(enrolledMs)) {
+                    const elapsedDays = Math.max(0, (nowMs - enrolledMs) / (1000 * 60 * 60 * 24));
+                    const totalDays = (context.durationMonths || 1) * 30;
+                    const totalCh = Math.max(1, context.totalChapters || 6);
+                    const chIdx = Math.max(0, context.chapterIndex || 0);
+
+                    // Cadence adaptée : les chapitres se débloquent tous les (totalDays / totalCh) jours
+                    const daysPerChapter = totalDays / totalCh;
+                    const requiredDays = chIdx * daysPerChapter;
+
+                    if (elapsedDays >= requiredDays) {
+                        adaptedByShortSession = true;
+                    }
+                }
+            }
+
+            if (!adaptedByShortSession) {
+                isLockedByDate = true;
+                formattedUnlockDate = formatDripDate(item.unlock_date);
+            }
         }
     }
 

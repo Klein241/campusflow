@@ -33,6 +33,8 @@ import { SchoolReviewsSection } from '@/components/campus/school-reviews';
 import { SkyAgentBubble } from '@/components/sky-agent/SkyAgentBubble';
 import { SchoolJsonLd } from '@/components/seo/SchoolJsonLd';
 import { cleanMotto } from '@/lib/clean-motto';
+import { useCurrency } from '@/lib/currency-converter';
+import { CurrencySelector } from '@/components/ui/currency-selector';
 
 // ═══════════════════════════════════════════════════════════════════════
 // TYPES
@@ -94,6 +96,7 @@ function AnimatedCounter({ value, duration = 1.5 }: { value: number; duration?: 
 // ═══════════════════════════════════════════════════════════════════════
 export default function SchoolLandingPage() {
     const orgSlug = useOrgSlug();
+    const { currency, formatPrice, convertCycle } = useCurrency();
     const [org, setOrg]               = useState<Org | null>(null);
     const [loading, setLoading]       = useState(true);
     const [classrooms, setClassrooms] = useState<any[]>([]);
@@ -106,6 +109,7 @@ export default function SchoolLandingPage() {
     // Inscription multi-step
     const [inscStep, setInscStep]                   = useState(0);
     const [selectedClassroom, setSelectedClassroom] = useState<any>(null);
+    const [selectedDuration, setSelectedDuration]   = useState<number>(6); // 1, 3, ou 6 mois
     const [inscForm, setInscForm] = useState({ first_name: '', last_name: '', birth_date: '', gender: '', phone: '', email: '', address: '', nationality: 'Camerounaise', guardian_name: '', guardian_phone: '' });
     const [inscPin, setInscPin]           = useState(['', '', '', '']);
     const [inscPinConfirm, setInscPinConfirm] = useState(['', '', '', '']);
@@ -115,6 +119,77 @@ export default function SchoolLandingPage() {
     const [credSaved, setCredSaved]           = useState(false);
     const [codeCopied, setCodeCopied]         = useState(false);
     const [showInscModal, setShowInscModal]   = useState(false);
+
+    // Helpers de tarification dynamique par durée (1 mois, 3 mois, 6 mois)
+    const getClassroomBaseFee = (cls: any): number => {
+        if (!cls) return 0;
+        if (typeof cls.tuition_fee === 'number' && cls.tuition_fee > 0) return cls.tuition_fee;
+        if (cls.frais_scolarite) {
+            const num = parseInt(String(cls.frais_scolarite).replace(/\D/g, ''), 10);
+            if (num > 0) return num;
+        }
+        if (cls.cycle) {
+            const m = String(cls.cycle).match(/(\d[\d\s]*)\s*(FCFA|XAF|EUR|USD|\$|€)/i);
+            if (m) return parseInt(m[1].replace(/\s/g, ''), 10);
+        }
+        return 0;
+    };
+
+    const getFeeForDuration = (cls: any, durationMonths: number): number => {
+        if (!cls) return 0;
+        // 1. Chercher si une classe exacte existe en base pour cette durée spécifique
+        const exactMatch = classrooms.find((c: any) =>
+            c.id !== cls.id &&
+            (c.duree_mois === durationMonths || c.cycle?.toLowerCase().includes(`${durationMonths} mois`)) &&
+            (c.name?.toLowerCase().includes(cls.name?.toLowerCase().slice(0, 15)) || cls.name?.toLowerCase().includes(c.name?.toLowerCase().slice(0, 15)))
+        );
+        if (exactMatch) {
+            const fee = getClassroomBaseFee(exactMatch);
+            if (fee > 0) return fee;
+        }
+
+        const base = getClassroomBaseFee(cls);
+        if (base <= 0) return 0;
+
+        if (durationMonths === 1) {
+            return Math.max(25000, Math.round((base * 0.35) / 5000) * 5000);
+        } else if (durationMonths === 3) {
+            return Math.max(50000, Math.round((base * 0.60) / 5000) * 5000);
+        }
+        return base;
+    };
+
+    const formatFcfa = (amount: number): string => {
+        if (!amount || amount <= 0) return 'Gratuit / Inclus';
+        return formatPrice(amount);
+    };
+
+    const DURATION_PLANS = [
+        {
+            months: 1,
+            label: '1 Mois',
+            badge: '⚡ Intensif',
+            title: 'Session Intensive (Bootcamp)',
+            rhythm: '4 Semaines • Immersion pratique quotidienne',
+            description: 'Parcours accéléré axé sur les compétences clés et résultats rapides.'
+        },
+        {
+            months: 3,
+            label: '3 Mois',
+            badge: '🔥 Recommandé',
+            title: 'Session Accélérée (Pratique & Ateliers)',
+            rhythm: '12 Semaines • Ateliers, projets et accompagnement',
+            description: 'Idéal pour pratiquer, structurer et concrétiser vos projets.'
+        },
+        {
+            months: 6,
+            label: '6 Mois',
+            badge: '🏆 Cycle Pro',
+            title: 'Cycle Professionnel Complet',
+            rhythm: '24 Semaines • Suivi individuel & Certification PRO',
+            description: 'Le cursus d\'excellence complet avec certification officielle et mentorat.'
+        }
+    ];
 
     // Gallery lightbox with navigation
     const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
@@ -131,7 +206,11 @@ export default function SchoolLandingPage() {
             const matchingClassroom = classrooms.find((c: any) => c.id === prog.id || c.name === prog.nom || c.id === prog.rawItem?.id);
             if (matchingClassroom) {
                 setSelectedClassroom(matchingClassroom);
-                setInscStep(1);
+                if (sess?.months) {
+                    setSelectedDuration(sess.months);
+                } else if (prog.duree_mois && [1, 3, 6].includes(prog.duree_mois)) {
+                    setSelectedDuration(prog.duree_mois);
+                }
             }
         }
         setShowInscModal(true);
@@ -290,6 +369,20 @@ export default function SchoolLandingPage() {
             return;
         }
 
+        const chosenDurationLabel = selectedDuration === 1
+            ? '1 Mois (Session Intensive)'
+            : selectedDuration === 3
+            ? '3 Mois (Session Accélérée)'
+            : '6 Mois (Cycle Professionnel Complet)';
+        const chosenFee = getFeeForDuration(selectedClassroom, selectedDuration);
+
+        // Trouver la classe exacte si une classe pour cette durée existe en base
+        const matchingClass = classrooms.find((c: any) =>
+            (c.duree_mois === selectedDuration || c.cycle?.toLowerCase().includes(`${selectedDuration} mois`)) &&
+            (c.name?.toLowerCase().includes(selectedClassroom?.name?.toLowerCase().slice(0, 15)) || selectedClassroom?.name?.toLowerCase().includes(c.name?.toLowerCase().slice(0, 15)))
+        );
+        const finalClassroomId = matchingClass ? matchingClass.id : selectedClassroom?.id;
+
         const code = generateAccessCode();
         const payload = {
             organization_id: org.id,
@@ -305,8 +398,9 @@ export default function SchoolLandingPage() {
             ...(inscForm.nationality   && { nationality:   inscForm.nationality }),
             ...(inscForm.guardian_name && { guardian_name: inscForm.guardian_name }),
             ...(inscForm.guardian_phone && { guardian_phone: inscForm.guardian_phone }),
-            ...(selectedClassroom      && { classroom_id:  selectedClassroom.id }),
+            ...(finalClassroomId       && { classroom_id:  finalClassroomId }),
             ...(selectedClassroom?.filiere_id && { filiere_id: selectedClassroom.filiere_id }),
+            admin_message: `Formule demandée : ${chosenDurationLabel} • Tarif scolarité : ${formatFcfa(chosenFee)}`,
         };
 
         // ── Appel via Cloudflare Worker (bypass RLS, SPA statique) ───────
@@ -513,6 +607,9 @@ export default function SchoolLandingPage() {
 
                     {/* CTA */}
                     <div className="flex items-center gap-2">
+                        {/* Sélecteur de devises (FCFA / EUR / USD) */}
+                        <CurrencySelector variant="compact" />
+
                         <a href="#inscription" className="hidden sm:flex">
                             <Button variant="outline" size="sm" className="rounded-xl border-white/15 text-white/80 hover:bg-white/5 text-xs">
                                 S&apos;inscrire
@@ -551,6 +648,10 @@ export default function SchoolLandingPage() {
                                         {label} <ChevronRight className="w-4 h-4 text-slate-600" />
                                     </a>
                                 ))}
+                                <div className="pt-2 px-3 flex items-center justify-between">
+                                    <span className="text-xs text-slate-400">Devise :</span>
+                                    <CurrencySelector variant="segmented" />
+                                </div>
                             </div>
                         </motion.div>
                     )}
@@ -1094,7 +1195,7 @@ export default function SchoolLandingPage() {
                                     <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
                                         <span className="text-xs text-slate-500">Frais de scolarité</span>
                                         <span className="text-sm font-black" style={{ color: f.couleur || bc }}>
-                                            {new Intl.NumberFormat('fr-FR').format(f.frais_scolarite)} XAF
+                                            {formatPrice(f.frais_scolarite)}
                                         </span>
                                     </div>
                                 </div>
@@ -1261,134 +1362,234 @@ export default function SchoolLandingPage() {
 
                             {inscStep === 0 && (
                                 <motion.div key="ins0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
-                                    className="p-6 sm:p-8 space-y-5">
+                                    className="p-6 sm:p-8 space-y-6">
                                     <div>
                                         <div className="flex items-center gap-2 mb-1">
-                                            <BookOpen className="w-4 h-4" style={{ color: bc }} />
-                                            <span className="font-bold text-white">Choisissez votre classe</span>
+                                            <BookOpen className="w-5 h-5" style={{ color: bc }} />
+                                            <span className="font-extrabold text-white text-base sm:text-lg">Choisissez votre formation et sa durée</span>
                                         </div>
-                                        <p className="text-xs text-slate-500">Sélectionnez la classe dans laquelle vous souhaitez vous inscrire. Elle sera automatiquement assignée à votre dossier.</p>
+                                        <p className="text-xs text-slate-400">
+                                            Étape 1 : Choisissez votre formation, puis sélectionnez la durée de votre session (1 mois, 3 mois ou 6 mois) selon votre rythme.
+                                        </p>
                                     </div>
 
-                                    {classrooms.length === 0 && filieres.length > 0 ? (
-                                        <div className="space-y-4">
-                                            <div>
-                                                <label className="text-xs text-slate-400 mb-1.5 block font-medium">
-                                                    Filière / Spécialité souhaitée <span className="text-red-400">*</span>
-                                                </label>
-                                                <div className="grid sm:grid-cols-2 gap-2">
-                                                    {filieres.map((f: any) => {
-                                                        const sel = selectedClassroom?.filiere_id === f.id;
+                                    {/* ── 1. SÉLECTION DE LA FORMATION ── */}
+                                    <div className="space-y-3">
+                                        <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
+                                            <span>1. Formation / Niveau souhaité <span className="text-red-400">*</span></span>
+                                            {selectedClassroom && (
+                                                <span className="text-[10px] font-semibold text-emerald-400 flex items-center gap-1">
+                                                    <CheckCircle2 className="w-3.5 h-3.5" /> Formation sélectionnée
+                                                </span>
+                                            )}
+                                        </label>
+
+                                        {classrooms.length === 0 && filieres.length > 0 ? (
+                                            <div className="grid sm:grid-cols-2 gap-2">
+                                                {filieres.map((f: any) => {
+                                                    const sel = selectedClassroom?.filiere_id === f.id;
+                                                    return (
+                                                        <button key={f.id} type="button"
+                                                            onClick={() => setSelectedClassroom({ id: null, name: f.nom, filiere_id: f.id, tuition_fee: f.frais_scolarite })}
+                                                            className={cn(
+                                                                'p-3.5 rounded-xl text-left text-xs font-semibold transition-all duration-200 border flex items-center justify-between',
+                                                                sel
+                                                                    ? 'text-white border-transparent shadow-lg bg-emerald-500/20 border-emerald-500'
+                                                                    : 'bg-white/[0.04] border-white/[0.08] text-slate-300 hover:bg-white/[0.08]'
+                                                            )}
+                                                            style={sel ? { borderColor: bc, backgroundColor: `${bc}15` } : {}}>
+                                                            <span>{f.nom}</span>
+                                                            {sel && <CheckCircle2 className="w-4 h-4" style={{ color: bc }} />}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : classrooms.length === 0 ? (
+                                            <input
+                                                value={selectedClassroom?.name || ''}
+                                                onChange={e => setSelectedClassroom({ id: null, name: e.target.value })}
+                                                placeholder="Ex : Formation Professionnelle / Cursus d'Excellence"
+                                                className="w-full h-12 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors"
+                                            />
+                                        ) : (
+                                            <div className="space-y-2.5">
+                                                {/* Cartes de formations */}
+                                                <div className="grid gap-2.5">
+                                                    {classrooms.map((c: any) => {
+                                                        const isSel = selectedClassroom?.id === c.id || selectedClassroom?.name === c.name;
+                                                        const fil = filieres.find((f: any) => f.id === c.filiere_id);
+                                                        const startingFee = getFeeForDuration(c, 1);
+
                                                         return (
-                                                            <button key={f.id} type="button"
-                                                                onClick={() => setSelectedClassroom({ id: null, name: f.nom, filiere_id: f.id })}
+                                                            <button
+                                                                key={c.id}
+                                                                type="button"
+                                                                onClick={() => setSelectedClassroom(c)}
                                                                 className={cn(
-                                                                    'p-3.5 rounded-xl text-left text-xs font-semibold transition-all duration-200 border flex items-center justify-between',
-                                                                    sel
-                                                                        ? 'text-white border-transparent shadow-lg bg-emerald-500/20 border-emerald-500'
-                                                                        : 'bg-white/[0.04] border-white/[0.08] text-slate-300 hover:bg-white/[0.08]'
+                                                                    'w-full p-3.5 sm:p-4 rounded-2xl text-left transition-all duration-200 border flex items-center justify-between group relative overflow-hidden',
+                                                                    isSel
+                                                                        ? 'text-white shadow-xl bg-white/[0.08]'
+                                                                        : 'bg-white/[0.02] border-white/[0.08] text-slate-300 hover:bg-white/[0.05] hover:border-white/20'
                                                                 )}
-                                                                style={sel ? { borderColor: bc, backgroundColor: `${bc}15` } : {}}>
-                                                                <span>{f.nom}</span>
-                                                                {sel && <CheckCircle2 className="w-4 h-4" style={{ color: bc }} />}
+                                                                style={isSel ? {
+                                                                    borderColor: bc,
+                                                                    boxShadow: `0 8px 24px ${bc}25`
+                                                                } : {}}
+                                                            >
+                                                                <div className="flex items-center gap-3.5 min-w-0 pr-3">
+                                                                    <div
+                                                                        className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105"
+                                                                        style={{
+                                                                            backgroundColor: isSel ? `${bc}25` : 'rgba(255,255,255,0.06)',
+                                                                            color: isSel ? bc : '#94a3b8'
+                                                                        }}
+                                                                    >
+                                                                        <BookOpen className="w-5 h-5" />
+                                                                    </div>
+                                                                    <div className="min-w-0">
+                                                                        <div className="font-bold text-xs sm:text-sm text-white truncate">
+                                                                            {c.name}
+                                                                        </div>
+                                                                        <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
+                                                                            {fil && <span>{fil.nom} •</span>}
+                                                                            <span className="text-slate-300 font-medium">À partir de {formatFcfa(startingFee)}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="shrink-0 flex items-center gap-2">
+                                                                    <div
+                                                                        className={cn(
+                                                                            'w-5 h-5 rounded-full border flex items-center justify-center transition-all',
+                                                                            isSel ? 'border-transparent text-white' : 'border-white/20 text-transparent'
+                                                                        )}
+                                                                        style={isSel ? { backgroundColor: bc } : {}}
+                                                                    >
+                                                                        <Check className="w-3 h-3 stroke-[3]" />
+                                                                    </div>
+                                                                </div>
                                                             </button>
                                                         );
                                                     })}
                                                 </div>
                                             </div>
-                                        </div>
-                                    ) : classrooms.length === 0 ? (
-                                        <div className="space-y-4">
-                                            <div>
-                                                <label className="text-xs text-slate-400 mb-1.5 block font-medium">
-                                                    Formation / Spécialité souhaitée <span className="text-red-400">*</span>
-                                                </label>
-                                                <input
-                                                    value={selectedClassroom?.name || ''}
-                                                    onChange={e => setSelectedClassroom({ id: null, name: e.target.value })}
-                                                    placeholder="Ex : Formation Professionnelle / Cursus d'Excellence"
-                                                    className="w-full h-12 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm placeholder:text-slate-600 focus:outline-none focus:border-white/25 transition-colors"
-                                                />
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-4">
-                                            {/* ── Dropdown sélecteur ── */}
-                                            <div>
-                                                <label className="text-xs text-slate-400 mb-1.5 block font-medium">
-                                                    Niveau / Classe souhaitée <span className="text-red-400">*</span>
-                                                </label>
-                                                <select
-                                                    value={selectedClassroom?.id || ''}
-                                                    onChange={e => {
-                                                        const cls = classrooms.find((c: any) => c.id === e.target.value) || null;
-                                                        setSelectedClassroom(cls);
-                                                    }}
-                                                    className="w-full h-12 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm focus:outline-none focus:border-white/25 transition-colors [color-scheme:dark] appearance-none cursor-pointer"
-                                                    style={{ borderColor: selectedClassroom ? `${bc}50` : undefined }}
-                                                >
-                                                    <option value="" className="bg-[#111]">— Sélectionner une classe —</option>
-                                                    {classrooms.map((c: any) => {
-                                                        const fil = filieres.find((f: any) => f.id === c.filiere_id);
+                                        )}
+                                    </div>
+
+                                    {/* ── 2. CHOIX DE LA DURÉE / SESSION (1 MOIS, 3 MOIS, 6 MOIS) ── */}
+                                    <AnimatePresence>
+                                        {selectedClassroom && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 12 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: -10 }}
+                                                className="space-y-3 pt-3 border-t border-white/[0.08]"
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <label className="text-xs font-bold text-slate-300">
+                                                        2. Choisissez la durée de votre session <span className="text-red-400">*</span>
+                                                    </label>
+                                                    <span className="text-[10px] text-slate-400">
+                                                        Planning adapté à votre rythme
+                                                    </span>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                    {DURATION_PLANS.map((plan) => {
+                                                        const isChosen = selectedDuration === plan.months;
+                                                        const price = getFeeForDuration(selectedClassroom, plan.months);
+
                                                         return (
-                                                            <option key={c.id} value={c.id} className="bg-[#111]">
-                                                                {c.name}{c.cycle ? ` (${c.cycle})` : ''}{fil ? ` — ${fil.nom}` : ''}
-                                                            </option>
+                                                            <button
+                                                                key={plan.months}
+                                                                type="button"
+                                                                onClick={() => setSelectedDuration(plan.months)}
+                                                                className={cn(
+                                                                    'p-4 rounded-2xl text-left transition-all duration-300 border flex flex-col justify-between relative group cursor-pointer overflow-hidden',
+                                                                    isChosen
+                                                                        ? 'text-white shadow-xl'
+                                                                        : 'bg-white/[0.02] border-white/[0.08] text-slate-300 hover:bg-white/[0.05] hover:border-white/15'
+                                                                )}
+                                                                style={isChosen ? {
+                                                                    borderColor: bc,
+                                                                    backgroundColor: `${bc}12`,
+                                                                    boxShadow: `0 8px 24px ${bc}20`
+                                                                } : {}}
+                                                            >
+                                                                <div>
+                                                                    <div className="flex items-center justify-between mb-2">
+                                                                        <span
+                                                                            className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border"
+                                                                            style={{
+                                                                                borderColor: isChosen ? `${bc}60` : 'rgba(255,255,255,0.1)',
+                                                                                backgroundColor: isChosen ? `${bc}20` : 'rgba(255,255,255,0.04)',
+                                                                                color: isChosen ? '#fff' : '#94a3b8'
+                                                                            }}
+                                                                        >
+                                                                            {plan.badge}
+                                                                        </span>
+                                                                        {isChosen && (
+                                                                            <div className="w-4 h-4 rounded-full flex items-center justify-center text-white" style={{ backgroundColor: bc }}>
+                                                                                <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    <div className="text-sm font-black text-white mb-0.5">
+                                                                        {plan.label}
+                                                                    </div>
+                                                                    <div className="text-[10px] text-slate-400 font-medium mb-3">
+                                                                        {plan.rhythm}
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="pt-2 border-t border-white/[0.06]">
+                                                                    <span className="text-[10px] text-slate-400 block font-medium">Tarif session</span>
+                                                                    <span
+                                                                        className="text-sm sm:text-base font-black tracking-tight"
+                                                                        style={{ color: isChosen ? bc : '#fff' }}
+                                                                    >
+                                                                        {formatFcfa(price)}
+                                                                    </span>
+                                                                </div>
+                                                            </button>
                                                         );
                                                     })}
-                                                </select>
-                                            </div>
-
-                                            {/* ── Pastilles rapides (si ≤ 12 classes) ── */}
-                                            {classrooms.length <= 12 && (
-                                                <div>
-                                                    <p className="text-[10px] text-slate-600 uppercase tracking-widest font-semibold mb-2">Ou sélectionnez directement</p>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {classrooms.map((c: any) => {
-                                                            const sel = selectedClassroom?.id === c.id;
-                                                            return (
-                                                                <button key={c.id}
-                                                                    onClick={() => setSelectedClassroom(sel ? null : c)}
-                                                                    className={cn(
-                                                                        'px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 border',
-                                                                        sel
-                                                                            ? 'text-white border-transparent shadow-lg'
-                                                                            : 'bg-white/[0.04] border-white/[0.08] text-slate-300 hover:bg-white/[0.08] hover:border-white/15'
-                                                                    )}
-                                                                    style={sel ? {
-                                                                        background: `linear-gradient(135deg,${bc},${bc}bb)`,
-                                                                        boxShadow: `0 4px 15px ${bc}35`
-                                                                    } : {}}>
-                                                                    {c.name}
-                                                                    {c.cycle && <span className="ml-1.5 opacity-60 text-[10px]">({c.cycle})</span>}
-                                                                </button>
-                                                            );
-                                                        })}
-                                                    </div>
                                                 </div>
-                                            )}
-                                        </div>
-                                    )}
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
 
+                                    {/* ── BANDEAU RÉCAPITULATIF SÉLECTION ── */}
                                     {selectedClassroom && (
                                         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                                            className="flex items-center gap-2 text-sm px-4 py-3 rounded-xl border"
-                                            style={{ backgroundColor: `${bc}10`, borderColor: `${bc}30`, color: bc }}>
-                                            <CheckCircle2 className="w-4 h-4 shrink-0" />
-                                            <span>Sélectionné : <strong>{selectedClassroom.name}</strong>
-                                                {filieres.find((f: any) => f.id === selectedClassroom.filiere_id) && (
-                                                    <span className="opacity-70"> — {filieres.find((f: any) => f.id === selectedClassroom.filiere_id)?.nom}</span>
-                                                )}
-                                            </span>
+                                            className="p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                                            style={{ backgroundColor: `${bc}10`, borderColor: `${bc}30` }}>
+                                            <div className="flex items-center gap-2.5">
+                                                <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: bc }} />
+                                                <div>
+                                                    <span className="text-slate-300">Formation : </span>
+                                                    <strong className="text-white">{selectedClassroom.name}</strong>
+                                                    <span className="text-slate-400 block sm:inline sm:ml-2">
+                                                        • Session <strong>{selectedDuration} Mois ({selectedDuration === 1 ? 'Intensif' : selectedDuration === 3 ? 'Accéléré' : 'Cycle Pro'})</strong>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="text-left sm:text-right shrink-0">
+                                                <span className="text-[10px] text-slate-400 uppercase tracking-widest block font-bold">Investissement</span>
+                                                <strong className="text-sm font-black" style={{ color: bc }}>
+                                                    {formatFcfa(getFeeForDuration(selectedClassroom, selectedDuration))}
+                                                </strong>
+                                            </div>
                                         </motion.div>
                                     )}
 
                                     <div className="pt-2 flex justify-end">
                                         <Button onClick={() => {
-                                            if (!selectedClassroom) { toast.error('Veuillez sélectionner une classe'); return; }
+                                            if (!selectedClassroom) { toast.error('Veuillez sélectionner une formation'); return; }
                                             setInscStep(1);
-                                        }} className="rounded-xl px-8 font-bold text-white"
-                                            style={{ background: `linear-gradient(135deg,${bc},${bc}bb)` }}>
+                                        }} className="rounded-xl px-8 font-bold text-white shadow-lg"
+                                            style={{ background: `linear-gradient(135deg,${bc},${bc}bb)`, boxShadow: `0 8px 24px ${bc}35` }}>
                                             Continuer <ArrowRight className="w-4 h-4 ml-2" />
                                         </Button>
                                     </div>
@@ -1552,12 +1753,24 @@ export default function SchoolLandingPage() {
                                     </div>
 
                                     {/* Récap */}
-                                    <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
-                                        <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold mb-3">Récapitulatif</p>
+                                    <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] space-y-2">
+                                        <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold mb-2">Récapitulatif de la candidature</p>
                                         <div className="space-y-1.5 text-xs">
                                             <div className="flex justify-between"><span className="text-slate-500">Nom :</span><span className="text-white font-medium">{inscForm.first_name} {inscForm.last_name}</span></div>
                                             <div className="flex justify-between"><span className="text-slate-500">Téléphone :</span><span className="text-white font-medium">{inscForm.phone}</span></div>
-                                            <div className="flex justify-between"><span className="text-slate-500">Classe :</span><span className="font-bold" style={{ color: bc }}>{selectedClassroom?.name || '—'}</span></div>
+                                            <div className="flex justify-between items-center"><span className="text-slate-500">Formation :</span><span className="font-bold text-white text-right max-w-[220px] truncate">{selectedClassroom?.name || '—'}</span></div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-slate-500">Session choisie :</span>
+                                                <span className="font-semibold text-amber-300">
+                                                    {DURATION_PLANS.find(p => p.months === selectedDuration)?.badge} {selectedDuration} mois — {DURATION_PLANS.find(p => p.months === selectedDuration)?.label}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between items-center pt-1 border-t border-white/5">
+                                                <span className="text-slate-400 font-medium">Scolarité :</span>
+                                                <span className="text-sm font-black text-emerald-400">
+                                                    {formatFcfa(getFeeForDuration(selectedClassroom, selectedDuration))}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -1642,72 +1855,107 @@ export default function SchoolLandingPage() {
                             <div className="p-6">
                                 {inscStep === 0 && (
                                     <div className="space-y-4">
-                                        <p className="text-xs text-slate-400">Sélectionnez la classe ou la filière d&apos;admission :</p>
-                                        {classrooms.length > 0 ? (
-                                            <div className="space-y-3">
-                                                <select
-                                                    value={selectedClassroom?.id || ''}
-                                                    onChange={e => {
-                                                        const cls = classrooms.find((c: any) => c.id === e.target.value) || null;
-                                                        setSelectedClassroom(cls);
-                                                    }}
-                                                    className="w-full h-12 bg-white/[0.04] border border-white/10 text-white rounded-xl px-4 text-sm focus:outline-none [color-scheme:dark]"
-                                                >
-                                                    <option value="" className="bg-[#111]">— Sélectionner une classe —</option>
-                                                    {classrooms.map((c: any) => (
-                                                        <option key={c.id} value={c.id} className="bg-[#111]">
-                                                            {c.name}{c.cycle ? ` (${c.cycle})` : ''}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                                {classrooms.length <= 8 && (
-                                                    <div className="flex flex-wrap gap-2 pt-1">
-                                                        {classrooms.map((c: any) => (
-                                                            <button key={c.id} type="button"
-                                                                onClick={() => setSelectedClassroom(c)}
-                                                                className={cn(
-                                                                    'px-3 py-1.5 rounded-xl text-xs font-semibold border transition',
-                                                                    selectedClassroom?.id === c.id ? 'text-white border-transparent' : 'bg-white/5 border-white/10 text-slate-300'
-                                                                )}
-                                                                style={selectedClassroom?.id === c.id ? { background: bc } : {}}>
-                                                                {c.name}
-                                                            </button>
-                                                        ))}
+                                        <div>
+                                            <p className="text-xs text-slate-400 mb-2 font-medium">1. Choisissez votre formation :</p>
+                                            {classrooms.length > 0 ? (
+                                                <div className="space-y-2">
+                                                    <div className="grid gap-2 max-h-[220px] overflow-y-auto pr-1">
+                                                        {classrooms.map((c: any) => {
+                                                            const isSel = selectedClassroom?.id === c.id;
+                                                            const baseFee = getClassroomBaseFee(c);
+                                                            return (
+                                                                <button key={c.id} type="button"
+                                                                    onClick={() => setSelectedClassroom(c)}
+                                                                    className={cn(
+                                                                        'w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all',
+                                                                        isSel ? 'text-white border-transparent' : 'bg-white/5 border-white/10 text-slate-300 hover:border-white/20 hover:bg-white/[0.08]'
+                                                                    )}
+                                                                    style={isSel ? { background: `${bc}25`, borderColor: bc } : {}}>
+                                                                    <div className="min-w-0 pr-2">
+                                                                        <div className="text-xs font-bold text-white truncate">{c.name}</div>
+                                                                        {c.cycle && <div className="text-[10px] text-slate-400">{c.cycle}</div>}
+                                                                    </div>
+                                                                    <div className="text-right shrink-0 flex items-center gap-2">
+                                                                        {baseFee > 0 && (
+                                                                            <span className="text-xs font-semibold text-emerald-400">
+                                                                                {formatFcfa(baseFee)}
+                                                                            </span>
+                                                                        )}
+                                                                        {isSel && <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: bc }} />}
+                                                                    </div>
+                                                                </button>
+                                                            );
+                                                        })}
                                                     </div>
-                                                )}
+                                                </div>
+                                            ) : filieres.length > 0 ? (
+                                                <div className="grid sm:grid-cols-2 gap-2">
+                                                    {filieres.map((f: any) => {
+                                                        const sel = selectedClassroom?.filiere_id === f.id;
+                                                        return (
+                                                            <button key={f.id} type="button"
+                                                                onClick={() => setSelectedClassroom({ id: null, name: f.nom, filiere_id: f.id })}
+                                                                className={cn('p-3 rounded-xl border text-xs font-semibold text-left flex items-center justify-between',
+                                                                    sel ? 'text-white border-transparent' : 'bg-white/5 border-white/10 text-slate-300'
+                                                                )}
+                                                                style={sel ? { background: `${bc}25`, borderColor: bc } : {}}>
+                                                                <span>{f.nom}</span>
+                                                                {sel && <CheckCircle2 className="w-4 h-4" style={{ color: bc }} />}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <input
+                                                    value={selectedClassroom?.name || ''}
+                                                    onChange={e => setSelectedClassroom({ id: null, name: e.target.value })}
+                                                    placeholder="Indiquez la formation souhaitée"
+                                                    className="w-full h-11 bg-white/5 border border-white/10 rounded-xl px-4 text-sm text-white"
+                                                />
+                                            )}
+                                        </div>
+
+                                        {/* 2. Choix de la formule de durée */}
+                                        {selectedClassroom && (
+                                            <div className="pt-3 border-t border-white/10 space-y-2.5">
+                                                <div className="flex items-center justify-between">
+                                                    <p className="text-xs text-slate-400 font-medium">2. Choisissez la durée de votre session :</p>
+                                                    <span className="text-xs font-bold text-emerald-400">
+                                                        {formatFcfa(getFeeForDuration(selectedClassroom, selectedDuration))}
+                                                    </span>
+                                                </div>
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    {DURATION_PLANS.map(plan => {
+                                                        const isPlanSel = selectedDuration === plan.months;
+                                                        const planFee = getFeeForDuration(selectedClassroom, plan.months);
+                                                        return (
+                                                            <button
+                                                                key={plan.months}
+                                                                type="button"
+                                                                onClick={() => setSelectedDuration(plan.months)}
+                                                                className={cn(
+                                                                    'p-2.5 rounded-xl border text-center transition-all flex flex-col items-center justify-center',
+                                                                    isPlanSel ? 'border-amber-400/80 bg-amber-400/10 text-white shadow-sm' : 'border-white/10 bg-white/[0.03] text-slate-400 hover:border-white/20 hover:bg-white/[0.06]'
+                                                                )}
+                                                            >
+                                                                <span className="text-base">{plan.badge}</span>
+                                                                <span className="text-xs font-bold text-white mt-0.5">{plan.months} Mois</span>
+                                                                <span className="text-[10px] text-emerald-400 font-semibold mt-1">
+                                                                    {planFee > 0 ? formatFcfa(planFee) : '—'}
+                                                                </span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
-                                        ) : filieres.length > 0 ? (
-                                            <div className="grid sm:grid-cols-2 gap-2">
-                                                {filieres.map((f: any) => {
-                                                    const sel = selectedClassroom?.filiere_id === f.id;
-                                                    return (
-                                                        <button key={f.id} type="button"
-                                                            onClick={() => setSelectedClassroom({ id: null, name: f.nom, filiere_id: f.id })}
-                                                            className={cn('p-3 rounded-xl border text-xs font-semibold text-left flex items-center justify-between',
-                                                                sel ? 'text-white border-transparent' : 'bg-white/5 border-white/10 text-slate-300'
-                                                            )}
-                                                            style={sel ? { background: `${bc}25`, borderColor: bc } : {}}>
-                                                            <span>{f.nom}</span>
-                                                            {sel && <CheckCircle2 className="w-4 h-4" style={{ color: bc }} />}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        ) : (
-                                            <input
-                                                value={selectedClassroom?.name || ''}
-                                                onChange={e => setSelectedClassroom({ id: null, name: e.target.value })}
-                                                placeholder="Indiquez la formation souhaitée"
-                                                className="w-full h-11 bg-white/5 border border-white/10 rounded-xl px-4 text-sm text-white"
-                                            />
                                         )}
 
-                                        <div className="pt-4 flex justify-end">
+                                        <div className="pt-3 flex justify-end">
                                             <Button onClick={() => {
-                                                if (!selectedClassroom) { toast.error('Veuillez sélectionner une classe ou filière'); return; }
+                                                if (!selectedClassroom) { toast.error('Veuillez sélectionner une formation'); return; }
                                                 setInscStep(1);
-                                            }} className="rounded-xl px-7 font-bold text-white" style={{ background: bc }}>
-                                                Continuer <ArrowRight className="w-4 h-4 ml-2" />
+                                            }} className="rounded-xl px-7 font-bold text-white text-xs" style={{ background: bc }}>
+                                                Continuer <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
                                             </Button>
                                         </div>
                                     </div>
@@ -1799,6 +2047,24 @@ export default function SchoolLandingPage() {
                                                         className="w-12 h-12 text-center text-xl font-bold bg-white/10 border border-white/15 rounded-xl text-white focus:outline-none"
                                                     />
                                                 ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Récapitulatif compact modal */}
+                                        <div className="p-3.5 rounded-xl bg-white/[0.04] border border-white/10 text-xs space-y-1.5">
+                                            <div className="flex justify-between items-center text-slate-400">
+                                                <span>Formation :</span>
+                                                <span className="font-semibold text-white truncate max-w-[200px]">{selectedClassroom?.name || '—'}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-slate-400">
+                                                <span>Session :</span>
+                                                <span className="font-semibold text-amber-300">
+                                                    {DURATION_PLANS.find(p => p.months === selectedDuration)?.badge} {selectedDuration} mois ({DURATION_PLANS.find(p => p.months === selectedDuration)?.label})
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-slate-400 pt-1 border-t border-white/5">
+                                                <span>Frais de scolarité :</span>
+                                                <span className="font-black text-emerald-400">{formatFcfa(getFeeForDuration(selectedClassroom, selectedDuration))}</span>
                                             </div>
                                         </div>
 

@@ -14,7 +14,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { isContentUnlocked } from '@/lib/cursus-drip-service';
+import { isContentUnlocked, type DripContext } from '@/lib/cursus-drip-service';
 import type { ContentBlock } from './rich-content-editor';
 import { deductSkyPoints } from '@/lib/sky-points-service';
 import { useSkyAgent } from '@/hooks/use-sky-agent';
@@ -55,6 +55,7 @@ interface LessonReaderProps {
     initialShowNotes?: boolean;
     isCompleted?: boolean;
     onToggleComplete?: () => void;
+    dripContext?: DripContext;
 }
 
 const LANGUAGE_META: Record<string, { name: string; flag: string }> = {
@@ -389,7 +390,8 @@ export function LessonReader({
     orgId,
     initialShowNotes = false,
     isCompleted = false,
-    onToggleComplete
+    onToggleComplete,
+    dripContext
 }: LessonReaderProps) {
     // Hide bottom nav when lesson reader is open
     useEffect(() => {
@@ -739,7 +741,7 @@ export function LessonReader({
 
     if (!isOpen) return null;
 
-    const drip = isContentUnlocked(lesson as any);
+    const drip = isContentUnlocked(lesson as any, new Date(), dripContext);
 
     if (!drip.isUnlocked) {
         return (

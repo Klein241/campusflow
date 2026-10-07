@@ -14,6 +14,7 @@ import { cleanMotto } from '@/lib/clean-motto';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-studio';
 import { getNormalizedPrograms, getNormalizedStats, getNormalizedTestimonials } from './template-data-adapter';
 import { ProgramCardSessionSelector } from './ProgramCardSessionSelector';
+import { CurrencySelector } from '@/components/ui/currency-selector';
 
 interface TemplateProps {
     org: any;
@@ -96,7 +97,10 @@ export function TemplateHubOnglets({
                         <h1 data-editable-field="trainer_title" className="text-2xl sm:text-4xl font-black text-white truncate">{heroTitle}</h1>
                         <p data-editable-field="trainer_subtitle" className="text-sm text-slate-400 mt-1 max-w-xl">{heroSubtitle}</p>
                     </div>
-                    <div className="flex flex-col gap-2 shrink-0 w-full sm:w-auto">
+                    <div className="flex flex-col gap-2 shrink-0 w-full sm:w-auto items-stretch sm:items-end">
+                        <div className="self-center sm:self-end">
+                            <CurrencySelector variant="compact" />
+                        </div>
                         <a href="#inscription" onClick={onOpenInscription}>
                             <Button data-editable-field="primary_cta_text" className="w-full sm:w-auto font-black rounded-xl text-white shadow-lg text-xs h-11 px-6" style={{ background: `linear-gradient(135deg, ${bc}, ${bc}cc)` }}>
                                 <FileText className="w-4 h-4 mr-2" />

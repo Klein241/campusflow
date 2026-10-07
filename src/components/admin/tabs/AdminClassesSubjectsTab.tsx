@@ -5,12 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
     School, Plus, Pencil, Trash2, Save, X, BookOpen,
-    GraduationCap, Loader2, Coins
+    GraduationCap, Loader2, Coins, Copy
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { FilierePricingModal } from '@/components/admin/pricing/FilierePricingModal';
 import { formatXAF } from '@/lib/camerpay';
+import { duplicateFormation } from '@/lib/formation-duplication-service';
 import type { EcheancePaiement } from '@/lib/filieres/types';
 
 const COLLEGE = ['6ème', '5ème', '4ème', '3ème'];
@@ -106,6 +107,41 @@ export function AdminClassesSubjectsTab({
         fraisInscription?: number;
         echeances?: EcheancePaiement[];
     } | null>(null);
+
+    const [duplicatingClassId, setDuplicatingClassId] = useState<string | null>(null);
+
+    const handleDuplicateClass = async (classId: string, currentName: string) => {
+        if (!org?.id) return;
+        const confirmName = window.prompt(
+            `Dupliquer cette formation (titre, matières, chapitres, leçons, exercices) :\nEntrez le nom de la nouvelle formation :`,
+            `Copie de ${currentName}`
+        );
+        if (!confirmName || !confirmName.trim()) return;
+
+        setDuplicatingClassId(classId);
+        const toastId = toast.loading(`Duplication complète de "${currentName}" en cours...`);
+        try {
+            const res = await duplicateFormation(classId, org.id, { customName: confirmName.trim() });
+            if (!res.success) {
+                toast.error(`Erreur de duplication : ${res.error}`, { id: toastId });
+                return;
+            }
+
+            toast.success(
+                `🎉 Formation "${confirmName.trim()}" dupliquée avec succès ! (${res.stats?.subjects || 0} matières, ${res.stats?.chapters || 0} chapitres, ${res.stats?.lessons || 0} leçons)`,
+                { id: toastId, duration: 5000 }
+            );
+            if (saveCls) {
+                saveCls();
+            } else {
+                window.location.reload();
+            }
+        } catch (err: any) {
+            toast.error(`Erreur : ${err.message}`, { id: toastId });
+        } finally {
+            setDuplicatingClassId(null);
+        }
+    };
 
     const handlePricingSaved = (id: string, fraisScolarite: number, fraisInscription: number, echeances: EcheancePaiement[]) => {
         setCls(prev => prev.map(c => c.id === id ? { ...c, frais_scolarite: fraisScolarite, frais_inscription: fraisInscription, echeances } : c));
@@ -327,6 +363,18 @@ export function AdminClassesSubjectsTab({
                                                     title="Modifier le nom de la classe"
                                                 >
                                                     <Pencil className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDuplicateClass(c.id!, c.name)}
+                                                    disabled={duplicatingClassId === c.id}
+                                                    className="text-slate-400 hover:text-amber-400 p-1.5 rounded-lg hover:bg-amber-500/10 transition cursor-pointer"
+                                                    title="Dupliquer intégralement cette formation (matières, chapitres, leçons, exercices)"
+                                                >
+                                                    {duplicatingClassId === c.id ? (
+                                                        <span className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin inline-block" />
+                                                    ) : (
+                                                        <Copy className="w-3.5 h-3.5" />
+                                                    )}
                                                 </button>
                                                 <button
                                                     onClick={() => handleDeleteClass(c.id!)}

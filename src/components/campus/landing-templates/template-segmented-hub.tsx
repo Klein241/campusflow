@@ -19,6 +19,8 @@ import type { TemplateCustomConfig } from '@/components/campus/template-customiz
 import { extractContentAndCurriculum } from '@/lib/curriculum-parser';
 import { getNormalizedPrograms } from './template-data-adapter';
 import { ProgramCardSessionSelector } from './ProgramCardSessionSelector';
+import { CurrencySelector } from '@/components/ui/currency-selector';
+import { useCurrency } from '@/lib/currency-converter';
 
 interface TemplateProps {
     org: any;
@@ -44,6 +46,7 @@ export function TemplateSegmentedHub({
     onOpenInscription
 }: TemplateProps) {
     const cfg: TemplateCustomConfig = org.template_config || {};
+    const { formatPrice, convertCycle } = useCurrency();
     const [selectedProgramIdx, setSelectedProgramIdx] = useState<number>(0);
     const [activeModalProgram, setActiveModalProgram] = useState<any | null>(null);
     const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
@@ -139,18 +142,18 @@ export function TemplateSegmentedHub({
         if (p.prix_barre) {
             const pb = Number(p.prix_barre);
             if (!isNaN(pb) && pb > 0) {
-                originalPriceStr = `${new Intl.NumberFormat('fr-FR').format(pb)} FCFA`;
+                originalPriceStr = formatPrice(pb);
                 if (currentPriceNum > 0 && pb > currentPriceNum) {
                     const pct = Math.round(((pb - currentPriceNum) / pb) * 100);
                     discountBadge = `-${pct}%`;
                 }
             } else {
-                originalPriceStr = String(p.prix_barre);
+                originalPriceStr = convertCycle(String(p.prix_barre));
             }
         }
         // Sinon prix barré configuré globalement dans le Studio
         else if (cfg.filiere_original_price) {
-            originalPriceStr = cfg.filiere_original_price;
+            originalPriceStr = convertCycle(cfg.filiere_original_price);
             if (cfg.filiere_discount_pct) {
                 discountBadge = cfg.filiere_discount_pct.startsWith('-') ? cfg.filiere_discount_pct : `-${cfg.filiere_discount_pct}`;
             }
@@ -160,14 +163,14 @@ export function TemplateSegmentedHub({
             const pctVal = parseFloat(cfg.filiere_discount_pct.replace(/[^0-9.]/g, ''));
             if (pctVal > 0 && pctVal < 100) {
                 const orig = Math.round(currentPriceNum / (1 - pctVal / 100));
-                originalPriceStr = `${new Intl.NumberFormat('fr-FR').format(orig)} FCFA`;
+                originalPriceStr = formatPrice(orig);
                 discountBadge = `-${Math.round(pctVal)}%`;
             }
         }
 
         const currentPriceStr = currentPriceNum > 0
-            ? `${new Intl.NumberFormat('fr-FR').format(currentPriceNum)} FCFA`
-            : (cfg.flagship_price || 'Tarif sur dossier');
+            ? formatPrice(currentPriceNum)
+            : (cfg.flagship_price ? convertCycle(cfg.flagship_price) : 'Tarif sur dossier');
 
         const promoBadge = discountBadge || (originalPriceStr ? (cfg.filiere_promo_badge || 'Offre Rentrée') : null);
 
@@ -477,15 +480,18 @@ export function TemplateSegmentedHub({
                         <button onClick={() => { document.getElementById('gallery')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-amber-300 transition-colors cursor-pointer">Galerie Photos</button>
                     </div>
 
-                    {/* Contact & Espace élève CTA */}
-                    <div className="flex items-center gap-2.5">
+                    {/* Contact & Espace élève CTA + Sélecteur de Devise */}
+                    <div className="flex items-center gap-2">
+                        {/* Sélecteur de devise interactif (FCFA / EUR / USD) */}
+                        <CurrencySelector variant="compact" />
+
                         <Link href={orgPath(orgSlug, 'login')}>
-                            <Button size="sm" className="bg-white/10 hover:bg-white/15 text-white font-bold text-xs rounded-xl border border-white/15 h-9 px-4 flex items-center gap-1.5 cursor-pointer">
+                            <Button size="sm" className="bg-white/10 hover:bg-white/15 text-white font-bold text-xs rounded-xl border border-white/15 h-9 px-3 sm:px-4 flex items-center gap-1.5 cursor-pointer">
                                 <LogIn className="w-3.5 h-3.5" />
-                                Connexion
+                                <span className="hidden sm:inline">Connexion</span>
                             </Button>
                         </Link>
-                        <Button size="sm" onClick={onOpenInscription} data-editable-field="primary_cta_text" className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/25 h-9 px-4 cursor-pointer">
+                        <Button size="sm" onClick={onOpenInscription} data-editable-field="primary_cta_text" className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/25 h-9 px-3 sm:px-4 cursor-pointer">
                             {primaryCta}
                         </Button>
                     </div>

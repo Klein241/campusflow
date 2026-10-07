@@ -16,6 +16,7 @@ import { cleanMotto } from '@/lib/clean-motto';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-studio';
 import { getNormalizedPrograms, getNormalizedStats, getNormalizedTestimonials } from './template-data-adapter';
 import { ProgramCardSessionSelector } from './ProgramCardSessionSelector';
+import { CurrencySelector } from '@/components/ui/currency-selector';
 
 interface TemplateProps {
     org: any;
@@ -106,8 +107,9 @@ export function TemplateGlassShowcase({
                         <button onClick={() => setOpenCard('library')} className="hover:text-cyan-400 transition-colors">Ressources</button>
                     </div>
 
-                    {/* Espace élève CTA */}
+                    {/* Espace élève CTA + Sélecteur de Devise */}
                     <div className="flex items-center gap-2">
+                        <CurrencySelector variant="compact" />
                         <Link href={orgPath(orgSlug, 'login')}>
                             <Button size="sm" className="bg-white/10 hover:bg-white/15 text-white font-bold text-xs rounded-xl border border-white/15 h-9 px-4">
                                 Espace élève

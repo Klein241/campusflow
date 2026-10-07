@@ -20,6 +20,9 @@ import { DirectMobileMoneyPaymentModal } from './DirectMobileMoneyPaymentModal';
 import { extractContentAndCurriculum, SAMPLE_CURRICULUM_TEMPLATE } from '@/lib/curriculum-parser';
 import { SessionConfigEditor } from './SessionConfigEditor';
 import { PosterUploadField } from './PosterUploadField';
+import { duplicateFormation } from '@/lib/formation-duplication-service';
+import { useCurrency } from '@/lib/currency-converter';
+import { CurrencySelector } from '@/components/ui/currency-selector';
 import { cn } from '@/lib/utils';
 
 interface AdminIndependentTrainerTabProps {
@@ -45,6 +48,9 @@ export function AdminIndependentTrainerTab({
     const [trainerPhone, setTrainerPhone] = useState(org.phone || '');
     const [trainerEmail, setTrainerEmail] = useState(org.email || '');
     const [savingProfile, setSavingProfile] = useState(false);
+
+    // Multi-currency hook (FCFA, EUR, USD)
+    const { currency, formatPrice, convertCycle } = useCurrency();
 
     // Modal offre de formation rapide (Création)
     const [showAddOffer, setShowAddOffer] = useState(false);
@@ -152,6 +158,7 @@ export function AdminIndependentTrainerTab({
     // Délivrance d'attestation formateur solo
     const [certModalStudent, setCertModalStudent] = useState<any | null>(null);
     const [certMention, setCertMention] = useState('Mention Très Bien');
+    const [duplicatingOfferId, setDuplicatingOfferId] = useState<string | null>(null);
 
     // ── 1. Sauvegarde du profil formateur ──
     const handleSaveProfile = async () => {
@@ -346,6 +353,36 @@ export function AdminIndependentTrainerTab({
         }
     };
 
+    // ── Duplication intégrale d'une offre / filière avec matières, chapitres et leçons ──
+    const handleDuplicateOffer = async (item: any) => {
+        if (!item?.id || !org?.id) return;
+        const confirmName = window.prompt(
+            `Dupliquer cette formation (titre, modules, chapitres, leçons, prix, affiche) :\nEntrez le nom de la nouvelle formation :`,
+            `Copie de ${item.name}`
+        );
+        if (!confirmName || !confirmName.trim()) return;
+
+        setDuplicatingOfferId(item.id);
+        const toastId = toast.loading(`Duplication complète de "${item.name}"...`);
+        try {
+            const res = await duplicateFormation(item.id, org.id, { customName: confirmName.trim() });
+            if (!res.success) {
+                toast.error(`Erreur de duplication : ${res.error}`, { id: toastId });
+                return;
+            }
+
+            toast.success(
+                `🎉 Formation "${confirmName.trim()}" dupliquée avec succès ! (${res.stats?.subjects || 0} modules, ${res.stats?.chapters || 0} chapitres, ${res.stats?.lessons || 0} leçons copiés)`,
+                { id: toastId, duration: 5000 }
+            );
+            onRefresh();
+        } catch (err: any) {
+            toast.error(`Erreur : ${err.message}`, { id: toastId });
+        } finally {
+            setDuplicatingOfferId(null);
+        }
+    };
+
     // ── 5. Inscription directe d'un apprenant avec 12 car + PIN ──
     const handleEnrollStudent = async (offerId: string) => {
         if (!newApprenantFN.trim() || !newApprenantLN.trim()) {
@@ -526,13 +563,17 @@ export function AdminIndependentTrainerTab({
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* 2 Colonnes : Liste des Formations Actives */}
                 <div className="lg:col-span-2 space-y-4">
-                    <div className="flex items-center justify-between">
-                        <h3 className="text-base font-black text-white flex items-center gap-2">
-                            <span>📚 Mes Offres & Formations ({cls.length})</span>
-                        </h3>
-                        <span className="text-xs text-slate-400">
-                            Gérez vos offres et vos apprenants
-                        </span>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <h3 className="text-base font-black text-white flex items-center gap-2">
+                                <span>📚 Mes Offres & Formations ({cls.length})</span>
+                            </h3>
+                            <span className="text-xs text-slate-400">
+                                Gérez vos offres et vos apprenants
+                            </span>
+                        </div>
+                        {/* Sélecteur de Devise : FCFA / EUR / USD */}
+                        <CurrencySelector variant="segmented" showRatesHint={true} />
                     </div>
 
                     {cls.length === 0 ? (
@@ -602,6 +643,18 @@ export function AdminIndependentTrainerTab({
                                                         <Edit3 className="w-3 h-3" />
                                                     </button>
                                                     <button
+                                                        onClick={() => handleDuplicateOffer(item)}
+                                                        disabled={duplicatingOfferId === item.id}
+                                                        className="opacity-0 group-hover:opacity-100 p-1 rounded-md bg-white/5 hover:bg-amber-500/20 text-slate-400 hover:text-amber-300 transition cursor-pointer"
+                                                        title="Dupliquer intégralement cette formation (matières, chapitres, leçons, prix, affiche)"
+                                                    >
+                                                        {duplicatingOfferId === item.id ? (
+                                                            <span className="w-3 h-3 border border-amber-400 border-t-transparent rounded-full animate-spin inline-block" />
+                                                        ) : (
+                                                            <Copy className="w-3 h-3" />
+                                                        )}
+                                                    </button>
+                                                    <button
                                                         onClick={() => handleDeleteOffer(item.id, item.name)}
                                                         className="opacity-0 group-hover:opacity-100 p-1 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-400 transition cursor-pointer"
                                                         title="Supprimer l'offre"
@@ -626,8 +679,8 @@ export function AdminIndependentTrainerTab({
                                                 );
                                             })()}
 
-                                            <p className="text-xs text-slate-400 mt-2">
-                                                {item.cycle || 'Formation & Accompagnement'}
+                                            <p className="text-xs text-slate-300 mt-2 font-medium">
+                                                {convertCycle(item.cycle) || 'Formation & Accompagnement'}
                                             </p>
 
                                             {/* Badges des sessions et durées disponibles */}
@@ -636,11 +689,16 @@ export function AdminIndependentTrainerTab({
                                                 if (sess.length === 0) return null;
                                                 return (
                                                     <div className="flex flex-wrap gap-1 mt-1.5 pt-1.5 border-t border-white/5">
-                                                        {sess.map((s: any, idx: number) => (
-                                                            <span key={idx} className="px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-[9px] text-amber-200 font-medium">
-                                                                ⏱️ {s.duration_label || s.label} : <strong className="text-white font-mono">{s.price ? `${new Intl.NumberFormat('fr-FR').format(s.price)} F` : s.formatted_price}</strong>
-                                                            </span>
-                                                        ))}
+                                                        {sess.map((s: any, idx: number) => {
+                                                            const displayedPrice = s.price 
+                                                                ? formatPrice(s.price) 
+                                                                : (s.formatted_price ? convertCycle(s.formatted_price) : formatPrice(s.price));
+                                                            return (
+                                                                <span key={idx} className="px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-[9px] text-amber-200 font-medium">
+                                                                    ⏱️ {s.duration_label || s.label} : <strong className="text-white font-mono">{displayedPrice}</strong>
+                                                                </span>
+                                                            );
+                                                        })}
                                                     </div>
                                                 );
                                             })()}

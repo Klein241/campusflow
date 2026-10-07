@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, CreditCard, Check, Sparkles, ChevronDown, Clock, ShieldCheck, ArrowRight } from 'lucide-react';
 import type { NormalizedProgram, ProgramSession } from './template-data-adapter';
+import { useCurrency, convertFcfaTo } from '@/lib/currency-converter';
+import { CurrencySelector } from '@/components/ui/currency-selector';
 
 interface ProgramCardSessionSelectorProps {
     program: NormalizedProgram;
@@ -20,6 +22,7 @@ export const ProgramCardSessionSelector: React.FC<ProgramCardSessionSelectorProp
     showPoster = true,
     className = '',
 }) => {
+    const { currency, formatPrice, convertCycle } = useCurrency();
     const sessions = program.sessions && program.sessions.length > 0 ? program.sessions : [];
     const [selectedId, setSelectedId] = useState<string>(sessions[0]?.id || '');
     const [showInstallmentsDetails, setShowInstallmentsDetails] = useState(false);
@@ -69,7 +72,7 @@ export const ProgramCardSessionSelector: React.FC<ProgramCardSessionSelectorProp
                             {activeSession.duration_label}
                         </span>
                         <span className="font-mono font-black text-xs text-amber-300 bg-black/70 backdrop-blur-md px-2.5 py-0.5 rounded-lg border border-amber-500/30">
-                            {activeSession.formatted_price}
+                            {activeSession.price ? formatPrice(activeSession.price) : convertCycle(activeSession.formatted_price)}
                         </span>
                     </div>
                 </div>
@@ -91,6 +94,12 @@ export const ProgramCardSessionSelector: React.FC<ProgramCardSessionSelectorProp
                     <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-white/[0.04] border border-white/[0.08]">
                         {sessions.map(s => {
                             const isSelected = s.id === activeSession.id;
+                            const pillPrice = s.price > 0 ? (
+                                currency === 'XAF' ? `${Math.round(s.price / 1000)}k` :
+                                currency === 'EUR' ? `${Math.round(convertFcfaTo(s.price, 'EUR'))} €` :
+                                `$${Math.round(convertFcfaTo(s.price, 'USD'))}`
+                            ) : 'Gratuit';
+
                             return (
                                 <button
                                     key={s.id}
@@ -109,7 +118,7 @@ export const ProgramCardSessionSelector: React.FC<ProgramCardSessionSelectorProp
                                         {s.duration_label}
                                     </span>
                                     <span className={`text-[9px] font-mono leading-tight ${isSelected ? 'text-slate-900 font-extrabold' : 'text-slate-400'}`}>
-                                        {s.price > 0 ? `${Math.round(s.price / 1000)}k` : 'Gratuit'}
+                                        {pillPrice}
                                     </span>
                                     {isSelected && (
                                         <motion.div
@@ -128,19 +137,22 @@ export const ProgramCardSessionSelector: React.FC<ProgramCardSessionSelectorProp
 
             {/* ── 3. Affichage du Tarif de la Session Active ── */}
             <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/[0.07] space-y-2">
-                <div className="flex items-baseline justify-between gap-2">
+                <div className="flex items-baseline justify-between gap-2 flex-wrap">
                     <div>
-                        <p className="text-[10px] text-slate-400 font-medium">
-                            Tarif scolarité ({activeSession.label})
-                        </p>
+                        <div className="flex items-center gap-2 mb-1">
+                            <p className="text-[10px] text-slate-400 font-medium">
+                                Tarif ({activeSession.label})
+                            </p>
+                            <CurrencySelector variant="compact" />
+                        </div>
                         <div className="flex items-baseline gap-2">
                             {activeSession.formatted_prix_barre && (
                                 <span className="text-xs text-slate-500 line-through font-mono">
-                                    {activeSession.formatted_prix_barre}
+                                    {activeSession.prix_barre ? formatPrice(activeSession.prix_barre) : convertCycle(activeSession.formatted_prix_barre)}
                                 </span>
                             )}
                             <span className="text-lg font-black text-white font-mono tracking-tight">
-                                {activeSession.formatted_price}
+                                {activeSession.price ? formatPrice(activeSession.price) : convertCycle(activeSession.formatted_price)}
                             </span>
                         </div>
                     </div>
@@ -187,7 +199,7 @@ export const ProgramCardSessionSelector: React.FC<ProgramCardSessionSelectorProp
                                         {inst.label}
                                     </p>
                                     <p className="text-[11px] font-mono font-bold text-amber-300 leading-snug">
-                                        {inst.formatted_amount}
+                                        {inst.amount ? formatPrice(inst.amount) : convertCycle(inst.formatted_amount)}
                                     </p>
                                     {inst.due_date_label && (
                                         <p className="text-[8px] text-slate-500 leading-tight">

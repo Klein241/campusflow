@@ -15,6 +15,7 @@ import { cleanMotto } from '@/lib/clean-motto';
 import { cn } from '@/lib/utils';
 import { getNormalizedPrograms, getNormalizedTestimonials, getNormalizedStats } from './template-data-adapter';
 import { ProgramCardSessionSelector } from './ProgramCardSessionSelector';
+import { CurrencySelector } from '@/components/ui/currency-selector';
 
 interface TemplateProps {
     org: any;
@@ -130,10 +131,12 @@ export function TemplateProductMastery({
                         ))}
                     </nav>
 
-                    {/* Actions & Mobile toggle */}
-                    <div className="flex items-center gap-2.5">
+                    {/* Actions & Mobile toggle + Sélecteur de Devise */}
+                    <div className="flex items-center gap-2">
+                        <CurrencySelector variant="compact" />
+
                         <Link href={orgPath(orgSlug, 'login')} className="hidden sm:inline-flex">
-                            <button className="text-xs font-bold px-4 h-10 rounded-full text-gray-700 hover:text-black hover:bg-gray-100 transition-colors">
+                            <button className="text-xs font-bold px-3 h-10 rounded-full text-gray-700 hover:text-black hover:bg-gray-100 transition-colors">
                                 Espace Élève
                             </button>
                         </Link>

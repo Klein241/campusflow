@@ -246,9 +246,16 @@ export function SessionConfigEditor({
                                                 />
                                             </div>
                                             <div>
-                                                <label className="text-[10px] font-bold text-slate-300 block mb-1">
-                                                    Tarif total (FCFA)
-                                                </label>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <label className="text-[10px] font-bold text-slate-300">
+                                                        Tarif total (FCFA)
+                                                    </label>
+                                                    {sess.price > 0 && (
+                                                        <span className="text-[9px] text-amber-300 font-mono">
+                                                            ≈ {Math.round(sess.price / 655.957)} € | ≈ {Math.round(sess.price / 600)} $
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <Input
                                                     type="number"
                                                     step="1000"
@@ -262,9 +269,16 @@ export function SessionConfigEditor({
 
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                             <div>
-                                                <label className="text-[10px] font-bold text-slate-300 block mb-1">
-                                                    Prix initial barré (Optionnel)
-                                                </label>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <label className="text-[10px] font-bold text-slate-300">
+                                                        Prix initial barré (Optionnel)
+                                                    </label>
+                                                    {sess.prix_barre && sess.prix_barre > 0 && (
+                                                        <span className="text-[9px] text-slate-400 font-mono">
+                                                            ≈ {Math.round(sess.prix_barre / 655.957)} € | ≈ {Math.round(sess.prix_barre / 600)} $
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <Input
                                                     type="number"
                                                     step="1000"

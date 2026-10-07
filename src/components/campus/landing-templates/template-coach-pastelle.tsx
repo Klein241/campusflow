@@ -12,6 +12,7 @@ import type { TemplateCustomConfig } from '@/components/campus/template-customiz
 import { cleanMotto } from '@/lib/clean-motto';
 import { getNormalizedPrograms, getNormalizedStats, getNormalizedTestimonials } from './template-data-adapter';
 import { ProgramCardSessionSelector } from './ProgramCardSessionSelector';
+import { CurrencySelector } from '@/components/ui/currency-selector';
 
 interface TemplateProps {
     org: any;
@@ -115,8 +116,9 @@ export function TemplateCoachPastelle({
                         })}
                     </nav>
 
-                    {/* Right CTA */}
-                    <div className="flex items-center gap-3">
+                    {/* Right CTA + Sélecteur de Devise */}
+                    <div className="flex items-center gap-2.5">
+                        <CurrencySelector variant="compact" />
                         <button
                             onClick={onOpenInscription || (() => scrollToSection('contact'))}
                             className="hidden sm:inline-flex items-center bg-[#1E293B] hover:bg-gray-800 text-white font-bold text-xs rounded-full px-5 h-9 transition-all hover:scale-105"

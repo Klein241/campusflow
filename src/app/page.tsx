@@ -74,7 +74,7 @@ export default function LandingPage() {
       try {
         const { data, error } = await supabase
           .from('organizations')
-          .select('id, name, slug, type, city, country, logo_url, brand_color, certification_badge, badge_title, is_online_academy')
+          .select('id, name, slug, type, city, country, logo_url, brand_color, certification_badge, badge_title, is_online_academy, show_portal_button')
           .eq('is_active', true)
           .order('created_at', { ascending: false })
           .limit(16);
@@ -414,56 +414,67 @@ export default function LandingPage() {
                 const isPhysical = s.certification_badge === 'verified_physical';
                 const isOnline = s.certification_badge === 'verified_online' || s.is_online_academy;
                 const badgeText = s.badge_title || (isPhysical ? 'Établissement Agréé' : isOnline ? 'Académie Certifiée' : null);
+                const canVisitPortal = s.show_portal_button !== false;
 
-                return (
-                  <Link key={s.id} href={`/${s.slug}`} className="group block">
-                    <div className="p-4 rounded-2xl bg-[#0B111F]/80 border border-white/10 hover:border-indigo-500/40 hover:bg-[#0E1729] transition-all duration-300 shadow-xl flex flex-col justify-between h-44 relative overflow-hidden">
-                      {/* Top row: Logo & Badge */}
-                      <div className="flex items-start justify-between gap-2">
-                        {s.logo_url ? (
-                          <img
-                            src={s.logo_url}
-                            alt={s.name}
-                            className="w-11 h-11 rounded-xl object-contain bg-white/10 p-1 border border-white/10 shrink-0 group-hover:scale-105 transition-transform"
-                          />
-                        ) : (
-                          <div
-                            className="w-11 h-11 rounded-xl flex items-center justify-center font-black text-white text-base shrink-0 shadow-md"
-                            style={{ background: `linear-gradient(135deg, ${s.brand_color || '#4f46e5'}, #06b6d4)` }}
-                          >
-                            {s.name?.[0]?.toUpperCase() || 'E'}
-                          </div>
-                        )}
+                const cardInner = (
+                  <div className="p-4 rounded-2xl bg-[#0B111F]/80 border border-white/10 hover:border-indigo-500/40 hover:bg-[#0E1729] transition-all duration-300 shadow-xl flex flex-col justify-between h-44 relative overflow-hidden">
+                    {/* Top row: Logo & Badge */}
+                    <div className="flex items-start justify-between gap-2">
+                      {s.logo_url ? (
+                        <img
+                          src={s.logo_url}
+                          alt={s.name}
+                          className="w-11 h-11 rounded-xl object-contain bg-white/10 p-1 border border-white/10 shrink-0 group-hover:scale-105 transition-transform"
+                        />
+                      ) : (
+                        <div
+                          className="w-11 h-11 rounded-xl flex items-center justify-center font-black text-white text-base shrink-0 shadow-md"
+                          style={{ background: `linear-gradient(135deg, ${s.brand_color || '#4f46e5'}, #06b6d4)` }}
+                        >
+                          {s.name?.[0]?.toUpperCase() || 'E'}
+                        </div>
+                      )}
 
-                        {/* Certification badge indicator */}
-                        {badgeText && (
-                          <span className={`px-2 py-0.5 rounded-md text-[9px] font-black shrink-0 border flex items-center gap-1 ${
-                            isPhysical
-                              ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                              : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
-                          }`}>
-                            {isPhysical ? '🏛️' : '🎓'} {badgeText}
-                          </span>
-                        )}
-                      </div>
+                      {/* Certification badge indicator */}
+                      {badgeText && (
+                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-black shrink-0 border flex items-center gap-1 ${
+                          isPhysical
+                            ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                            : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
+                        }`}>
+                          {isPhysical ? '🏛️' : '🎓'} {badgeText}
+                        </span>
+                      )}
+                    </div>
 
-                      {/* Middle: Name & location */}
-                      <div>
-                        <h4 className="font-bold text-xs sm:text-sm text-white group-hover:text-indigo-300 transition-colors line-clamp-1">
-                          {s.name}
-                        </h4>
-                        <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
-                          {s.is_online_academy ? '💻 Académie 100% en Ligne' : (s.city ? `${s.city}, ${s.country}` : 'Campus Connecté')}
-                        </p>
-                      </div>
+                    {/* Middle: Name & location */}
+                    <div>
+                      <h4 className="font-bold text-xs sm:text-sm text-white group-hover:text-indigo-300 transition-colors line-clamp-1">
+                        {s.name}
+                      </h4>
+                      <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
+                        {s.is_online_academy ? '💻 Académie 100% en Ligne' : (s.city ? `${s.city}, ${s.country}` : 'Campus Connecté')}
+                      </p>
+                    </div>
 
-                      {/* Bottom: Action link */}
+                    {/* Bottom: Action link (masqué si show_portal_button === false) */}
+                    {canVisitPortal && (
                       <div className="flex items-center justify-between text-[10px] text-indigo-400 font-bold border-t border-white/5 pt-2">
                         <span>Visiter le portail</span>
                         <ExternalLink className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
                       </div>
-                    </div>
+                    )}
+                  </div>
+                );
+
+                return canVisitPortal ? (
+                  <Link key={s.id} href={`/${s.slug}`} className="group block">
+                    {cardInner}
                   </Link>
+                ) : (
+                  <div key={s.id} className="group block cursor-default">
+                    {cardInner}
+                  </div>
                 );
               })}
             </div>

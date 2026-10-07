@@ -15,6 +15,7 @@ import { orgPath } from '@/lib/custom-domain';
 import type { TemplateCustomConfig } from '@/components/campus/template-customizer-studio';
 import { getNormalizedPrograms, getNormalizedStats, getNormalizedTestimonials } from './template-data-adapter';
 import { ProgramCardSessionSelector } from './ProgramCardSessionSelector';
+import { CurrencySelector } from '@/components/ui/currency-selector';
 
 interface TemplateProps {
     org: any;
@@ -119,6 +120,7 @@ export function TemplateBentoBox({
                     </div>
 
                     <div className="flex items-center gap-2">
+                        <CurrencySelector variant="compact" />
                         <Link href={orgPath(orgSlug, 'login')}>
                             <Button data-editable-field="secondary_cta_text" size="sm" className="h-9 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-md shadow-cyan-500/20 flex items-center gap-1.5">
                                 <LogIn className="w-3.5 h-3.5" />

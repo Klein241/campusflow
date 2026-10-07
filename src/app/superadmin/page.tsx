@@ -303,6 +303,7 @@ export default function SuperAdminPage() {
                     badge_title: o.badge_title || null,
                     is_online_academy: !!o.is_online_academy,
                     verification_docs: o.verification_docs || [],
+                    show_portal_button: o.show_portal_button !== false,
                 }));
             } else if (orgsRes?.data && orgsRes.data.length > 0) {
                 finalOrgs = (orgsRes.data as any[]).map(o => ({
@@ -310,6 +311,7 @@ export default function SuperAdminPage() {
                     certification_badge: o.certification_badge || 'none',
                     badge_title: o.badge_title || null,
                     sky_points: typeof o.sky_points === 'number' ? o.sky_points : 1000,
+                    show_portal_button: o.show_portal_button !== false,
                 }));
             }
             setOrgs(finalOrgs);

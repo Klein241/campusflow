@@ -16,6 +16,7 @@ import { orgPath } from '@/lib/custom-domain';
 import { cleanMotto } from '@/lib/clean-motto';
 import { getNormalizedPrograms, getNormalizedStats, getNormalizedTestimonials } from './template-data-adapter';
 import { ProgramCardSessionSelector } from './ProgramCardSessionSelector';
+import { CurrencySelector } from '@/components/ui/currency-selector';
 
 interface TemplateProps {
     org: any;
@@ -89,6 +90,7 @@ export function TemplateBentoGrid({
                     </div>
 
                     <div className="flex items-center gap-2">
+                        <CurrencySelector variant="compact" />
                         <Link href={orgPath(orgSlug, 'login')}>
                             <Button size="sm" className="h-9 px-5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-full shadow-lg shadow-emerald-500/20 flex items-center gap-1.5">
                                 <LogIn className="w-3.5 h-3.5" />

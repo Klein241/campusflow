@@ -20,7 +20,7 @@ import { RichContentRenderer } from './rich-content-renderer';
 import { DiscussButton } from '../discuss-button';
 import { LessonReader } from './lesson-reader';
 import { deductSkyPoints } from '@/lib/sky-points-service';
-import { isContentUnlocked } from '@/lib/cursus-drip-service';
+import { isContentUnlocked, type DripContext } from '@/lib/cursus-drip-service';
 import { ClassSelectorCards } from './class-selector-cards';
 import type { ContentBlock } from './rich-content-editor';
 import { TranslationDialog } from './translation-dialog';
@@ -68,6 +68,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
     // ── Multi-classes & Filières ──
     const [studentClasses,  setStudentClasses]  = useState<any[]>([]);
     const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+    const [studentEnrollmentInfo, setStudentEnrollmentInfo] = useState<{ enrolledAt?: string; durationMonths?: number }>({ durationMonths: 6 });
 
     // ── Navigation Miller Columns ──
     const [selectedSubId, setSelectedSubId] = useState<string | null>(null);
@@ -134,7 +135,7 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
         try {
             // 1. Récupérer les classes & filières de l'étudiant (principale + additionnelles)
             const { data: profile } = await supabase.from('student_profiles')
-                .select('classroom_id, additional_classroom_ids, filiere_ids')
+                .select('classroom_id, additional_classroom_ids, filiere_ids, enrollment_date, created_at')
                 .eq('id', userId)
                 .maybeSingle();
 
@@ -147,13 +148,32 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
             let stuClasses: any[] = [];
             if (allClassIds.length > 0) {
                 const { data: clsData } = await supabase.from('classrooms')
-                    .select('id, name, level, filiere_id')
+                    .select('id, name, level, filiere_id, training_duration, cycle')
                     .in('id', allClassIds);
                 stuClasses = clsData || [];
             }
             setStudentClasses(stuClasses);
 
             const activeClassId = selectedClassId || (stuClasses.length > 0 ? stuClasses[0].id : classroomId);
+
+            // Déterminer la durée de session (1, 3 ou 6 mois)
+            const currentClass = stuClasses.find(c => c.id === activeClassId) || stuClasses[0];
+            let detectedDuration = 6;
+            if (currentClass) {
+                const searchStr = `${currentClass.training_duration || ''} ${currentClass.name || ''} ${currentClass.cycle || ''}`.toLowerCase();
+                if (searchStr.includes('1 mois') || searchStr.includes('1m') || searchStr.includes('1-mois') || searchStr.includes('1_mois')) {
+                    detectedDuration = 1;
+                } else if (searchStr.includes('3 mois') || searchStr.includes('3m') || searchStr.includes('3-mois') || searchStr.includes('3_mois')) {
+                    detectedDuration = 3;
+                } else if (searchStr.includes('6 mois') || searchStr.includes('6m')) {
+                    detectedDuration = 6;
+                }
+            }
+
+            setStudentEnrollmentInfo({
+                enrolledAt: profile?.enrollment_date || profile?.created_at,
+                durationMonths: detectedDuration
+            });
 
             let subs: any[] = [];
             // Priorité 1 : par activeClassId
@@ -368,6 +388,12 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                     initialShowNotes={false}
                     isCompleted={isLessonCompleted(readerLesson.id)}
                     onToggleComplete={() => toggleLessonDone(readerLesson.id)}
+                    dripContext={{
+                        enrolledAt: studentEnrollmentInfo.enrolledAt,
+                        durationMonths: studentEnrollmentInfo.durationMonths,
+                        chapterIndex: subChapters.findIndex(c => c.id === readerLesson.chapter_id) >= 0 ? subChapters.findIndex(c => c.id === readerLesson.chapter_id) : 0,
+                        totalChapters: subChapters.length || 6
+                    }}
                 />
             )}
             {/* ── Lesson Reader en mode Bloc Notes ── */}
@@ -381,6 +407,12 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                     initialShowNotes={true}
                     isCompleted={isLessonCompleted(blocNotesLesson.id)}
                     onToggleComplete={() => toggleLessonDone(blocNotesLesson.id)}
+                    dripContext={{
+                        enrolledAt: studentEnrollmentInfo.enrolledAt,
+                        durationMonths: studentEnrollmentInfo.durationMonths,
+                        chapterIndex: subChapters.findIndex(c => c.id === blocNotesLesson.chapter_id) >= 0 ? subChapters.findIndex(c => c.id === blocNotesLesson.chapter_id) : 0,
+                        totalChapters: subChapters.length || 6
+                    }}
                 />
             )}
 
@@ -1063,8 +1095,12 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
                                         const chPct   = chLsns.length > 0 ? (chComp / chLsns.length) * 100 : 0;
                                         const chScore = getChapterScore(ch.id);
                                         const chAvg   = chScore ? (chScore.score / chScore.max) * 20 : null;
-                                        const chDoneExs = chExs.filter(e => getSubmission(e.id)).length;
-                                        const chDrip  = isContentUnlocked(ch);
+                                        const chDrip  = isContentUnlocked(ch, new Date(), {
+                                            enrolledAt: studentEnrollmentInfo.enrolledAt,
+                                            durationMonths: studentEnrollmentInfo.durationMonths,
+                                            chapterIndex: ci,
+                                            totalChapters: subChapters.length || 6
+                                        });
 
                                         return (
                                             <motion.button key={ch.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: ci * 0.04 }}
@@ -1245,7 +1281,13 @@ export function StudentCursus({ orgId, userId, userName, classroomId, filiereId,
 
                                 {chLessons.map((lesson: any, li: number) => {
                                     const done = isLessonCompleted(lesson.id);
-                                    const lessonDrip = isContentUnlocked(lesson);
+                                    const chIdx = subChapters.findIndex((c: any) => c.id === lesson.chapter_id);
+                                    const lessonDrip = isContentUnlocked(lesson, new Date(), {
+                                        enrolledAt: studentEnrollmentInfo.enrolledAt,
+                                        durationMonths: studentEnrollmentInfo.durationMonths,
+                                        chapterIndex: chIdx >= 0 ? chIdx : 0,
+                                        totalChapters: subChapters.length || 6
+                                    });
                                     const isTranslated = savedTranslations.some(t => t.id === lesson.id);
 
                                     return (
