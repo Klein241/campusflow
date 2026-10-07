@@ -51,6 +51,11 @@ export async function duplicateFormation(
         const newName = (options?.customName || `Copie de ${sourceClass.name}`).trim();
 
         // 2. Insérer la nouvelle classe (nouvelle formation)
+        const scheduleConfig = sourceClass.schedule_config ? JSON.parse(JSON.stringify(sourceClass.schedule_config)) : {};
+        if (sourceClass.poster_url && !scheduleConfig.poster_url) {
+            scheduleConfig.poster_url = sourceClass.poster_url;
+        }
+
         const newClassPayload: any = {
             organization_id: organizationId,
             name: newName,
@@ -66,45 +71,68 @@ export async function duplicateFormation(
             rhythm: sourceClass.rhythm || 'Cours du Jour (Plein temps)',
             description: sourceClass.description || null,
             prix_barre: sourceClass.prix_barre || null,
-            poster_url: sourceClass.poster_url || null,
-            image_url: sourceClass.image_url || null,
             status: sourceClass.status || 'in_progress',
             certification_type: sourceClass.certification_type || 'attestation_reussite',
-            schedule_config: sourceClass.schedule_config ? JSON.parse(JSON.stringify(sourceClass.schedule_config)) : {},
-            competencies_list: Array.isArray(sourceClass.competencies_list) ? [...sourceClass.competencies_list] : [],
+            schedule_config: scheduleConfig,
+            competencies_list: Array.isArray(sourceClass.competencies_list)
+                ? sourceClass.competencies_list.map((c: any) => String(c))
+                : [],
             filiere_id: sourceClass.filiere_id || null,
         };
 
-        let createdClass: any = null;
-        const { data: directInsert, error: directErr } = await supabase
-            .from('classrooms')
-            .insert(newClassPayload)
-            .select()
-            .single();
+        if (sourceClass.poster_url) {
+            newClassPayload.poster_url = sourceClass.poster_url;
+        }
 
-        if (directErr || !directInsert) {
-            console.warn('[duplicateFormation] Insert direct classrooms bloqué par RLS, tentative de secours via create_classroom_secure:', directErr);
+        let createdClass: any = null;
+        let lastError: any = null;
+
+        // Boucle de retry auto-nettoyante si une colonne optionnelle est absente du cache de schéma Supabase
+        for (let attempt = 0; attempt < 5; attempt++) {
+            const { data: directInsert, error: directErr } = await supabase
+                .from('classrooms')
+                .insert(newClassPayload)
+                .select()
+                .single();
+
+            if (directInsert && !directErr) {
+                createdClass = directInsert;
+                break;
+            }
+
+            lastError = directErr;
+            if (directErr?.code === 'PGRST204') {
+                const match = directErr.message?.match(/Could not find the '([^']+)' column/i);
+                if (match && match[1] && newClassPayload[match[1]] !== undefined) {
+                    console.warn(`[duplicateFormation] Colonne "${match[1]}" absente de classrooms, suppression et retry...`);
+                    delete newClassPayload[match[1]];
+                    continue;
+                }
+            }
+            break;
+        }
+
+        if (!createdClass) {
+            console.warn('[duplicateFormation] Insert direct échoué, tentative de secours via create_classroom_secure:', lastError);
             const { data: rpcData, error: rpcErr } = await (supabase.rpc as any)('create_classroom_secure', {
                 p_org_id: organizationId,
                 p_name: newName,
-                p_cycle: newClassPayload.cycle,
-                p_level: newClassPayload.level,
-                p_capacity: newClassPayload.capacity,
-                p_tuition_fee: newClassPayload.tuition_fee,
-                p_registration_fee: newClassPayload.registration_fee,
-                p_training_duration: newClassPayload.training_duration,
-                p_description: newClassPayload.description,
-                p_prix_barre: newClassPayload.prix_barre,
-                p_schedule_config: newClassPayload.schedule_config,
-                p_competencies_list: newClassPayload.competencies_list
+                p_cycle: newClassPayload.cycle || null,
+                p_level: newClassPayload.level || 1,
+                p_capacity: newClassPayload.capacity || 100,
+                p_tuition_fee: newClassPayload.tuition_fee || 0,
+                p_registration_fee: newClassPayload.registration_fee || 0,
+                p_training_duration: newClassPayload.training_duration || null,
+                p_description: newClassPayload.description || null,
+                p_prix_barre: newClassPayload.prix_barre || null,
+                p_schedule_config: scheduleConfig,
+                p_competencies_list: Array.isArray(newClassPayload.competencies_list) ? newClassPayload.competencies_list : []
             });
 
             if (rpcErr || !rpcData?.classroom) {
-                return { success: false, error: directErr?.message || rpcErr?.message || 'Échec de duplication de la classe' };
+                return { success: false, error: lastError?.message || rpcErr?.message || 'Échec de duplication de la classe' };
             }
             createdClass = rpcData.classroom;
-        } else {
-            createdClass = directInsert;
         }
 
         const newClassId = createdClass.id;
@@ -166,14 +194,30 @@ export async function duplicateFormation(
                             language: ch.language || 'fr'
                         };
 
-                        const { data: createdCh, error: chErr } = await supabase
-                            .from('chapters')
-                            .insert(newChPayload)
-                            .select()
-                            .single();
+                        let createdCh: any = null;
+                        for (let att = 0; att < 4; att++) {
+                            const { data: chRes, error: chErr } = await supabase
+                                .from('chapters')
+                                .insert(newChPayload)
+                                .select()
+                                .single();
 
-                        if (chErr || !createdCh) {
-                            console.warn(`[duplicateFormation] Échec clonage chapitre "${ch.title}":`, chErr);
+                            if (chRes && !chErr) {
+                                createdCh = chRes;
+                                break;
+                            }
+                            if (chErr?.code === 'PGRST204') {
+                                const match = chErr.message?.match(/Could not find the '([^']+)' column/i);
+                                if (match && match[1] && newChPayload[match[1]] !== undefined) {
+                                    delete newChPayload[match[1]];
+                                    continue;
+                                }
+                            }
+                            break;
+                        }
+
+                        if (!createdCh) {
+                            console.warn(`[duplicateFormation] Échec clonage chapitre "${ch.title}"`);
                             continue;
                         }
                         stats.chapters++;
@@ -198,12 +242,23 @@ export async function duplicateFormation(
                                     language: lsn.language || 'fr'
                                 };
 
-                                const { error: lsnErr } = await supabase
-                                    .from('lessons')
-                                    .insert(newLsnPayload);
+                                for (let att = 0; att < 4; att++) {
+                                    const { error: lsnErr } = await supabase
+                                        .from('lessons')
+                                        .insert(newLsnPayload);
 
-                                if (!lsnErr) {
-                                    stats.lessons++;
+                                    if (!lsnErr) {
+                                        stats.lessons++;
+                                        break;
+                                    }
+                                    if (lsnErr?.code === 'PGRST204') {
+                                        const match = lsnErr.message?.match(/Could not find the '([^']+)' column/i);
+                                        if (match && match[1] && newLsnPayload[match[1]] !== undefined) {
+                                            delete newLsnPayload[match[1]];
+                                            continue;
+                                        }
+                                    }
+                                    break;
                                 }
                             }
                         }
@@ -227,12 +282,23 @@ export async function duplicateFormation(
                                     type: ex.type || 'text'
                                 };
 
-                                const { error: exErr } = await supabase
-                                    .from('exercises')
-                                    .insert(newExPayload);
+                                for (let att = 0; att < 4; att++) {
+                                    const { error: exErr } = await supabase
+                                        .from('exercises')
+                                        .insert(newExPayload);
 
-                                if (!exErr) {
-                                    stats.exercises++;
+                                    if (!exErr) {
+                                        stats.exercises++;
+                                        break;
+                                    }
+                                    if (exErr?.code === 'PGRST204') {
+                                        const match = exErr.message?.match(/Could not find the '([^']+)' column/i);
+                                        if (match && match[1] && newExPayload[match[1]] !== undefined) {
+                                            delete newExPayload[match[1]];
+                                            continue;
+                                        }
+                                    }
+                                    break;
                                 }
                             }
                         }
