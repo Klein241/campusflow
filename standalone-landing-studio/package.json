@@ -1,0 +1,22 @@
+{
+  "name": "@app/standalone-landing-studio",
+  "version": "1.0.0",
+  "description": "Studio de personnalisation interactif et 10 templates de landing pages 100% compatibles Cloudflare (D1, R2, Workers)",
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.4.7",
+    "lucide-react": "^0.475.0",
+    "sonner": "^2.0.1",
+    "tailwind-merge": "^3.0.1"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  }
+}
